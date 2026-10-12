@@ -4,6 +4,7 @@ MTG Starthand-Simulator -> erzeugt einen HTML-Bericht
 
 Aufruf:  python mtg_sim.py deck.txt [--sims 10000] [--turns 3] [--max-runden 15]
                                     [--ausgabe bericht.html] [--nicht-oeffnen]
+         python mtg_sim.py --drafthelper [kartenpool.txt]   (Kartenseite im Browser, siehe README)
 
 Ablauf pro Runde: ziehen (Play: nicht in Runde 1) -> Land legen -> Zaubern.
 Die genaue Spiellogik steht im Bericht (Abschnitt "Spiellogik").
@@ -55,11 +56,15 @@ def build_deck(entry, data, args):
         cyc_names=sorted({n for n, _, c, _ in rows if c.cycle_alts}))
 
 
-def simulate_deck(dd, args, idx, horizon):
+def _stderr(msg):
+    print(msg, file=sys.stderr)
+
+
+def simulate_deck(dd, args, idx, horizon, progress=_stderr):
     """Simuliert On the Play und On the Draw. Mit --seed bekommt jedes Deck einen eigenen, festen Zufallsstrom."""
     if args.seed is not None:
         random.seed(args.seed + 7919 * idx)
-    print(f"Simuliere {dd['name']}: {args.sims} Spiele pro Modus ...", file=sys.stderr)
+    progress(f"Simuliere {dd['name']}: {args.sims} Spiele pro Modus ...")
     results = {}
     for label, on_draw in (("On the Play", False), ("On the Draw", True)):
         try:
@@ -74,7 +79,8 @@ def simulate_deck(dd, args, idx, horizon):
     dd["results"] = results
 
 
-def run(args):
+def entries_from_files(args):
+    """Deck-Eintraege aus den Dateien der Kommandozeile (mit optionalem Kern)."""
     entries, used = [], Counter()
     core, core_label = {}, None
     if args.core:
@@ -96,8 +102,13 @@ def run(args):
         # Herkunft jeder Karte: Mengen je Bereich getrennt halten (eine Karte kann in mehreren Bereichen stehen)
         parts = ([(core_label, dict(core))] if args.core else []) + [(label, part)]
         entries.append({"path": path, "name": name, "deck": dict(deck), "parts": parts})
+    return entries
 
-    print("Lade Kartendaten von Scryfall ...", file=sys.stderr)
+
+def simulate_entries(entries, args, progress=_stderr):
+    """Laedt die Kartendaten, simuliert alle Decks und gibt den HTML-Bericht als Text zurueck.
+    Bei Fehlern (zu wenige Karten, Scryfall nicht erreichbar, ...) endet das Programm mit sys.exit(Meldung)."""
+    progress("Lade Kartendaten von Scryfall ...")
     try:
         data = fetch_cards_cached(sorted(set().union(*(e["deck"].keys() for e in entries))), args.neu_laden)
     except urllib.error.URLError as e:
@@ -106,14 +117,28 @@ def run(args):
     horizon = max(args.max_runden, args.turns, args.curve_runden)
     decks = [build_deck(e, data, args) for e in entries]
     for idx, dd in enumerate(decks):
-        simulate_deck(dd, args, idx, horizon)
+        simulate_deck(dd, args, idx, horizon, progress)
 
     main_deck = decks[0]
     ctx = dict(main_deck, args=args, horizon=horizon, jace=analyze_jace(main_deck["rows"]), alts=decks[1:],
                all_decks=decks)
+    return render_html(ctx)
+
+
+def save_report(html, args):
     out_path = pathlib.Path(args.ausgabe)
-    out_path.write_text(render_html(ctx), encoding="utf-8")
+    out_path.write_text(html, encoding="utf-8")
     print(f"Bericht gespeichert: {out_path.resolve()}", file=sys.stderr)
+    return out_path
+
+
+def run(args):
+    if args.drafthelper is not None:
+        from components.drafthelper import serve
+        serve(args, simulate_entries, save_report)
+        return
+    html = simulate_entries(entries_from_files(args), args)
+    out_path = save_report(html, args)
     if not args.nicht_oeffnen:
         try:
             webbrowser.open(out_path.resolve().as_uri())

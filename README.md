@@ -29,6 +29,26 @@ Liest eine Deckliste, holt die Kartendaten von [Scryfall](https://scryfall.com) 
 | `components/report_sections.py` | Berichtsabschnitte Spiellogik, Deck-Vergleich, Jace |
 | `components/report.py` | Bericht zusammensetzen |
 
+## Draft-Helper (`--drafthelper`)
+
+```
+python mtg_sim.py --drafthelper
+```
+
+Liest den Kartenpool aus `_draftedcardpool.txt` (Abschnitte `Deck` und `Sideboard`, Zeilen wie in den Deckdateien,
+mit Setcode und Nummer) und öffnet im Browser eine Seite mit allen Karten als Bild (Daten und Bilder von Scryfall).
+Eine andere Datei geht so: `python mtg_sim.py --drafthelper meinpool.txt`.
+
+- Jede Kopie einer Karte wird einzeln als **Core**, **Splash**, **NoSplash** oder **Aus** markiert. Vorbelegung:
+  Deck = Core, Sideboard = Aus.
+- **Simulieren** baut die Varianten *Core + Splash* und *Core + NoSplash*, simuliert beide und zeigt den
+  Vergleichsbericht direkt auf der Seite (zusätzlich als Datei, siehe `--ausgabe`). Danach geht es mit
+  „Zurück zu den Karten“ weiter.
+- Die Simulationsparameter (`--sims`, `--seed`, `--turns` …) kommen von der Kommandozeile, die Spielanzahl lässt
+  sich auf der Seite ändern.
+- Der Server läuft nur lokal (127.0.0.1, Port 8765). Beenden: Button „Beenden“ oder Strg+C im Terminal.
+- Wird weder Splash noch NoSplash markiert, wird nur das Core-Deck simuliert.
+
 ## Schnellstart
 
 ```

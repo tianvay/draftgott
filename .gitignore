@@ -3,6 +3,7 @@
 
 # Scryfall-Cache
 scryfall_cache.json
+scryfall_images_cache.json
 
 # Python
 __pycache__/

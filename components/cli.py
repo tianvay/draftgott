@@ -4,9 +4,13 @@ import argparse
 
 def parse_args():
     ap = argparse.ArgumentParser(description="MTG Starthand-Simulator: erzeugt einen HTML-Bericht")
-    ap.add_argument("deckfile", nargs="+",
+    ap.add_argument("deckfile", nargs="*",
                     help="Deckliste(n). Mit --core: die Varianten, die zum Kern hinzukommen; die erste ist die Basis, "
                          "alle weiteren werden mit ihr verglichen")
+    ap.add_argument("--drafthelper", nargs="?", const="_draftedcardpool.txt", default=None, metavar="DATEI",
+                    help="Draft-Helper: Kartenseite im Browser, auf der Karten als Core/Splash/NoSplash markiert und "
+                         "die Varianten direkt simuliert werden. Optional die Kartenpool-Datei "
+                         "(Standard: _draftedcardpool.txt)")
     ap.add_argument("--core", metavar="DATEI", default=None,
                     help="Kern-Deckliste, die zu jeder Variante (deckfile / --deckalt) hinzugefuegt wird")
     ap.add_argument("--neu-laden", action="store_true",
@@ -45,4 +49,7 @@ def parse_args():
                     help="Name des HTML-Berichts (Standard: mtg_bericht.html)")
     ap.add_argument("--nicht-oeffnen", action="store_true",
                     help="HTML-Bericht nicht automatisch im Browser oeffnen")
-    return ap.parse_args()
+    args = ap.parse_args()
+    if not args.deckfile and args.drafthelper is None:
+        ap.error("Bitte eine Deckliste angeben oder --drafthelper verwenden")
+    return args

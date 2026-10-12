@@ -5,6 +5,8 @@ Oeffentliche Funktionen:
     fetch_cards(names)                       -> {name: scryfall_card}, direkt von der API (75 Karten pro Anfrage)
     fetch_cards_cached(names, refresh=False) -> wie fetch_cards, laedt aber nur Karten nach, die noch nicht im
                                                 Cache (scryfall_cache.json neben mtg_sim.py) stehen
+    fetch_printing_images(specs)             -> {"set/nummer": Bild-URL} fuer bestimmte Drucke (Draft-Helper),
+                                                Cache: scryfall_images_cache.json
 """
 import json
 import pathlib
@@ -75,3 +77,40 @@ def fetch_cards_cached(names, refresh=False):
     else:
         print("Alle Karten aus dem Cache.", file=sys.stderr)
     return cache
+
+
+IMAGE_CACHE_FILE = pathlib.Path(__file__).resolve().parent.parent / "scryfall_images_cache.json"
+
+
+def card_image_url(card):
+    """Bild-URL (Format 'normal') einer Scryfall-Karte, bei zweiseitigen Karten die Vorderseite."""
+    uris = card.get("image_uris") or ((card.get("card_faces") or [{}])[0].get("image_uris")) or {}
+    return uris.get("normal")
+
+
+def fetch_printing_images(specs):
+    """specs: [(set, sammlernummer)]. Gibt {"set/nummer": Bild-URL} zurueck (nicht gefundene fehlen).
+    Merkt sich die URLs in scryfall_images_cache.json; Netzwerkfehler brechen nicht ab, dann fehlen die Bilder."""
+    cache = {}
+    if IMAGE_CACHE_FILE.exists():
+        try:
+            cache = json.loads(IMAGE_CACHE_FILE.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            cache = {}
+    todo = [(s_, n) for s_, n in dict.fromkeys(specs) if f"{s_}/{n}" not in cache]
+    for i in range(0, len(todo), 75):
+        try:
+            data = post_collection([{"set": s_, "collector_number": n} for s_, n in todo[i:i + 75]])
+        except urllib.error.URLError as e:
+            print(f"Kartenbilder konnten nicht geladen werden: {e}", file=sys.stderr)
+            break
+        for card in data.get("data", []):
+            url = card_image_url(card)
+            if url:
+                cache[f"{card['set']}/{card['collector_number']}"] = url
+    if todo:
+        try:
+            IMAGE_CACHE_FILE.write_text(json.dumps(cache), encoding="utf-8")
+        except OSError as e:
+            print(f"Bild-Cache konnte nicht gespeichert werden: {e}", file=sys.stderr)
+    return {k: v for k, v in cache.items() if k in {f"{s_}/{n}" for s_, n in specs}}

@@ -4,5 +4,8 @@ python .\mtg_sim.py .\_normaldeck.txt --sims 10000 --html meinbericht.html
 Für Abwägung ob Splash:
 python mtg_sim.py _splash.txt _nosplash.txt --core _core.txt --seed 42 --html splashornot.html
 
+Für Drafthelper:
+python mtg_sim.py --drafthelper _draftedcardpool.txt
+
 
 770953a44b3f928a
