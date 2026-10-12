@@ -406,7 +406,7 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                     curve_full[turn] += (spent == avail_total)
 
             if has_jace:
-                # Angriffs-Ausloeser (Kreaturen vom Vorzug oder mit Haste)
+                # Angriffs-Ausloeser (Kreaturen vom Vorzug oder mit Haste, nie Defender)
                 for pc, t_in in perms:
                     for e in recurring_effects(pc):
                         if e[1] == "trigger" and e[3] == "attack" and pc.is_creature and (t_in < turn or pc.haste):
@@ -424,8 +424,8 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                             jst.add(e[2])
                 jst.try_activate(hand, library, turn)  # Loyalty aus dieser Runde
 
-            # Angriff: Kreaturen vom Vorzug greifen an, neue nur mit Haste (keine Blocker, kein Removal)
-            turn_dmg = sum(c.power for c, t in board if t < turn or c.haste) if board else 0
+            # Angriff: Kreaturen vom Vorzug greifen an, neue nur mit Haste, Defender nie (keine Blocker, kein Removal)
+            turn_dmg = sum(c.power for c, t in board if not c.defender and (t < turn or c.haste)) if board else 0
             dmg_total += turn_dmg
             log.append((turn, drew, land_played, tapped_now, chosen, turn_dmg, dmg_total, cycled_log,
                         (jst.gained - turn_gain0, jst.acts - turn_acts0, jst.loyalty)))

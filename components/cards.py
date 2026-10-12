@@ -28,6 +28,7 @@ class Card(NamedTuple):
     empower: tuple = ()        # Effekte: (Seite, Art, Wert, Ausloeser, Kosten, Tap, nicht_modelliert, X)
     empower_text: str = ""     # erkannte Textzeilen (zur Kontrolle im Bericht)
     pw_tags: tuple = ()        # jace / pw_help / pw_removal / is_pw
+    defender: bool = False     # Kreatur mit Defender: kann nicht angreifen
 
 
 LANDCYCLE_RE = re.compile(
@@ -238,9 +239,10 @@ def card_info(card):
         cycle_tag = f"   [{label} {cm.group(2)}]"
     keywords = set(card.get("keywords") or []) | set(front.get("keywords") or [])
     haste = is_creature and "Haste" in keywords
+    defender = is_creature and "Defender" in keywords
     shown = " // ".join(costs) or "-"
     if is_creature:
-        shown += f"   [Kreatur {pw}/{tg}" + (", Haste]" if haste else "]")
+        shown += f"   [Kreatur {pw}/{tg}" + (", Haste" if haste else "") + (", Defender]" if defender else "]")
     elif is_aura:
         shown += "   [Aura]"
     shown += cycle_tag
@@ -251,4 +253,4 @@ def card_info(card):
                 name=card["name"], cycle_alts=cycle_alts, cycle_target=cycle_target,
                 cycle_mv=cycle_mv, is_instant_sorcery=("Instant" in type_line or "Sorcery" in type_line),
                 is_planeswalker="Planeswalker" in type_line, empower=eff, empower_text=etext,
-                pw_tags=pw_tags_for(card, type_line)), shown
+                pw_tags=pw_tags_for(card, type_line), defender=defender), shown

@@ -282,7 +282,7 @@ def render_details(ctx, suffix=""):
     table = (f'<div class="panel"><b>Erste Runde mit {a.schaden} Schaden</b>'
              f'{h_table(["", "Ø Runde", "Median", "Eintritt"], rows_d)}'
              f'<div class="note">Ø und Median nur über Spiele, in denen es bis Runde {H} eintritt. '
-             f'Alle Kreaturen greifen jede Runde an, Einsatzverzögerung außer Haste, keine Blocker oder Removal, '
+             f'Alle Kreaturen greifen jede Runde an, Einsatzverzögerung außer Haste, Defender greift nie an, keine Blocker oder Removal, '
              f'nur aufgedruckte Power.</div></div>')
     add("schaden", "Schaden durch Kreaturen", "", f'<div class="grid g2">{table}{chart}</div>')
 
@@ -376,7 +376,7 @@ def render_details(ctx, suffix=""):
         "Farben, Hybrid- und Phyrexian-Mana werden beachtet; Manakreaturen und Artefakte sind nicht modelliert.",
         "Länder, die getappt ins Spiel kommen, werden aus dem Kartentext erkannt; Shock-Länder zahlen die 2 Leben.",
         "Auras werden nur mit eigener Kreatur gespielt" if not a.auras_ohne_kreatur else "Auras dürfen ohne eigene Kreatur gespielt werden.",
-        "Kreaturen: aufgedruckte Power/Toughness, Einsatzverzögerung außer Haste, keine Blocker oder Removal.",
+        "Kreaturen: aufgedruckte Power/Toughness, Einsatzverzögerung außer Haste, Defender greift nie an, keine Blocker oder Removal.",
     ]
     if ctx["cyc_names"]:
         ass.append("Landcycling ist deaktiviert." if a.ohne_landcycling else

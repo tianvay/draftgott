@@ -60,7 +60,7 @@ def render_logic_section(has_jace=False):
         "wird die beste nach den vier Auswahlregeln gespielt.",
         "<b>Landcycling (nur wenn es sich lohnt):</b> Eine nicht spielbare Karte wird mit übrigem Mana gecycelt, "
         "wenn das diese oder nächste Runde etwas verbessert.",
-        "<b>Angriff:</b> Kreaturen vom Vorzug greifen an, neue nur mit Haste.",
+        "<b>Angriff:</b> Kreaturen vom Vorzug greifen an, neue nur mit Haste, Kreaturen mit Defender nie.",
     ]
     if has_jace:
         steps.insert(2, "<b>Jace (Empower):</b> Hat der Jace-Token mindestens 3 Loyalty, wird er zu Rundenbeginn aktiviert (Karte ziehen), "
@@ -306,7 +306,7 @@ def render_jace_section(ctx):
         "zu Rundenbeginn mit Loyalty aus früheren Runden (die Karte kann dann noch gespielt werden), sonst nach dem Zaubern.",
         "Einmalig: Zauber (Instant, Sorcery) und „beim Betreten“-Effekte wirken sofort beim Ausspielen, auch bei Ländern.",
         "Wiederkehrend, modelliert: „whenever you cast …“ (alle, Kreatur, Nichtkreatur, Instant oder Sorcery), „whenever … enters“ "
-        "(Kreatur, Land, Permanent), „whenever … attacks“ (ab der Runde nach dem Ausspielen, mit Haste sofort) und „at the beginning of …“ "
+        "(Kreatur, Land, Permanent), „whenever … attacks“ (ab der Runde nach dem Ausspielen, mit Haste sofort, nie bei Defender) und „at the beginning of …“ "
         "(einmal pro Runde ab der Folgerunde). Karten reagieren nur auf Ereignisse, nachdem sie im Spiel sind.",
         "Bezahlbare Fähigkeiten werden mit dem Mana benutzt, das nach dem Zaubern übrig ist, so oft es reicht (höchstens 10-mal pro Runde). "
         "Mit {T} im Preis nur einmal pro Runde und bei Kreaturen erst ab der Folgerunde. Andere Kosten (Opfern, Ablegen) sind nicht modelliert.",

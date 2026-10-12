@@ -214,8 +214,9 @@ Diese Werte stehen im Skript und lassen sich nur dort ändern.
 - **Kartenauswahl pro Runde:** Aus allen zusammen bezahlbaren Kombinationen gewinnt nacheinander: (1) die meiste
   Mana-Ausgabe, (2) die meisten Kreaturen, (3) die höchste Summe aus Power und Toughness, (4) die meisten Karten.
   Es gibt keine Vorausschau auf spätere Runden, außer beim Landcycling.
-- **Kreaturen und Schaden:** aufgedruckte Power und Toughness, Einsatzverzögerung außer bei Haste, alle Kreaturen
-  greifen jede Runde an, keine Blocker, kein Removal. Boni durch Auras oder andere Effekte werden nicht gezählt.
+- **Kreaturen und Schaden:** aufgedruckte Power und Toughness, Einsatzverzögerung außer bei aufgedrucktem Haste, Kreaturen mit Defender
+  greifen nie an, alle anderen Kreaturen greifen jede Runde an. Jace und andere Planeswalker haben keine
+  Einsatzverzögerung (Aktivierung höchstens 1x pro Runde), keine Blocker, kein Removal. Boni durch Auras oder andere Effekte werden nicht gezählt.
 - **Mana:** Nur Mana aus Ländern. Manakreaturen, Artefakte und Rituale sind nicht modelliert.
 - **Getappte Länder:** Werden aus dem Kartentext erkannt (immer getappt, Check-, Fast- und Slow-Länder). Shock-Länder
   zahlen die 2 Leben. Andere Bedingungen (zum Beispiel Reveal-Länder) werden als „immer getappt“ gezählt und im Bericht
