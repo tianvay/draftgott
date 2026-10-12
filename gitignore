@@ -1,0 +1,8 @@
+# Generierte Berichte
+*.html
+
+# Scryfall-Cache
+scryfall_cache.json
+
+# Python
+__pycache__/

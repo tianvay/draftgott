@@ -7,8 +7,27 @@ Liest eine Deckliste, holt die Kartendaten von [Scryfall](https://scryfall.com) 
 
 - Python 3.8 oder neuer, keine zusätzlichen Pakete
 - Internetverbindung (Kartendaten von Scryfall)
-- Zwei Dateien, die im **selben Ordner** liegen müssen: `mtg_sim.py` (Simulation und Bericht) und `scryfall.py` (Abruf und
-  Cache der Kartendaten). Der Cache `scryfall_cache.json` entsteht automatisch daneben.
+- Die Dateien müssen so liegen: `mtg_sim.py` im Hauptordner und daneben der Ordner `components/` mit allen Bausteinen
+  (`scryfall.py`, `cards.py`, `mana.py`, `simulation.py`, `report.py` …). Der Cache `scryfall_cache.json` entsteht
+  automatisch neben `mtg_sim.py`.
+
+## Aufbau des Codes
+
+| Datei | Aufgabe |
+|---|---|
+| `mtg_sim.py` | Startpunkt: Decks laden, simulieren, Bericht schreiben |
+| `components/cli.py` | Alle Kommandozeilen-Parameter |
+| `components/deckfile.py` | Deckdateien und Datei-Angaben (`datei=Label`) einlesen |
+| `components/scryfall.py` | Kartendaten von Scryfall holen und zwischenspeichern |
+| `components/mana.py` | Kosten, Hybrid/Phyrexian, Bezahlbarkeit durch Länder |
+| `components/cards.py` | Kartenmodell `Card`, Länder, Landcycling, Empower Jace, Planeswalker-Tags |
+| `components/jace.py` | Jace-Zustand in der Simulation, Effekt-Filter, Deck-Analyse |
+| `components/mulligan.py` | Mulligan-Regeln und Starthand |
+| `components/simulation.py` | Spielablauf, Zauber-/Landauswahl, Landcycling, Messwerte |
+| `components/stats.py` | Ampel-Schwellen, Zeitkennzahlen, Signifikanz-Rechnung |
+| `components/html_base.py` | CSS, Mana-Symbole, Tabellen, SVG-Diagramme |
+| `components/report_sections.py` | Berichtsabschnitte Spiellogik, Deck-Vergleich, Jace |
+| `components/report.py` | Bericht zusammensetzen |
 
 ## Schnellstart
 

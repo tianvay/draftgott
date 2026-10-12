@@ -4,7 +4,7 @@ Scryfall-Zugriff fuer mtg_sim.py: Kartendaten holen und lokal zwischenspeichern.
 Oeffentliche Funktionen:
     fetch_cards(names)                       -> {name: scryfall_card}, direkt von der API (75 Karten pro Anfrage)
     fetch_cards_cached(names, refresh=False) -> wie fetch_cards, laedt aber nur Karten nach, die noch nicht im
-                                                Cache (scryfall_cache.json neben diesem Script) stehen
+                                                Cache (scryfall_cache.json neben mtg_sim.py) stehen
 """
 import json
 import pathlib
@@ -52,7 +52,7 @@ def fetch_cards(names):
     return found
 
 
-CACHE_FILE = pathlib.Path(__file__).resolve().with_name("scryfall_cache.json")
+CACHE_FILE = pathlib.Path(__file__).resolve().parent.parent / "scryfall_cache.json"
 
 
 def fetch_cards_cached(names, refresh=False):

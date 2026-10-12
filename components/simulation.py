@@ -1,0 +1,522 @@
+"""Simulation eines Spiels: Zauber- und Landauswahl, Landcycling, Spielablauf und Statistik-Sammlung."""
+import itertools
+import random
+from collections import Counter
+
+from components.cards import enters_tapped
+from components.jace import JaceState, cast_filter_matches, enter_filter_matches, once_effects, recurring_effects
+from components.mana import can_cast_all, can_pay, has_two_colors, land_key
+from components.mulligan import deal_opening
+
+
+def aura_ok(chosen, has_creature, auras_need_creature):
+    if not auras_need_creature or has_creature:
+        return True
+    return not (any(c.is_aura for c in chosen) and not any(c.is_creature for c in chosen))
+
+
+def play_score(chosen):
+    """Bewertung einer Zauber-Kombination (hoeher ist besser, in dieser Reihenfolge):
+    1. ausgegebenes Mana  2. Zahl der Kreaturen  3. Power + Toughness  4. Zahl der Karten."""
+    return (sum(c.mv for c in chosen),
+            sum(c.is_creature for c in chosen),
+            sum(c.power + c.toughness for c in chosen),
+            len(chosen))
+
+
+def best_cast(spells, key, has_creature, auras_need_creature):
+    """Waehlt die Zauber, die in dieser Runde zusammen gespielt werden:
+    maximal ausgegebenes Mana, dann mehr Kreaturen, dann mehr Power+Toughness."""
+    spells = sorted(spells)
+    n = len(spells)
+
+    # Abkuerzung: passt die komplette Hand, wird alles gespielt
+    if n and can_cast_all(tuple(sorted(c.alts for c in spells)), key) \
+            and aura_ok(spells, has_creature, auras_need_creature):
+        return play_score(spells), list(spells)
+
+    best = [(-1, 0, 0, 0), []]
+
+    def dfs(i, chosen):
+        if i == n:
+            if aura_ok(chosen, has_creature, auras_need_creature):
+                s = play_score(chosen)
+                if s > best[0]:
+                    best[0], best[1] = s, chosen
+            return
+        cand = chosen + [spells[i]]
+        if can_cast_all(tuple(sorted(c.alts for c in cand)), key):
+            dfs(i + 1, cand)
+        j = i + 1
+        while j < n and spells[j] == spells[i]:  # gleiche Karten nicht doppelt durchprobieren
+            j += 1
+        dfs(j, chosen)
+
+    dfs(0, [])
+    return best[0], best[1]
+
+
+def top_card_playable(card, spells, key, has_creature, auras_need_creature):
+    """Ist die Top Card mit den aktuellen Laendern spielbar (Aura-Regel beachtet)?"""
+    if not can_cast_all((card.alts,), key):
+        return False
+    if card.is_aura and auras_need_creature and not has_creature:
+        return any(c.is_creature and can_cast_all(tuple(sorted((card.alts, c.alts))), key)
+                   for c in spells)
+    return True
+
+
+def pay_subsets(pool, alts):
+    """Alle Moeglichkeiten, die Kosten aus den Laendern zu bezahlen. Gibt die uebrig bleibenden
+    Laender (Liste von Farbtupeln) zurueck, ohne doppelte Restmengen."""
+    seen, out = set(), []
+    for generic, req in alts:
+        req_c = Counter(dict(req))
+        need = generic + sum(req_c.values())
+        if need > len(pool):
+            continue
+        for idx in itertools.combinations(range(len(pool)), need):
+            if not can_pay([pool[k] for k in idx if pool[k]], generic, req_c):
+                continue
+            rest = [pool[k] for k in range(len(pool)) if k not in idx]
+            sig = tuple(sorted(rest))
+            if sig not in seen:
+                seen.add(sig)
+                out.append(rest)
+    return out
+
+
+def fits_target(land, target):
+    if target == "basic":
+        return land.is_basic
+    if target == "land":
+        return True
+    return target in land.land_types
+
+
+def without_many(items, remove):
+    out = list(items)
+    for r_ in remove:
+        out.remove(r_)
+    return out
+
+
+def value_next(spells_next, bf_cols, bf_cards, lands_hand, has_creature, auras_need_creature):
+    """Bestes Ergebnis der naechsten Runde: welches der Haendelaender man legt und was man damit spielen kann."""
+    options = sorted(set(lands_hand))
+    if not options:
+        return best_cast(spells_next, land_key(bf_cols), has_creature, auras_need_creature)[0]
+    best = None
+    for land in options:
+        cols = bf_cols + ([] if enters_tapped(land, bf_cards) else [land.land_colors])
+        sc, _ = best_cast(spells_next, land_key(cols), has_creature, auras_need_creature)
+        if best is None or sc > best:
+            best = sc
+    return best
+
+
+def plan_cycle(cycler, pool, spells, battlefield, library, hand_lands, land_open, has_creature,
+               auras_need_creature, base=None):
+    """Plant das Landcycling: womit bezahlt wird und welches Land geholt wird.
+    Bewertet wird mit Vorausschau: Mana-Nutzung in DIESER Runde, was man in der NAECHSTEN Runde
+    spielen kann (inkl. Farben) und wie viele Landdrops gesichert sind.
+    base=(Score, gewaehlte Zauber) ohne Cycling: dann wird nur gecycelt, wenn es sich lohnt,
+    die geplanten Zauber dieser Runde nicht schlechter werden und die Karte nicht naechste Runde
+    ohnehin spielbar waere. base=None (Regel 'Land fehlt'): Cycling ist Pflicht, nur das Land wird gewaehlt."""
+    spells_wo = without_one(spells, cycler)
+    cands = sorted({c for c in library if c.is_land and fits_target(c, cycler.cycle_target)})
+    if not cands:
+        return None
+    rems = pay_subsets(pool, cycler.cycle_alts)
+    if not rems:
+        return None
+    bf_cols = [c.land_colors for c in battlefield]
+    have_colors = set().union(*bf_cols) if bf_cols else set()
+
+    base_key = None
+    if base is not None:
+        s0, ch0 = base
+        hc0 = has_creature or any(c.is_creature for c in ch0)
+        nxt0 = value_next(without_many(spells, ch0), bf_cols, battlefield, hand_lands, hc0, auras_need_creature)
+        base_key = (s0, nxt0, min(2, len(hand_lands)))
+
+    best = None
+    for rem in rems:
+        for cand in cands:
+            tapped = land_open and enters_tapped(cand, battlefield)
+            avail = rem + ([cand.land_colors] if land_open and not tapped else [])
+            sc, ch = best_cast(spells_wo, land_key(avail), has_creature, auras_need_creature)
+            if base is not None and sc < base[0]:
+                continue  # geplante Zauber duerfen nicht schlechter werden
+            bf_after = battlefield + ([cand] if land_open else [])
+            cols_after = bf_cols + ([cand.land_colors] if land_open else [])
+            lands_next = [] if land_open else hand_lands + [cand]
+            hc = has_creature or any(c.is_creature for c in ch)
+            nxt = value_next(without_many(spells_wo, ch), cols_after, bf_after, lands_next, hc, auras_need_creature)
+            cover = (1 if land_open else 0) + min(2, len(lands_next))
+            demand = sum(1 for sp in spells_wo
+                         if any(col in (set(cand.land_colors) - have_colors)
+                                for _, req in sp.alts for col, _ in req))
+            ncol = len(set().union(*(bf_cols + [cand.land_colors])))
+            deficit = -sum(1 for lc in bf_cols if set(lc) & set(cand.land_colors))
+            k = (sc, nxt, cover, demand, ncol, deficit)
+            if best is None or k > best[0]:
+                best = (k, rem, cand)
+    if best is None:
+        return None
+    if base_key is not None and best[0][:3] <= base_key:
+        return None  # Cycling bringt nichts -> Karte behalten
+    return best[1], best[2]
+
+
+def do_cycle(hand, library, cycler, cand):
+    """Fuehrt das Landcycling aus: Karte weg, Land aus dem Deck auf die Hand, Deck mischen.
+    Gibt die Chance auf ein Nicht-Land im naechsten Zug vor und nach dem Cycling zurueck."""
+    n = len(library)
+    lands = sum(c.is_land for c in library)
+    p_before = (n - lands) / n if n else 0.0
+    hand.remove(cycler)
+    library.remove(cand)
+    random.shuffle(library)
+    hand.append(cand)
+    n2 = n - 1
+    p_after = (n2 - (lands - 1)) / n2 if n2 > 0 else p_before
+    return p_before, p_after
+
+
+def without_one(items, item):
+    out = list(items)
+    out.remove(item)
+    return out
+
+
+def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multicolor, top_mv,
+             flood_lands=11, dmg_target=20, curve_turns=6,
+             cycle_on=True, cycle_turns=3, cycle_cap=6, cycle_last=False, mulligan=True, min_hand=5,
+             jace_on=True):
+    cast_in_turn = {t: 0 for t in range(1, max_turn + 1)}
+    opener_lands = n_creatures = power = toughness = 0
+    land_screw = color_screw = any_screw = 0
+    empty_hand, empty_spells, top_turns = [], [], []
+    flooded = lands_drawn_total = 0
+    dmg_turns = []
+    best_lethal = None
+    curve_avail = {t: 0 for t in range(1, curve_turns + 1)}  # verfuegbares Mana (Summe ueber alle Spiele)
+    curve_spent = {t: 0 for t in range(1, curve_turns + 1)}  # ausgegebenes Mana
+    curve_full = {t: 0 for t in range(1, curve_turns + 1)}   # Spiele, in denen alles Mana genutzt wurde
+    curve_games = {t: 0 for t in range(1, curve_turns + 1)}  # Spiele mit mindestens 1 Mana
+    cyc = {"games": 0, "events": 0, "reason": Counter(), "card": Counter(),
+           "p_before": 0.0, "p_after": 0.0, "first": []}
+    has_cyclers = cycle_on and any(c.cycle_alts for c in cards)
+    mull = {"on": mulligan, "min_hand": min_hand, "deals": 0, "lost": 0, "sizes": Counter(),
+            "first_any": 0, "first": Counter()}
+    played, max_deals = 0, sims * 50 + 1000
+    has_jace = jace_on and any(once_effects(c) or recurring_effects(c) for c in cards)
+    samples = {"creatures": [], "power": [], "toughness": [], "util": [], "jace": []}  # je gespieltes Spiel
+    jc = {"on": has_jace, "games_any": 0, "acts_win": 0, "gained_win": 0, "dist_win": Counter(),
+          "acts_all": 0, "gained_all": 0, "dist_all": Counter(), "first": [], "empty_reached": 0}
+
+    while played < sims:
+        mull["deals"] += 1
+        if mull["deals"] > max_deals:
+            raise RuntimeError(f"Fast jede Starthand fuehrt zum Mulligan: nur {played} von {sims} Spielen "
+                               f"wurden gespielt. Das Deck ist mit diesen Mulligan-Regeln praktisch unspielbar.")
+        hand, library, mulls, first_reasons = deal_opening(cards, mulligan, min_hand)
+        if first_reasons:
+            mull["first_any"] += 1
+            for r_ in set(first_reasons):
+                mull["first"][r_] += 1
+        if hand is None:
+            mull["lost"] += 1
+            continue  # Spiel durch Mulligan verloren: wird nicht gespielt
+        played += 1
+        mull["sizes"][len(hand)] += 1
+        opening = hand[:]
+        opener_lands += sum(c.is_land for c in hand)
+        battlefield, board = [], []  # gelegte Laender / gespielte Kreaturen (Karte, Runde)
+        hand_done = spells_done = top_done = dmg_done = False
+        dmg_total = 0
+        log = []
+        game_events = []
+        jst = JaceState()
+        perms = []  # Permanents mit wiederkehrendem Empower: (Karte, Runde des Eintritts)
+        acts_empty = gained_empty = None
+        snap = (0, 0, 0)
+        g_avail = g_spent = 0
+
+        for turn in range(1, horizon + 1):
+            drew = None
+            if turn > 1 or on_draw:
+                if not library:
+                    break
+                drew = library.pop(0)
+                hand.append(drew)
+            jst.used = False
+            turn_acts0, turn_gain0 = jst.acts, jst.gained
+            if has_jace:
+                for pc, t_in in perms:
+                    if t_in < turn:
+                        for e in recurring_effects(pc):
+                            if e[1] == "trigger" and e[3] == "turn":
+                                jst.add(e[2])
+                jst.try_activate(hand, library, turn)  # Loyalty aus frueheren Runden: Karte vor dem Landdrop ziehen
+            pool = [c.land_colors for c in battlefield]      # zu Rundenbeginn sind alle Laender untapped
+            avail_total = sum(1 for lc in pool if lc)         # Mana dieser Runde (inkl. neu gelegter Laender)
+            cycle_spent = 0
+            cycled_log = []
+            spells = [c for c in hand if not c.is_land]
+            has_creature = bool(board)
+
+            # Landcycling Regel 2: kein Land auf der Hand -> Land per Landcycling sichern
+            if has_cyclers and turn <= cycle_turns and not any(c.is_land for c in hand):
+                for cycler in sorted({c for c in spells if c.cycle_alts}, key=lambda c: (c.cycle_mv, c)):
+                    if not cycle_last and len(spells) <= 1:
+                        continue  # letzte Karte auf der Hand: nicht wegwerfen
+                    plan = plan_cycle(cycler, pool, spells, battlefield, library, [],
+                                      True, has_creature, auras_need_creature)
+                    if plan:
+                        rem, cand = plan
+                        pb, pa = do_cycle(hand, library, cycler, cand)
+                        game_events.append((turn, "Land fehlt", cycler.name, pb, pa))
+                        cycled_log.append((cycler, "Land fehlt"))
+                        cycle_spent += cycler.cycle_mv
+                        pool = rem
+                        spells = [c for c in hand if not c.is_land]
+                        break
+
+            # Land legen (getappte Laender liefern in dieser Runde kein Mana)
+            land_played, tapped_now = None, False
+            land_options = sorted({c for c in hand if c.is_land})
+            if land_options:
+                bf_cols = [c.land_colors for c in battlefield]
+
+                def score(land):
+                    tapped = enters_tapped(land, battlefield)
+                    avail = pool + ([] if tapped else [land.land_colors])
+                    s_, _ = best_cast(spells, land_key(avail), has_creature, auras_need_creature)
+                    # gleich viel Mana ausgegeben -> getapptes Land bevorzugt jetzt legen
+                    return (s_, tapped, len(set().union(*(bf_cols + [land.land_colors]))))
+
+                land_played = max(land_options, key=score)
+                tapped_now = enters_tapped(land_played, battlefield)
+                hand.remove(land_played)
+                battlefield.append(land_played)
+                if not tapped_now:
+                    pool = pool + [land_played.land_colors]
+                    if land_played.land_colors:
+                        avail_total += 1
+            key = land_key(pool)
+            full_key = land_key([c.land_colors for c in battlefield])
+
+            # Top Card gezogen und spielbar?
+            if not top_done and top_mv is not None:
+                for c in set(x for x in spells if x.mv == top_mv and x.alts):
+                    if top_card_playable(c, spells, key, has_creature, auras_need_creature):
+                        top_turns.append(turn)
+                        top_done = True
+                        break
+
+            s_chosen, chosen = best_cast(spells, key, has_creature, auras_need_creature)
+
+            # Landcycling Regel 1: Karte ist diesmal nicht spielbar -> mit uebrigem Mana cyceln
+            if has_cyclers:
+                for _round in range(3):
+                    if len(battlefield) + sum(c.is_land for c in hand) >= cycle_cap:
+                        break
+                    left = Counter(spells)
+                    left.subtract(Counter(chosen))
+                    cands = sorted((c for c, k in left.items() if k > 0 and c.cycle_alts),
+                                   key=lambda c: (c.cycle_mv, c))
+                    done = False
+                    for cycler in cands:
+                        if not cycle_last:
+                            rest = left.copy()
+                            rest[cycler] -= 1
+                            if not any(k > 0 for k in rest.values()):
+                                continue  # waere die letzte Karte auf der Hand: nicht wegwerfen
+                        plan = plan_cycle(cycler, pool, spells, battlefield, library,
+                                          [c for c in hand if c.is_land], land_played is None,
+                                          has_creature, auras_need_creature, base=(s_chosen, chosen))
+                        if not plan:
+                            continue
+                        rem, cand = plan
+                        pb, pa = do_cycle(hand, library, cycler, cand)
+                        game_events.append((turn, "Karte nicht spielbar", cycler.name, pb, pa))
+                        cycled_log.append((cycler, "Karte nicht spielbar"))
+                        cycle_spent += cycler.cycle_mv
+                        pool = rem
+                        if land_played is None:  # Landdrop noch frei -> geholtes Land sofort legen
+                            land_played = cand
+                            tapped_now = enters_tapped(cand, battlefield)
+                            hand.remove(cand)
+                            battlefield.append(cand)
+                            if not tapped_now:
+                                pool = pool + [cand.land_colors]
+                                if cand.land_colors:
+                                    avail_total += 1
+                        spells = [c for c in hand if not c.is_land]
+                        key = land_key(pool)
+                        full_key = land_key([c.land_colors for c in battlefield])
+                        s_chosen, chosen = best_cast(spells, key, has_creature, auras_need_creature)
+                        done = True
+                        break
+                    if not done:
+                        break
+
+            if has_jace and land_played is not None:
+                for e in once_effects(land_played):
+                    if e[1] == "etb":
+                        jst.add(e[2])
+                for pc, _t in perms:
+                    for e in recurring_effects(pc):
+                        if e[1] == "trigger" and e[3].startswith("enter:") and enter_filter_matches(e[3][6:], land_played):
+                            jst.add(e[2])
+                if recurring_effects(land_played):
+                    perms.append((land_played, turn))
+
+            for c in chosen:
+                hand.remove(c)
+                if c.is_creature:
+                    board.append((c, turn))
+            if has_jace:
+                for c in sorted(chosen, key=lambda x: (not recurring_effects(x), x.mv)):
+                    for pc, _t in perms:
+                        for e in recurring_effects(pc):
+                            if e[1] == "trigger" and e[3].startswith("cast:") and cast_filter_matches(e[3][5:], c):
+                                jst.add(e[2])
+                    for e in once_effects(c):
+                        jst.add(e[2])
+                    if not c.is_instant_sorcery:
+                        for pc, _t in perms:
+                            for e in recurring_effects(pc):
+                                if e[1] == "trigger" and e[3].startswith("enter:") and enter_filter_matches(e[3][6:], c):
+                                    jst.add(e[2])
+                        if recurring_effects(c):
+                            perms.append((c, turn))
+            if turn <= max_turn and chosen:
+                cast_in_turn[turn] += 1
+            if turn <= curve_turns:
+                spent = min(sum(c.mv for c in chosen) + cycle_spent, avail_total)
+                curve_avail[turn] += avail_total
+                curve_spent[turn] += spent
+                g_avail += avail_total
+                g_spent += spent
+                if avail_total > 0:
+                    curve_games[turn] += 1
+                    curve_full[turn] += (spent == avail_total)
+
+            if has_jace:
+                # Angriffs-Ausloeser (Kreaturen vom Vorzug oder mit Haste)
+                for pc, t_in in perms:
+                    for e in recurring_effects(pc):
+                        if e[1] == "trigger" and e[3] == "attack" and pc.is_creature and (t_in < turn or pc.haste):
+                            jst.add(e[2])
+                # bezahlbare Faehigkeiten mit dem uebrigen Mana
+                paid = [c.alts for c in chosen]
+                for pc, t_in in perms:
+                    for e in recurring_effects(pc):
+                        if e[1] != "activated" or (e[5] and pc.is_creature and not (t_in < turn or pc.haste)):
+                            continue
+                        for _k in range(1 if e[5] else 10):
+                            if not can_cast_all(tuple(sorted(paid + [e[4]])), key):
+                                break
+                            paid.append(e[4])
+                            jst.add(e[2])
+                jst.try_activate(hand, library, turn)  # Loyalty aus dieser Runde
+
+            # Angriff: Kreaturen vom Vorzug greifen an, neue nur mit Haste (keine Blocker, kein Removal)
+            turn_dmg = sum(c.power for c, t in board if t < turn or c.haste) if board else 0
+            dmg_total += turn_dmg
+            log.append((turn, drew, land_played, tapped_now, chosen, turn_dmg, dmg_total, cycled_log,
+                        (jst.gained - turn_gain0, jst.acts - turn_acts0, jst.loyalty)))
+            if not dmg_done and dmg_total >= dmg_target:
+                dmg_turns.append(turn)
+                dmg_done = True
+                cand_key = (turn, -dmg_total)  # frueher ist besser, bei Gleichstand mehr Schaden
+                if best_lethal is None or cand_key < best_lethal["key"]:
+                    best_lethal = {"key": cand_key, "opening": opening, "log": list(log), "mulls": mulls}
+
+            # Hand aufgebraucht?
+            if not hand_done and not hand:
+                empty_hand.append(turn)
+                hand_done = True
+                acts_empty, gained_empty = jst.acts, jst.gained
+            if not spells_done and all(c.is_land for c in hand):
+                empty_spells.append(turn)
+                spells_done = True
+
+            if turn == max_turn:  # Momentaufnahme fuer Kreaturen und Screw
+                short = len(battlefield) < max_turn
+                no_colors = multicolor and not has_two_colors(full_key)
+                land_screw += short
+                color_screw += no_colors
+                any_screw += (short or no_colors)
+                n_creatures += len(board)
+                power += sum(c.power for c, _ in board)
+                toughness += sum(c.toughness for c, _ in board)
+                snap = (len(board), sum(c.power for c, _ in board), sum(c.toughness for c, _ in board))
+
+        if has_jace:
+            a_win = acts_empty if acts_empty is not None else jst.acts
+            g_win = gained_empty if gained_empty is not None else jst.gained
+            jc["acts_win"] += a_win
+            jc["gained_win"] += g_win
+            jc["dist_win"][min(a_win, 6)] += 1
+            jc["games_any"] += a_win > 0
+            jc["acts_all"] += jst.acts
+            jc["gained_all"] += jst.gained
+            jc["dist_all"][min(jst.acts, 6)] += 1
+            samples["jace"].append(a_win)
+            jc["empty_reached"] += acts_empty is not None
+            if jst.first is not None:
+                jc["first"].append(jst.first)
+
+        samples["creatures"].append(snap[0])
+        samples["power"].append(snap[1])
+        samples["toughness"].append(snap[2])
+        if g_avail:
+            samples["util"].append(g_spent / g_avail)
+
+        # Flood: Laender, die bis zum Ende gezogen wurden (Starthand + Zuege) = Hand + Feld
+        lands_drawn = sum(c.is_land for c in hand) + len(battlefield)
+        lands_drawn_total += lands_drawn
+        flooded += lands_drawn >= flood_lands
+
+        if game_events:
+            cyc["games"] += 1
+            cyc["first"].append(min(e[0] for e in game_events))
+            for _t, reason, name, pb, pa in game_events:
+                cyc["events"] += 1
+                cyc["reason"][reason] += 1
+                cyc["card"][name] += 1
+                cyc["p_before"] += pb
+                cyc["p_after"] += pa
+
+    return {
+        "cast": cast_in_turn,
+        "opener_lands": opener_lands / sims,
+        "creatures": n_creatures / sims,
+        "power": power / sims,
+        "toughness": toughness / sims,
+        "land_screw": land_screw / sims,
+        "color_screw": color_screw / sims,
+        "any_screw": any_screw / sims,
+        "dmg": dmg_turns,
+        "best_lethal": best_lethal,
+        "mulligan": mull,
+        "jace": jc,
+        "samples": samples,
+        "curve": {"avail": curve_avail, "spent": curve_spent, "full": curve_full, "games": curve_games},
+        "landcycle": cyc,
+        "flood": flooded / sims,
+        "lands_drawn": lands_drawn_total / sims,
+        "empty_hand": empty_hand,
+        "empty_spells": empty_spells,
+        "top": top_turns,
+    }
+
+
+def card_label(c):
+    if c.is_creature:
+        return f"{c.name} ({c.power}/{c.toughness}{', Haste' if c.haste else ''})"
+    return c.name

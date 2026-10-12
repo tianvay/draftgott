@@ -1,0 +1,110 @@
+"""Empower Jace: Zustand von Jace in der Simulation, Filter fuer Effekte und die statische Analyse eines Decks."""
+from functools import lru_cache
+
+from components.cards import EMPOWER_ONCE, EMPOWER_RECURRING
+
+
+class JaceState:
+    """Jace-Planeswalker-Token: nur eine Zahl (Loyalty). Bei 0 Loyalty gibt es keinen Token mehr,
+    ein weiterer Empower erstellt einen neuen. Aktiviert wird (-3: Karte ziehen) hoechstens 1x pro Runde."""
+    __slots__ = ("loyalty", "used", "acts", "gained", "first")
+
+    def __init__(self):
+        self.loyalty = 0
+        self.used = False
+        self.acts = 0
+        self.gained = 0
+        self.first = None
+
+    def add(self, n):
+        if n > 0:
+            self.loyalty += n
+            self.gained += n
+
+    def try_activate(self, hand, library, turn):
+        if self.used or self.loyalty < 3 or not library:
+            return False
+        self.loyalty -= 3
+        self.used = True
+        self.acts += 1
+        if self.first is None:
+            self.first = turn
+        hand.append(library.pop(0))
+        return True
+
+
+@lru_cache(maxsize=None)
+def recurring_effects(card):
+    """Wiederkehrende, modellierbare Empower-Effekte der Vorderseite (Ausloeser, bezahlbare Faehigkeiten)."""
+    return tuple(e for e in card.empower if e[0] == 0 and e[1] in EMPOWER_RECURRING and not e[6])
+
+
+@lru_cache(maxsize=None)
+def once_effects(card):
+    """Einmalige Empower-Effekte der Vorderseite (Zauber, beim Betreten)."""
+    return tuple(e for e in card.empower if e[0] == 0 and e[1] in ("spell", "etb") and not e[6])
+
+
+def cast_filter_matches(filt, card):
+    if filt == "noncreature":
+        return not card.is_creature
+    if filt == "creature":
+        return card.is_creature
+    if filt == "instant_sorcery":
+        return card.is_instant_sorcery
+    return True
+
+
+def enter_filter_matches(filt, card):
+    if filt == "creature":
+        return card.is_creature
+    if filt == "land":
+        return card.is_land
+    return True
+
+
+def analyze_jace(rows):
+    """Zaehlt Empower-Jace-Karten und weitere Jace-/Planeswalker-Bezuege (aus den Kartentexten)."""
+    kinds = ["spell", "etb", "other_once", "trigger", "activated", "unknown"]
+    cat = {k: {"copies": 0, "cards": 0, "sum": 0} for k in kinds}
+    out = {"cat": cat, "cards": [], "empower_copies": 0, "empower_cards": 0, "once_copies": 0, "once_sum": 0,
+           "rec_copies": 0, "rec_sum": 0, "x_cards": [], "unmodeled": [],
+           "tags": {t: {"copies": 0, "cards": 0} for t in ("jace", "pw_help", "pw_removal", "is_pw")}}
+    for name, qty, card, shown in rows:
+        eff, tags = card.empower, card.pw_tags
+        if not eff and not tags:
+            continue
+        rec = {"name": name, "qty": qty, "kinds": [], "values": [], "tags": list(tags), "text": card.empower_text}
+        seen = set()
+        once_n = rec_n = 0
+        for fi, kind, n, trig, cost, tap, unmod, xval in eff:
+            seen.add(kind)
+            cat[kind]["sum"] += qty * n
+            if kind in EMPOWER_ONCE:
+                once_n += n
+            elif kind in EMPOWER_RECURRING:
+                rec_n += n
+            rec["values"].append(f"{n}{'+X' if xval and n else ''}" if (n or not xval) else "X")
+            if xval and name not in out["x_cards"]:
+                out["x_cards"].append(name)
+            if unmod and name not in out["unmodeled"]:
+                out["unmodeled"].append(name)
+        for k in seen:
+            cat[k]["copies"] += qty
+            cat[k]["cards"] += 1
+        rec["kinds"] = sorted(seen, key=kinds.index)
+        if eff:
+            out["empower_copies"] += qty
+            out["empower_cards"] += 1
+        if seen & set(EMPOWER_ONCE):
+            out["once_copies"] += qty
+            out["once_sum"] += qty * once_n
+        if seen & set(EMPOWER_RECURRING):
+            out["rec_copies"] += qty
+            out["rec_sum"] += qty * rec_n
+        for t in tags:
+            out["tags"][t]["copies"] += qty
+            out["tags"][t]["cards"] += 1
+        out["cards"].append(rec)
+    out["any"] = bool(out["cards"])
+    return out
