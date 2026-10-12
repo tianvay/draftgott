@@ -24,6 +24,14 @@ schnellen Test reicht zum Beispiel `--sims 1000`.
 
 ### Decks vergleichen
 
+**Herkunft der Karten:** Mit `--core` zeigt die Deckliste im Abschnitt „Deck“ alle Karten aus allen Dateien, jede Zeile mit
+ihrem Bereich (z. B. `Core`, `Splash`, `Nosplash`). Mengen werden pro Bereich getrennt geführt, eine Karte kann in mehreren
+Bereichen stehen: `Plains` mit 6 im Kern und 3 in `_nosplash.txt` erscheint als zwei Zeilen (6 × Core, 3 × Nosplash), im
+Deck mit der Nosplash-Variante sind es 9. Die Bereiche sind farbig: Kern blau, erste Variante rot, zweite Variante gelb
+(weitere ebenfalls gelb). Bereiche, die nicht zum gezeigten Deck gehören, sind blass dargestellt.
+Der Bereichsname ist der Dateiname ohne führenden Unterstrich. Eigener Name: `_nosplash.txt=NoSplash` (auch bei `--core`
+und `--deckalt`).
+
 Mit gemeinsamem Kern (z. B. `core.txt` mit 32 Karten, `whitesplash.txt` und `nosplash.txt` mit je 8 Karten):
 
 ```
@@ -226,6 +234,13 @@ Karten), Zauber pro Runde, Kreaturen, Mana Screw
 und Flood, Curve-Auslastung, Spiellogik, Schaden durch Kreaturen, schnellster Lethal (mit Spielverlauf), Landcycling
 (nur bei passenden Karten), Tempo und Modellannahmen. Die Modellannahmen im Bericht zeigen immer die Einstellungen,
 mit denen er erzeugt wurde.
+
+## Details pro Variante
+
+Mit `--deckalt` oder mehreren Deckdateien werden alle Detailabschnitte (Auf einen Blick bis Modellannahmen, also auch
+Schnellster Lethal, Jace & Planeswalker, Mulligan, Curve …) für **jedes** Deck berechnet. Unter „Deck-Vergleich“ wählst du
+mit den Knöpfen „Details für: …“ das Deck aus. Die Navigation oben passt sich an. Ohne JavaScript stehen alle Decks
+untereinander.
 
 ## Der Abschnitt „Deck-Vergleich“
 

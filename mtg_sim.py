@@ -1124,6 +1124,23 @@ td.bad{background:var(--badbg);color:var(--bad)}
 .m-h{text-shadow:0 0 3px #fff,0 0 3px #fff;color:#111;min-width:38px;padding:0 8px}
 .tag.add{background:var(--goodbg);color:var(--good);border-color:transparent}
 .tag.rem{background:var(--badbg);color:var(--bad);border-color:transparent}
+.tag.t0{background:#dbe9ff;color:#1b4a9c;border-color:transparent;font-weight:650}
+.tag.t1{background:#fde0e0;color:#a82a2a;border-color:transparent;font-weight:650}
+.tag.t2{background:#fff0b3;color:#7a5a00;border-color:transparent;font-weight:650}
+.tag.off{opacity:.55}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .tag.t0{background:#17305c;color:#9fc4ff}
+:root:not([data-theme="light"]) .tag.t1{background:#401a1a;color:#ff9090}
+:root:not([data-theme="light"]) .tag.t2{background:#3b3110;color:#f5d56a}}
+:root[data-theme="dark"] .tag.t0{background:#17305c;color:#9fc4ff}
+:root[data-theme="dark"] .tag.t1{background:#401a1a;color:#ff9090}
+:root[data-theme="dark"] .tag.t2{background:#3b3110;color:#f5d56a}
+.grpbar{max-width:1120px;margin:18px auto 0;padding:0 20px;display:none;align-items:center;gap:8px;flex-wrap:wrap}
+.js .grpbar{display:flex}
+.grpbar button{font:inherit;font-size:13.5px;padding:5px 14px;border-radius:999px;border:1px solid var(--line);
+  background:var(--chip);color:var(--text);cursor:pointer}
+.grpbar button.on{background:var(--text);color:var(--bg);border-color:var(--text)}
+.js .grp:not(.on),.js .grpnav:not(.on){display:none}
+.grp>h2.gh{max-width:1120px;margin:22px auto 0;padding:0 20px;font-size:20px}
 .tag{display:inline-block;background:var(--chip);border:1px solid var(--line);border-radius:6px;padding:0 7px;margin:1px 3px 1px 0;font-size:12px;color:var(--muted)}
 .bar{background:var(--track);border-radius:999px;height:9px;min-width:70px;overflow:hidden}
 .bar i{display:block;height:100%;background:var(--accent);border-radius:999px}
@@ -1732,19 +1749,25 @@ def render_jace_section(ctx):
             + "".join(f"<li>{esc(r)}</li>" for r in rules) + "</ul></div>")
 
 
-def render_html(ctx):
+SWITCH_JS = """<script>
+document.documentElement.classList.add('js');
+document.querySelectorAll('.grpbar button').forEach(function(b){b.addEventListener('click',function(){
+  var g=b.getAttribute('data-g');
+  document.querySelectorAll('[data-g]').forEach(function(e){e.classList.toggle('on',e.getAttribute('data-g')===g)});
+  window.scrollTo(0,document.querySelector('.grpbar').offsetTop-60);});});
+</script>"""
+
+
+def render_details(ctx, suffix=""):
+    """Alle Detailabschnitte (Auf einen Blick ... Modellannahmen) fuer EIN Deck. Gibt (sections, nav) zurueck."""
     a, res, rows = ctx["args"], ctx["results"], ctx["rows"]
     sims, T, C, H = a.sims, a.turns, a.curve_runden, ctx["horizon"]
     labels = list(res.keys())
     sections, nav = [], []
 
     def add(sid, title, hint, body):
-        sections.append(h_section(sid, title, hint, body))
-        nav.append((sid, title))
-
-    if ctx.get("alts"):
-        add("vergleich", "Deck-Vergleich", f"Hauptdeck gegen {len(ctx['alts'])} Alternative(n), mit statistischer Einordnung der Unterschiede.",
-            render_compare_section(ctx))
+        sections.append(h_section(sid + suffix, title, hint, body))
+        nav.append((sid + suffix, title))
 
     # ---------------- Auf einen Blick
     rows_v = []
@@ -1817,12 +1840,38 @@ def render_html(ctx):
                              h_bar_cell(srcs[col] / max(ctx["n_lands"], 1), f"{srcs[col] / max(ctx['n_lands'], 1):.0%}")])
     col_table = h_table(["Farbe", "Karten", "Quellen", "Anteil der Länder"], col_rows)
 
-    deck_rows = []
-    for name, qty, card, shown in sorted(rows, key=lambda r: (r[2].is_land, r[2].mv, r[0])):
-        cost = shown.split("   [")[0]
-        tags = "".join(f'<span class="tag">{html_cost(t)}</span>' for t in re.findall(r"\[([^\]]*)\]", shown))
-        deck_rows.append([f'<td class="l">{esc(name)}</td>', f"<td>{qty}</td>",
-                          f'<td class="l">{html_cost(cost)}</td>', f'<td class="l">{tags}</td>'])
+    deck_rows, origin_note, head = [], "", ["Karte", "Anz.", "Kosten", "Eigenschaften"]
+    cost_tags = lambda shown: ("".join(f'<span class="tag">{html_cost(t)}</span>'
+                                       for t in re.findall(r"\[([^\]]*)\]", shown)))
+    if ctx["parts"] and ctx["args"].core:
+        # Tabelle mit allen Dateien: je Bereich eine Zeile pro Karte, mit der Menge dieses Bereichs
+        all_decks = ctx.get("all_decks") or [ctx]
+        info = {n: (c, sh) for dd in all_decks for n, _, c, sh in dd["rows"]}
+        base_labels = [lab for lab, _ in ctx["parts"]]
+        order, seen = [], set()
+        for dd in all_decks:
+            for lab, d in dd["parts"]:
+                if (lab, id(d)) not in seen and not any(lab == o[0] for o in order):
+                    order.append((lab, d))
+                seen.add((lab, id(d)))
+        flat = [(n, q, lab, i) for i, (lab, d) in enumerate(order) for n, q in d.items() if n in info]
+        totals = {lab: sum(d.values()) for lab, d in order}
+        for n, q, lab, i in sorted(flat, key=lambda r: (info[r[0]][0].is_land, info[r[0]][0].mv, r[0], r[3])):
+            card, shown = info[n]
+            in_base = lab in base_labels
+            tag = f'<span class="tag t{min(i, 2)}{"" if in_base else " off"}">{esc(lab)}</span>'
+            deck_rows.append([f'<td class="l">{esc(n)}</td>', f"<td>{q}</td>", f'<td class="l">{tag}</td>',
+                              f'<td class="l">{html_cost(shown.split("   [")[0])}</td>', f'<td class="l">{cost_tags(shown)}</td>'])
+        head = ["Karte", "Anz.", "Bereich", "Kosten", "Eigenschaften"]
+        origin_note = ('<div class="note" style="margin:0 0 8px">Alle Dateien: '
+                       + " · ".join(f"<b>{esc(l)}</b> {totals[l]} Karten" for l, _ in order)
+                       + f'. Dieses Deck besteht aus {" + ".join(esc(l) for l in base_labels)}; '
+                       'blass dargestellte Bereiche gehören nur zu einer anderen Variante. Eine Karte steht mit der Menge je Bereich, '
+                       'ihre Gesamtmenge im Deck ist die Summe der Bereiche des Decks.</div>')
+    else:
+        for name, qty, card, shown in sorted(rows, key=lambda r: (r[2].is_land, r[2].mv, r[0])):
+            deck_rows.append([f'<td class="l">{esc(name)}</td>', f"<td>{qty}</td>",
+                              f'<td class="l">{html_cost(shown.split("   [")[0])}</td>', f'<td class="l">{cost_tags(shown)}</td>'])
     unsure = ""
     if ctx["unsure"]:
         unsure = ('<div class="warnbox">Getappt-Bedingung nicht modelliert (als immer getappt gezählt): '
@@ -1832,7 +1881,7 @@ def render_html(ctx):
             f'<div class="panel"><b>Mana-Kurve</b><div class="note" style="margin:0 0 4px">Anzahl Nichtland-Karten je Manawert</div>{curve_svg}</div>'
             f'<div class="panel"><b>Farbverteilung</b><div class="note" style="margin:0 0 4px">Karten = Nichtland-Karten, die die Farbe brauchen · Quellen = Länder, die sie erzeugen</div>{col_table}</div></div>'
             f'<div class="panel" style="margin-top:14px">{unsure}'
-            f'{h_table(["Karte", "Anz.", "Kosten", "Eigenschaften"], deck_rows, left=(0, 2, 3))}</div>')
+            f'{origin_note}{h_table(head, deck_rows, left=(0, 2, 3, 4) if len(head) == 5 else (0, 2, 3))}</div>')
     add("deck", "Deck", "Kartendaten von Scryfall.", body)
 
     # ---------------- Mulligan
@@ -2077,10 +2126,41 @@ def render_html(ctx):
                    "Regeln im Abschnitt Jace & Planeswalker.")
     add("annahmen", "Modellannahmen", "", '<div class="panel"><ul class="ass">' + "".join(f"<li>{esc(x)}</li>" for x in ass) + "</ul></div>")
 
+    return sections, nav
+
+
+def render_html(ctx):
+    a, res = ctx["args"], ctx["results"]
+    sims, T, H = a.sims, a.turns, ctx["horizon"]
+    mu0 = res[list(res.keys())[0]]["mulligan"]
+    decks = [ctx] + [dict(d, args=a, horizon=ctx["horizon"], jace=analyze_jace(d["rows"]), alts=[],
+                          all_decks=ctx["all_decks"]) for d in ctx.get("alts", [])]
+    multi = len(decks) > 1
+    sections, nav_parts = [], []
+    if multi:
+        cmp_body = h_section("vergleich", "Deck-Vergleich",
+                             f"Hauptdeck gegen {len(ctx['alts'])} Alternative(n), mit statistischer Einordnung der Unterschiede.",
+                             render_compare_section(ctx))
+        sections.append(cmp_body)
+        cmp_nav = [("vergleich", "Deck-Vergleich")]
+        btns = "".join(f'<button type="button" data-g="{i}" class="{"on" if i == 0 else ""}">{esc(d["name"])}</button>'
+                       for i, d in enumerate(decks))
+        sections.append(f'<div class="grpbar"><b>Details für:</b> {btns}</div>')
+        for i, d in enumerate(decks):
+            sec, nv = render_details(d, "" if i == 0 else f"-{i}")
+            sections.append(f'<div class="grp{" on" if i == 0 else ""}" data-g="{i}">'
+                            f'<h2 class="gh">Details: {esc(d["name"])}</h2>{"".join(sec)}</div>')
+            nav_parts.append(f'<div class="in grpnav{" on" if i == 0 else ""}" data-g="{i}">'
+                             + "".join(f'<a href="#{k}">{esc(t)}</a>' for k, t in cmp_nav + nv) + "</div>")
+        nav_html = "".join(nav_parts)
+    else:
+        sec, nv = render_details(ctx)
+        sections += sec
+        nav_html = '<div class="in">' + "".join(f'<a href="#{k}">{esc(t)}</a>' for k, t in nv) + "</div>"
+
     chips = ([f"Vergleich mit {len(ctx['alts'])} Alternative(n)"] if ctx.get("alts") else []) + (
         [f"Seed {a.seed}"] if a.seed is not None else []) + [f"{sims} gespielte Spiele pro Modus", "Mulligan an" if mu0["on"] else "ohne Mulligan", f"Auswertung Runde {T}", f"Beobachtung bis Runde {H}",
              f"{a.schaden} Schaden", f"Flood ab {a.flood} Ländern"]
-    nav_html = "".join(f'<a href="#{i}">{esc(t)}</a>' for i, t in nav)
     missing_html = ('<div class="warnbox" style="margin-top:14px"><b>Nicht bei Scryfall gefunden (nicht simuliert):</b> '
                     + esc(", ".join(ctx["missing"])) + "</div>") if ctx.get("missing") else ""
     stamp = datetime.datetime.now().strftime("%d.%m.%Y %H:%M")
@@ -2090,8 +2170,9 @@ def render_html(ctx):
             f'<header class="top"><h1>{esc(ctx["name"])}</h1>'
             f'<div class="sub">Starthand-Simulation · erstellt am {stamp}</div>'
             f'<div class="chips">{"".join(f"<span class=chip>{esc(c)}</span>" for c in chips)}</div></header>'
-            f'<nav><div class="in">{nav_html}</div></nav><main>{missing_html}{"".join(sections)}</main>'
-            f'<footer>Erzeugt mit mtg_sim.py · Kartendaten von Scryfall</footer></body></html>')
+            f'<nav>{nav_html}</nav><main>{missing_html}{"".join(sections)}</main>'
+            f'<footer>Erzeugt mit mtg_sim.py · Kartendaten von Scryfall</footer>'
+            + (SWITCH_JS if multi else "") + '</body></html>')
 
 
 
@@ -2141,6 +2222,17 @@ def main():
     run(ap.parse_args())
 
 
+def split_label(spec):
+    """'datei.txt=Label' -> (datei.txt, Label). Ohne Label wird der Dateiname genommen (ohne fuehrende '_')."""
+    path, label = spec, None
+    if "=" in spec:
+        path, label = spec.rsplit("=", 1)
+    if not label:
+        stem = pathlib.Path(path).stem.strip("_- ")
+        label = stem[:1].upper() + stem[1:]
+    return path, label
+
+
 def build_deck(entry, data, args):
     """Wertet eine Deckliste mit den Scryfall-Daten aus."""
     cards, rows, missing = [], [], []
@@ -2160,7 +2252,7 @@ def build_deck(entry, data, args):
     top_mv = max((c.mv for c in castable), default=None)
     deck_colors = sorted(set().union(*(required_colors(c) for c in nonlands)))
     return dict(
-        name=entry["name"], deck=entry["deck"], rows=rows, cards=cards, missing=missing,
+        name=entry["name"], deck=entry["deck"], parts=entry.get("parts", []), rows=rows, cards=cards, missing=missing,
         n_lands=len(cards) - len(nonlands),
         avg_mv=sum(c.mv for c in nonlands) / len(nonlands) if nonlands else 0,
         unsure=sorted({n for n, _, c, _ in rows if c.is_land and c.tap_mode == "tapped?"}),
@@ -2190,21 +2282,26 @@ def simulate_deck(dd, args, idx, horizon):
 
 def run(args):
     entries, used = [], Counter()
-    core = {}
+    core, core_label = {}, None
     if args.core:
-        with open(args.core, encoding="utf-8") as f:
+        core_path, core_label = split_label(args.core)
+        with open(core_path, encoding="utf-8") as f:
             core = parse_deck(f.read())
-        print(f"Kern: {sum(core.values())} Karten aus {args.core}", file=sys.stderr)
-    for path in list(args.deckfile) + (args.deckalt or []):
+        print(f"Kern: {sum(core.values())} Karten aus {core_path}", file=sys.stderr)
+    for spec in list(args.deckfile) + (args.deckalt or []):
+        path, label = split_label(spec)
         with open(path, encoding="utf-8") as f:
             text = f.read()
         name = parse_deck_name(text, pathlib.Path(path).stem)
         used[name] += 1
         if used[name] > 1:
             name = f"{name} ({used[name]})"
+        part = parse_deck(text)
         deck = Counter(core)
-        deck.update(parse_deck(text))
-        entries.append({"path": path, "name": name, "deck": dict(deck)})
+        deck.update(part)
+        # Herkunft jeder Karte: Mengen je Bereich getrennt halten (eine Karte kann in mehreren Bereichen stehen)
+        parts = ([(core_label, dict(core))] if args.core else []) + [(label, part)]
+        entries.append({"path": path, "name": name, "deck": dict(deck), "parts": parts})
 
     print("Lade Kartendaten von Scryfall ...", file=sys.stderr)
     try:
@@ -2218,7 +2315,8 @@ def run(args):
         simulate_deck(dd, args, idx, horizon)
 
     main_deck = decks[0]
-    ctx = dict(main_deck, args=args, horizon=horizon, jace=analyze_jace(main_deck["rows"]), alts=decks[1:])
+    ctx = dict(main_deck, args=args, horizon=horizon, jace=analyze_jace(main_deck["rows"]), alts=decks[1:],
+               all_decks=decks)
     out_path = pathlib.Path(args.ausgabe)
     out_path.write_text(render_html(ctx), encoding="utf-8")
     print(f"Bericht gespeichert: {out_path.resolve()}", file=sys.stderr)
