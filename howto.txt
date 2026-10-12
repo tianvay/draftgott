@@ -1,0 +1,8 @@
+Für Standard-Sim:
+python .\mtg_sim.py .\deck.txt --sims 10000 --html meinbericht.html
+
+Für Abwägung ob Splash:
+python mtg_sim.py _splash.txt _nosplash.txt --core _core.txt --seed 42 --html splashornot.html
+
+
+770953a44b3f928a
