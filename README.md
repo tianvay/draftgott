@@ -39,14 +39,18 @@ Liest den Kartenpool aus `_draftedcardpool.txt` (Abschnitte `Deck` und `Sideboar
 mit Setcode und Nummer) und öffnet im Browser eine Seite mit allen Karten als Bild (Daten und Bilder von Scryfall).
 Eine andere Datei geht so: `python mtg_sim.py --drafthelper meinpool.txt`.
 
-- Jede Kopie einer Karte wird einzeln als **Core**, **Splash**, **NoSplash** oder **Aus** markiert. Vorbelegung:
+- Jede Kopie einer Karte (außer Standardländern) wird einzeln als **Core**, **Splash**, **NoSplash** oder **Aus** markiert. Vorbelegung:
   Deck = Core, Sideboard = Aus.
+- **Standardländer** (Plains, Island, Swamp, Mountain, Forest) werden nicht als Einzelkarten markiert, sondern oben
+  als Menge je Gruppe eingestellt (Core / Splash / NoSplash, mit − und +). Startwert ist die Anzahl im Deck der
+  Datei als Core. Länder, die nicht im Pool sind (z. B. Swamp für einen anderen Splash), lassen sich ebenfalls
+  hinzufügen.
 - **Simulieren** baut die Varianten *Core + Splash* und *Core + NoSplash*, simuliert beide und zeigt den
   Vergleichsbericht direkt auf der Seite (zusätzlich als Datei, siehe `--ausgabe`). Danach geht es mit
   „Zurück zu den Karten“ weiter.
 - Die Simulationsparameter (`--sims`, `--seed`, `--turns` …) kommen von der Kommandozeile, die Spielanzahl lässt
   sich auf der Seite ändern.
-- Der Server läuft nur lokal (127.0.0.1, Port 8765). Beenden: Button „Beenden“ oder Strg+C im Terminal.
+- Der Server läuft nur lokal (127.0.0.1, Port 8765, ist er belegt, ein freier Port). Beenden: Button „Beenden“ oder Strg+C im Terminal.
 - Wird weder Splash noch NoSplash markiert, wird nur das Core-Deck simuliert.
 
 ## Schnellstart

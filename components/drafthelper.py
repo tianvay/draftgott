@@ -1,7 +1,8 @@
 """Draft-Helper (--drafthelper): lokaler Webserver mit Kartenseite.
 
 Die Seite zeigt Deck und Sideboard aus der Kartenpool-Datei als Karten (Daten und Bilder von Scryfall). Jede Kopie
-einer Karte wird als Core, Splash, NoSplash oder Aus markiert. Ein Klick auf "Simulieren" baut daraus die Varianten
+einer Karte wird als Core, Splash, NoSplash oder Aus markiert. Standardlaender werden getrennt davon als Mengen je
+Gruppe eingestellt (auch solche, die nicht im Pool sind). Ein Klick auf "Simulieren" baut daraus die Varianten
 Core + Splash und Core + NoSplash, simuliert sie mit der normalen Pipeline und zeigt den Vergleichsbericht.
 
 Nur Standardbibliothek. Der Server hoert ausschliesslich auf 127.0.0.1.
@@ -23,12 +24,17 @@ from components.scryfall import card_image_url, fetch_cards_cached, fetch_printi
 
 PORT = 8765
 MARKS = ("core", "splash", "nosplash", "off")
+GROUPS = ("core", "splash", "nosplash")
+BASIC_LANDS = ("Plains", "Island", "Swamp", "Mountain", "Forest")
+MAX_BASICS = 40  # je Land und Gruppe
 SIM_OPTIONS = (1000, 5000, 10000)
 SCRIPT_DIR = pathlib.Path(__file__).resolve().parent.parent
 
 
 def load_pool(path, refresh=False):
-    """Liest die Pool-Datei und ergaenzt Typ, Manawert und Bild-URL von Scryfall. Reihenfolge: Deck, Sideboard."""
+    """Liest die Pool-Datei und ergaenzt Typ, Manawert und Bild-URL von Scryfall.
+    Gibt (cards, basics) zurueck: cards ohne Standardlaender (Reihenfolge Deck, Sideboard), basics mit allen fuenf
+    Standardlaendern (Startwert Core = Anzahl im Deck der Datei, 'pool' = Anzahl in Deck und Sideboard)."""
     p = pathlib.Path(path)
     if not p.exists() and (SCRIPT_DIR / p).exists():
         p = SCRIPT_DIR / p
@@ -40,14 +46,20 @@ def load_pool(path, refresh=False):
     print(f"Kartenpool: {sum(r['qty'] for r in rows)} Karten aus {p}", file=sys.stderr)
     print("Lade Kartendaten und Bilder von Scryfall ...", file=sys.stderr)
     try:
-        data = fetch_cards_cached(sorted({r["name"] for r in rows}), refresh)
+        data = fetch_cards_cached(sorted({r["name"] for r in rows} | set(BASIC_LANDS)), refresh)
     except urllib.error.URLError as e:
         sys.exit(f"Scryfall nicht erreichbar: {e}")
     images = fetch_printing_images([(r["set"], r["number"]) for r in rows if r["set"] and r["number"]])
-    cards = []
+    cards, basics = [], {n: {"name": n, "image": None, "core": 0, "pool": 0} for n in BASIC_LANDS}
     for r in rows:
         sc = data.get(r["name"]) or data.get(r["name"].split(" // ")[0]) or {}
         image = images.get(f"{r['set']}/{r['number']}") or card_image_url(sc)
+        if r["name"] in basics:
+            b = basics[r["name"]]
+            b["pool"] += r["qty"]
+            b["core"] += r["qty"] if r["section"] == "deck" else 0
+            b["image"] = b["image"] or image
+            continue
         type_line = sc.get("type_line") or ""
         cards.append({
             "name": r["name"], "qty": r["qty"], "section": r["section"], "image": image,
@@ -56,15 +68,23 @@ def load_pool(path, refresh=False):
         })
     order = {"deck": 0, "sideboard": 1}  # je Bereich: Nichtlaender nach Manawert, Laender zuletzt
     cards.sort(key=lambda c: (order.get(c["section"], 2), c["land"], c["mv"], c["name"]))
-    return cards
+    for b in basics.values():
+        b["image"] = b["image"] or card_image_url(data.get(b["name"]) or {})
+        b["large"] = b["image"].replace("/normal/", "/large/") if b["image"] else None
+    return cards, list(basics.values())
 
 
-def entries_from_marks(pool, marks):
-    """Baut die Deck-Eintraege fuer die Simulation. marks: je Pool-Karte eine Liste mit einer Markierung je Kopie."""
+def entries_from_marks(pool, marks, basics=None):
+    """Baut die Deck-Eintraege fuer die Simulation. marks: je Pool-Karte eine Liste mit einer Markierung je Kopie.
+    basics: {Landname: {core, splash, nosplash}} mit der Menge je Gruppe."""
     groups = {m: Counter() for m in MARKS}
     for card, ms in zip(pool, marks):
         for m in ms:
             groups[m][card["name"]] += 1
+    for name, counts in (basics or {}).items():
+        for g in GROUPS:
+            if counts.get(g):
+                groups[g][name] += counts[g]
     core = dict(groups["core"])
     if not groups["splash"] and not groups["nosplash"]:
         return [{"path": "", "name": "Core", "deck": core, "parts": [("Core", core)]}]
@@ -116,6 +136,12 @@ class Job:
             self.report, self.state, self.message, self.finished = report, state, message, time.time()
 
 
+class LocalServer(http.server.ThreadingHTTPServer):
+    # Unter Windows erlaubt SO_REUSEADDR, einen Port doppelt zu belegen: dann landet der Browser womoeglich bei einer
+    # alten Instanz. Ohne Wiederverwendung schlaegt das Binden fehl und es wird ein freier Port gewaehlt.
+    allow_reuse_address = False
+
+
 def make_handler(app):
     class Handler(http.server.BaseHTTPRequestHandler):
         def log_message(self, *a):  # keine Zugriffsprotokolle im Terminal
@@ -138,8 +164,8 @@ def make_handler(app):
             if path == "/":
                 self._send(PAGE)
             elif path == "/api/pool":
-                self._json({"cards": app["pool"], "sims": app["args"].sims, "options": app["options"],
-                            "file": app["file"]})
+                self._json({"cards": app["pool"], "basics": app["basics"], "sims": app["args"].sims,
+                            "options": app["options"], "file": app["file"]})
             elif path == "/api/status":
                 self._json(app["job"].status())
             elif path == "/report":
@@ -166,6 +192,12 @@ def make_handler(app):
                     raise ValueError("Markierungen passen nicht zum Kartenpool")
                 if not 100 <= sims <= 100000:
                     raise ValueError("Anzahl der Spiele muss zwischen 100 und 100000 liegen")
+                basics = {}
+                for name in BASIC_LANDS:
+                    c = (body.get("basics") or {}).get(name) or {}
+                    basics[name] = {g: int(c.get(g) or 0) for g in GROUPS}
+                    if any(not 0 <= v <= MAX_BASICS for v in basics[name].values()):
+                        raise ValueError(f"Anzahl {name}: erlaubt sind 0 bis {MAX_BASICS} je Gruppe")
             except (ValueError, KeyError, TypeError) as e:
                 self._json({"ok": False, "error": str(e)}, 400)
                 return
@@ -173,7 +205,7 @@ def make_handler(app):
             run_args.sims, run_args.core = sims, "Core"  # core: Herkunft der Karten (Core/Splash/NoSplash) im Bericht
 
             def work(progress):
-                html = app["simulate"](entries_from_marks(pool, marks), run_args, progress)
+                html = app["simulate"](entries_from_marks(pool, marks, basics), run_args, progress)
                 app["save"](html, run_args)
                 return html
 
@@ -186,14 +218,14 @@ def make_handler(app):
 
 
 def serve(args, simulate, save):
-    pool = load_pool(args.drafthelper, args.neu_laden)
+    pool, basics = load_pool(args.drafthelper, args.neu_laden)
     options = sorted(set(SIM_OPTIONS) | {args.sims})
-    app = {"pool": pool, "args": args, "simulate": simulate, "save": save, "job": Job(), "options": options,
+    app = {"pool": pool, "basics": basics, "args": args, "simulate": simulate, "save": save, "job": Job(), "options": options,
            "file": pathlib.Path(args.drafthelper).name}
     try:
-        server = http.server.ThreadingHTTPServer(("127.0.0.1", PORT), make_handler(app))
+        server = LocalServer(("127.0.0.1", PORT), make_handler(app))
     except OSError:  # Port belegt: freien Port waehlen lassen
-        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), make_handler(app))
+        server = LocalServer(("127.0.0.1", 0), make_handler(app))
     app["server"] = server
     url = f"http://127.0.0.1:{server.server_address[1]}/"
     print(f"Draft-Helper laeuft: {url}", file=sys.stderr)
@@ -270,6 +302,17 @@ h2 small{color:var(--muted);font-weight:400}
 #results.show{display:flex}
 #results .rbar{padding:10px 20px;background:#fff;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:center}
 #results iframe{flex:1;border:0;width:100%}
+.basics{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+.bl{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;display:flex;gap:10px}
+.bl img{width:84px;border-radius:6px;cursor:zoom-in;align-self:flex-start;aspect-ratio:488/680;background:#e9edf3}
+.bl .bn{flex:1}
+.bl b{display:block;margin-bottom:2px}
+.bl .pooln{font-size:12px;color:var(--muted);margin-bottom:6px}
+.step{display:flex;align-items:center;gap:6px;margin:4px 0}
+.step .lab{width:66px;font-size:12.5px;font-weight:600}
+.step .lab.core{color:var(--core)}.step .lab.splash{color:var(--splash)}.step .lab.nosplash{color:#a37c00}
+.step button{width:28px;height:28px;border:1px solid var(--line);background:#f8f9fb;border-radius:6px;font-size:16px;line-height:1;padding:0}
+.step .val{min-width:24px;text-align:center;font-weight:700}
 .err{background:#fef3f2;border:1px solid #fda29b;color:#b42318;border-radius:10px;padding:12px 16px;margin:10px 0;display:none}
 </style></head><body>
 <header class="bar">
@@ -289,9 +332,12 @@ h2 small{color:var(--muted);font-weight:400}
       <li><b style="color:#a37c00">NoSplash</b> – Karte ist nur in der Variante „NoSplash“ dabei.</li>
       <li><b style="color:var(--off)">Aus</b> – Karte ist in keiner Variante dabei.</li>
     </ul>
-    Mehrfach vorhandene Karten (z. B. 4 Plains) erscheinen einzeln und können unterschiedlich zugeordnet werden.
+    Mehrfach vorhandene Karten erscheinen einzeln und können unterschiedlich zugeordnet werden.
+    Standardländer stellst du oben als Menge je Gruppe ein; dort kannst du auch Länder hinzufügen, die nicht im Pool sind.
     Ein Klick auf das Bild zeigt die Karte groß. Danach auf <b>Simulieren</b> klicken.</div>
   <div class="err" id="err"></div>
+  <h2>Standardländer <small>(Menge je Gruppe – auch Länder, die nicht im Pool sind, lassen sich hinzufügen)</small></h2>
+  <div class="basics" id="basics"></div>
   <div id="sections"></div>
 </main>
 <div id="overlay"><div class="box"><div class="spin"></div><b>Simulation läuft …</b>
@@ -301,13 +347,33 @@ h2 small{color:var(--muted);font-weight:400}
   <span id="rnote" style="color:var(--muted)"></span></div><iframe id="frame" title="Bericht"></iframe></div>
 <script>
 const LABEL={core:"Core",splash:"Splash",nosplash:"NoSplash",off:"Aus"};
-let pool=[], tiles=[], state=[], file="";
+let pool=[], state=[], basics=[], file="";
 const $=id=>document.getElementById(id);
 const el=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e};
 
-function save(){try{localStorage.setItem("draft:"+file,JSON.stringify(state.map(t=>t.mark)))}catch(e){}}
-function restore(){try{const s=JSON.parse(localStorage.getItem("draft:"+file)||"null");
-  if(Array.isArray(s)&&s.length===state.length&&s.every(m=>m in LABEL))s.forEach((m,i)=>state[i].mark=m)}catch(e){}}
+const GROUPS=["core","splash","nosplash"];
+function save(){try{localStorage.setItem("draft2:"+file,JSON.stringify({marks:state.map(t=>t.mark),
+  basics:basics.map(b=>GROUPS.map(g=>b[g]))}))}catch(e){}}
+function restore(){try{const s=JSON.parse(localStorage.getItem("draft2:"+file)||"null");if(!s)return;
+  if(Array.isArray(s.marks)&&s.marks.length===state.length&&s.marks.every(m=>m in LABEL))s.marks.forEach((m,i)=>state[i].mark=m);
+  if(Array.isArray(s.basics)&&s.basics.length===basics.length)
+    s.basics.forEach((v,i)=>GROUPS.forEach((g,k)=>{const n=+v[k];if(Number.isInteger(n)&&n>=0&&n<=40)basics[i][g]=n}))}catch(e){}}
+function buildBasics(){
+  const box=$("basics");box.textContent="";
+  for(const b of basics){
+    const d=el("div","bl");
+    if(b.image){const im=el("img");im.src=b.image;im.alt=b.name;im.loading="lazy";
+      im.onclick=()=>{$("lightbox").querySelector("img").src=b.large||b.image;$("lightbox").classList.add("show")};d.appendChild(im)}
+    const r=el("div","bn");r.appendChild(el("b",null,b.name));
+    r.appendChild(el("div","pooln",b.pool?"Im Pool: "+b.pool:"Nicht im Pool"));
+    for(const g of GROUPS){
+      const row=el("div","step");row.appendChild(el("span","lab "+g,LABEL[g]));
+      const minus=el("button",null,"−"),val=el("span","val",String(b[g])),plus=el("button",null,"+");
+      const set=n=>{b[g]=Math.max(0,Math.min(40,n));val.textContent=b[g];summary();save()};
+      minus.onclick=()=>set(b[g]-1);plus.onclick=()=>set(b[g]+1);
+      row.append(minus,val,plus);r.appendChild(row)}
+    d.appendChild(r);box.appendChild(d)}
+}
 
 function build(){
   state=[];const box=$("sections");box.textContent="";
@@ -323,7 +389,7 @@ function build(){
     small.textContent="("+n+" Karten)";
     grid._cards=cards;
   }
-  restore();
+  restore();buildBasics();
   // Tiles in Reihenfolge der Sektionen erzeugen
   let idx=0;const grids=[...box.querySelectorAll(".grid")];
   grids.forEach(grid=>{for(const c of grid._cards){for(let k=1;k<=c.qty;k++){grid.appendChild(tile(state[idx],idx));idx++}}});
@@ -348,6 +414,7 @@ function paint(t){t.node.className="tile m-"+t.mark;
 function refresh(){state.forEach(paint);summary()}
 function summary(){
   const n={core:0,splash:0,nosplash:0,off:0};state.forEach(t=>n[t.mark]++);
+  basics.forEach(b=>GROUPS.forEach(g=>n[g]+=b[g]));
   const c=$("counts");c.textContent="";
   for(const m of ["core","splash","nosplash","off"])c.appendChild(el("span","chip "+m,LABEL[m]+" "+n[m]));
   const a=n.core+n.splash,b=n.core+n.nosplash,s=$("sizes");s.textContent="";
@@ -363,7 +430,8 @@ async function api(path,body){
 async function simulate(){
   showErr("");$("go").disabled=true;
   const marks=[];let i=0;for(const c of pool){const ms=[];for(let k=0;k<c.qty;k++)ms.push(state[i++].mark);marks.push(ms)}
-  const r=await api("/api/simulate",{marks,sims:+$("sims").value});
+  const bs={};basics.forEach(b=>bs[b.name]={core:b.core,splash:b.splash,nosplash:b.nosplash});
+  const r=await api("/api/simulate",{marks,basics:bs,sims:+$("sims").value});
   if(!r.ok){showErr(r.error||"Fehler");$("go").disabled=false;return}
   $("overlay").classList.add("show");poll();
 }
@@ -387,6 +455,7 @@ $("quit").onclick=async()=>{if(!confirm("Draft-Helper beenden?"))return;
   document.body.innerHTML="<main><h2>Draft-Helper wurde beendet.</h2><p>Du kannst dieses Fenster jetzt schließen.</p></main>"};
 (async()=>{
   const d=await api("/api/pool");pool=d.cards;file=d.file;
+  basics=d.basics.map(b=>({name:b.name,image:b.image,large:b.large,pool:b.pool,core:b.core,splash:0,nosplash:0}));
   const sel=$("sims");d.options.forEach(o=>{const op=el("option",null,o.toLocaleString("de-DE"));op.value=o;
     if(o===d.sims)op.selected=true;sel.appendChild(op)});
   build();
