@@ -21,6 +21,7 @@ from collections import Counter
 from components.cli import parse_args
 from components.scryfall import fetch_cards_cached
 from components.cards import card_info
+from components.cardkinds import card_colors, empower_points, flow_kinds, type_kinds
 from components.coverage import analyze_card
 from components.deckfile import parse_deck, parse_deck_name, split_label
 from components.jace import analyze_jace
@@ -31,7 +32,7 @@ from components.simulation import simulate
 
 def build_deck(entry, data, args):
     """Wertet eine Deckliste mit den Scryfall-Daten aus."""
-    cards, rows, missing, coverage = [], [], [], {}
+    cards, rows, missing, coverage, info = [], [], [], {}, {}
     for name, qty in entry["deck"].items():
         sc = data.get(name) or data.get(name.split(" // ")[0])
         if not sc:
@@ -41,6 +42,9 @@ def build_deck(entry, data, args):
         card, shown = card_info(sc)
         rows.append((name, qty, card, shown))
         coverage[name] = analyze_card(sc)
+        front_type = ((sc.get("card_faces") or [sc])[0].get("type_line") or sc.get("type_line") or "")
+        info[name] = {"kinds": type_kinds(front_type), "flow": flow_kinds(sc), "colors": card_colors(sc),
+                      "empower": bool(card.empower), "points": empower_points(card.empower)}
         cards += [card] * qty
     if len(cards) < 7 + args.turns:
         sys.exit(f"Zu wenige Karten im Deck {entry['name']}.")
@@ -50,7 +54,7 @@ def build_deck(entry, data, args):
     deck_colors = sorted(set().union(*(required_colors(c) for c in nonlands)))
     return dict(
         name=entry["name"], deck=entry["deck"], parts=entry.get("parts", []), rows=rows, cards=cards, missing=missing,
-        cats=entry.get("cats", {}), role=entry.get("role"), coverage=coverage,
+        cats=entry.get("cats", {}), role=entry.get("role"), coverage=coverage, info=info,
         n_lands=len(cards) - len(nonlands),
         avg_mv=sum(c.mv for c in nonlands) / len(nonlands) if nonlands else 0,
         unsure=sorted({n for n, _, c, _ in rows if c.is_land and c.tap_mode == "tapped?"}),

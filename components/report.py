@@ -9,6 +9,7 @@ from components.mana import required_colors
 from components.mulligan import MULL_COLORS, MULL_LANDS_HIGH, MULL_LANDS_LOW
 from components.report_sections import render_compare_section, render_jace_section, render_logic_section
 from components.coverage import METRIC_ORDER, STATUS_TEXT, metrics_of, summarize
+from components.report_cards import render_color_curves, render_type_table
 from components.simulation import card_label
 from components.stats import TRAFFIC, lethal_level, timing_stats, traffic_level
 
@@ -174,10 +175,6 @@ def render_details(ctx, suffix=""):
     kpi_html = "".join(f'<div class="panel kpi"><div class="l">{esc(l)}</div><div class="v">{v}</div>'
                        f'<div class="s">{esc(s_)}</div></div>' for l, v, s_ in kpis)
 
-    mv_counts = Counter(min(c.mv, 7) for c in nonlands)
-    mv_labels = [str(i) if i < 7 else "7+" for i in range(0, 8)]
-    curve_svg = svg_bars(mv_labels, {"Karten": [mv_counts.get(i, 0) for i in range(8)]},
-                         max(max(mv_counts.values(), default=1), 1), lambda v: f"{v:.0f}")
     need = {col: sum(q for _, q, c, _ in rows if not c.is_land and col in required_colors(c)) for col in "WUBRG"}
     srcs = {col: sum(q for _, q, c, _ in rows if c.is_land and col in c.land_colors) for col in "WUBRGC"}
     col_rows = []
@@ -225,8 +222,9 @@ def render_details(ctx, suffix=""):
         unsure = ('<div class="warnbox">Getappt-Bedingung nicht modelliert (als immer getappt gezählt): '
                   + esc(", ".join(ctx["unsure"])) + "</div>")
     body = (f'<div class="grid g4">{kpi_html}</div>'
+            f'<div style="margin-top:14px">{render_color_curves(ctx)}</div>'
             f'<div class="grid g2" style="margin-top:14px">'
-            f'<div class="panel"><b>Mana-Kurve</b><div class="note" style="margin:0 0 4px">Anzahl Nichtland-Karten je Manawert</div>{curve_svg}</div>'
+            f'{render_type_table(ctx)}'
             f'<div class="panel"><b>Farbverteilung</b><div class="note" style="margin:0 0 4px">Karten = Nichtland-Karten, die die Farbe brauchen · Quellen = Länder, die sie erzeugen</div>{col_table}</div></div>'
             f'<div class="panel" style="margin-top:14px">{unsure}'
             f'{origin_note}{h_table(head, deck_rows, left=(0, 2, 3, 4) if len(head) == 5 else (0, 2, 3))}</div>')

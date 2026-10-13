@@ -22,6 +22,8 @@ import webbrowser
 from collections import Counter
 
 from components.cards import card_info
+from components.cardkinds import (FLOW_ORDER, empower_points, flow_kinds,  # noqa: F401 (auch von Tests benutzt)
+                                  type_kinds)
 from components.deckfile import parse_pool
 from components.scryfall import card_image_url, fetch_cards_cached, fetch_printing_images
 from components.suggest import WUBRG, propose, suggest
@@ -35,73 +37,6 @@ CATEGORIES = ("splashworthy", "mustplay", "filler", "neverplay")  # Kategorie je
 SORTS = ("mv", "name", "color", "mark", "cat")  # Sortierungen der Seite (fuer die Filler-Reihenfolge)
 SIM_OPTIONS = (1000, 5000, 10000)
 SCRIPT_DIR = pathlib.Path(__file__).resolve().parent.parent
-
-
-def type_kinds(type_line):
-    """Typ-Kennzeichen einer Karte fuer die Uebersicht links (nur die Vorderseite zaehlt). Artefakte und
-    Verzauberungen zaehlen ohne Kreaturen und Laender; ein Nicht-Standardland ist 'land' und 'nonbasic_land'."""
-    types = (type_line or "").split(" // ")[0].split("\u2014")[0]
-    creature, land = "Creature" in types, "Land" in types
-    kinds = []
-    if creature:
-        kinds.append("creature")
-    for word in ("Instant", "Sorcery"):
-        if word in types:
-            kinds.append(word.lower())
-    if land:
-        kinds.append("land")
-        if "Basic" not in types:
-            kinds.append("nonbasic_land")
-    if "Artifact" in types and not creature and not land:
-        kinds.append("artifact")
-    if "Enchantment" in types and not creature and not land:
-        kinds.append("enchantment")
-    if "Planeswalker" in types:
-        kinds.append("planeswalker")
-    return kinds
-
-
-FLOW_ORDER = ("draw", "search", "surveil", "scry", "explore", "mill_self", "mill_opp")
-# Auslöser, die nur auf Ziehen/Scry/Surveil/Mill reagieren, sind selbst kein Kartenfluss
-_FLOW_TRIGGERS = re.compile(
-    r"\b(whenever|each time|when) (you|a player|an opponent|each player) "
-    r"(scry|surveil|draw|mill|scries|surveils|draws|mills)[^,.\n]*|\bif you would (draw|mill)[^,.\n]*|"
-    r"\b(if|as long as) you('ve| have) (scried|surveilled|drawn|milled)[^,.\n]*")
-# Mill: "mill 3" (ohne Subjekt) trifft den eigenen Spieler; "target player/each player" kann beide treffen
-_MILL_SELF = re.compile(r"(?<!opponent )(?<!player )\bmill (\d+|x|a|an|one|two|three|four|five|six|seven|eight|"
-                        r"that many|half|cards?)\b|\byou mill\b|\bput the top [^.]*? of your library into your "
-                        r"graveyard")
-_MILL_OPP = re.compile(r"\b(target|each|an) opponent mills\b|\btarget opponent puts the top\b")
-_MILL_BOTH = re.compile(r"\b(target|each) player mills\b|\b(target|each) player puts the top [^.]*? of their "
-                        r"library into their graveyard")
-_FLOW_PATTERNS = {
-    "draw": re.compile(r"(?<!opponent )\bdraws? (a|an|one|two|three|four|five|six|seven|x|\d+|that many|up to|cards?)\b"),
-    "search": re.compile(r"\bsearch your library\b"),
-    "surveil": re.compile(r"\bsurveil\b"),
-    "scry": re.compile(r"\bscry\b"),
-    "explore": re.compile(r"\bexplores?\b"),
-}
-
-
-def flow_kinds(card):
-    """Arten von Kartenfluss, die eine Karte liefert (nach FLOW_ORDER): draw, search, surveil, scry, explore.
-    Erkannt wird aus dem Kartentext (ohne Erinnerungstext); Cycling und Landcycling ueber die Schluesselwoerter."""
-    faces = card.get("card_faces") or [card]
-    text = " ".join(re.sub(r"\([^)]*\)", " ", f.get("oracle_text") or "") for f in faces).lower()
-    text = _FLOW_TRIGGERS.sub(" ", text)
-    found = {k for k, pattern in _FLOW_PATTERNS.items() if pattern.search(text)}
-    if _MILL_SELF.search(text):
-        found.add("mill_self")
-    if _MILL_OPP.search(text):
-        found.add("mill_opp")
-    if _MILL_BOTH.search(text):
-        found |= {"mill_self", "mill_opp"}
-    keywords = {k.lower() for k in card.get("keywords") or []}
-    if any("landcycling" in k or "typecycling" in k for k in keywords):
-        found.add("search")
-    elif "cycling" in keywords:
-        found.add("draw")
-    return [k for k in FLOW_ORDER if k in found]
 
 
 def load_pool(path, refresh=False):
@@ -150,7 +85,7 @@ def load_pool(path, refresh=False):
             "land": "Land" in type_line.split("—")[0], "mv": sc.get("cmc") or 0, "found": bool(sc),
             "kinds": type_kinds(type_line), "empower": bool(empower), "flow": flow_kinds(sc),
             # Loyalty, die beim Wirken bzw. Betreten sofort dazukommt (ohne X und ohne wiederkehrende Ausloeser)
-            "empower_points": sum(e[2] for e in empower if e[1] in ("spell", "etb") and not e[6]),
+            "empower_points": empower_points(empower),
         })
     order = {"deck": 0, "sideboard": 1}  # je Bereich: Nichtlaender nach Manawert, Laender zuletzt
     cards.sort(key=lambda c: (order.get(c["section"], 2), c["land"], c["mv"], c["name"]))
@@ -542,6 +477,22 @@ h2 small{color:var(--muted);font-weight:400}
 .types td.sub{padding-left:14px;color:var(--muted)}
 .types tr.sep td{border-top:2px solid var(--line)}
 .types .diff{font-weight:700}
+.cc-controls{display:flex;flex-wrap:wrap;gap:6px 12px;margin:4px 0 8px;font-size:12px}
+.cc-controls label{display:flex;align-items:center;gap:5px}
+.cc-controls select{font-size:12px;padding:3px 6px}
+.ccbars{display:flex;gap:6px;align-items:flex-end;height:112px}
+.cccol{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end}
+.cctop{font-size:10.5px;color:var(--muted);height:13px;line-height:13px}
+.ccstack{display:flex;justify-content:center;width:100%}
+.ccstack.stacked{flex-direction:column-reverse;align-items:center}
+.ccstack.percolor{align-items:flex-end;gap:1px}
+.ccseg{border:1px solid rgba(0,0,0,.25)}
+.ccstack.stacked .ccseg{width:22px}
+.ccstack.percolor .ccseg{width:7px}
+.ccx{font-size:11.5px;color:var(--muted);margin-top:3px}
+.ccleg{display:flex;flex-wrap:wrap;gap:3px 10px;font-size:11.5px;color:var(--muted);margin-top:8px}
+.ccleg i{display:inline-block;width:10px;height:10px;border:1px solid rgba(0,0,0,.25);margin-right:4px;border-radius:2px}
+.ccnote{font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.4}
 .err{background:#fef3f2;border:1px solid #fda29b;color:#b42318;border-radius:10px;padding:12px 16px;margin:10px 0;display:none}
 </style></head><body>
 <header class="bar">
@@ -580,6 +531,15 @@ h2 small{color:var(--muted);font-weight:400}
   <div class="layout">
     <aside class="side"><h3>Übersicht nach Farbe</h3><div id="overview"></div>
       <h3 style="margin-top:18px">Mana-Kurve</h3><div id="curve" class="curve"></div>
+      <h3 style="margin-top:18px">Mana-Kurve nach Farben</h3>
+      <div class="cc-controls">
+        <label>Variante <select id="ccvar"><option value="splash">Splash</option>
+          <option value="nosplash">NoSplash</option></select></label>
+        <label>Ansicht <select id="ccmode">
+          <option value="stacked">Mehrfarbige gesondert</option>
+          <option value="percolor">Je Farbe (Mehrfarbige in jeder Farbe)</option></select></label>
+      </div>
+      <div id="colorcurve" class="colorcurve"></div>
       <h3 style="margin-top:18px">Kartentypen je Variante</h3><div id="types"></div></aside>
     <div>
       <div class="toolbar">
@@ -731,7 +691,7 @@ function summary(){
   s.appendChild(document.createTextNode("Splash-Variante: "));s.appendChild(el("b",null,a+" Karten"));
   s.appendChild(document.createTextNode(" · NoSplash-Variante: "));s.appendChild(el("b",null,b+" Karten"));
   if(a!==b)s.appendChild(el("span","warn","  – unterschiedlich groß"));
-  overview();curve();typeOverview();
+  overview();curve();typeOverview();renderColorCurve();
 }
 // Mana-Kurve: Nichtland-Karten je Manawert, Splash- und NoSplash-Variante nebeneinander
 function curve(){
@@ -755,6 +715,79 @@ function curve(){
             i2,"NoSplash-Variante: "+num.nosplash+" Karten, Ø Manawert "+avg("nosplash"),document.createElement("br"),
             "ohne Länder; Manawert 6+ zusammengefasst");
   box.appendChild(lg);
+}
+// BEGIN colorCurve
+// Mana-Kurve nach Farben fuer eine Variante. mode "stacked": mehrfarbige Karten bilden ein eigenes Segment "M" (jede
+// Karte steht genau einmal); "percolor": eine mehrfarbige Karte zaehlt bei jeder ihrer Farben (Balken nebeneinander).
+const CURVE_BUCKETS=7;
+const WUBRG="WUBRG";
+function colorCurve(copies,variant,mode){
+  const keys=mode==="stacked"?["W","U","B","R","G","M","C"]:["W","U","B","R","G","C"];
+  const buckets=[];
+  for(let i=0;i<CURVE_BUCKETS;i++){const b={};keys.forEach(k=>{b[k]=0});buckets.push(b)}
+  const pairs={};let total=0,multi=0,colorless=0;
+  for(const c of copies){
+    if(c.land||c.mark==="off"||(c.mark!=="core"&&c.mark!==variant))continue;
+    const i=Math.min(Math.round(c.mv||0),CURVE_BUCKETS-1);
+    const cols=(c.colors||[]).filter(x=>WUBRG.includes(x)).sort((a,b)=>WUBRG.indexOf(a)-WUBRG.indexOf(b));
+    total++;
+    if(!cols.length){buckets[i].C++;colorless++}
+    else if(cols.length===1){buckets[i][cols[0]]++}
+    else{
+      multi++;const key=cols.join("/");pairs[key]=(pairs[key]||0)+1;
+      if(mode==="stacked")buckets[i].M++;else cols.forEach(x=>{buckets[i][x]++});
+    }
+  }
+  let max=1;
+  for(const b of buckets){
+    const h=mode==="stacked"?keys.reduce((t,k)=>t+b[k],0):Math.max(...keys.map(k=>b[k]));
+    if(h>max)max=h;
+  }
+  return {buckets,keys,pairs,total,multi,colorless,max};
+}
+// Kacheln der Seite -> Eingabe von colorCurve
+function colorCopiesOf(tiles){
+  return tiles.map(x=>({colors:x.card.colors||[],mv:x.card.mv||0,mark:x.mark,land:!!x.card.land}));
+}
+// END colorCurve
+const COLOR_HEX={W:"#f1e7b8",U:"#3b82d6",B:"#4a4a4a",R:"#d6453b",G:"#3f9b4f",M:"#d9a400",C:"#b7bcc6"};
+const COLOR_NAME={W:"Weiß",U:"Blau",B:"Schwarz",R:"Rot",G:"Grün",M:"Mehrfarbig",C:"Farblos"};
+function renderColorCurve(){
+  const variant=$("ccvar").value,mode=$("ccmode").value;
+  const r=colorCurve(colorCopiesOf(state),variant,mode);
+  const box=$("colorcurve");box.textContent="";
+  const H=84,bars=el("div","ccbars");
+  for(let i=0;i<CURVE_BUCKETS;i++){
+    const col=el("div","cccol"),stack=el("div","ccstack "+mode);
+    let sum=0;
+    for(const k of r.keys){
+      const v=r.buckets[i][k];if(!v)continue;
+      sum+=v;
+      const seg=el("div","ccseg");seg.style.background=COLOR_HEX[k];
+      seg.style.height=Math.max(3,Math.round(v/r.max*H))+"px";
+      seg.title=COLOR_NAME[k]+": "+v+(v===1?" Karte":" Karten")+(k==="M"?" (eine Karte, mehrere Farben)":"");
+      stack.appendChild(seg);
+    }
+    col.append(el("div","cctop",mode==="stacked"&&sum?String(sum):""),stack,
+      el("div","ccx",i===CURVE_BUCKETS-1?(CURVE_BUCKETS-1)+"+":String(i)));
+    bars.appendChild(col);
+  }
+  box.appendChild(bars);
+  const leg=el("div","ccleg");
+  for(const k of r.keys){const item=el("span");const dot=el("i");dot.style.background=COLOR_HEX[k];
+    item.append(dot,COLOR_NAME[k]+(k==="M"?" (mehrere Farben)":""));leg.appendChild(item)}
+  box.appendChild(leg);
+  const note=mode==="stacked"
+    ?"Jede Karte steht genau einmal im Diagramm (Balkenhöhe = Kartenzahl). Karten mit mehreren Farben bilden das goldene "+
+     "Segment „Mehrfarbig“."
+    :"Eine mehrfarbige Karte zählt bei jeder ihrer Farben, z. B. eine Karte Grün/Weiß bei Grün und bei Weiß. Die Balken "+
+     "ergeben deshalb zusammen mehr als die Kartenzahl.";
+  box.appendChild(el("div","ccnote",note));
+  const pairs=Object.entries(r.pairs).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]))
+    .map(([k,n])=>k.split("/").map(c=>COLOR_NAME[c]).join("/")+" "+n);
+  const info=r.total+" Nichtland-Karten in der Variante, davon "+r.multi+" mehrfarbig und "+r.colorless+" farblos."+
+    (pairs.length?" Mehrfarbig: "+pairs.join(" · ")+".":"");
+  box.appendChild(el("div","ccnote",info));
 }
 // BEGIN typeCounts
 const FLOW_KINDS=["draw","search","surveil","scry","explore","mill_self","mill_opp"];
@@ -1035,6 +1068,8 @@ $("catfilter").onchange=()=>state.forEach(paint);
 $("search").oninput=()=>{searchQ=$("search").value.trim().toLowerCase();state.forEach(paint)};
 $("sort").onchange=()=>{sortKey=$("sort").value;applySort()};
 $("export").onclick=openExport;
+$("ccvar").onchange=renderColorCurve;
+$("ccmode").onchange=renderColorCurve;
 $("suggest").onclick=suggestDeck;
 $("propose").onclick=createProposal;
 document.querySelectorAll(".colpick input").forEach(i=>{i.onchange=save});

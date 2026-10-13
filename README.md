@@ -87,6 +87,12 @@ Eine andere Datei geht so: `python mtg_sim.py --drafthelper meinpool.txt`.
   Die Sortierung (Manawert, Name, Farbe, Zuordnung, Kategorie) ändert nur die Anzeige, nicht die Zuordnungen.
 - **Mana-Kurve links:** Anzahl der Nichtland-Karten je Manawert für Splash- und NoSplash-Variante nebeneinander,
   dazu Kartenzahl und Ø Manawert je Variante.
+- **Mana-Kurve nach Farben (links):** Eine zweite Kurve unter der Mana-Kurve zeigt die Nichtland-Karten einer wählbaren
+  Variante (Splash oder NoSplash) nach Manawert und Farbe. Zwei Ansichten: **Mehrfarbige gesondert** (gestapelt, jede
+  Karte genau einmal, mehrfarbige Karten bilden ein goldenes Segment „Mehrfarbig“) und **Je Farbe** (eine mehrfarbige
+  Karte zählt bei jeder ihrer Farben, die Balken ergeben dann mehr als die Kartenzahl). Eine Erklärung wechselt mit der
+  Ansicht; darunter stehen Kartenzahl, mehrfarbige und farblose Karten sowie die vorkommenden Farbkombinationen
+  („Schwarz/Rot 4 · Schwarz/Grün 1“).
 - **Kartentypen je Variante (links):** Unter der Mana-Kurve steht für die Splash- und die NoSplash-Variante, wie
   viele Karten (Kopien, mit Standardländern) es gibt: Karten gesamt, Kreaturen, Instants, Sorceries, Artefakte,
   Verzauberungen, Planeswalker, Länder (davon Nicht-Standard-Länder) sowie Empower Jace (Karten und die Summe der
@@ -322,6 +328,12 @@ Diese Werte stehen im Skript und lassen sich nur dort ändern.
 - **„Behold a Jace“** (z. B. Theorist's Sanctum): Das Land kommt untapped, wenn ein Jace auf dem Tisch liegt (Token
   oder Planeswalker mit Untertyp Jace) oder eine Jace-Karte auf der Hand ist (sie wird nur gezeigt, nicht gewirkt).
   Andere Planeswalker genügen nicht. Als vorgezogener Zauber kommen nur Karten in Frage, die einen Jace erschaffen.
+- **Kartentypen und Farben im Bericht:** Die Übersichten aus dem Drafthelper stehen auch im Bericht. Im Abschnitt
+  „Deck“ ersetzt **„Mana-Kurve nach Farben“** die bisherige einfarbige Kurve: links gestapelt mit mehrfarbigen
+  Karten als goldenem Segment (jede Karte einmal, Summe über dem Balken), rechts je Farbe (mehrfarbige Karten zählen
+  bei jeder ihrer Farben). Darunter die Farbkombinationen. Daneben die Tabelle **„Kartentypen“** (Kreaturen,
+  Instants, Sorceries, Artefakte, Verzauberungen, Planeswalker, Länder, Empower Jace, Kartenfluss nach Art). Im
+  „Deck-Vergleich“ steht „Kartentypen im Vergleich“ mit einer Spalte je Deck, Unterschiede fett.
 - **Modell-Abdeckung (Bericht):** Der Abschnitt „Modell-Abdeckung“ listet je Deck die Karten, deren Effekte die
   Simulation noch nicht abbildet, mit dem Status „To Do: Noch nicht implementiert“, einer groben Kategorie
   (Tokens, Direkter Schaden, Zählmarken / Stärkebonus, Haste verleihen, Mana außer Ländern, Kartenfluss,

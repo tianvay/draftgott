@@ -7,6 +7,7 @@ from components.html_base import LABEL_CLASS, esc, h_bar_cell, h_mode, h_pct, h_
 from components.mana import can_cast_all, cost_alternatives, land_key
 from components.simulation import best_cast, play_score
 from components.stats import Z95, compare_metrics
+from components.report_cards import render_types_compare
 
 
 def _example_card(mv, creature):
@@ -208,7 +209,9 @@ def render_compare_section(ctx):
             "(|Δ| > 1,96 × Standardfehler), grün bei besser und rot bei schlechter. Mit ≈ markierte Unterschiede sind nicht "
             "von Zufall zu trennen. PP = Prozentpunkte. Bei so vielen Kennzahlen sind einzelne zufällige Ausreißer zu erwarten, "
             "achte deshalb auf das Gesamtbild. Für eine höhere Genauigkeit hilft eine größere --sims-Zahl.")
+    types_compare = render_types_compare(decks)
     return (f'<div class="panel">{overview}{warn}</div>'
+            f'<div style="margin-top:14px">{types_compare}</div>'
             f'<div class="panel" style="margin-top:14px"><b>Fazit über alle Kennzahlen (Play und Draw zusammen)</b>{fazit}'
             f'<div class="note">{esc(note)}</div></div>'
             f'<div class="grid" style="margin-top:14px">{"".join(panels)}</div>')
