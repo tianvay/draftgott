@@ -45,6 +45,17 @@ def once_effects(card):
     return tuple(e for e in card.empower if e[0] == 0 and e[1] in ("spell", "etb") and not e[6])
 
 
+def creates_walker(card):
+    """Erschafft das Wirken dieser Karte einen Planeswalker (Planeswalker-Karte oder Empower Jace, das den
+    Jace-Token erschafft)?"""
+    return card.is_planeswalker or creates_jace(card)
+
+
+def creates_jace(card):
+    """Liegt nach dem Wirken ein Jace auf dem Tisch (Jace-Karte oder Empower Jace mit mindestens 1 Loyalty)?"""
+    return card.is_jace or any(e[2] > 0 for e in once_effects(card))
+
+
 def cast_filter_matches(filt, card):
     if filt == "noncreature":
         return not card.is_creature

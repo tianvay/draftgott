@@ -302,6 +302,17 @@ Diese Werte stehen im Skript und lassen sich nur dort ändern.
 - **Getappte Länder:** Werden aus dem Kartentext erkannt (immer getappt, Check-, Fast- und Slow-Länder). Shock-Länder
   zahlen die 2 Leben. Andere Bedingungen (zum Beispiel Reveal-Länder) werden als „immer getappt“ gezählt und im Bericht
   aufgelistet.
+- **Länder mit Planeswalker-Bedingung** („enters tapped unless you control a planeswalker“, z. B. die Commons und
+  Annexes aus FRA): Sie kommen untapped, wenn ein Planeswalker auf dem Tisch liegt. Das ist der Jace-Token (Loyalty
+  größer 0) oder eine gewirkte Planeswalker-Karte. Liegt keiner da und ist ein Zauber auf der Hand, der einen
+  Planeswalker erschafft (Planeswalker-Karte oder Empower Jace) und vor dem Land bezahlbar ist, wird dieser Zauber
+  zuerst gewirkt und danach das Land gelegt. Tokens zählen nur auf dem Tisch, nie von der Hand.
+- **„Behold a Jace“** (z. B. Theorist's Sanctum): Das Land kommt untapped, wenn ein Jace auf dem Tisch liegt (Token
+  oder Planeswalker mit Untertyp Jace) oder eine Jace-Karte auf der Hand ist (sie wird nur gezeigt, nicht gewirkt).
+  Andere Planeswalker genügen nicht. Als vorgezogener Zauber kommen nur Karten in Frage, die einen Jace erschaffen.
+- **Einschränkung:** In einer Runde, in der ein Zauber vor dem Land gewirkt wird, entfällt das Landcycling nach dem
+  Land (die Bezahlung wäre sonst nicht gesichert). Für die Planung der Folgerunde (Landcycling-Vorausschau) werden
+  Planeswalker-Länder weiterhin als getappt behandelt.
 - **Empower Jace (Zählung):** Erkannt wird aus dem Kartentext von Scryfall, auf allen Seiten einer Karte. Eingeteilt wird nach
   Art: einmalig (Instant oder Sorcery, „beim Betreten“, einmaliger Sonderfall wie „beim Sterben“) und wiederkehrend
   („whenever“ und „at the beginning“-Auslöser, bezahlbare Fähigkeiten mit Kosten). Eine Karte kann in mehreren Gruppen

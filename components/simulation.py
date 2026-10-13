@@ -4,7 +4,8 @@ import random
 from collections import Counter
 
 from components.cards import enters_tapped
-from components.jace import JaceState, cast_filter_matches, enter_filter_matches, once_effects, recurring_effects
+from components.jace import (JaceState, cast_filter_matches, creates_jace, creates_walker, enter_filter_matches,
+                             once_effects, recurring_effects)
 from components.mana import can_cast_all, can_pay, has_two_colors, land_key
 from components.mulligan import deal_opening
 
@@ -24,16 +25,25 @@ def play_score(chosen):
             len(chosen))
 
 
-def best_cast(spells, key, has_creature, auras_need_creature):
+def best_cast(spells, key, has_creature, auras_need_creature, must=None):
     """Waehlt die Zauber, die in dieser Runde zusammen gespielt werden:
-    maximal ausgegebenes Mana, dann mehr Kreaturen, dann mehr Power+Toughness."""
+    maximal ausgegebenes Mana, dann mehr Kreaturen, dann mehr Power+Toughness.
+    must: Karte, die auf jeden Fall dabei sein muss (z. B. ein Zauber, der vor dem Land einen Planeswalker
+    erschafft). Ist sie nicht bezahlbar, kommt (-1, 0, 0, 0), [] zurueck."""
     spells = sorted(spells)
+    base = []
+    if must is not None:
+        if must not in spells or not can_cast_all((must.alts,), key):
+            return (-1, 0, 0, 0), []
+        spells.remove(must)
+        base = [must]
     n = len(spells)
+    allcards = base + spells
 
     # Abkuerzung: passt die komplette Hand, wird alles gespielt
-    if n and can_cast_all(tuple(sorted(c.alts for c in spells)), key) \
-            and aura_ok(spells, has_creature, auras_need_creature):
-        return play_score(spells), list(spells)
+    if allcards and can_cast_all(tuple(sorted(c.alts for c in allcards)), key) \
+            and aura_ok(allcards, has_creature, auras_need_creature):
+        return play_score(allcards), list(allcards)
 
     best = [(-1, 0, 0, 0), []]
 
@@ -52,8 +62,61 @@ def best_cast(spells, key, has_creature, auras_need_creature):
             j += 1
         dfs(j, chosen)
 
-    dfs(0, [])
+    dfs(0, list(base))
     return best[0], best[1]
+
+
+def choose_land(hand, spells, pool, battlefield, walker_bf, jace_bf, has_creature, auras_need_creature):
+    """Waehlt das Land dieser Runde. Gibt (Land, getappt, vorab) zurueck.
+    Laender mit Planeswalker- oder Jace-Bedingung kommen untapped, wenn die Bedingung erfuellt ist. Ist sie es nicht,
+    wird zuerst ein Zauber gewirkt, der einen Planeswalker (bzw. Jace) erschafft, und danach das Land gelegt:
+    'vorab' ist dieser Zauber (bezahlt mit den schon liegenden Laendern), sonst None.
+    walker_bf / jace_bf: Planeswalker bzw. Jace liegt auf dem Tisch (Token oder Karte; Tokens nie auf der Hand).
+    Eine Jace-Karte auf der Hand genuegt fuer 'behold a Jace' (sie wird nur gezeigt, nicht gewirkt)."""
+    options = sorted({c for c in hand if c.is_land})
+    if not options:
+        return None, False, None
+    jace_hand = any(c.is_jace for c in hand)
+    key_now = land_key(pool)
+    enablers = sorted({c for c in spells if creates_walker(c) and can_cast_all((c.alts,), key_now)})
+    jace_enablers = [c for c in enablers if creates_jace(c)]
+    bf_cols = [c.land_colors for c in battlefield]
+
+    def status(land):
+        """(getappt, moegliche Vorab-Zauber)"""
+        if land.tap_mode == "planeswalker":
+            if walker_bf:
+                return False, []
+            return (False, enablers) if enablers else (True, [])
+        if land.tap_mode == "jace":
+            if jace_bf or jace_hand:
+                return False, []
+            return (False, jace_enablers) if jace_enablers else (True, [])
+        return enters_tapped(land, battlefield), []
+
+    def best_with(land, tapped, musts):
+        """(Score, Index des besten Vorab-Zaubers) fuer dieses Land."""
+        key = land_key(pool + ([] if tapped else [land.land_colors]))
+        if not musts:
+            return best_cast(spells, key, has_creature, auras_need_creature)[0], 0
+        scored = [(best_cast(spells, key, has_creature, auras_need_creature, must=m)[0], -i)
+                  for i, m in enumerate(musts)]
+        score_, neg_i = max(scored)
+        return score_, -neg_i
+
+    def score(land):
+        tapped, musts = status(land)
+        spent, _ = best_with(land, tapped, musts)
+        # gleich viel Mana ausgegeben -> getapptes Land bevorzugt jetzt legen
+        return (spent, tapped, len(set().union(*(bf_cols + [land.land_colors]))))
+
+    land = max(options, key=score)
+    tapped, musts = status(land)
+    forced = None
+    if musts:
+        _, idx = best_with(land, tapped, musts)
+        forced = musts[idx]
+    return land, tapped, forced
 
 
 def top_card_playable(card, spells, key, has_creature, auras_need_creature):
@@ -240,6 +303,7 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
         game_events = []
         jst = JaceState()
         perms = []  # Permanents mit wiederkehrendem Empower: (Karte, Runde des Eintritts)
+        walkers = []  # gewirkte Planeswalker-Karten (liegen auf dem Tisch)
         acts_empty = gained_empty = None
         snap = (0, 0, 0)
         g_avail = g_spent = 0
@@ -284,21 +348,13 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                         spells = [c for c in hand if not c.is_land]
                         break
 
-            # Land legen (getappte Laender liefern in dieser Runde kein Mana)
-            land_played, tapped_now = None, False
-            land_options = sorted({c for c in hand if c.is_land})
-            if land_options:
-                bf_cols = [c.land_colors for c in battlefield]
-
-                def score(land):
-                    tapped = enters_tapped(land, battlefield)
-                    avail = pool + ([] if tapped else [land.land_colors])
-                    s_, _ = best_cast(spells, land_key(avail), has_creature, auras_need_creature)
-                    # gleich viel Mana ausgegeben -> getapptes Land bevorzugt jetzt legen
-                    return (s_, tapped, len(set().union(*(bf_cols + [land.land_colors]))))
-
-                land_played = max(land_options, key=score)
-                tapped_now = enters_tapped(land_played, battlefield)
+            # Land legen (getappte Laender liefern in dieser Runde kein Mana). Planeswalker-/Jace-Laender: erst ein
+            # Zauber, der einen Planeswalker erschafft (falls moeglich), dann das Land (siehe choose_land)
+            walker_bf = jst.loyalty > 0 or bool(walkers)
+            jace_bf = jst.loyalty > 0 or any(c.is_jace for c in walkers)
+            land_played, tapped_now, forced = choose_land(hand, spells, pool, battlefield, walker_bf, jace_bf,
+                                                          has_creature, auras_need_creature)
+            if land_played is not None:
                 hand.remove(land_played)
                 battlefield.append(land_played)
                 if not tapped_now:
@@ -316,10 +372,11 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                         top_done = True
                         break
 
-            s_chosen, chosen = best_cast(spells, key, has_creature, auras_need_creature)
+            s_chosen, chosen = best_cast(spells, key, has_creature, auras_need_creature, must=forced)
 
-            # Landcycling Regel 1: Karte ist diesmal nicht spielbar -> mit uebrigem Mana cyceln
-            if has_cyclers:
+            # Landcycling Regel 1: Karte ist diesmal nicht spielbar -> mit uebrigem Mana cyceln.
+            # Entfaellt in Runden, in denen ein Zauber vor dem Land gewirkt wurde (Bezahlung sonst nicht gesichert).
+            if has_cyclers and forced is None:
                 for _round in range(3):
                     if len(battlefield) + sum(c.is_land for c in hand) >= cycle_cap:
                         break
@@ -378,6 +435,8 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                 hand.remove(c)
                 if c.is_creature:
                     board.append((c, turn))
+                if c.is_planeswalker:
+                    walkers.append(c)
             if has_jace:
                 for c in sorted(chosen, key=lambda x: (not recurring_effects(x), x.mv)):
                     for pc, _t in perms:

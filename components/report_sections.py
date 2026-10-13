@@ -55,7 +55,10 @@ def render_logic_section(has_jace=False):
         "<b>Landcycling (Pflicht):</b> Fehlt in den ersten Runden ein Land auf der Hand, wird ein Landcycler "
         "gecycelt, damit der Landdrop klappt.",
         "<b>Land legen:</b> Es wird das Land gelegt, mit dem in dieser Runde am meisten Mana in Zauber fließen kann. "
-        "Bei Gleichstand kommt ein getapptes Land zuerst, danach zählt, welches Land mehr verschiedene Farben bringt.",
+        "Bei Gleichstand kommt ein getapptes Land zuerst, danach zählt, welches Land mehr verschiedene Farben bringt. "
+        "Länder, die getappt kommen, außer man kontrolliert einen Planeswalker (oder zeigt bzw. kontrolliert einen Jace), "
+        "kommen untapped, wenn ein Planeswalker (Jace-Token oder Karte) auf dem Tisch liegt; sonst wird, wenn möglich, "
+        "zuerst ein Zauber gewirkt, der einen Planeswalker erschafft, und danach das Land gelegt.",
         "<b>Zauber wählen:</b> Aus allen Kombinationen, die zusammen bezahlt werden können (Farben beachtet), "
         "wird die beste nach den vier Auswahlregeln gespielt.",
         "<b>Landcycling (nur wenn es sich lohnt):</b> Eine nicht spielbare Karte wird mit übrigem Mana gecycelt, "

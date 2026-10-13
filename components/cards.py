@@ -29,6 +29,7 @@ class Card(NamedTuple):
     empower_text: str = ""     # erkannte Textzeilen (zur Kontrolle im Bericht)
     pw_tags: tuple = ()        # jace / pw_help / pw_removal / is_pw
     defender: bool = False     # Kreatur mit Defender: kann nicht angreifen
+    is_jace: bool = False      # Planeswalker mit Untertyp Jace (fuer "behold a Jace")
 
 
 LANDCYCLE_RE = re.compile(
@@ -40,7 +41,9 @@ def land_tap_info(card, front):
     """Liest aus dem Kartentext, ob/wann ein Land getappt ins Spiel kommt.
     Modi: no (nie), tapped (immer), tapped? (Bedingung nicht modelliert -> wie 'tapped' gezaehlt),
           fast (untapped, wenn hoechstens 2 andere Laender), slow (untapped ab 2 anderen Laendern),
-          check (untapped, wenn du einen der genannten Landtypen kontrollierst)."""
+          check (untapped, wenn du einen der genannten Landtypen kontrollierst),
+          planeswalker (untapped, wenn du einen Planeswalker kontrollierst),
+          jace (untapped, wenn du einen Jace kontrollierst oder eine Jace-Karte von der Hand zeigst)."""
     text = (front.get("oracle_text") or card.get("oracle_text") or "").lower()
     if not TAPPED_RE.search(text):
         return "no", ()
@@ -50,6 +53,10 @@ def land_tap_info(card, front):
         return "fast", ()
     if "two or more other lands" in text:
         return "slow", ()
+    if re.search(r"unless you control an? planeswalker", text):
+        return "planeswalker", ()
+    if "behold a jace" in text:
+        return "jace", ()
     m = re.search(r"unless you control ((?:an? [a-z]+(?:,? or |, | or )?)+)", text)
     if m:
         types = tuple(sorted(set(re.findall(r"an? ([a-z]+)", m.group(1)))))
@@ -58,8 +65,10 @@ def land_tap_info(card, front):
     return ("tapped?" if "unless" in text else "tapped"), ()
 
 
-def enters_tapped(land, battlefield):
-    """Kommt dieses Land mit den bereits liegenden Laendern getappt ins Spiel?"""
+def enters_tapped(land, battlefield, walker=False, jace=False):
+    """Kommt dieses Land mit den bereits liegenden Laendern getappt ins Spiel?
+    walker: ein Planeswalker liegt auf dem Tisch; jace: ein Jace liegt auf dem Tisch oder eine Jace-Karte ist auf der
+    Hand (nur fuer Laender mit Planeswalker- bzw. Jace-Bedingung von Bedeutung)."""
     mode = land.tap_mode
     if mode == "no":
         return False
@@ -69,6 +78,10 @@ def enters_tapped(land, battlefield):
         return len(battlefield) < 2
     if mode == "check":
         return not any(set(l.land_types) & set(land.tap_arg) for l in battlefield)
+    if mode == "planeswalker":
+        return not walker
+    if mode == "jace":
+        return not jace
     return True  # tapped / tapped?
 
 
@@ -80,6 +93,8 @@ def tap_tag(mode, arg):
         "fast": "   [getappt ab dem 4. Land]",
         "slow": "   [getappt, solange weniger als 2 andere Laender]",
         "check": "   [getappt, ausser du kontrollierst: " + "/".join(arg) + "]",
+        "planeswalker": "   [getappt, ausser du kontrollierst einen Planeswalker]",
+        "jace": "   [getappt, ausser du kontrollierst oder zeigst einen Jace]",
     }[mode]
 
 
@@ -253,4 +268,5 @@ def card_info(card):
                 name=card["name"], cycle_alts=cycle_alts, cycle_target=cycle_target,
                 cycle_mv=cycle_mv, is_instant_sorcery=("Instant" in type_line or "Sorcery" in type_line),
                 is_planeswalker="Planeswalker" in type_line, empower=eff, empower_text=etext,
-                pw_tags=pw_tags_for(card, type_line), defender=defender), shown
+                pw_tags=pw_tags_for(card, type_line), defender=defender,
+                is_jace=("Planeswalker" in type_line and "Jace" in type_line.split("—")[-1].split())), shown
