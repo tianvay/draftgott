@@ -56,6 +56,12 @@ Eine andere Datei geht so: `python mtg_sim.py --drafthelper meinpool.txt`.
   als Menge je Gruppe eingestellt (Core / Splash / NoSplash, mit − und +). Startwert ist die Anzahl im Deck der
   Datei als Core. Länder, die nicht im Pool sind (z. B. Swamp für einen anderen Splash), lassen sich ebenfalls
   hinzufügen.
+- **Start per Doppelklick (Windows):** `draftgott.bat` im Projektordner doppelklicken. Ein Menü fragt nach der
+  Betriebsart: **1 = Analyse** (simuliert `_normaldeck.txt` mit 10 000 Spielen und schreibt `meinbericht.html`)
+  oder **2 = Drafthelper** (Kartenseite mit `_draftedcardpool.txt`). Das Skript sucht Python selbst (`py` oder
+  `python`). Beim Drafthelper das schwarze Fenster offen lassen und zum Beenden den Button „Beenden“ auf der
+  Seite benutzen oder das Fenster schließen. Weitere Parameter werden an den gewählten Aufruf angehängt
+  (`draftgott.bat --sims 1000`).
 - **Simulieren** baut die Varianten *Core + Splash* und *Core + NoSplash*, simuliert beide und zeigt den
   Vergleichsbericht direkt auf der Seite (zusätzlich als Datei, siehe `--ausgabe`). Danach geht es mit
   „Zurück zu den Karten“ weiter.

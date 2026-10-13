@@ -117,7 +117,8 @@ class Job:
     def status(self):
         with self.lock:
             end = self.finished if self.state in ("done", "error") else time.time()
-            return {"state": self.state, "message": self.message, "elapsed": round(end - self.started, 1)}
+            elapsed = round(end - self.started, 1) if self.started else 0.0
+            return {"state": self.state, "message": self.message, "elapsed": elapsed}
 
     def start(self, work):
         with self.lock:

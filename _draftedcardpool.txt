@@ -1,29 +1,24 @@
 Deck
-2 Bartolomé del Presidio (LCI) 224
-3 Bitter Triumph (SOA) 26
-4 Bleachbone Verge (DFT) 250
-2 Shattered Sanctum (SOS) 260
-3 Godless Shrine (EOE) 254
-4 Lake-town Lookout (HOB) 18
-6 Plains (SPM) 194
-4 Raise the Past (FDN) 22
-2 Requiting Hex (ECL) 116
-4 Snarling Gorehound (MKM) 105
-2 Practiced Offense (SOS) 25
-6 Swamp (SPM) 196
-2 Syr Vondam, Sunstar Exemplar (EOE) 231
-3 The Queen of Dale (HOB) 24
-4 Vengeful Bloodwitch (FDN) 76
+5 Mountain (SPM) 197
+3 Practiced Offense (SOS) 25
+4 Political Triumph (MSH) 31
+4 Inspiring Vantage (KLR) 283
+2 Sheltered by Ghosts (DSK) 30
+2 The Last Ronin's Technique (TMT) 12
+3 Belladonna Took (HOB) 4
+4 Sacred Foundry (GRN) 254
 3 Voice of Victory (TDM) 33
-1 Shadowy Backstreet (MKM) 268
-2 Umbral Collar Zealot (EOE) 123
-2 Blessed Ghoul (FRA) 123
-1 Iron-Shield Elf (ECL) 108
+2 Raphael, Tough Turtle (TMT) 104
+9 Plains (SPM) 194
+2 The Queen of Dale (HOB) 24
+2 Warleader's Call (MAR) 96
+2 Bilbo's Gambit (HOB) 5
+4 Stadium Headliner (TDM) 122
+4 Dalkovan Packbeasts (TDM) 7
+2 Leonardo, Big Brother (TMT) 14
+3 Mabel, Valley Hero (FRA) 274
 
 Sideboard
-1 Get Lost (LCI) 14
-1 Nowhere to Run (DSK) 111
-1 Requisition Raid (SOA) 10
-1 Seam Rip (EOE) 34
-1 Strategic Betrayal (TDM) 94
-3 Nighthowl Pursuer (HOB) 78
+1 Leonin Vanguard (FDN) 499
+1 Impact Tremors (FDN) 717
+1 Descendant of Storms (TDM) 8
