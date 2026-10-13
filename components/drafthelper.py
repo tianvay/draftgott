@@ -9,6 +9,7 @@ Nur Standardbibliothek. Der Server hoert ausschliesslich auf 127.0.0.1.
 """
 import argparse
 import hashlib
+import re
 import http.server
 import json
 import pathlib
@@ -60,6 +61,49 @@ def type_kinds(type_line):
     return kinds
 
 
+FLOW_ORDER = ("draw", "search", "surveil", "scry", "explore", "mill_self", "mill_opp")
+# Auslöser, die nur auf Ziehen/Scry/Surveil/Mill reagieren, sind selbst kein Kartenfluss
+_FLOW_TRIGGERS = re.compile(
+    r"\b(whenever|each time|when) (you|a player|an opponent|each player) "
+    r"(scry|surveil|draw|mill|scries|surveils|draws|mills)[^,.\n]*|\bif you would (draw|mill)[^,.\n]*|"
+    r"\b(if|as long as) you('ve| have) (scried|surveilled|drawn|milled)[^,.\n]*")
+# Mill: "mill 3" (ohne Subjekt) trifft den eigenen Spieler; "target player/each player" kann beide treffen
+_MILL_SELF = re.compile(r"(?<!opponent )(?<!player )\bmill (\d+|x|a|an|one|two|three|four|five|six|seven|eight|"
+                        r"that many|half|cards?)\b|\byou mill\b|\bput the top [^.]*? of your library into your "
+                        r"graveyard")
+_MILL_OPP = re.compile(r"\b(target|each|an) opponent mills\b|\btarget opponent puts the top\b")
+_MILL_BOTH = re.compile(r"\b(target|each) player mills\b|\b(target|each) player puts the top [^.]*? of their "
+                        r"library into their graveyard")
+_FLOW_PATTERNS = {
+    "draw": re.compile(r"(?<!opponent )\bdraws? (a|an|one|two|three|four|five|six|seven|x|\d+|that many|up to|cards?)\b"),
+    "search": re.compile(r"\bsearch your library\b"),
+    "surveil": re.compile(r"\bsurveil\b"),
+    "scry": re.compile(r"\bscry\b"),
+    "explore": re.compile(r"\bexplores?\b"),
+}
+
+
+def flow_kinds(card):
+    """Arten von Kartenfluss, die eine Karte liefert (nach FLOW_ORDER): draw, search, surveil, scry, explore.
+    Erkannt wird aus dem Kartentext (ohne Erinnerungstext); Cycling und Landcycling ueber die Schluesselwoerter."""
+    faces = card.get("card_faces") or [card]
+    text = " ".join(re.sub(r"\([^)]*\)", " ", f.get("oracle_text") or "") for f in faces).lower()
+    text = _FLOW_TRIGGERS.sub(" ", text)
+    found = {k for k, pattern in _FLOW_PATTERNS.items() if pattern.search(text)}
+    if _MILL_SELF.search(text):
+        found.add("mill_self")
+    if _MILL_OPP.search(text):
+        found.add("mill_opp")
+    if _MILL_BOTH.search(text):
+        found |= {"mill_self", "mill_opp"}
+    keywords = {k.lower() for k in card.get("keywords") or []}
+    if any("landcycling" in k or "typecycling" in k for k in keywords):
+        found.add("search")
+    elif "cycling" in keywords:
+        found.add("draw")
+    return [k for k in FLOW_ORDER if k in found]
+
+
 def load_pool(path, refresh=False):
     """Liest die Pool-Datei und ergaenzt Typ, Manawert und Bild-URL von Scryfall.
     Gibt (cards, basics, signature) zurueck: cards ohne Standardlaender (Reihenfolge Deck, Sideboard), basics mit
@@ -104,7 +148,7 @@ def load_pool(path, refresh=False):
             "cost": sc.get("mana_cost") or (faces[0].get("mana_cost") if faces else "") or "",
             "large": image.replace("/normal/", "/large/") if image else None,
             "land": "Land" in type_line.split("—")[0], "mv": sc.get("cmc") or 0, "found": bool(sc),
-            "kinds": type_kinds(type_line), "empower": bool(empower),
+            "kinds": type_kinds(type_line), "empower": bool(empower), "flow": flow_kinds(sc),
             # Loyalty, die beim Wirken bzw. Betreten sofort dazukommt (ohne X und ohne wiederkehrende Ausloeser)
             "empower_points": sum(e[2] for e in empower if e[1] in ("spell", "etb") and not e[6]),
         })
@@ -713,36 +757,56 @@ function curve(){
   box.appendChild(lg);
 }
 // BEGIN typeCounts
+const FLOW_KINDS=["draw","search","surveil","scry","explore","mill_self","mill_opp"];
 // Zaehlt je Variante (Core + Splash bzw. Core + NoSplash) Kopien nach Typ. copies: {kinds, mark, empower, points};
 // basics: {core, splash, nosplash} je Standardland (zaehlen als Land und Karte, nie als Nicht-Standardland).
 function typeCounts(copies, basics){
   const rows=["creature","instant","sorcery","land","nonbasic_land","artifact","enchantment","planeswalker"];
   const out={splash:{},nosplash:{}};
   for(const g of ["splash","nosplash"]){
-    const o=out[g];rows.forEach(r=>{o[r]=0});o.cards=0;o.empower=0;o.points=0;
+    const o=out[g];rows.forEach(r=>{o[r]=0});o.cards=0;o.empower=0;o.points=0;o.flow=0;
+    FLOW_KINDS.forEach(k=>{o["flow_"+k]=0});
     for(const c of copies){
       if(c.mark!=="core"&&c.mark!==g)continue;
       o.cards++;
       c.kinds.forEach(k=>{if(k in o)o[k]++});
       if(c.empower){o.empower++;o.points+=c.points}
+      const fl=c.flow||[];
+      if(fl.length){o.flow++;fl.forEach(k=>{if(("flow_"+k) in o)o["flow_"+k]++})}
     }
     for(const b of basics){const n=b.core+b[g];o.land+=n;o.cards+=n}
   }
   return out;
 }
+// Kacheln der Seite -> Eingabe von typeCounts (alle gezaehlten Felder muessen hier weitergegeben werden)
+function copiesOf(tiles){
+  return tiles.map(x=>({kinds:x.card.kinds||[],mark:x.mark,empower:!!x.card.empower,
+    points:x.card.empower_points||0,flow:x.card.flow||[]}));
+}
 // END typeCounts
+const FLOW_LABELS={draw:"Ziehen (Draw)",search:"Suchen (Search)",surveil:"Surveil",scry:"Scry",explore:"Explore",
+  mill_self:"Mill: sich selbst",mill_opp:"Mill: Gegner möglich (auch „target player“)"};
 const TYPE_ROWS=[["cards","Karten gesamt",""],["creature","Kreaturen",""],["instant","Instants",""],
   ["sorcery","Sorceries",""],["artifact","Artefakte (ohne Kreaturen)",""],["enchantment","Verzauberungen",""],
   ["planeswalker","Planeswalker",""],["land","Länder gesamt","sep"],["nonbasic_land","davon Nicht-Standard-Länder","sub"],
   ["empower","Empower Jace (Karten)","sep"],["points","Σ Loyalty beim Wirken/Betreten","sub"]];
+// Zeilen der Typ-Uebersicht; Kartenfluss-Arten erscheinen nur, wenn eine Karte im Pool sie hat
+function typeRows(){
+  const rows=TYPE_ROWS.slice();
+  const present=FLOW_KINDS.filter(k=>pool.some(c=>(c.flow||[]).includes(k)));
+  if(present.length){
+    rows.push(["flow","Kartenfluss (Karten)","sep"]);
+    present.forEach(k=>rows.push(["flow_"+k,FLOW_LABELS[k],"sub"]));
+  }
+  return rows;
+}
 function typeOverview(){
-  const t=typeCounts(state.map(x=>({kinds:x.card.kinds||[],mark:x.mark,empower:!!x.card.empower,
-    points:x.card.empower_points||0})),basics);
+  const t=typeCounts(copiesOf(state),basics);
   const tb=el("table"),head=el("tr");
   head.append(el("th","l",""),el("th",null,"Splash"),el("th",null,"NoSplash"));
   const th=el("thead");th.appendChild(head);tb.appendChild(th);
   const body=el("tbody");
-  for(const [key,label,cls] of TYPE_ROWS){
+  for(const [key,label,cls] of typeRows()){
     const tr=el("tr",cls==="sep"?"sep":null);
     tr.appendChild(el("td","l"+(cls==="sub"?" sub":""),label));
     const a=t.splash[key],b=t.nosplash[key];
@@ -755,7 +819,9 @@ function typeOverview(){
   box.appendChild(el("div","note",
     "Gezählt werden Kopien in der Variante (Core plus Gruppe) einschließlich Standardländern. Artefakte und "+
     "Verzauberungen ohne Kreaturen und Länder; eine Karte kann in mehreren Zeilen stehen. Fett: Unterschied zwischen "+
-    "den Varianten. Σ Loyalty: Zahlenwerte von Empower Jace beim Zauber oder Betreten (ohne X, ohne Auslöser)."));
+    "den Varianten. Σ Loyalty: Zahlenwerte von Empower Jace beim Zauber oder Betreten (ohne X, ohne Auslöser). "+
+    "Kartenfluss: Karten, die ziehen, suchen, surveilen, scrien oder explorieren; es erscheinen nur Arten, die im Pool "+
+    "vorkommen. Empower Jace zählt nicht dazu (eigene Zeile)."));
 }
 // Sortierung nur der Anzeige (die Reihenfolge der Zuordnungen bleibt unberuehrt)
 const COLOR_ORDER=["W","U","B","R","G","M","C","L"];

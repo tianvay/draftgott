@@ -92,6 +92,12 @@ Eine andere Datei geht so: `python mtg_sim.py --drafthelper meinpool.txt`.
   Verzauberungen, Planeswalker, Länder (davon Nicht-Standard-Länder) sowie Empower Jace (Karten und die Summe der
   sofortigen Loyalty beim Wirken oder Betreten, ohne X und ohne Auslöser). Artefakte und Verzauberungen zählen ohne
   Kreaturen und Länder; eine Karte kann in mehreren Zeilen stehen. Unterschiede zwischen den Varianten sind fett.
+  Darunter steht der **Kartenfluss**: Karten, die ziehen (Draw, auch Cycling), Länder oder Karten suchen (Search,
+  auch Landcycling), Surveil, Scry, Explore oder Mill haben. Mill ist getrennt nach „sich selbst“ (z. B.
+  „Mill three cards“) und „Gegner möglich“ („target opponent mills“, „each opponent mills“; „target player mills“ und
+  „each player mills“ zählen in beiden Zeilen, weil sie auch dich treffen können). Eine Karte zählt einmal gesamt und je Art. Es erscheinen nur
+  Arten, die im Pool vorkommen. Auslöser, die nur auf Ziehen oder Scry/Surveil reagieren („whenever you draw …“),
+  und Ziehen des Gegners zählen nicht; Empower Jace hat eine eigene Zeile.
 - **Deckliste exportieren:** Der Button in der Kopfleiste zeigt beide Varianten im Arena/MTGO-Importformat
   (`Deck` und `Sideboard`, mit Set und Nummer), zum Kopieren oder Speichern als `draftgott_splash.txt` bzw.
   `draftgott_nosplash.txt`. Deck = Core + Gruppe der Variante + Standardländer, Sideboard = alle übrigen Karten.
