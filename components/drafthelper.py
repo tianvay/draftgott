@@ -54,7 +54,8 @@ def load_pool(path, refresh=False):
     except urllib.error.URLError as e:
         sys.exit(f"Scryfall nicht erreichbar: {e}")
     images = fetch_printing_images([(r["set"], r["number"]) for r in rows if r["set"] and r["number"]])
-    cards, basics = [], {n: {"name": n, "image": None, "core": 0, "pool": 0} for n in BASIC_LANDS}
+    cards = []
+    basics = {n: {"name": n, "image": None, "core": 0, "pool": 0, "set": "", "number": ""} for n in BASIC_LANDS}
     for r in rows:
         sc = data.get(r["name"]) or data.get(r["name"].split(" // ")[0]) or {}
         image = images.get(f"{r['set']}/{r['number']}") or card_image_url(sc)
@@ -63,12 +64,15 @@ def load_pool(path, refresh=False):
             b["pool"] += r["qty"]
             b["core"] += r["qty"] if r["section"] == "deck" else 0
             b["image"] = b["image"] or image
+            if not b["set"]:
+                b["set"], b["number"] = r["set"], r["number"]
             continue
         type_line = sc.get("type_line") or ""
         faces = sc.get("card_faces") or []
         colors = sc.get("colors") or (faces[0].get("colors") if faces else None) or []
         cards.append({
             "name": r["name"], "qty": r["qty"], "section": r["section"], "image": image, "colors": colors,
+            "set": r["set"], "number": r["number"], "type": type_line,
             "large": image.replace("/normal/", "/large/") if image else None,
             "land": "Land" in type_line.split("—")[0], "mv": sc.get("cmc") or 0, "found": bool(sc),
         })
@@ -355,6 +359,31 @@ h2 small{color:var(--muted);font-weight:400}
 .side .note{font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.35}
 .cdot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:baseline;border:1px solid rgba(0,0,0,.2)}
 @media(max-width:1100px){.layout{grid-template-columns:1fr}.side{position:static;max-height:none}}
+.toolbar{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;margin:0 0 12px}
+.toolbar input[type=search]{flex:1;min-width:200px;font:inherit;padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:#fff}
+.toolbar label{font-size:13px;display:flex;align-items:center;gap:6px}
+.curve .bars{display:flex;gap:6px;align-items:flex-end}
+.curve .bcol{flex:1;text-align:center}
+.curve .pair{display:flex;gap:2px;align-items:flex-end;justify-content:center;height:96px}
+.curve .bw{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;width:13px}
+.curve .bv{font-size:10.5px;color:var(--muted);height:13px;line-height:13px}
+.curve .bar{width:13px;border-radius:3px 3px 0 0;min-height:1px}
+.curve .bar.splash{background:var(--splash)}.curve .bar.nosplash{background:var(--nosplash)}
+.curve .bx{font-size:11.5px;color:var(--muted);margin-top:3px}
+.curve .legend{font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.5}
+.curve .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:baseline}
+#exportbox{position:fixed;inset:0;display:none;z-index:25;background:rgba(20,26,38,.72);align-items:flex-start;
+  justify-content:center;padding:30px 16px;overflow:auto}
+#exportbox.show{display:flex}
+.xbox{background:#fff;border-radius:14px;padding:18px 22px;max-width:980px;width:100%}
+.xhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.xnote{font-size:13px;color:var(--muted);margin:0 0 12px}
+.xcols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.xcol h3{margin:0 0 2px;font-size:15px}
+.xcol .xcount{font-size:12.5px;color:var(--muted);margin-bottom:6px}
+.xcol textarea{width:100%;height:340px;font:12.5px/1.45 ui-monospace,Consolas,monospace;border:1px solid var(--line);
+  border-radius:8px;padding:8px;resize:vertical}
+.xcol .xbtns{display:flex;gap:8px;margin-top:8px}
 .err{background:#fef3f2;border:1px solid #fda29b;color:#b42318;border-radius:10px;padding:12px 16px;margin:10px 0;display:none}
 </style></head><body>
 <header class="bar">
@@ -365,6 +394,7 @@ h2 small{color:var(--muted);font-weight:400}
     <select id="catfilter" title="Blendet Karten anderer Kategorien aus"></select></label>
   <div class="spacer"></div>
   <label>Spiele pro Modus <select id="sims"></select></label>
+  <button class="btn" id="export" title="Deckliste der Varianten zum Kopieren oder Speichern">Deckliste exportieren</button>
   <button class="btn primary" id="go">Simulieren</button>
   <button class="btn" id="quit" title="Draft-Helper beenden">Beenden</button>
 </header>
@@ -390,8 +420,15 @@ h2 small{color:var(--muted);font-weight:400}
     Ein Klick auf das Bild zeigt die Karte groß. Danach auf <b>Simulieren</b> klicken.</div>
   <div class="err" id="err"></div>
   <div class="layout">
-    <aside class="side"><h3>Übersicht nach Farbe</h3><div id="overview"></div></aside>
+    <aside class="side"><h3>Übersicht nach Farbe</h3><div id="overview"></div>
+      <h3 style="margin-top:18px">Mana-Kurve</h3><div id="curve" class="curve"></div></aside>
     <div>
+      <div class="toolbar">
+        <input type="search" id="search" placeholder="Karte suchen (Name oder englischer Typ, z. B. Creature, Instant, Land)">
+        <label>Sortierung <select id="sort">
+          <option value="mv">Manawert</option><option value="name">Name</option><option value="color">Farbe</option>
+          <option value="mark">Zuordnung</option><option value="cat">Kategorie</option></select></label>
+      </div>
       <h2 style="margin-top:0">Standardländer <small>(Menge je Gruppe – auch Länder, die nicht im Pool sind, lassen sich hinzufügen)</small></h2>
       <div class="basics" id="basics"></div>
       <div id="sections"></div>
@@ -401,11 +438,16 @@ h2 small{color:var(--muted);font-weight:400}
 <div id="overlay"><div class="box"><div class="spin"></div><b>Simulation läuft …</b>
   <div id="ovmsg" style="margin-top:8px"></div><div id="ovtime" style="color:var(--muted);margin-top:4px"></div></div></div>
 <div id="lightbox"><img alt=""></div>
+<div id="exportbox"><div class="xbox"><div class="xhead"><b style="font-size:17px">Deckliste exportieren</b>
+  <button class="btn" id="xclose">Schließen</button></div>
+  <p class="xnote">Format wie beim Import in MTG Arena und MTGO (Abschnitte Deck und Sideboard). Das Deck besteht aus
+    Core plus der Gruppe der Variante samt Standardländern; Sideboard sind alle übrigen Karten aus Deck und Sideboard der Datei.</p>
+  <div class="xcols" id="xcols"></div></div></div>
 <div id="results"><div class="rbar"><button class="btn" id="back">← Zurück zu den Karten</button>
   <span id="rnote" style="color:var(--muted)"></span></div><iframe id="frame" title="Bericht"></iframe></div>
 <script>
 const LABEL={core:"Core",splash:"Splash",nosplash:"NoSplash",off:"Aus"};
-let pool=[], state=[], basics=[], storeKey="";
+let pool=[], state=[], basics=[], storeKey="", searchQ="", sortKey="mv";
 const $=id=>document.getElementById(id);
 const el=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e};
 
@@ -462,7 +504,7 @@ function build(){
   restore();buildBasics();
   // Tiles in Reihenfolge der Sektionen erzeugen
   let idx=0;const grids=[...box.querySelectorAll(".grid")];
-  grids.forEach(grid=>{for(const c of grid._cards){for(let k=1;k<=c.qty;k++){grid.appendChild(tile(state[idx]));idx++}}});
+  grids.forEach(grid=>{for(const c of grid._cards){for(let k=1;k<=c.qty;k++){state[idx].grid=grid;grid.appendChild(tile(state[idx]));idx++}}});
   refresh();
 }
 function tile(t){
@@ -489,11 +531,12 @@ function tile(t){
 }
 function paint(t){
   const k=catOf(t.card.name),c=CATS.find(x=>x.key===k),f=$("catfilter").value;
+  const hidden=(f&&(f==="none"?k:k!==f))||(searchQ&&!((t.card.name+" "+(t.card.type||"")).toLowerCase().includes(searchQ)));
   t.node.className="tile m-"+t.mark+(k?" c-"+k:"");
   t.badge.textContent=c?c.abbr+" "+c.label:"";t.badge.style.display=c?"":"none";
   t.sel.value=k;
   t.node.querySelectorAll(".seg button").forEach(b=>b.classList.toggle("on",b.dataset.m===t.mark));
-  t.node.style.display=(f&&(f==="none"?k:k!==f))?"none":""}
+  t.node.style.display=hidden?"none":""}
 function setCat(name,key){
   if(key)cats[name]=key;else delete cats[name];
   state.filter(t=>t.card.name===name).forEach(paint);summary();save()}
@@ -509,7 +552,81 @@ function summary(){
   s.appendChild(document.createTextNode("Splash-Variante: "));s.appendChild(el("b",null,a+" Karten"));
   s.appendChild(document.createTextNode(" · NoSplash-Variante: "));s.appendChild(el("b",null,b+" Karten"));
   if(a!==b)s.appendChild(el("span","warn","  – unterschiedlich groß"));
-  overview();
+  overview();curve();
+}
+// Mana-Kurve: Nichtland-Karten je Manawert, Splash- und NoSplash-Variante nebeneinander
+function curve(){
+  const B=7,cnt={splash:Array(B).fill(0),nosplash:Array(B).fill(0)},sum={splash:0,nosplash:0},num={splash:0,nosplash:0};
+  for(const t of state){if(t.card.land||t.mark==="off")continue;const i=Math.min(Math.round(t.card.mv),B-1);
+    for(const g of ["splash","nosplash"])if(t.mark==="core"||t.mark===g){cnt[g][i]++;sum[g]+=t.card.mv;num[g]++}}
+  const max=Math.max(1,...cnt.splash,...cnt.nosplash),box=$("curve");box.textContent="";
+  const bars=el("div","bars");
+  for(let i=0;i<B;i++){
+    const col=el("div","bcol"),pair=el("div","pair");
+    for(const g of ["splash","nosplash"]){
+      const v=cnt[g][i],w=el("div","bw"),bar=el("div","bar "+g);
+      bar.style.height=Math.round(v/max*72)+"px";bar.title=(g==="splash"?"Splash":"NoSplash")+": "+v+" Karten";
+      w.append(el("span","bv",v?String(v):""),bar);pair.appendChild(w)}
+    col.append(pair,el("div","bx",i===B-1?(B-1)+"+":String(i)));bars.appendChild(col)}
+  box.appendChild(bars);
+  const avg=g=>num[g]?(sum[g]/num[g]).toFixed(2).replace(".",","):"–";
+  const lg=el("div","legend");
+  const i1=el("i");i1.style.background="var(--splash)";const i2=el("i");i2.style.background="var(--nosplash)";
+  lg.append(i1,"Splash-Variante: "+num.splash+" Karten, Ø Manawert "+avg("splash"),document.createElement("br"),
+            i2,"NoSplash-Variante: "+num.nosplash+" Karten, Ø Manawert "+avg("nosplash"),document.createElement("br"),
+            "ohne Länder; Manawert 6+ zusammengefasst");
+  box.appendChild(lg);
+}
+// Sortierung nur der Anzeige (die Reihenfolge der Zuordnungen bleibt unberuehrt)
+const COLOR_ORDER=["W","U","B","R","G","M","C","L"];
+function sortKeyOf(t){
+  const c=t.card,nm=c.name.toLowerCase(),land=c.land?1:0;
+  switch(sortKey){
+    case "name":return [nm];
+    case "color":return [COLOR_ORDER.indexOf(rowKey(c)),land,c.mv,nm];
+    case "mark":return [["core","splash","nosplash","off"].indexOf(t.mark),land,c.mv,nm];
+    case "cat":{const k=catOf(c.name);return [k?CATS.findIndex(x=>x.key===k):99,land,c.mv,nm]}
+    default:return [land,c.mv,nm];
+  }
+}
+function applySort(){
+  const groups=new Map();
+  for(const t of state){if(!groups.has(t.grid))groups.set(t.grid,[]);groups.get(t.grid).push(t)}
+  for(const [grid,ts] of groups){
+    ts.map(t=>[sortKeyOf(t),t]).sort((x,y)=>{
+      for(let i=0;i<x[0].length;i++){if(x[0][i]<y[0][i])return -1;if(x[0][i]>y[0][i])return 1}
+      return x[1].copy-y[1].copy}).forEach(([,t])=>grid.appendChild(t.node))}
+}
+// Export: Arena/MTGO-Format je Variante (Deck = Core + Gruppe + Standardlaender, Sideboard = uebrige Karten)
+function exportLists(){
+  const res={};
+  for(const grp of ["splash","nosplash"]){
+    const deck=new Map(),side=new Map();
+    const add=(m,x,n)=>{const k=x.name+"|"+x.set+"|"+x.number;const e=m.get(k)||{name:x.name,set:x.set,number:x.number,n:0};e.n+=n;m.set(k,e)};
+    for(const t of state)add(t.mark==="core"||t.mark===grp?deck:side,t.card,1);
+    basics.forEach(b=>{const n=b.core+b[grp];if(n)add(deck,b,n)});
+    const line=e=>e.n+" "+e.name+(e.set?" ("+e.set.toUpperCase()+") "+e.number:"");
+    const dl=[...deck.values()].map(line),sl=[...side.values()].map(line);
+    res[grp]={count:[...deck.values()].reduce((a,e)=>a+e.n,0),sideCount:[...side.values()].reduce((a,e)=>a+e.n,0),
+      text:"Deck\n"+dl.join("\n")+(sl.length?"\n\nSideboard\n"+sl.join("\n"):"")+"\n"}}
+  return res;
+}
+function download(name,text){
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([text],{type:"text/plain;charset=utf-8"}));
+  a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+function openExport(){
+  const box=$("xcols");box.textContent="";const lists=exportLists();
+  for(const [grp,title] of [["splash","Splash-Variante"],["nosplash","NoSplash-Variante"]]){
+    const r=lists[grp],col=el("div","xcol");
+    col.appendChild(el("h3",null,title));
+    col.appendChild(el("div","xcount",r.count+" Karten im Deck, "+r.sideCount+" im Sideboard"));
+    const ta=el("textarea");ta.readOnly=true;ta.value=r.text;ta.onfocus=()=>ta.select();col.appendChild(ta);
+    const btns=el("div","xbtns"),cp=el("button","btn","Kopieren"),sv=el("button","btn","Als Datei speichern");
+    cp.onclick=async()=>{try{await navigator.clipboard.writeText(r.text)}catch(e){ta.focus();ta.select();document.execCommand("copy")}
+      cp.textContent="Kopiert";setTimeout(()=>cp.textContent="Kopieren",1500)};
+    sv.onclick=()=>download("draftgott_"+grp+".txt",r.text);
+    btns.append(cp,sv);col.appendChild(btns);box.appendChild(col)}
+  $("exportbox").classList.add("show");
 }
 // Uebersicht links: Karten je Farbe, Zuordnung (C/S/N) und Kategorie (zaehlt Kopien, ohne Standardlaender)
 const COLORS=[["W","Weiß","#f1e7b8"],["U","Blau","#3b82d6"],["B","Schwarz","#4a4a4a"],["R","Rot","#d6453b"],
@@ -573,11 +690,17 @@ async function poll(){
 }
 $("go").onclick=simulate;
 $("catfilter").onchange=()=>state.forEach(paint);
+$("search").oninput=()=>{searchQ=$("search").value.trim().toLowerCase();state.forEach(paint)};
+$("sort").onchange=()=>{sortKey=$("sort").value;applySort()};
+$("export").onclick=openExport;
+$("xclose").onclick=()=>$("exportbox").classList.remove("show");
+$("exportbox").onclick=e=>{if(e.target===$("exportbox"))$("exportbox").classList.remove("show")};
 const fixBar=()=>document.documentElement.style.setProperty("--hbar",document.querySelector("header.bar").offsetHeight+"px");
 window.addEventListener("resize",fixBar);
 $("back").onclick=()=>$("results").classList.remove("show");
 $("lightbox").onclick=()=>$("lightbox").classList.remove("show");
-document.addEventListener("keydown",e=>{if(e.key==="Escape")$("lightbox").classList.remove("show")});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"){
+  $("lightbox").classList.remove("show");$("exportbox").classList.remove("show")}});
 $("quit").onclick=async()=>{if(!confirm("Draft-Helper beenden?"))return;
   try{await api("/api/quit",{})}catch(e){}
   document.body.innerHTML="<main><h2>Draft-Helper wurde beendet.</h2><p>Du kannst dieses Fenster jetzt schließen.</p></main>"};
@@ -586,7 +709,8 @@ $("quit").onclick=async()=>{if(!confirm("Draft-Helper beenden?"))return;
   // Speicherstand je Inhalt der Pool-Datei: ein anderer Kartenpool startet mit den Vorgaben der Datei
   storeKey="draft3:"+d.signature;
   try{Object.keys(localStorage).filter(k=>/^draft2?:/.test(k)).forEach(k=>localStorage.removeItem(k))}catch(e){}
-  basics=d.basics.map(b=>({name:b.name,image:b.image,large:b.large,pool:b.pool,core:b.core,splash:0,nosplash:0}));
+  basics=d.basics.map(b=>({name:b.name,image:b.image,large:b.large,pool:b.pool,core:b.core,splash:0,nosplash:0,
+    set:b.set,number:b.number}));
   const cf=$("catfilter");
   for(const [v,t] of [["","Alle Karten"],...CATS.map(c=>[c.key,c.abbr+" "+c.label]),["none","Ohne Kategorie"]]){
     const o=el("option",null,t);o.value=v;cf.appendChild(o)}

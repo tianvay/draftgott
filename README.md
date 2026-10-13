@@ -49,6 +49,13 @@ Eine andere Datei geht so: `python mtg_sim.py --drafthelper meinpool.txt`.
   Filter „Karten zeigen“.
 - **Übersicht links:** Karten je Farbe (Weiß, Blau, Schwarz, Rot, Grün, Mehrfarbig, Farblos, Länder) mit Pool-Menge,
   Zuordnung (Core/Splash/NoSplash) und Kategorien. Gezählt werden Kopien ohne Standardländer.
+- **Suche und Sortierung:** Das Suchfeld über den Karten filtert nach Name oder (englischem) Typ, z. B. „Creature“.
+  Die Sortierung (Manawert, Name, Farbe, Zuordnung, Kategorie) ändert nur die Anzeige, nicht die Zuordnungen.
+- **Mana-Kurve links:** Anzahl der Nichtland-Karten je Manawert für Splash- und NoSplash-Variante nebeneinander,
+  dazu Kartenzahl und Ø Manawert je Variante.
+- **Deckliste exportieren:** Der Button in der Kopfleiste zeigt beide Varianten im Arena/MTGO-Importformat
+  (`Deck` und `Sideboard`, mit Set und Nummer), zum Kopieren oder Speichern als `draftgott_splash.txt` bzw.
+  `draftgott_nosplash.txt`. Deck = Core + Gruppe der Variante + Standardländer, Sideboard = alle übrigen Karten.
 - **Bericht, Abschnitt „Great in this deck!“:** listet je Variante die ★ Splashworthy- und MustPlay-Karten des
   Decks (mit Bereich) und weist darauf hin, wenn eine MustPlay-Karte (in der Splash-Variante auch eine
   Splashworthy-Karte) im Deck fehlt oder eine NeverPlay-Karte enthalten ist.

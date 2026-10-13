@@ -1,24 +1,43 @@
 Deck
+2 Extended Absence (FRA) 54
+1 Craftwork Crusher (FRA) 127
+1 Silence the Echo (FRA) 66
+1 Winter, Tormented Loner (FRA) 240
+1 Compel Brutality (FRA) 101
+1 Fblthp, Knows the Way (FRA) 258
+1 Yoshimaru, Scrappy Stray (FRA) 269
+1 Multiply by Zero (FRA) 58
+1 Grim Repriser (FRA) 136
+1 Splinter Twin (SPG) 0
+1 Formidable Commons (FRA) 178
+1 Ingris Stingerquill (FRA) 137
+2 Apex Witchstalker (FRA) 48
+1 Arcane Amphisbaena (FRA) 97
+1 Garruk, Curse Breaker (FRA) 259
+1 Edgar, Moonlit Sovereign (FRA) 257
+5 Forest (SPM) 198
+1 Massacre Girl, Most Wanted (FRA) 234
+1 Primal Witchstalker (FRA) 144
+1 Ruric Thar, Magecrusher (FRA) 265
+1 Darklight Phoenix (FRA) 53
 5 Mountain (SPM) 197
-3 Practiced Offense (SOS) 25
-4 Political Triumph (MSH) 31
-4 Inspiring Vantage (KLR) 283
-2 Sheltered by Ghosts (DSK) 30
-2 The Last Ronin's Technique (TMT) 12
-3 Belladonna Took (HOB) 4
-4 Sacred Foundry (GRN) 254
-3 Voice of Victory (TDM) 33
-2 Raphael, Tough Turtle (TMT) 104
-9 Plains (SPM) 194
-2 The Queen of Dale (HOB) 24
-2 Warleader's Call (MAR) 96
-2 Bilbo's Gambit (HOB) 5
-4 Stadium Headliner (TDM) 122
-4 Dalkovan Packbeasts (TDM) 7
-2 Leonardo, Big Brother (TMT) 14
-3 Mabel, Valley Hero (FRA) 274
+6 Swamp (SPM) 196
+2 Stingerquill Voxmancer (FRA) 151
 
 Sideboard
-1 Leonin Vanguard (FDN) 499
-1 Impact Tremors (FDN) 717
-1 Descendant of Storms (TDM) 8
+1 Heartstring Puller (FRA) 86
+1 Winter, Tormented Loner (FRA) 240
+1 Arni, Renowned Champion (FRA) 243
+1 Rank Rat (FRA) 61
+1 Sureshot Sower (FRA) 115
+2 Whiplash Wordsmith (FRA) 164
+1 Cast Away Doubt (FRA) 51
+1 Way of the Necromancer (FRA) 239
+2 Marwyn, the Clearcutter (FRA) 249
+1 Blazing Crescendo (FRA) 75
+1 Afterthought Sentry (FRA) 166
+1 Winter, Team Player (FRA) 256
+1 Hallway Heckler (FRA) 85
+1 Cruel Calculations (FRA) 26
+1 Rescue Girl, First Responder (FRA) 202
+1 Chandra's Emberling (FRA) 76
