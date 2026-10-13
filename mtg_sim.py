@@ -21,6 +21,7 @@ from collections import Counter
 from components.cli import parse_args
 from components.scryfall import fetch_cards_cached
 from components.cards import card_info
+from components.coverage import analyze_card
 from components.deckfile import parse_deck, parse_deck_name, split_label
 from components.jace import analyze_jace
 from components.mana import required_colors
@@ -30,7 +31,7 @@ from components.simulation import simulate
 
 def build_deck(entry, data, args):
     """Wertet eine Deckliste mit den Scryfall-Daten aus."""
-    cards, rows, missing = [], [], []
+    cards, rows, missing, coverage = [], [], [], {}
     for name, qty in entry["deck"].items():
         sc = data.get(name) or data.get(name.split(" // ")[0])
         if not sc:
@@ -39,6 +40,7 @@ def build_deck(entry, data, args):
             continue
         card, shown = card_info(sc)
         rows.append((name, qty, card, shown))
+        coverage[name] = analyze_card(sc)
         cards += [card] * qty
     if len(cards) < 7 + args.turns:
         sys.exit(f"Zu wenige Karten im Deck {entry['name']}.")
@@ -48,7 +50,7 @@ def build_deck(entry, data, args):
     deck_colors = sorted(set().union(*(required_colors(c) for c in nonlands)))
     return dict(
         name=entry["name"], deck=entry["deck"], parts=entry.get("parts", []), rows=rows, cards=cards, missing=missing,
-        cats=entry.get("cats", {}), role=entry.get("role"),
+        cats=entry.get("cats", {}), role=entry.get("role"), coverage=coverage,
         n_lands=len(cards) - len(nonlands),
         avg_mv=sum(c.mv for c in nonlands) / len(nonlands) if nonlands else 0,
         unsure=sorted({n for n, _, c, _ in rows if c.is_land and c.tap_mode == "tapped?"}),

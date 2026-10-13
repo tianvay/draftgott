@@ -37,6 +37,7 @@ ausdrücklicher Freigabe.
 | `components/scryfall.py` | Kartendaten von Scryfall holen und zwischenspeichern |
 | `components/mana.py` | Kosten, Hybrid/Phyrexian, Bezahlbarkeit durch Länder |
 | `components/cards.py` | Kartenmodell `Card`, Länder, Landcycling, Empower Jace, Planeswalker-Tags |
+| `components/coverage.py` | Modell-Abdeckung: erkennt aus dem Kartentext, welche Effekte noch nicht simuliert werden |
 | `components/jace.py` | Jace-Zustand in der Simulation, Effekt-Filter, Deck-Analyse |
 | `components/mulligan.py` | Mulligan-Regeln und Starthand |
 | `components/simulation.py` | Spielablauf, Zauber-/Landauswahl, Landcycling, Messwerte |
@@ -310,6 +311,13 @@ Diese Werte stehen im Skript und lassen sich nur dort ändern.
 - **„Behold a Jace“** (z. B. Theorist's Sanctum): Das Land kommt untapped, wenn ein Jace auf dem Tisch liegt (Token
   oder Planeswalker mit Untertyp Jace) oder eine Jace-Karte auf der Hand ist (sie wird nur gezeigt, nicht gewirkt).
   Andere Planeswalker genügen nicht. Als vorgezogener Zauber kommen nur Karten in Frage, die einen Jace erschaffen.
+- **Modell-Abdeckung (Bericht):** Der Abschnitt „Modell-Abdeckung“ listet je Deck die Karten, deren Effekte die
+  Simulation noch nicht abbildet, mit dem Status „To Do: Noch nicht implementiert“, einer groben Kategorie
+  (Tokens, Direkter Schaden, Zählmarken / Stärkebonus, Haste verleihen, Mana außer Ländern, Kartenfluss,
+  Kostensenkung, Zweitverwertung, Prepared, Interaktion mit dem Gegner, Lebensgewinn, …) und der betroffenen
+  Kennzahl (Lethal, Mana und Zauber pro Runde, Kartenfluss, keine, unklar). Oben steht, wie viele Karten welche
+  Kennzahl betreffen. Die Erkennung arbeitet nur über den Kartentext und ist grob; was nicht einzuordnen ist, heißt
+  „Unbekannter Effekt“ (Kennzahl „unklar“). Die Zahlen im Bericht ändern sich dadurch nicht.
 - **Einschränkung:** In einer Runde, in der ein Zauber vor dem Land gewirkt wird, entfällt das Landcycling nach dem
   Land (die Bezahlung wäre sonst nicht gesichert). Für die Planung der Folgerunde (Landcycling-Vorausschau) werden
   Planeswalker-Länder weiterhin als getappt behandelt.

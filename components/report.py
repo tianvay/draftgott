@@ -8,6 +8,7 @@ from components.jace import analyze_jace
 from components.mana import required_colors
 from components.mulligan import MULL_COLORS, MULL_LANDS_HIGH, MULL_LANDS_LOW
 from components.report_sections import render_compare_section, render_jace_section, render_logic_section
+from components.coverage import METRIC_ORDER, STATUS_TEXT, metrics_of, summarize
 from components.simulation import card_label
 from components.stats import TRAFFIC, lethal_level, timing_stats, traffic_level
 
@@ -66,6 +67,43 @@ def render_great(ctx):
         parts.append('<div class="warnbox" style="margin-top:12px"><b>NeverPlay-Karten im Deck:</b> '
                      + esc(", ".join(never_in_deck)) + "</div>")
     return '<div class="panel">' + "".join(parts) + "</div>"
+
+
+def render_coverage(ctx):
+    """Abschnitt 'Modell-Abdeckung': Karten mit Effekten, die die Simulation noch nicht abbildet (Status, grobe
+    Kategorie, betroffene Kennzahl)."""
+    coverage = ctx.get("coverage") or {}
+    qty = {name: q for name, q, _c, _s in ctx["rows"]}
+    summary = summarize(coverage, qty)
+    if not summary["flagged_cards"]:
+        return ('<div class="panel"><p class="muted">Keine Karte mit nicht implementierten Effekten gefunden. '
+                'Die Erkennung arbeitet über den Kartentext und ist grob; sie ersetzt keine Prüfung der Karten.</p></div>')
+    kpis = "".join(
+        f'<div class="kpi"><div class="l">{esc(m)}</div><div class="v">{summary["by_metric"][m]}</div>'
+        f'<div class="s">Karten</div></div>' for m in METRIC_ORDER if summary["by_metric"][m])
+    flagged = [n for n, items in coverage.items() if items]
+
+    def order(name):
+        ms = metrics_of(coverage[name])
+        return (min(METRIC_ORDER.index(m) for m in ms), name)
+
+    rows = []
+    for name in sorted(flagged, key=order):
+        items = coverage[name]
+        cats = list(dict.fromkeys(c for c, _m, _l in items))
+        metrics = [m for m in METRIC_ORDER if m in metrics_of(items)]
+        evidence = " | ".join(dict.fromkeys(l for _c, _m, l in items))
+        rows.append([f'<td class="l">{esc(name)}</td>', f"<td>{qty.get(name, 1)}</td>",
+                     f'<td class="l"><span class="tag off">{esc(STATUS_TEXT)}</span></td>',
+                     f'<td class="l" title="{esc(evidence)}">{esc(", ".join(cats))}</td>',
+                     f'<td class="l">{esc(", ".join(metrics))}</td>'])
+    note = (f'<div class="note" style="margin:0 0 10px"><b>{summary["flagged_cards"]} Karten</b> '
+            f'({summary["flagged_copies"]} Kopien) haben Effekte, die die Simulation noch nicht abbildet. Die Zahlen in '
+            'diesem Bericht berücksichtigen sie nicht. Die Erkennung arbeitet über den Kartentext und sortiert nur grob; '
+            'bei Karten mit „unklar“ ist nicht bekannt, was genau fehlt. Mit der Maus über der Kategorie steht die '
+            'betreffende Textstelle.</div>')
+    table = h_table(["Karte", "Anz.", "Status", "Kategorie", "Betroffene Kennzahl"], rows, left=(0, 2, 3, 4))
+    return f'<div class="panel">{note}<div class="grid g4" style="margin-bottom:12px">{kpis}</div>{table}</div>'
 
 
 def render_details(ctx, suffix=""):
@@ -199,6 +237,11 @@ def render_details(ctx, suffix=""):
     if great_html:
         add("great", "Great in this deck!",
             "Als Splashworthy oder MustPlay gekennzeichnete Karten dieses Decks (Draft-Helper).", great_html)
+
+    # ---------------- Modell-Abdeckung (Karten mit Effekten, die noch nicht simuliert werden)
+    if ctx.get("coverage") is not None:
+        add("abdeckung", "Modell-Abdeckung",
+            "Welche Karten dieses Decks Effekte haben, die die Simulation noch nicht abbildet.", render_coverage(ctx))
 
     # ---------------- Mulligan
     if mu0["on"]:
