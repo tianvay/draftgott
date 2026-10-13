@@ -41,6 +41,17 @@ Eine andere Datei geht so: `python mtg_sim.py --drafthelper meinpool.txt`.
 
 - Jede Kopie einer Karte (außer Standardländern) wird einzeln als **Core**, **Splash**, **NoSplash** oder **Aus** markiert. Vorbelegung:
   Deck = Core, Sideboard = Aus.
+- **Kategorie je Karte** (Auswahl unter dem Bild, gilt für alle Kopien, höchstens eine): **★ Splashworthy**
+  (entscheidet Spiele allein, soll auf jeden Fall rein, auch wenn wir die Farbe nicht spielen), **MustPlay**
+  (wird gespielt, wenn wir diese Farbe spielen), **Filler** (füllt auf, wenn wir die Farbe spielen und nicht
+  splashen) und **NeverPlay** (zu schlecht oder zu situativ). Die Kategorie ist unabhängig von
+  Core/Splash/NoSplash/Aus und beeinflusst die Simulation nicht. Die Kopfleiste zählt je Kategorie und hat einen
+  Filter „Karten zeigen“.
+- **Übersicht links:** Karten je Farbe (Weiß, Blau, Schwarz, Rot, Grün, Mehrfarbig, Farblos, Länder) mit Pool-Menge,
+  Zuordnung (Core/Splash/NoSplash) und Kategorien. Gezählt werden Kopien ohne Standardländer.
+- **Bericht, Abschnitt „Great in this deck!“:** listet je Variante die ★ Splashworthy- und MustPlay-Karten des
+  Decks (mit Bereich) und weist darauf hin, wenn eine MustPlay-Karte (in der Splash-Variante auch eine
+  Splashworthy-Karte) im Deck fehlt oder eine NeverPlay-Karte enthalten ist.
 - **Standardländer** (Plains, Island, Swamp, Mountain, Forest) werden nicht als Einzelkarten markiert, sondern oben
   als Menge je Gruppe eingestellt (Core / Splash / NoSplash, mit − und +). Startwert ist die Anzahl im Deck der
   Datei als Core. Länder, die nicht im Pool sind (z. B. Swamp für einen anderen Splash), lassen sich ebenfalls

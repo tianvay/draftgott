@@ -21,6 +21,52 @@ document.querySelectorAll('.grpbar button').forEach(function(b){b.addEventListen
 </script>"""
 
 
+CAT_LABEL = {"splashworthy": "★ Splashworthy", "mustplay": "MustPlay", "filler": "Filler", "neverplay": "NeverPlay"}
+
+
+def render_great(ctx):
+    """Abschnitt 'Great in this deck!': Splashworthy- und MustPlay-Karten des Decks, dazu Hinweise, was fehlt.
+    Gibt '' zurueck, wenn keine Kategorien gesetzt sind (z. B. ohne Draft-Helper)."""
+    cats = ctx.get("cats") or {}
+    great = {n: c for n, c in cats.items() if c in ("splashworthy", "mustplay")}
+    never_in_deck = sorted(n for n, c in cats.items() if c == "neverplay" and n in ctx["deck"])
+    if not great and not never_in_deck:
+        return ""
+    order = []
+    for dd in ctx.get("all_decks") or [ctx]:
+        for lab, _ in dd["parts"]:
+            if lab not in order:
+                order.append(lab)
+    lab_of = {}
+    for lab, part in ctx["parts"]:
+        for n in part:
+            lab_of.setdefault(n, []).append(lab)
+    rows_g = []
+    for name, qty, card, shown in sorted((r for r in ctx["rows"] if r[0] in great),
+                                         key=lambda r: (great[r[0]] != "splashworthy", r[2].is_land, r[2].mv, r[0])):
+        tags = "".join(f'<span class="tag t{min(order.index(l), 2) if l in order else 0}">{esc(l)}</span> '
+                       for l in lab_of.get(name, []))
+        props = "".join(f'<span class="tag">{html_cost(t)}</span>' for t in re.findall(r"\[([^\]]*)\]", shown))
+        rows_g.append([f'<td class="l">{esc(name)}</td>', f'<td class="l"><b>{esc(CAT_LABEL[great[name]])}</b></td>',
+                       f"<td>{qty}</td>", f'<td class="l">{tags}</td>',
+                       f'<td class="l">{html_cost(shown.split("   [")[0])}</td>', f'<td class="l">{props}</td>'])
+    parts = []
+    if rows_g:
+        parts.append(h_table(["Karte", "Kategorie", "Anz.", "Bereich", "Kosten", "Eigenschaften"], rows_g,
+                             left=(0, 1, 3, 4, 5)))
+    else:
+        parts.append('<p class="muted">Keine Splashworthy- oder MustPlay-Karten in diesem Deck.</p>')
+    expected = [n for n, c in great.items() if c == "mustplay" or (c == "splashworthy" and ctx.get("role") == "splash")]
+    missing = sorted(n for n in expected if n not in ctx["deck"])
+    if missing:
+        parts.append('<div class="warnbox" style="margin-top:12px"><b>Fehlt in diesem Deck:</b> '
+                     + esc(", ".join(f"{n} ({CAT_LABEL[great[n]]})" for n in missing)) + "</div>")
+    if never_in_deck:
+        parts.append('<div class="warnbox" style="margin-top:12px"><b>NeverPlay-Karten im Deck:</b> '
+                     + esc(", ".join(never_in_deck)) + "</div>")
+    return '<div class="panel">' + "".join(parts) + "</div>"
+
+
 def render_details(ctx, suffix=""):
     """Alle Detailabschnitte (Auf einen Blick ... Modellannahmen) fuer EIN Deck. Gibt (sections, nav) zurueck."""
     a, res, rows = ctx["args"], ctx["results"], ctx["rows"]
@@ -146,6 +192,12 @@ def render_details(ctx, suffix=""):
             f'<div class="panel" style="margin-top:14px">{unsure}'
             f'{origin_note}{h_table(head, deck_rows, left=(0, 2, 3, 4) if len(head) == 5 else (0, 2, 3))}</div>')
     add("deck", "Deck", "Kartendaten von Scryfall.", body)
+
+    # ---------------- Great in this deck! (Kategorien aus dem Draft-Helper)
+    great_html = render_great(ctx)
+    if great_html:
+        add("great", "Great in this deck!",
+            "Als Splashworthy oder MustPlay gekennzeichnete Karten dieses Decks (Draft-Helper).", great_html)
 
     # ---------------- Mulligan
     if mu0["on"]:

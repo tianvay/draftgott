@@ -1,46 +1,41 @@
 Deck
-1 Carnivorous Cultivator (FRA) 100
-1 Prophesied End (FRA) 17
-1 Prudent Fateseer (FRA) 146
-1 Face Yourself (FRA) 83
-1 Yoshimaru, Scrappy Stray (FRA) 269
-1 Way of the Warlord (FRA) 255
-1 Way of the Mentor (FRA) 208
-1 Vigorbloom Annex (FRA) 194
-1 Bloombrute (FRA) 124
-1 Surgical Precision (FRA) 22
-1 Kiora of Fire and Ashes (FRA) 247
-1 Emergency Phytomedic (FRA) 130
-2 Compel Brutality (FRA) 101
-1 Tethermage's Advantage (FRA) 117
-1 Unflinching Hortimancer (FRA) 23
-1 Stingerquill Voxmancer (FRA) 151
-1 Mindseeker Oculus (FRA) 33
-1 Way of the Mind Sculptor (FRA) 224
-1 Thalia, the Survivor (FRA) 205
-1 Restore with Empathy (FRA) 112
-1 Konstrari Charm (FRA) 138
-4 Plains (SPM) 194
-2 Island (SPM) 195
-4 Mountain (SPM) 197
-4 Forest (SPM) 198
-1 Afterthought Sentry (FRA) 166
-1 Konstrari Annex (FRA) 183
-1 Deserted Beach (FRA) 176
-1 Twinned Vision (FRA) 157
+1 Chandra, Torch of Defiance (FRA) 244
+2 Wrath of the Bloodmane (FRA) 96
+1 Saheeli, Consul of Oversight (FRA) 203
+1 Infinite Coursework (FRA) 31
+2 Stingerquill Charm (FRA) 150
+1 Memory Trap (FRA) 15
+1 Skilled Battlecarver (FRA) 92
+1 Silence the Echo (FRA) 66
+2 Teyo, Diamondblade Mage (FRA) 236
+1 Danitha, Spear of Agony (FRA) 227
+1 Desperate Futurescribe (FRA) 129
+1 Plan for All Outcomes (FRA) 35
+2 Extended Absence (FRA) 54
+1 Last Gasp (FRA) 56
+1 Break Under Pressure (FRA) 50
+1 Generous Revival (FRA) 8
+1 Warrior's Blades (FRA) 163
+1 Gallia, Tragic Host (FRA) 228
+1 Cryotheory Adept (FRA) 27
+1 Screeching Soulbreaker (FRA) 65
+1 Repurposed Enforcer (FRA) 19
+1 Gideon the Oathless (FRA) 230
+2 Apex Witchstalker (FRA) 48
+1 Saheeli, Jewel of Avishkar (FRA) 275
+1 Surveillance Phantasm (FRA) 42
+1 Heartstring Puller (FRA) 86
+1 Theorix Charm (FRA) 155
+1 Keeper of the Quiet Hour (FRA) 171
+3 Plains (SPM) 194
+4 Island (SPM) 195
+5 Swamp (SPM) 196
+5 Mountain (SPM) 197
 
 Sideboard
-1 Icy Reception (FRA) 30
-1 Yargle, Glutton of Urborg (FRA) 241
-1 Formidable Commons (FRA) 178
-1 Massacre Girl, Most Wanted (FRA) 234
-1 Loyal Tutor (FRA) 14
-1 Protege's Awakening (FRA) 37
-1 Meticulous Commons (FRA) 184
-1 Eardrum Rattler (FRA) 81
-1 Haunted Ridge (FRA) 180
-1 Flourishing Grapple (FRA) 102
-1 Paradox Shaper (FRA) 143
+2 Rampart Hunter (FRA) 60
 1 Solve for Disappointment (FRA) 67
+1 Refute Destiny (FRA) 18
+1 Eardrum Rattler (FRA) 81
+1 Flourishing Grapple (FRA) 102
 1 Theoretical Necromancer (FRA) 69
-1 Void Extrapolator (FRA) 70

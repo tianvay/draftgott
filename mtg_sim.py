@@ -48,6 +48,7 @@ def build_deck(entry, data, args):
     deck_colors = sorted(set().union(*(required_colors(c) for c in nonlands)))
     return dict(
         name=entry["name"], deck=entry["deck"], parts=entry.get("parts", []), rows=rows, cards=cards, missing=missing,
+        cats=entry.get("cats", {}), role=entry.get("role"),
         n_lands=len(cards) - len(nonlands),
         avg_mv=sum(c.mv for c in nonlands) / len(nonlands) if nonlands else 0,
         unsure=sorted({n for n, _, c, _ in rows if c.is_land and c.tap_mode == "tapped?"}),

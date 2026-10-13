@@ -27,6 +27,7 @@ MARKS = ("core", "splash", "nosplash", "off")
 GROUPS = ("core", "splash", "nosplash")
 BASIC_LANDS = ("Plains", "Island", "Swamp", "Mountain", "Forest")
 MAX_BASICS = 40  # je Land und Gruppe
+CATEGORIES = ("splashworthy", "mustplay", "filler", "neverplay")  # Kategorie je Karte, hoechstens eine
 SIM_OPTIONS = (1000, 5000, 10000)
 SCRIPT_DIR = pathlib.Path(__file__).resolve().parent.parent
 
@@ -61,8 +62,10 @@ def load_pool(path, refresh=False):
             b["image"] = b["image"] or image
             continue
         type_line = sc.get("type_line") or ""
+        faces = sc.get("card_faces") or []
+        colors = sc.get("colors") or (faces[0].get("colors") if faces else None) or []
         cards.append({
-            "name": r["name"], "qty": r["qty"], "section": r["section"], "image": image,
+            "name": r["name"], "qty": r["qty"], "section": r["section"], "image": image, "colors": colors,
             "large": image.replace("/normal/", "/large/") if image else None,
             "land": "Land" in type_line.split("—")[0], "mv": sc.get("cmc") or 0, "found": bool(sc),
         })
@@ -74,9 +77,11 @@ def load_pool(path, refresh=False):
     return cards, list(basics.values())
 
 
-def entries_from_marks(pool, marks, basics=None):
+def entries_from_marks(pool, marks, basics=None, cats=None):
     """Baut die Deck-Eintraege fuer die Simulation. marks: je Pool-Karte eine Liste mit einer Markierung je Kopie.
-    basics: {Landname: {core, splash, nosplash}} mit der Menge je Gruppe."""
+    basics: {Landname: {core, splash, nosplash}} mit der Menge je Gruppe.
+    cats: {Kartenname: Kategorie}; wird an die Eintraege gehaengt (Abschnitt "Great in this deck!" im Bericht)."""
+    cats = dict(cats or {})
     groups = {m: Counter() for m in MARKS}
     for card, ms in zip(pool, marks):
         for m in ms:
@@ -87,13 +92,14 @@ def entries_from_marks(pool, marks, basics=None):
                 groups[g][name] += counts[g]
     core = dict(groups["core"])
     if not groups["splash"] and not groups["nosplash"]:
-        return [{"path": "", "name": "Core", "deck": core, "parts": [("Core", core)]}]
+        return [{"path": "", "name": "Core", "deck": core, "parts": [("Core", core)], "cats": cats, "role": "core"}]
     entries = []
     for label, key in (("Splash", "splash"), ("NoSplash", "nosplash")):
         part = dict(groups[key])
         deck = Counter(core)
         deck.update(part)
-        entries.append({"path": "", "name": label, "deck": dict(deck), "parts": [("Core", dict(core)), (label, part)]})
+        entries.append({"path": "", "name": label, "deck": dict(deck), "parts": [("Core", dict(core)), (label, part)],
+                        "cats": cats, "role": key})
     return entries
 
 
@@ -192,6 +198,8 @@ def make_handler(app):
                     raise ValueError("Markierungen passen nicht zum Kartenpool")
                 if not 100 <= sims <= 100000:
                     raise ValueError("Anzahl der Spiele muss zwischen 100 und 100000 liegen")
+                names = {c["name"] for c in pool}
+                cats = {n: k for n, k in (body.get("cats") or {}).items() if n in names and k in CATEGORIES}
                 basics = {}
                 for name in BASIC_LANDS:
                     c = (body.get("basics") or {}).get(name) or {}
@@ -205,7 +213,7 @@ def make_handler(app):
             run_args.sims, run_args.core = sims, "Core"  # core: Herkunft der Karten (Core/Splash/NoSplash) im Bericht
 
             def work(progress):
-                html = app["simulate"](entries_from_marks(pool, marks, basics), run_args, progress)
+                html = app["simulate"](entries_from_marks(pool, marks, basics, cats), run_args, progress)
                 app["save"](html, run_args)
                 return html
 
@@ -313,12 +321,43 @@ h2 small{color:var(--muted);font-weight:400}
 .step .lab.core{color:var(--core)}.step .lab.splash{color:var(--splash)}.step .lab.nosplash{color:#a37c00}
 .step button{width:28px;height:28px;border:1px solid var(--line);background:#f8f9fb;border-radius:6px;font-size:16px;line-height:1;padding:0}
 .step .val{min-width:24px;text-align:center;font-weight:700}
+.imgw{position:relative}
+.badge{position:absolute;top:6px;left:6px;border-radius:999px;padding:2px 9px;font-size:12px;font-weight:700;
+  color:#fff;box-shadow:0 1px 3px rgba(0,0,0,.35)}
+.tile.c-splashworthy .badge,.cdot.splashworthy{background:#e0a800;color:#2d2100}
+.tile.c-mustplay .badge,.cdot.mustplay{background:#2e9e5b}
+.tile.c-filler .badge,.cdot.filler{background:#6b7d99}
+.tile.c-neverplay .badge,.cdot.neverplay{background:#8b2f2f}
+.tile.c-splashworthy{box-shadow:0 0 0 3px #ffc83d88}
+.tile.c-mustplay{box-shadow:0 0 0 3px #2e9e5b55}
+.tile.c-neverplay img{filter:grayscale(.75)}
+.catsel{width:100%;margin-top:5px;padding:4px 6px;font-size:12.5px}
+.chip.cat{color:#fff}
+.chip.cat.splashworthy{background:#e0a800;color:#2d2100}.chip.cat.mustplay{background:#2e9e5b}
+.chip.cat.filler{background:#6b7d99}.chip.cat.neverplay{background:#8b2f2f}
+.filter{display:flex;align-items:center;gap:6px;font-size:13px}
+.layout{display:grid;grid-template-columns:400px 1fr;gap:20px;align-items:start;margin-top:14px}
+.side{position:sticky;top:calc(var(--hbar,70px) + 12px);background:#fff;border:1px solid var(--line);border-radius:12px;
+  padding:12px;max-height:calc(100vh - var(--hbar,70px) - 24px);overflow:auto}
+.side h3{margin:0 0 6px;font-size:15px}
+.side table{width:100%;border-collapse:collapse;font-size:12.5px}
+.side th,.side td{padding:3px 2px;text-align:center;border-bottom:1px solid #eef0f4}
+.side th{font-weight:700;color:var(--muted);font-size:11.5px}
+.side th.grp{border-bottom:2px solid var(--line)}
+.side td.l,.side th.l{text-align:left}
+.side td.z{color:#c3c8d2}
+.side tr.tot td{font-weight:700;border-top:2px solid var(--line)}
+.side .note{font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.35}
+.cdot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:baseline;border:1px solid rgba(0,0,0,.2)}
+@media(max-width:1100px){.layout{grid-template-columns:1fr}.side{position:static;max-height:none}}
 .err{background:#fef3f2;border:1px solid #fda29b;color:#b42318;border-radius:10px;padding:12px 16px;margin:10px 0;display:none}
 </style></head><body>
 <header class="bar">
   <h1>Draft-Helper</h1>
   <div class="counts" id="counts"></div>
   <div class="sizes" id="sizes"></div>
+  <label class="filter">Karten zeigen
+    <select id="catfilter" title="Blendet Karten anderer Kategorien aus"></select></label>
   <div class="spacer"></div>
   <label>Spiele pro Modus <select id="sims"></select></label>
   <button class="btn primary" id="go">Simulieren</button>
@@ -332,13 +371,27 @@ h2 small{color:var(--muted);font-weight:400}
       <li><b style="color:#a37c00">NoSplash</b> – Karte ist nur in der Variante „NoSplash“ dabei.</li>
       <li><b style="color:var(--off)">Aus</b> – Karte ist in keiner Variante dabei.</li>
     </ul>
+    Zusätzlich bekommt jede Karte unter dem Bild eine <b>Kategorie</b> (unabhängig von der Zuordnung):
+    <ul>
+      <li><b>★ Splashworthy</b> – entscheidet Spiele allein, soll auf jeden Fall rein, auch wenn wir die Farbe nicht spielen.</li>
+      <li><b>MustPlay</b> – wird auf jeden Fall gespielt, wenn wir diese Farbe spielen.</li>
+      <li><b>Filler</b> – füllt das Deck auf, wenn wir die Farbe spielen und nicht splashen.</li>
+      <li><b>NeverPlay</b> – zu schlecht oder zu situativ.</li>
+    </ul>
+    Die Kategorie beeinflusst die Simulation nicht; ★ Splashworthy und MustPlay erscheinen im Bericht unter
+    „Great in this deck!“. Links siehst du, wie viele Karten es je Farbe und Kategorie gibt.
     Mehrfach vorhandene Karten erscheinen einzeln und können unterschiedlich zugeordnet werden.
     Standardländer stellst du oben als Menge je Gruppe ein; dort kannst du auch Länder hinzufügen, die nicht im Pool sind.
     Ein Klick auf das Bild zeigt die Karte groß. Danach auf <b>Simulieren</b> klicken.</div>
   <div class="err" id="err"></div>
-  <h2>Standardländer <small>(Menge je Gruppe – auch Länder, die nicht im Pool sind, lassen sich hinzufügen)</small></h2>
-  <div class="basics" id="basics"></div>
-  <div id="sections"></div>
+  <div class="layout">
+    <aside class="side"><h3>Übersicht nach Farbe</h3><div id="overview"></div></aside>
+    <div>
+      <h2 style="margin-top:0">Standardländer <small>(Menge je Gruppe – auch Länder, die nicht im Pool sind, lassen sich hinzufügen)</small></h2>
+      <div class="basics" id="basics"></div>
+      <div id="sections"></div>
+    </div>
+  </div>
 </main>
 <div id="overlay"><div class="box"><div class="spin"></div><b>Simulation läuft …</b>
   <div id="ovmsg" style="margin-top:8px"></div><div id="ovtime" style="color:var(--muted);margin-top:4px"></div></div></div>
@@ -352,10 +405,22 @@ const $=id=>document.getElementById(id);
 const el=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e};
 
 const GROUPS=["core","splash","nosplash"];
+// Kategorie je Karte (nicht je Kopie), hoechstens eine. Weitere Kategorien: hier einen Eintrag ergaenzen.
+const CATS=[
+ {key:"splashworthy",abbr:"★",label:"Splashworthy",hint:"Entscheidet Spiele allein – soll auf jeden Fall rein, auch wenn wir die Farbe nicht spielen"},
+ {key:"mustplay",abbr:"MP",label:"MustPlay",hint:"Wird auf jeden Fall gespielt, wenn wir diese Farbe spielen"},
+ {key:"filler",abbr:"Fi",label:"Filler",hint:"Füllt das Deck auf, wenn wir die Farbe spielen und nicht splashen"},
+ {key:"neverplay",abbr:"NP",label:"NeverPlay",hint:"Zu schlecht oder zu situativ, wird nicht gespielt"}];
+let cats={};  // Kartenname -> Kategorie
+const catOf=name=>cats[name]||"";
 function save(){try{localStorage.setItem("draft2:"+file,JSON.stringify({marks:state.map(t=>t.mark),
-  basics:basics.map(b=>GROUPS.map(g=>b[g]))}))}catch(e){}}
+  basics:basics.map(b=>GROUPS.map(g=>b[g])),cats}))}catch(e){}}
 function restore(){try{const s=JSON.parse(localStorage.getItem("draft2:"+file)||"null");if(!s)return;
   if(Array.isArray(s.marks)&&s.marks.length===state.length&&s.marks.every(m=>m in LABEL))s.marks.forEach((m,i)=>state[i].mark=m);
+  const names=new Set(pool.map(c=>c.name)),keys=new Set(CATS.map(c=>c.key));
+  if(s.cats&&typeof s.cats==="object")for(const [n,k] of Object.entries(s.cats))if(names.has(n)&&keys.has(k))cats[n]=k;
+  if(s.tags&&typeof s.tags==="object")for(const [n,v] of Object.entries(s.tags))  // aelterer Speicherstand
+    if(names.has(n)&&!cats[n]&&Array.isArray(v)&&keys.has(v[0]))cats[n]=v[0];
   if(Array.isArray(s.basics)&&s.basics.length===basics.length)
     s.basics.forEach((v,i)=>GROUPS.forEach((g,k)=>{const n=+v[k];if(Number.isInteger(n)&&n>=0&&n<=40)basics[i][g]=n}))}catch(e){}}
 function buildBasics(){
@@ -392,35 +457,90 @@ function build(){
   restore();buildBasics();
   // Tiles in Reihenfolge der Sektionen erzeugen
   let idx=0;const grids=[...box.querySelectorAll(".grid")];
-  grids.forEach(grid=>{for(const c of grid._cards){for(let k=1;k<=c.qty;k++){grid.appendChild(tile(state[idx],idx));idx++}}});
+  grids.forEach(grid=>{for(const c of grid._cards){for(let k=1;k<=c.qty;k++){grid.appendChild(tile(state[idx]));idx++}}});
   refresh();
 }
-function tile(t,i){
+function tile(t){
   const d=el("div","tile");t.node=d;
+  const w=el("div","imgw");
   if(t.card.image){const im=el("img");im.src=t.card.image;im.alt=t.card.name;im.loading="lazy";
     im.onclick=()=>{$("lightbox").querySelector("img").src=t.card.large||t.card.image;$("lightbox").classList.add("show")};
-    d.appendChild(im)}
-  else d.appendChild(el("div","ph",t.card.name));
+    w.appendChild(im)}
+  else w.appendChild(el("div","ph",t.card.name));
+  t.badge=el("div","badge");w.appendChild(t.badge);
+  d.appendChild(w);
   const cap=el("div","cap");cap.appendChild(el("b",null,t.card.name));
   if(t.card.qty>1)cap.appendChild(el("span",null,t.copy+"/"+t.card.qty));
   d.appendChild(cap);
   const seg=el("div","seg");
   for(const m of ["core","splash","nosplash","off"]){
     const b=el("button",null,LABEL[m]);b.dataset.m=m;b.onclick=()=>{t.mark=m;paint(t);summary();save()};seg.appendChild(b)}
-  d.appendChild(seg);paint(t);return d;
+  d.appendChild(seg);
+  const sel=el("select","catsel");sel.title="Kategorie dieser Karte (gilt für alle Kopien)";
+  const o0=el("option",null,"Kategorie: –");o0.value="";sel.appendChild(o0);
+  for(const c of CATS){const o=el("option",null,c.abbr+" "+c.label);o.value=c.key;o.title=c.hint;sel.appendChild(o)}
+  sel.onchange=()=>setCat(t.card.name,sel.value);t.sel=sel;d.appendChild(sel);
+  paint(t);return d;
 }
-function paint(t){t.node.className="tile m-"+t.mark;
-  t.node.querySelectorAll(".seg button").forEach(b=>b.classList.toggle("on",b.dataset.m===t.mark))}
+function paint(t){
+  const k=catOf(t.card.name),c=CATS.find(x=>x.key===k),f=$("catfilter").value;
+  t.node.className="tile m-"+t.mark+(k?" c-"+k:"");
+  t.badge.textContent=c?c.abbr+" "+c.label:"";t.badge.style.display=c?"":"none";
+  t.sel.value=k;
+  t.node.querySelectorAll(".seg button").forEach(b=>b.classList.toggle("on",b.dataset.m===t.mark));
+  t.node.style.display=(f&&(f==="none"?k:k!==f))?"none":""}
+function setCat(name,key){
+  if(key)cats[name]=key;else delete cats[name];
+  state.filter(t=>t.card.name===name).forEach(paint);summary();save()}
 function refresh(){state.forEach(paint);summary()}
 function summary(){
   const n={core:0,splash:0,nosplash:0,off:0};state.forEach(t=>n[t.mark]++);
   basics.forEach(b=>GROUPS.forEach(g=>n[g]+=b[g]));
   const c=$("counts");c.textContent="";
   for(const m of ["core","splash","nosplash","off"])c.appendChild(el("span","chip "+m,LABEL[m]+" "+n[m]));
+  for(const cat of CATS){const k=state.filter(t=>catOf(t.card.name)===cat.key).length;
+    if(k)c.appendChild(el("span","chip cat "+cat.key,cat.abbr+" "+cat.label+" "+k))}
   const a=n.core+n.splash,b=n.core+n.nosplash,s=$("sizes");s.textContent="";
   s.appendChild(document.createTextNode("Splash-Variante: "));s.appendChild(el("b",null,a+" Karten"));
   s.appendChild(document.createTextNode(" · NoSplash-Variante: "));s.appendChild(el("b",null,b+" Karten"));
   if(a!==b)s.appendChild(el("span","warn","  – unterschiedlich groß"));
+  overview();
+}
+// Uebersicht links: Karten je Farbe, Zuordnung (C/S/N) und Kategorie (zaehlt Kopien, ohne Standardlaender)
+const COLORS=[["W","Weiß","#f1e7b8"],["U","Blau","#3b82d6"],["B","Schwarz","#4a4a4a"],["R","Rot","#d6453b"],
+  ["G","Grün","#3f9b4f"],["M","Mehrfarbig","#d9a400"],["C","Farblos","#b7bcc6"],["L","Länder","#9a7b4f"]];
+const rowKey=card=>{if(card.land)return "L";const c=card.colors||[];return c.length===0?"C":c.length>1?"M":c[0]};
+function overview(){
+  const acc={};COLORS.forEach(([k])=>acc[k]={pool:0,core:0,splash:0,nosplash:0,none:0,cat:{}});
+  for(const t of state){const a=acc[rowKey(t.card)]||acc.C;a.pool++;if(t.mark!=="off")a[t.mark]++;
+    const k=catOf(t.card.name);if(k)a.cat[k]=(a.cat[k]||0)+1;else a.none++}
+  const tb=el("table"),th=el("thead"),r1=el("tr"),r2=el("tr");
+  const h=(tr,txt,cls,span,title)=>{const c=el("th",cls||null,txt);if(span)c.colSpan=span;if(title)c.title=title;tr.appendChild(c);return c};
+  h(r1,"","");h(r1,"","");h(r1,"Zuordnung","grp",3);h(r1,"Kategorie","grp",CATS.length+1);
+  h(r2,"Farbe","l");h(r2,"Pool","",0,"Alle Kopien in Deck und Sideboard der Datei (ohne Standardländer)");
+  h(r2,"C","",0,"Core").style.color="var(--core)";h(r2,"S","",0,"Splash").style.color="var(--splash)";
+  h(r2,"N","",0,"NoSplash").style.color="#a37c00";
+  for(const c of CATS)h(r2,c.abbr,"",0,c.label+": "+c.hint);
+  h(r2,"–","",0,"ohne Kategorie");
+  th.append(r1,r2);tb.appendChild(th);
+  const body=el("tbody"),tot={pool:0,core:0,splash:0,nosplash:0,none:0,cat:{}};
+  const cell=(tr,v,cls)=>{tr.appendChild(el("td",v?cls||null:"z",v?String(v):"·"))};
+  for(const [k,name,col] of COLORS){
+    const a=acc[k],tr=el("tr");
+    const lab=el("td","l");const dot=el("span","cdot");dot.style.background=col;lab.append(dot,name);tr.appendChild(lab);
+    cell(tr,a.pool);cell(tr,a.core);cell(tr,a.splash);cell(tr,a.nosplash);
+    for(const c of CATS)cell(tr,a.cat[c.key]||0);cell(tr,a.none);
+    body.appendChild(tr);
+    for(const f of ["pool","core","splash","nosplash","none"])tot[f]+=a[f];
+    for(const c of CATS)tot.cat[c.key]=(tot.cat[c.key]||0)+(a.cat[c.key]||0)}
+  const tr=el("tr","tot");tr.appendChild(el("td","l","Gesamt"));
+  [tot.pool,tot.core,tot.splash,tot.nosplash,...CATS.map(c=>tot.cat[c.key]||0),tot.none].forEach(v=>tr.appendChild(el("td",null,String(v))));
+  body.appendChild(tr);tb.appendChild(body);
+  const box=$("overview");box.textContent="";box.appendChild(tb);
+  const note=el("div","note",
+    "Mehrfarbige Karten stehen nur in „Mehrfarbig“. Pool = alle Kopien in Deck und Sideboard der Datei, ohne Standardländer. "+
+    "C/S/N = Core/Splash/NoSplash; der Rest des Pools ist „Aus“. Kategorien: "+CATS.map(c=>c.abbr+" "+c.label).join(", ")+".");
+  box.appendChild(note);
 }
 function showErr(msg){const e=$("err");e.textContent=msg||"";e.style.display=msg?"block":"none"}
 async function api(path,body){
@@ -431,7 +551,7 @@ async function simulate(){
   showErr("");$("go").disabled=true;
   const marks=[];let i=0;for(const c of pool){const ms=[];for(let k=0;k<c.qty;k++)ms.push(state[i++].mark);marks.push(ms)}
   const bs={};basics.forEach(b=>bs[b.name]={core:b.core,splash:b.splash,nosplash:b.nosplash});
-  const r=await api("/api/simulate",{marks,basics:bs,sims:+$("sims").value});
+  const r=await api("/api/simulate",{marks,basics:bs,cats,sims:+$("sims").value});
   if(!r.ok){showErr(r.error||"Fehler");$("go").disabled=false;return}
   $("overlay").classList.add("show");poll();
 }
@@ -447,6 +567,9 @@ async function poll(){
   else if(s.state==="error")showErr(s.message);
 }
 $("go").onclick=simulate;
+$("catfilter").onchange=()=>state.forEach(paint);
+const fixBar=()=>document.documentElement.style.setProperty("--hbar",document.querySelector("header.bar").offsetHeight+"px");
+window.addEventListener("resize",fixBar);
 $("back").onclick=()=>$("results").classList.remove("show");
 $("lightbox").onclick=()=>$("lightbox").classList.remove("show");
 document.addEventListener("keydown",e=>{if(e.key==="Escape")$("lightbox").classList.remove("show")});
@@ -456,9 +579,12 @@ $("quit").onclick=async()=>{if(!confirm("Draft-Helper beenden?"))return;
 (async()=>{
   const d=await api("/api/pool");pool=d.cards;file=d.file;
   basics=d.basics.map(b=>({name:b.name,image:b.image,large:b.large,pool:b.pool,core:b.core,splash:0,nosplash:0}));
+  const cf=$("catfilter");
+  for(const [v,t] of [["","Alle Karten"],...CATS.map(c=>[c.key,c.abbr+" "+c.label]),["none","Ohne Kategorie"]]){
+    const o=el("option",null,t);o.value=v;cf.appendChild(o)}
   const sel=$("sims");d.options.forEach(o=>{const op=el("option",null,o.toLocaleString("de-DE"));op.value=o;
     if(o===d.sims)op.selected=true;sel.appendChild(op)});
-  build();
+  build();fixBar();
 })();
 </script></body></html>
 """
