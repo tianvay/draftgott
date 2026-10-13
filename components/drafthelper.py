@@ -8,6 +8,7 @@ Core + Splash und Core + NoSplash, simuliert sie mit der normalen Pipeline und z
 Nur Standardbibliothek. Der Server hoert ausschliesslich auf 127.0.0.1.
 """
 import argparse
+import hashlib
 import http.server
 import json
 import pathlib
@@ -34,8 +35,9 @@ SCRIPT_DIR = pathlib.Path(__file__).resolve().parent.parent
 
 def load_pool(path, refresh=False):
     """Liest die Pool-Datei und ergaenzt Typ, Manawert und Bild-URL von Scryfall.
-    Gibt (cards, basics) zurueck: cards ohne Standardlaender (Reihenfolge Deck, Sideboard), basics mit allen fuenf
-    Standardlaendern (Startwert Core = Anzahl im Deck der Datei, 'pool' = Anzahl in Deck und Sideboard)."""
+    Gibt (cards, basics, signature) zurueck: cards ohne Standardlaender (Reihenfolge Deck, Sideboard), basics mit
+    allen fuenf Standardlaendern (Startwert Core = Anzahl im Deck der Datei, 'pool' = Anzahl in Deck und Sideboard)
+    und eine Signatur des Dateiinhalts (die Seite speichert ihren Stand je Signatur, nicht je Dateiname)."""
     p = pathlib.Path(path)
     if not p.exists() and (SCRIPT_DIR / p).exists():
         p = SCRIPT_DIR / p
@@ -44,6 +46,7 @@ def load_pool(path, refresh=False):
     rows = parse_pool(p.read_text(encoding="utf-8"))
     if not rows:
         sys.exit(f"Keine Karten in {p} gefunden (erwartet: Abschnitte 'Deck' und 'Sideboard').")
+    signature = hashlib.sha1(json.dumps(rows, sort_keys=True).encode("utf-8")).hexdigest()[:16]
     print(f"Kartenpool: {sum(r['qty'] for r in rows)} Karten aus {p}", file=sys.stderr)
     print("Lade Kartendaten und Bilder von Scryfall ...", file=sys.stderr)
     try:
@@ -74,7 +77,7 @@ def load_pool(path, refresh=False):
     for b in basics.values():
         b["image"] = b["image"] or card_image_url(data.get(b["name"]) or {})
         b["large"] = b["image"].replace("/normal/", "/large/") if b["image"] else None
-    return cards, list(basics.values())
+    return cards, list(basics.values()), signature
 
 
 def entries_from_marks(pool, marks, basics=None, cats=None):
@@ -171,7 +174,8 @@ def make_handler(app):
                 self._send(PAGE)
             elif path == "/api/pool":
                 self._json({"cards": app["pool"], "basics": app["basics"], "sims": app["args"].sims,
-                            "options": app["options"], "file": app["file"]})
+                            "options": app["options"], "file": app["file"],
+                            "signature": app["signature"]})
             elif path == "/api/status":
                 self._json(app["job"].status())
             elif path == "/report":
@@ -226,10 +230,10 @@ def make_handler(app):
 
 
 def serve(args, simulate, save):
-    pool, basics = load_pool(args.drafthelper, args.neu_laden)
+    pool, basics, signature = load_pool(args.drafthelper, args.neu_laden)
     options = sorted(set(SIM_OPTIONS) | {args.sims})
     app = {"pool": pool, "basics": basics, "args": args, "simulate": simulate, "save": save, "job": Job(), "options": options,
-           "file": pathlib.Path(args.drafthelper).name}
+           "file": pathlib.Path(args.drafthelper).name, "signature": signature}
     try:
         server = LocalServer(("127.0.0.1", PORT), make_handler(app))
     except OSError:  # Port belegt: freien Port waehlen lassen
@@ -400,7 +404,7 @@ h2 small{color:var(--muted);font-weight:400}
   <span id="rnote" style="color:var(--muted)"></span></div><iframe id="frame" title="Bericht"></iframe></div>
 <script>
 const LABEL={core:"Core",splash:"Splash",nosplash:"NoSplash",off:"Aus"};
-let pool=[], state=[], basics=[], file="";
+let pool=[], state=[], basics=[], storeKey="";
 const $=id=>document.getElementById(id);
 const el=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e};
 
@@ -413,9 +417,9 @@ const CATS=[
  {key:"neverplay",abbr:"NP",label:"NeverPlay",hint:"Zu schlecht oder zu situativ, wird nicht gespielt"}];
 let cats={};  // Kartenname -> Kategorie
 const catOf=name=>cats[name]||"";
-function save(){try{localStorage.setItem("draft2:"+file,JSON.stringify({marks:state.map(t=>t.mark),
+function save(){try{localStorage.setItem(storeKey,JSON.stringify({marks:state.map(t=>t.mark),
   basics:basics.map(b=>GROUPS.map(g=>b[g])),cats}))}catch(e){}}
-function restore(){try{const s=JSON.parse(localStorage.getItem("draft2:"+file)||"null");if(!s)return;
+function restore(){try{const s=JSON.parse(localStorage.getItem(storeKey)||"null");if(!s)return;
   if(Array.isArray(s.marks)&&s.marks.length===state.length&&s.marks.every(m=>m in LABEL))s.marks.forEach((m,i)=>state[i].mark=m);
   const names=new Set(pool.map(c=>c.name)),keys=new Set(CATS.map(c=>c.key));
   if(s.cats&&typeof s.cats==="object")for(const [n,k] of Object.entries(s.cats))if(names.has(n)&&keys.has(k))cats[n]=k;
@@ -577,7 +581,10 @@ $("quit").onclick=async()=>{if(!confirm("Draft-Helper beenden?"))return;
   try{await api("/api/quit",{})}catch(e){}
   document.body.innerHTML="<main><h2>Draft-Helper wurde beendet.</h2><p>Du kannst dieses Fenster jetzt schließen.</p></main>"};
 (async()=>{
-  const d=await api("/api/pool");pool=d.cards;file=d.file;
+  const d=await api("/api/pool");pool=d.cards;
+  // Speicherstand je Inhalt der Pool-Datei: ein anderer Kartenpool startet mit den Vorgaben der Datei
+  storeKey="draft3:"+d.signature;
+  try{Object.keys(localStorage).filter(k=>/^draft2?:/.test(k)).forEach(k=>localStorage.removeItem(k))}catch(e){}
   basics=d.basics.map(b=>({name:b.name,image:b.image,large:b.large,pool:b.pool,core:b.core,splash:0,nosplash:0}));
   const cf=$("catfilter");
   for(const [v,t] of [["","Alle Karten"],...CATS.map(c=>[c.key,c.abbr+" "+c.label]),["none","Ohne Kategorie"]]){

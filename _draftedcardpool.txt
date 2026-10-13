@@ -1,41 +1,29 @@
 Deck
-1 Chandra, Torch of Defiance (FRA) 244
-2 Wrath of the Bloodmane (FRA) 96
-1 Saheeli, Consul of Oversight (FRA) 203
-1 Infinite Coursework (FRA) 31
-2 Stingerquill Charm (FRA) 150
-1 Memory Trap (FRA) 15
-1 Skilled Battlecarver (FRA) 92
-1 Silence the Echo (FRA) 66
-2 Teyo, Diamondblade Mage (FRA) 236
-1 Danitha, Spear of Agony (FRA) 227
-1 Desperate Futurescribe (FRA) 129
-1 Plan for All Outcomes (FRA) 35
-2 Extended Absence (FRA) 54
-1 Last Gasp (FRA) 56
-1 Break Under Pressure (FRA) 50
-1 Generous Revival (FRA) 8
-1 Warrior's Blades (FRA) 163
-1 Gallia, Tragic Host (FRA) 228
-1 Cryotheory Adept (FRA) 27
-1 Screeching Soulbreaker (FRA) 65
-1 Repurposed Enforcer (FRA) 19
-1 Gideon the Oathless (FRA) 230
-2 Apex Witchstalker (FRA) 48
-1 Saheeli, Jewel of Avishkar (FRA) 275
-1 Surveillance Phantasm (FRA) 42
-1 Heartstring Puller (FRA) 86
-1 Theorix Charm (FRA) 155
-1 Keeper of the Quiet Hour (FRA) 171
-3 Plains (SPM) 194
-4 Island (SPM) 195
-5 Swamp (SPM) 196
-5 Mountain (SPM) 197
+2 Bartolomé del Presidio (LCI) 224
+3 Bitter Triumph (SOA) 26
+4 Bleachbone Verge (DFT) 250
+2 Shattered Sanctum (SOS) 260
+3 Godless Shrine (EOE) 254
+4 Lake-town Lookout (HOB) 18
+6 Plains (SPM) 194
+4 Raise the Past (FDN) 22
+2 Requiting Hex (ECL) 116
+4 Snarling Gorehound (MKM) 105
+2 Practiced Offense (SOS) 25
+6 Swamp (SPM) 196
+2 Syr Vondam, Sunstar Exemplar (EOE) 231
+3 The Queen of Dale (HOB) 24
+4 Vengeful Bloodwitch (FDN) 76
+3 Voice of Victory (TDM) 33
+1 Shadowy Backstreet (MKM) 268
+2 Umbral Collar Zealot (EOE) 123
+2 Blessed Ghoul (FRA) 123
+1 Iron-Shield Elf (ECL) 108
 
 Sideboard
-2 Rampart Hunter (FRA) 60
-1 Solve for Disappointment (FRA) 67
-1 Refute Destiny (FRA) 18
-1 Eardrum Rattler (FRA) 81
-1 Flourishing Grapple (FRA) 102
-1 Theoretical Necromancer (FRA) 69
+1 Get Lost (LCI) 14
+1 Nowhere to Run (DSK) 111
+1 Requisition Raid (SOA) 10
+1 Seam Rip (EOE) 34
+1 Strategic Betrayal (TDM) 94
+3 Nighthowl Pursuer (HOB) 78
