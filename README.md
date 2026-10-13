@@ -11,6 +11,22 @@ Liest eine Deckliste, holt die Kartendaten von [Scryfall](https://scryfall.com) 
   (`scryfall.py`, `cards.py`, `mana.py`, `simulation.py`, `report.py` …). Der Cache `scryfall_cache.json` entsteht
   automatisch neben `mtg_sim.py`.
 
+## Tests
+
+```
+python -m unittest
+```
+
+im Projektordner. Es werden keine zusätzlichen Pakete und kein Netzwerk gebraucht (die Testkarten stehen in
+`tests/fixtures.py`); ein Lauf dauert wenige Sekunden. Die Tests decken Parser, Kartenmodell, Mana, Mulligan,
+Schadens- und Einsatzverzögerungs-Regeln der Simulation (inklusive Referenzlauf mit festem Seed), den Variantenbau
+und Server des Drafthelpers sowie den Bericht ab. Die Oberfläche im Browser (Sortierung, Suche, Export) ist nicht
+automatisch getestet.
+
+**Arbeitsregel:** Neue Funktionen bekommen zuerst Tests, dann den Code. Bestehende Tests werden nicht verändert,
+damit sie grün werden; sollen sie wegen bewusst geändertem Verhalten angepasst werden, passiert das nur nach
+ausdrücklicher Freigabe.
+
 ## Aufbau des Codes
 
 | Datei | Aufgabe |

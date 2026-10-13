@@ -2,7 +2,7 @@
 import argparse
 
 
-def parse_args():
+def parse_args(argv=None):
     ap = argparse.ArgumentParser(description="MTG Starthand-Simulator: erzeugt einen HTML-Bericht")
     ap.add_argument("deckfile", nargs="*",
                     help="Deckliste(n). Mit --core: die Varianten, die zum Kern hinzukommen; die erste ist die Basis, "
@@ -49,7 +49,7 @@ def parse_args():
                     help="Name des HTML-Berichts (Standard: mtg_bericht.html)")
     ap.add_argument("--nicht-oeffnen", action="store_true",
                     help="HTML-Bericht nicht automatisch im Browser oeffnen")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
     if not args.deckfile and args.drafthelper is None:
         ap.error("Bitte eine Deckliste angeben oder --drafthelper verwenden")
     return args
