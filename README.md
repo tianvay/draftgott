@@ -87,6 +87,11 @@ Eine andere Datei geht so: `python mtg_sim.py --drafthelper meinpool.txt`.
   Die Sortierung (Manawert, Name, Farbe, Zuordnung, Kategorie) ändert nur die Anzeige, nicht die Zuordnungen.
 - **Mana-Kurve links:** Anzahl der Nichtland-Karten je Manawert für Splash- und NoSplash-Variante nebeneinander,
   dazu Kartenzahl und Ø Manawert je Variante.
+- **Kartentypen je Variante (links):** Unter der Mana-Kurve steht für die Splash- und die NoSplash-Variante, wie
+  viele Karten (Kopien, mit Standardländern) es gibt: Karten gesamt, Kreaturen, Instants, Sorceries, Artefakte,
+  Verzauberungen, Planeswalker, Länder (davon Nicht-Standard-Länder) sowie Empower Jace (Karten und die Summe der
+  sofortigen Loyalty beim Wirken oder Betreten, ohne X und ohne Auslöser). Artefakte und Verzauberungen zählen ohne
+  Kreaturen und Länder; eine Karte kann in mehreren Zeilen stehen. Unterschiede zwischen den Varianten sind fett.
 - **Deckliste exportieren:** Der Button in der Kopfleiste zeigt beide Varianten im Arena/MTGO-Importformat
   (`Deck` und `Sideboard`, mit Set und Nummer), zum Kopieren oder Speichern als `draftgott_splash.txt` bzw.
   `draftgott_nosplash.txt`. Deck = Core + Gruppe der Variante + Standardländer, Sideboard = alle übrigen Karten.

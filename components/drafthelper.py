@@ -20,6 +20,7 @@ import urllib.error
 import webbrowser
 from collections import Counter
 
+from components.cards import card_info
 from components.deckfile import parse_pool
 from components.scryfall import card_image_url, fetch_cards_cached, fetch_printing_images
 from components.suggest import WUBRG, propose, suggest
@@ -33,6 +34,30 @@ CATEGORIES = ("splashworthy", "mustplay", "filler", "neverplay")  # Kategorie je
 SORTS = ("mv", "name", "color", "mark", "cat")  # Sortierungen der Seite (fuer die Filler-Reihenfolge)
 SIM_OPTIONS = (1000, 5000, 10000)
 SCRIPT_DIR = pathlib.Path(__file__).resolve().parent.parent
+
+
+def type_kinds(type_line):
+    """Typ-Kennzeichen einer Karte fuer die Uebersicht links (nur die Vorderseite zaehlt). Artefakte und
+    Verzauberungen zaehlen ohne Kreaturen und Laender; ein Nicht-Standardland ist 'land' und 'nonbasic_land'."""
+    types = (type_line or "").split(" // ")[0].split("\u2014")[0]
+    creature, land = "Creature" in types, "Land" in types
+    kinds = []
+    if creature:
+        kinds.append("creature")
+    for word in ("Instant", "Sorcery"):
+        if word in types:
+            kinds.append(word.lower())
+    if land:
+        kinds.append("land")
+        if "Basic" not in types:
+            kinds.append("nonbasic_land")
+    if "Artifact" in types and not creature and not land:
+        kinds.append("artifact")
+    if "Enchantment" in types and not creature and not land:
+        kinds.append("enchantment")
+    if "Planeswalker" in types:
+        kinds.append("planeswalker")
+    return kinds
 
 
 def load_pool(path, refresh=False):
@@ -70,6 +95,7 @@ def load_pool(path, refresh=False):
                 b["set"], b["number"] = r["set"], r["number"]
             continue
         type_line = sc.get("type_line") or ""
+        empower = card_info(sc)[0].empower if sc else ()
         faces = sc.get("card_faces") or []
         colors = sc.get("colors") or (faces[0].get("colors") if faces else None) or []
         cards.append({
@@ -78,6 +104,9 @@ def load_pool(path, refresh=False):
             "cost": sc.get("mana_cost") or (faces[0].get("mana_cost") if faces else "") or "",
             "large": image.replace("/normal/", "/large/") if image else None,
             "land": "Land" in type_line.split("—")[0], "mv": sc.get("cmc") or 0, "found": bool(sc),
+            "kinds": type_kinds(type_line), "empower": bool(empower),
+            # Loyalty, die beim Wirken bzw. Betreten sofort dazukommt (ohne X und ohne wiederkehrende Ausloeser)
+            "empower_points": sum(e[2] for e in empower if e[1] in ("spell", "etb") and not e[6]),
         })
     order = {"deck": 0, "sideboard": 1}  # je Bereich: Nichtlaender nach Manawert, Laender zuletzt
     cards.sort(key=lambda c: (order.get(c["section"], 2), c["land"], c["mv"], c["name"]))
@@ -462,6 +491,13 @@ h2 small{color:var(--muted);font-weight:400}
   font-size:13.5px;line-height:1.55}
 .notice .nh{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:4px}
 .notice .nw{color:#b42318;font-weight:600}
+.types table{width:100%;border-collapse:collapse;font-size:12.5px}
+.types th,.types td{padding:3px 4px;text-align:right;border-bottom:1px solid #eef0f4}
+.types th{font-weight:700;font-size:11.5px;color:var(--muted)}
+.types td.l,.types th.l{text-align:left}
+.types td.sub{padding-left:14px;color:var(--muted)}
+.types tr.sep td{border-top:2px solid var(--line)}
+.types .diff{font-weight:700}
 .err{background:#fef3f2;border:1px solid #fda29b;color:#b42318;border-radius:10px;padding:12px 16px;margin:10px 0;display:none}
 </style></head><body>
 <header class="bar">
@@ -499,7 +535,8 @@ h2 small{color:var(--muted);font-weight:400}
   <div class="err" id="err"></div>
   <div class="layout">
     <aside class="side"><h3>Übersicht nach Farbe</h3><div id="overview"></div>
-      <h3 style="margin-top:18px">Mana-Kurve</h3><div id="curve" class="curve"></div></aside>
+      <h3 style="margin-top:18px">Mana-Kurve</h3><div id="curve" class="curve"></div>
+      <h3 style="margin-top:18px">Kartentypen je Variante</h3><div id="types"></div></aside>
     <div>
       <div class="toolbar">
         <input type="search" id="search" placeholder="Karte suchen (Name oder englischer Typ, z. B. Creature, Instant, Land)">
@@ -650,7 +687,7 @@ function summary(){
   s.appendChild(document.createTextNode("Splash-Variante: "));s.appendChild(el("b",null,a+" Karten"));
   s.appendChild(document.createTextNode(" · NoSplash-Variante: "));s.appendChild(el("b",null,b+" Karten"));
   if(a!==b)s.appendChild(el("span","warn","  – unterschiedlich groß"));
-  overview();curve();
+  overview();curve();typeOverview();
 }
 // Mana-Kurve: Nichtland-Karten je Manawert, Splash- und NoSplash-Variante nebeneinander
 function curve(){
@@ -674,6 +711,51 @@ function curve(){
             i2,"NoSplash-Variante: "+num.nosplash+" Karten, Ø Manawert "+avg("nosplash"),document.createElement("br"),
             "ohne Länder; Manawert 6+ zusammengefasst");
   box.appendChild(lg);
+}
+// BEGIN typeCounts
+// Zaehlt je Variante (Core + Splash bzw. Core + NoSplash) Kopien nach Typ. copies: {kinds, mark, empower, points};
+// basics: {core, splash, nosplash} je Standardland (zaehlen als Land und Karte, nie als Nicht-Standardland).
+function typeCounts(copies, basics){
+  const rows=["creature","instant","sorcery","land","nonbasic_land","artifact","enchantment","planeswalker"];
+  const out={splash:{},nosplash:{}};
+  for(const g of ["splash","nosplash"]){
+    const o=out[g];rows.forEach(r=>{o[r]=0});o.cards=0;o.empower=0;o.points=0;
+    for(const c of copies){
+      if(c.mark!=="core"&&c.mark!==g)continue;
+      o.cards++;
+      c.kinds.forEach(k=>{if(k in o)o[k]++});
+      if(c.empower){o.empower++;o.points+=c.points}
+    }
+    for(const b of basics){const n=b.core+b[g];o.land+=n;o.cards+=n}
+  }
+  return out;
+}
+// END typeCounts
+const TYPE_ROWS=[["cards","Karten gesamt",""],["creature","Kreaturen",""],["instant","Instants",""],
+  ["sorcery","Sorceries",""],["artifact","Artefakte (ohne Kreaturen)",""],["enchantment","Verzauberungen",""],
+  ["planeswalker","Planeswalker",""],["land","Länder gesamt","sep"],["nonbasic_land","davon Nicht-Standard-Länder","sub"],
+  ["empower","Empower Jace (Karten)","sep"],["points","Σ Loyalty beim Wirken/Betreten","sub"]];
+function typeOverview(){
+  const t=typeCounts(state.map(x=>({kinds:x.card.kinds||[],mark:x.mark,empower:!!x.card.empower,
+    points:x.card.empower_points||0})),basics);
+  const tb=el("table"),head=el("tr");
+  head.append(el("th","l",""),el("th",null,"Splash"),el("th",null,"NoSplash"));
+  const th=el("thead");th.appendChild(head);tb.appendChild(th);
+  const body=el("tbody");
+  for(const [key,label,cls] of TYPE_ROWS){
+    const tr=el("tr",cls==="sep"?"sep":null);
+    tr.appendChild(el("td","l"+(cls==="sub"?" sub":""),label));
+    const a=t.splash[key],b=t.nosplash[key];
+    tr.appendChild(el("td",a!==b?"diff":null,String(a)));
+    tr.appendChild(el("td",a!==b?"diff":null,String(b)));
+    body.appendChild(tr);
+  }
+  tb.appendChild(body);
+  const box=$("types");box.textContent="";box.className="types";box.appendChild(tb);
+  box.appendChild(el("div","note",
+    "Gezählt werden Kopien in der Variante (Core plus Gruppe) einschließlich Standardländern. Artefakte und "+
+    "Verzauberungen ohne Kreaturen und Länder; eine Karte kann in mehreren Zeilen stehen. Fett: Unterschied zwischen "+
+    "den Varianten. Σ Loyalty: Zahlenwerte von Empower Jace beim Zauber oder Betreten (ohne X, ohne Auslöser)."));
 }
 // Sortierung nur der Anzeige (die Reihenfolge der Zuordnungen bleibt unberuehrt)
 const COLOR_ORDER=["W","U","B","R","G","M","C","L"];
