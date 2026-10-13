@@ -56,7 +56,8 @@ def render_great(ctx):
                              left=(0, 1, 3, 4, 5)))
     else:
         parts.append('<p class="muted">Keine Splashworthy- oder MustPlay-Karten in diesem Deck.</p>')
-    expected = [n for n, c in great.items() if c == "mustplay" or (c == "splashworthy" and ctx.get("role") == "splash")]
+    expected = [] if ctx.get("role") == "proposal" else [
+        n for n, c in great.items() if c == "mustplay" or (c == "splashworthy" and ctx.get("role") == "splash")]
     missing = sorted(n for n in expected if n not in ctx["deck"])
     if missing:
         parts.append('<div class="warnbox" style="margin-top:12px"><b>Fehlt in diesem Deck:</b> '

@@ -22,6 +22,7 @@ from collections import Counter
 
 from components.deckfile import parse_pool
 from components.scryfall import card_image_url, fetch_cards_cached, fetch_printing_images
+from components.suggest import WUBRG, propose, suggest
 
 PORT = 8765
 MARKS = ("core", "splash", "nosplash", "off")
@@ -29,6 +30,7 @@ GROUPS = ("core", "splash", "nosplash")
 BASIC_LANDS = ("Plains", "Island", "Swamp", "Mountain", "Forest")
 MAX_BASICS = 40  # je Land und Gruppe
 CATEGORIES = ("splashworthy", "mustplay", "filler", "neverplay")  # Kategorie je Karte, hoechstens eine
+SORTS = ("mv", "name", "color", "mark", "cat")  # Sortierungen der Seite (fuer die Filler-Reihenfolge)
 SIM_OPTIONS = (1000, 5000, 10000)
 SCRIPT_DIR = pathlib.Path(__file__).resolve().parent.parent
 
@@ -73,6 +75,7 @@ def load_pool(path, refresh=False):
         cards.append({
             "name": r["name"], "qty": r["qty"], "section": r["section"], "image": image, "colors": colors,
             "set": r["set"], "number": r["number"], "type": type_line,
+            "cost": sc.get("mana_cost") or (faces[0].get("mana_cost") if faces else "") or "",
             "large": image.replace("/normal/", "/large/") if image else None,
             "land": "Land" in type_line.split("—")[0], "mv": sc.get("cmc") or 0, "found": bool(sc),
         })
@@ -108,6 +111,43 @@ def entries_from_marks(pool, marks, basics=None, cats=None):
         entries.append({"path": "", "name": label, "deck": dict(deck), "parts": [("Core", dict(core)), (label, part)],
                         "cats": cats, "role": key})
     return entries
+
+
+def parse_state(body, pool):
+    """Liest und prueft den Stand der Seite (Markierungen, Standardlaender, Kategorien) aus einer Anfrage.
+    Gibt (marks, basics, cats) zurueck; wirft ValueError/KeyError/TypeError bei ungueltigen Angaben.
+    Unbekannte Karten und Kategorien in cats werden verworfen."""
+    marks = body["marks"]
+    if len(marks) != len(pool) or any(len(ms) != c["qty"] or any(m not in MARKS for m in ms)
+                                      for ms, c in zip(marks, pool)):
+        raise ValueError("Markierungen passen nicht zum Kartenpool")
+    names = {c["name"] for c in pool}
+    cats = {n: k for n, k in (body.get("cats") or {}).items() if n in names and k in CATEGORIES}
+    basics = {}
+    for name in BASIC_LANDS:
+        c = (body.get("basics") or {}).get(name) or {}
+        basics[name] = {g: int(c.get(g) or 0) for g in GROUPS}
+        if any(not 0 <= v <= MAX_BASICS for v in basics[name].values()):
+            raise ValueError(f"Anzahl {name}: erlaubt sind 0 bis {MAX_BASICS} je Gruppe")
+    return marks, basics, cats
+
+
+def parse_proposal_spec(spec):
+    """Prueft die Angaben fuer den Deckvorschlag (Farben, Zielgroesse, Sortierung). Gibt (colors, target, sort)."""
+    if not isinstance(spec, dict):
+        raise ValueError("Angaben zum Deckvorschlag fehlen")
+    colors = spec.get("colors", [])
+    if not isinstance(colors, list) or any(c not in WUBRG or len(str(c)) != 1 for c in colors):
+        raise ValueError("Unbekannte Farbe (erlaubt: W, U, B, R, G)")
+    target, sort = int(spec.get("target") or 40), spec.get("sort") or "mv"
+    if not 10 <= target <= 200:
+        raise ValueError("Die Zielgröße muss zwischen 10 und 200 Karten liegen")
+    if sort not in SORTS:
+        raise ValueError("Unbekannte Sortierung")
+    return colors, target, sort
+
+
+MIN_PROPOSAL_CARDS = 8  # kleiner ist ein Deck nicht simulierbar (7 Starthandkarten plus ziehen)
 
 
 class Job:
@@ -195,34 +235,53 @@ def make_handler(app):
                 self._json({"ok": True})
                 threading.Thread(target=app["server"].shutdown, daemon=True).start()
                 return
-            if path != "/api/simulate":
+            if path not in ("/api/simulate", "/api/suggest", "/api/propose"):
                 self._send("Nicht gefunden", "text/plain; charset=utf-8", 404)
                 return
+            pool = app["pool"]
             try:
                 body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
-                marks, sims = body["marks"], int(body.get("sims") or app["args"].sims)
-                pool = app["pool"]
-                if len(marks) != len(pool) or any(len(ms) != c["qty"] or any(m not in MARKS for m in ms)
-                                                  for ms, c in zip(marks, pool)):
-                    raise ValueError("Markierungen passen nicht zum Kartenpool")
-                if not 100 <= sims <= 100000:
-                    raise ValueError("Anzahl der Spiele muss zwischen 100 und 100000 liegen")
-                names = {c["name"] for c in pool}
-                cats = {n: k for n, k in (body.get("cats") or {}).items() if n in names and k in CATEGORIES}
-                basics = {}
-                for name in BASIC_LANDS:
-                    c = (body.get("basics") or {}).get(name) or {}
-                    basics[name] = {g: int(c.get(g) or 0) for g in GROUPS}
-                    if any(not 0 <= v <= MAX_BASICS for v in basics[name].values()):
-                        raise ValueError(f"Anzahl {name}: erlaubt sind 0 bis {MAX_BASICS} je Gruppe")
+                marks, basics, cats = parse_state(body, pool)
+                if path == "/api/suggest":
+                    target, sort = int(body.get("target") or 40), body.get("sort") or "mv"
+                    if not 10 <= target <= 200:
+                        raise ValueError("Die Zielgröße muss zwischen 10 und 200 Karten liegen")
+                    if sort not in SORTS:
+                        raise ValueError("Unbekannte Sortierung")
+                elif path == "/api/propose":
+                    colors, target, sort = parse_proposal_spec(body)
+                else:
+                    sims = int(body.get("sims") or app["args"].sims)
+                    if not 100 <= sims <= 100000:
+                        raise ValueError("Anzahl der Spiele muss zwischen 100 und 100000 liegen")
+                    proposal = None
+                    if body.get("proposal"):
+                        colors, target, sort = parse_proposal_spec(body["proposal"])
+                        proposal = propose(pool, marks, cats, colors, target, sort)
+                        if proposal["summary"]["size"] < MIN_PROPOSAL_CARDS:
+                            raise ValueError("Der Deckvorschlag ist zu klein zum Simulieren (weniger als "
+                                             f"{MIN_PROPOSAL_CARDS} Karten): Bitte Farben und Kategorien prüfen.")
             except (ValueError, KeyError, TypeError) as e:
                 self._json({"ok": False, "error": str(e)}, 400)
+                return
+            if path == "/api/suggest":
+                result = suggest(pool, marks, basics, cats, target, sort)
+                self._json({"ok": True, "marks": result["marks"], "summary": result["summary"]})
+                return
+            if path == "/api/propose":
+                result = propose(pool, marks, cats, colors, target, sort)
+                self._json({"ok": True, "deck": result["deck"], "summary": result["summary"]})
                 return
             run_args = argparse.Namespace(**vars(app["args"]))
             run_args.sims, run_args.core = sims, "Core"  # core: Herkunft der Karten (Core/Splash/NoSplash) im Bericht
 
             def work(progress):
-                html = app["simulate"](entries_from_marks(pool, marks, basics, cats), run_args, progress)
+                entries = entries_from_marks(pool, marks, basics, cats)
+                if proposal:
+                    deck = dict(proposal["deck"])
+                    entries.append({"path": "", "name": "Vorschlag", "deck": deck, "parts": [("Vorschlag", deck)],
+                                    "cats": dict(cats), "role": "proposal"})
+                html = app["simulate"](entries, run_args, progress)
                 app["save"](html, run_args)
                 return html
 
@@ -384,6 +443,25 @@ h2 small{color:var(--muted);font-weight:400}
 .xcol textarea{width:100%;height:340px;font:12.5px/1.45 ui-monospace,Consolas,monospace;border:1px solid var(--line);
   border-radius:8px;padding:8px;resize:vertical}
 .xcol .xbtns{display:flex;gap:8px;margin-top:8px}
+.suggestbar{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;background:#fff;border:1px solid var(--line);
+  border-radius:10px;padding:10px 14px;margin:0 0 12px}
+.suggestbar label{font-size:13px;display:flex;align-items:center;gap:6px}
+.suggestbar input[type=number]{width:72px;font:inherit;padding:6px 8px;border-radius:8px;border:1px solid var(--line)}
+.suggestbar .hint{font-size:12.5px;color:var(--muted);flex:1;min-width:220px}
+.colpick{display:flex;gap:6px;align-items:center;font-size:13px}
+.colpick label{display:flex;align-items:center;gap:3px;border:1px solid var(--line);border-radius:999px;padding:2px 9px 2px 6px;
+  background:#fff;cursor:pointer}
+.colpick input{margin:0}
+.pcols{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:4px 24px;margin:6px 0}
+.pcol h4{margin:4px 0;font-size:13.5px}
+.pcol div{font-size:13px}
+.ptag{margin-left:6px;font-size:11px;font-weight:700;color:#fff;background:var(--splash);border-radius:999px;padding:0 7px}
+.nhint{color:#8a5a00;font-weight:600}
+.nmuted{color:var(--muted)}
+.notice{display:none;background:#eef4ff;border:1px solid #b7cdf5;border-radius:10px;padding:10px 14px;margin:0 0 12px;
+  font-size:13.5px;line-height:1.55}
+.notice .nh{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:4px}
+.notice .nw{color:#b42318;font-weight:600}
 .err{background:#fef3f2;border:1px solid #fda29b;color:#b42318;border-radius:10px;padding:12px 16px;margin:10px 0;display:none}
 </style></head><body>
 <header class="bar">
@@ -429,6 +507,24 @@ h2 small{color:var(--muted);font-weight:400}
           <option value="mv">Manawert</option><option value="name">Name</option><option value="color">Farbe</option>
           <option value="mark">Zuordnung</option><option value="cat">Kategorie</option></select></label>
       </div>
+      <div class="suggestbar">
+        <label>Zielgröße <input type="number" id="target" value="40" min="10" max="200"
+          title="Kartenzahl je Variante, alle Länder eingerechnet"> Karten</label>
+        <span class="colpick" title="Farben, die im Deckvorschlag gespielt werden">Farben:
+          <label><input type="checkbox" value="W"> W</label><label><input type="checkbox" value="U"> U</label>
+          <label><input type="checkbox" value="B"> B</label><label><input type="checkbox" value="R"> R</label>
+          <label><input type="checkbox" value="G"> G</label></span>
+        <button class="btn" id="propose" title="Baut aus den Kategorien ein eigenes Deck mit Ländern">Deckvorschlag erstellen</button>
+        <label title="Simuliert den Deckvorschlag als weitere Variante neben Splash und NoSplash"><input type="checkbox"
+          id="simprop"> mitsimulieren</label>
+        <button class="btn" id="suggest" title="Setzt die Zuordnung Core/Splash/NoSplash nach den Kategorien und füllt mit Filler auf">Zuordnung nach Kategorien setzen</button>
+        <button class="btn" id="undo" style="display:none">↶ Rückgängig</button>
+        <span class="hint">Deckvorschlag: eigenes Deck aus den Kategorien in den gewählten Farben, mit Ländern auf die
+          Faustregel aufgefüllt; die Zuordnung bleibt unverändert. MustPlay und Filler nur in den gewählten Farben,
+          Splashworthy auch außerhalb.</span>
+      </div>
+      <div class="notice" id="proposal"></div>
+      <div class="notice" id="notice"></div>
       <h2 style="margin-top:0">Standardländer <small>(Menge je Gruppe – auch Länder, die nicht im Pool sind, lassen sich hinzufügen)</small></h2>
       <div class="basics" id="basics"></div>
       <div id="sections"></div>
@@ -447,7 +543,7 @@ h2 small{color:var(--muted);font-weight:400}
   <span id="rnote" style="color:var(--muted)"></span></div><iframe id="frame" title="Bericht"></iframe></div>
 <script>
 const LABEL={core:"Core",splash:"Splash",nosplash:"NoSplash",off:"Aus"};
-let pool=[], state=[], basics=[], storeKey="", searchQ="", sortKey="mv";
+let pool=[], state=[], basics=[], storeKey="", searchQ="", sortKey="mv", proposal=null, colorsFromSave=false;
 const $=id=>document.getElementById(id);
 const el=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e};
 
@@ -461,13 +557,15 @@ const CATS=[
 let cats={};  // Kartenname -> Kategorie
 const catOf=name=>cats[name]||"";
 function save(){try{localStorage.setItem(storeKey,JSON.stringify({marks:state.map(t=>t.mark),
-  basics:basics.map(b=>GROUPS.map(g=>b[g])),cats}))}catch(e){}}
+  basics:basics.map(b=>GROUPS.map(g=>b[g])),cats,target:+$("target").value||40,colors:chosenColors()}))}catch(e){}}
 function restore(){try{const s=JSON.parse(localStorage.getItem(storeKey)||"null");if(!s)return;
   if(Array.isArray(s.marks)&&s.marks.length===state.length&&s.marks.every(m=>m in LABEL))s.marks.forEach((m,i)=>state[i].mark=m);
   const names=new Set(pool.map(c=>c.name)),keys=new Set(CATS.map(c=>c.key));
   if(s.cats&&typeof s.cats==="object")for(const [n,k] of Object.entries(s.cats))if(names.has(n)&&keys.has(k))cats[n]=k;
   if(s.tags&&typeof s.tags==="object")for(const [n,v] of Object.entries(s.tags))  // aelterer Speicherstand
     if(names.has(n)&&!cats[n]&&Array.isArray(v)&&keys.has(v[0]))cats[n]=v[0];
+  if(Number.isInteger(+s.target)&&s.target>=10&&s.target<=200)$("target").value=s.target;
+  if(Array.isArray(s.colors)){setColors(s.colors);colorsFromSave=true}
   if(Array.isArray(s.basics)&&s.basics.length===basics.length)
     s.basics.forEach((v,i)=>GROUPS.forEach((g,k)=>{const n=+v[k];if(Number.isInteger(n)&&n>=0&&n<=40)basics[i][g]=n}))}catch(e){}}
 function buildBasics(){
@@ -614,9 +712,25 @@ function exportLists(){
 function download(name,text){
   const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([text],{type:"text/plain;charset=utf-8"}));
   a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
-function openExport(){
+function proposalExport(r){
+  const info={};pool.forEach(c=>{info[c.name]={set:c.set,number:c.number}});
+  basics.forEach(b=>{info[b.name]={set:b.set,number:b.number}});
+  const line=(n,q)=>q+" "+n+(info[n]&&info[n].set?" ("+info[n].set.toUpperCase()+") "+info[n].number:"");
+  const dl=Object.entries(r.deck).map(([n,q])=>line(n,q));
+  const sl=[];let side=0;
+  for(const c of pool){const rest=c.qty-(r.deck[c.name]||0);if(rest>0){sl.push(line(c.name,rest));side+=rest}}
+  return {count:Object.values(r.deck).reduce((a,q)=>a+q,0),sideCount:side,
+    text:"Deck\n"+dl.join("\n")+(sl.length?"\n\nSideboard\n"+sl.join("\n"):"")+"\n"};
+}
+async function openExport(){
   const box=$("xcols");box.textContent="";const lists=exportLists();
-  for(const [grp,title] of [["splash","Splash-Variante"],["nosplash","NoSplash-Variante"]]){
+  if(proposal){  // aktuellen Stand des Vorschlags holen (Kategorien oder Farben koennen sich geaendert haben)
+    try{const r=await api("/api/propose",proposalBody());if(r.ok)proposal=r}catch(e){}
+    lists.proposal=proposalExport(proposal);
+  }
+  const variants=[["splash","Splash-Variante"],["nosplash","NoSplash-Variante"]];
+  if(lists.proposal)variants.push(["proposal","Deckvorschlag"]);
+  for(const [grp,title] of variants){
     const r=lists[grp],col=el("div","xcol");
     col.appendChild(el("h3",null,title));
     col.appendChild(el("div","xcount",r.count+" Karten im Deck, "+r.sideCount+" im Sideboard"));
@@ -664,6 +778,85 @@ function overview(){
     "C/S/N = Core/Splash/NoSplash; der Rest des Pools ist „Aus“. Kategorien: "+CATS.map(c=>c.abbr+" "+c.label).join(", ")+".");
   box.appendChild(note);
 }
+// Deck-Vorschlag: die Regeln liegen auf dem Server (components/suggest.py); hier nur Anwenden und Rueckgaengig
+const undoStack=[];
+function chosenColors(){return [...document.querySelectorAll(".colpick input:checked")].map(i=>i.value)}
+function setColors(list){document.querySelectorAll(".colpick input").forEach(i=>{i.checked=list.includes(i.value)})}
+// Standardfarben: Farben der Nichtland-Karten, die aktuell im Core sind (sonst alle fuenf)
+function defaultColors(){
+  const found=new Set();
+  state.forEach(t=>{if(t.mark==="core"&&!t.card.land)(t.card.colors||[]).forEach(c=>found.add(c))});
+  return found.size?[...found]:["W","U","B","R","G"];
+}
+function proposalBody(){return {marks:marksPerCard(),basics:basicsBody(),cats,colors:chosenColors(),
+  target:+$("target").value||40,sort:sortKey}}
+function renderProposal(){
+  const box=$("proposal");box.textContent="";
+  if(!proposal){box.style.display="none";return}
+  const deck=proposal.deck,m=proposal.summary,byName={};
+  pool.forEach(c=>{byName[c.name]=c});
+  const head=el("div","nh");
+  head.appendChild(el("b",null,"Deckvorschlag: "+m.size+" Karten (Ziel "+m.target+"), davon "+m.lands+" Länder · Farben "+
+    (m.colors.length?m.colors.join(""):"keine")));
+  const x=el("button","btn","Schließen");x.onclick=()=>{proposal=null;renderProposal()};head.appendChild(x);
+  box.appendChild(head);
+  const spells=[],lands=[];
+  for(const [n,q] of Object.entries(deck)){const c=byName[n];(!c||c.land?lands:spells).push([n,q,c])}
+  spells.sort((a,b)=>(a[2].mv-b[2].mv)||a[0].localeCompare(b[0]));
+  lands.sort((a,b)=>(!!a[2]-!!b[2])||a[0].localeCompare(b[0]));
+  const sum=rows=>rows.reduce((t,r)=>t+r[1],0);
+  const col=(title,rows)=>{const d=el("div","pcol");d.appendChild(el("h4",null,title));
+    rows.forEach(([n,q])=>{const l=el("div",null,q+"× "+n);if(m.splash_cards[n])l.appendChild(el("span","ptag","Splash"));d.appendChild(l)});
+    return d};
+  const cols=el("div","pcols");
+  cols.append(col("Zauber ("+sum(spells)+")",spells),col("Länder ("+sum(lands)+")",lands));
+  box.appendChild(cols);
+  m.hints.forEach(t=>noticeLine(box,t,"nhint"));m.warnings.forEach(t=>noticeLine(box,t,"nw"));
+  if(m.ignored)noticeLine(box,m.ignored+" Karten ohne Kategorie wurden nicht berücksichtigt.","nmuted");
+  noticeLine(box,"Beim Simulieren erscheint der Deckvorschlag als weitere Variante (Haken „mitsimulieren“).","nmuted");
+  box.style.display="block";
+}
+async function createProposal(){
+  showErr("");
+  const r=await api("/api/propose",proposalBody());
+  if(!r.ok){showErr(r.error||"Fehler beim Deckvorschlag");return}
+  proposal=r;$("simprop").checked=true;renderProposal();save();
+}
+function marksPerCard(){const out=[];let i=0;for(const c of pool){const ms=[];for(let k=0;k<c.qty;k++)ms.push(state[i++].mark);out.push(ms)}return out}
+function basicsBody(){const bs={};basics.forEach(b=>bs[b.name]={core:b.core,splash:b.splash,nosplash:b.nosplash});return bs}
+function noticeLine(box,text,cls){box.appendChild(el("div",cls||null,text))}
+function showNotice(title,lines,warnings,withUndo){
+  const box=$("notice");box.textContent="";
+  const head=el("div","nh");head.appendChild(el("b",null,title));
+  const x=el("button","btn","Schließen");x.onclick=()=>{box.style.display="none"};head.appendChild(x);
+  box.appendChild(head);
+  lines.forEach(t=>noticeLine(box,t));warnings.forEach(t=>noticeLine(box,t,"nw"));
+  box.style.display="block";
+}
+function updateUndo(){$("undo").style.display=undoStack.length?"":"none"}
+async function suggestDeck(){
+  showErr("");
+  const before=marksPerCard();
+  const r=await api("/api/suggest",{marks:before,basics:basicsBody(),cats,target:+$("target").value||40,sort:sortKey});
+  if(!r.ok){showErr(r.error||"Fehler beim Vorschlag");return}
+  if(JSON.stringify(r.marks)===JSON.stringify(before)){
+    showNotice("Keine Änderung",["Es gibt keine Karten mit Kategorie, die noch umgeordnet werden müssten."],r.summary.warnings);return}
+  undoStack.push(before.flat());
+  let i=0;r.marks.forEach(ms=>ms.forEach(m=>{state[i++].mark=m}));
+  state.forEach(paint);summary();save();updateUndo();
+  const m=r.summary,a=m.assigned,f=m.filler;
+  showNotice("Zuordnung nach Kategorien gesetzt",[
+    "Nach Kategorie: "+a.core+" → Core (MustPlay), "+a.splash+" → Splash (Splashworthy), "+a.off+" → Aus (NeverPlay).",
+    "Filler: "+f.core+" → Core, "+f.nosplash+" → NoSplash, "+f.off+" nicht benötigt (Aus).",
+    "Größe: Splash-Variante "+m.sizes.splash+", NoSplash-Variante "+m.sizes.nosplash+" Karten (Ziel "+m.target+").",
+    "Mit „Rückgängig“ stellst du den vorherigen Stand wieder her."],m.warnings);
+}
+function undoSuggest(){
+  const snap=undoStack.pop();if(!snap)return;
+  snap.forEach((m,i)=>{if(state[i])state[i].mark=m});
+  state.forEach(paint);summary();save();updateUndo();
+  showNotice("Rückgängig gemacht",["Die Zuordnung vor dem letzten Vorschlag ist wiederhergestellt."],[]);
+}
 function showErr(msg){const e=$("err");e.textContent=msg||"";e.style.display=msg?"block":"none"}
 async function api(path,body){
   const r=await fetch(path,body?{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}:undefined);
@@ -673,7 +866,8 @@ async function simulate(){
   showErr("");$("go").disabled=true;
   const marks=[];let i=0;for(const c of pool){const ms=[];for(let k=0;k<c.qty;k++)ms.push(state[i++].mark);marks.push(ms)}
   const bs={};basics.forEach(b=>bs[b.name]={core:b.core,splash:b.splash,nosplash:b.nosplash});
-  const r=await api("/api/simulate",{marks,basics:bs,cats,sims:+$("sims").value});
+  const prop=$("simprop").checked?{colors:chosenColors(),target:+$("target").value||40,sort:sortKey}:undefined;
+  const r=await api("/api/simulate",{marks,basics:bs,cats,sims:+$("sims").value,proposal:prop});
   if(!r.ok){showErr(r.error||"Fehler");$("go").disabled=false;return}
   $("overlay").classList.add("show");poll();
 }
@@ -693,6 +887,11 @@ $("catfilter").onchange=()=>state.forEach(paint);
 $("search").oninput=()=>{searchQ=$("search").value.trim().toLowerCase();state.forEach(paint)};
 $("sort").onchange=()=>{sortKey=$("sort").value;applySort()};
 $("export").onclick=openExport;
+$("suggest").onclick=suggestDeck;
+$("propose").onclick=createProposal;
+document.querySelectorAll(".colpick input").forEach(i=>{i.onchange=save});
+$("undo").onclick=undoSuggest;
+$("target").onchange=save;
 $("xclose").onclick=()=>$("exportbox").classList.remove("show");
 $("exportbox").onclick=e=>{if(e.target===$("exportbox"))$("exportbox").classList.remove("show")};
 const fixBar=()=>document.documentElement.style.setProperty("--hbar",document.querySelector("header.bar").offsetHeight+"px");
@@ -717,6 +916,7 @@ $("quit").onclick=async()=>{if(!confirm("Draft-Helper beenden?"))return;
   const sel=$("sims");d.options.forEach(o=>{const op=el("option",null,o.toLocaleString("de-DE"));op.value=o;
     if(o===d.sims)op.selected=true;sel.appendChild(op)});
   build();fixBar();
+  if(!colorsFromSave)setColors(defaultColors());
 })();
 </script></body></html>
 """

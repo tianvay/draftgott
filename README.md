@@ -63,6 +63,23 @@ Eine andere Datei geht so: `python mtg_sim.py --drafthelper meinpool.txt`.
   splashen) und **NeverPlay** (zu schlecht oder zu situativ). Die Kategorie ist unabhängig von
   Core/Splash/NoSplash/Aus und beeinflusst die Simulation nicht. Die Kopfleiste zählt je Kategorie und hat einen
   Filter „Karten zeigen“.
+- **Deckvorschlag (eigenes drittes Deck):** Über den Karten stehen **Zielgröße** (Standard 40, wählbar 10 bis 200,
+  alle Länder zählen mit), die **Farben** (W U B R G, vorbelegt mit den Farben des Cores) und der Button
+  **Deckvorschlag erstellen**. Der Vorschlag baut aus den Kategorien ein eigenes Deck und lässt deine Zuordnung
+  unverändert:
+  - MustPlay und Filler kommen nur rein, wenn alle Farben der Karte gewählt sind (Farblos immer).
+  - Splashworthy kommt immer rein; liegt die Farbe außerhalb der gewählten, ist die Karte ein Splash.
+  - NeverPlay und Karten ohne Kategorie kommen nicht rein.
+  - Länder: Nicht-Standardländer zählen als Länder, Standardländer werden bis zur Faustregel ergänzt (40 Karten:
+    17, 60 Karten: 22; Bereich 15 bis 17 bzw. 20 bis 24, dazwischen linear) und nach den Farbsymbolen verteilt, je
+    Splash-Farbe bis zu 3. Weicht die Länderzahl vom Bereich ab, steht ein Hinweis da.
+  - Filler: Reihenfolge nach der gewählten Sortierung, danach Farben, die schon im Deck sind, danach Manawert
+    aufsteigend.
+  Mit dem Haken **mitsimulieren** wird der Vorschlag beim Simulieren als weitere Variante („Vorschlag“) neben Splash
+  und NoSplash verglichen, und die Deckliste-Export-Ansicht zeigt ihn als dritte Spalte.
+- **Zuordnung nach Kategorien setzen:** Der frühere Deck-Vorschlag: schreibt die Kategorien in die Zuordnung
+  (MustPlay → Core, Splashworthy → Splash, NeverPlay → Aus, Filler füllt zuerst Core, dann NoSplash auf die
+  Zielgröße). **↶ Rückgängig** stellt den Stand davor wieder her.
 - **Übersicht links:** Karten je Farbe (Weiß, Blau, Schwarz, Rot, Grün, Mehrfarbig, Farblos, Länder) mit Pool-Menge,
   Zuordnung (Core/Splash/NoSplash) und Kategorien. Gezählt werden Kopien ohne Standardländer.
 - **Suche und Sortierung:** Das Suchfeld über den Karten filtert nach Name oder (englischem) Typ, z. B. „Creature“.
