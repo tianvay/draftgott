@@ -9,7 +9,7 @@ analyze_card(scryfall_card) -> Liste von (Kategorie, Kennzahl, Textzeile); leer 
 import re
 from collections import Counter
 
-from components.cards import EMPOWER_RE, LANDCYCLE_RE, classify_empower_line, land_tap_info
+from components.cards import EMPOWER_RE, LANDCYCLE_RE, classify_empower_line, draw_line, land_tap_info
 
 STATUS_TEXT = "To Do: Noch nicht implementiert"
 
@@ -154,6 +154,12 @@ def analyze_card(card):
                     mode = land_tap_info(card, face)[0]
                     if mode == "tapped?":
                         face_items.append((C_LAND_COND, M_MANA, line))
+                    continue
+            if fi == 0 and not is_land and not raw.strip().startswith("•"):  # Modi bleiben offen
+                n, rest = draw_line(line, "Instant" in type_line or "Sorcery" in type_line, card.get("name", ""))
+                if n:  # Ziehen mit fester Zahl ist modelliert; der Rest der Zeile wird weiter geprueft
+                    if re.sub(r"[^a-z]", "", rest):
+                        face_items += [(c, m, line) for c, m in (_classify(rest, False) or [(C_UNKNOWN, M_UNKNOWN)])]
                     continue
             if EMPOWER_RE.search(line):
                 effects = classify_empower_line(line, "Instant" in type_line or "Sorcery" in type_line)

@@ -25,25 +25,27 @@ def play_score(chosen):
             len(chosen))
 
 
-def best_cast(spells, key, has_creature, auras_need_creature, must=None):
+def best_cast(spells, key, has_creature, auras_need_creature, must=None, fixed=()):
     """Waehlt die Zauber, die in dieser Runde zusammen gespielt werden:
     maximal ausgegebenes Mana, dann mehr Kreaturen, dann mehr Power+Toughness.
     must: Karte, die auf jeden Fall dabei sein muss (z. B. ein Zauber, der vor dem Land einen Planeswalker
-    erschafft). Ist sie nicht bezahlbar, kommt (-1, 0, 0, 0), [] zurueck."""
+    erschafft). Ist sie nicht bezahlbar, kommt (-1, 0, 0, 0), [] zurueck.
+    fixed: in dieser Runde schon gewirkte Zauber (nicht in spells). Sie belegen Mana und zaehlen im Score mit,
+    stehen aber nicht in der zurueckgegebenen Liste."""
     spells = sorted(spells)
-    base = []
+    base = list(fixed)
     if must is not None:
         if must not in spells or not can_cast_all((must.alts,), key):
             return (-1, 0, 0, 0), []
         spells.remove(must)
-        base = [must]
+        base.append(must)
     n = len(spells)
     allcards = base + spells
 
     # Abkuerzung: passt die komplette Hand, wird alles gespielt
     if allcards and can_cast_all(tuple(sorted(c.alts for c in allcards)), key) \
             and aura_ok(allcards, has_creature, auras_need_creature):
-        return play_score(allcards), list(allcards)
+        return play_score(allcards), allcards[len(fixed):]
 
     best = [(-1, 0, 0, 0), []]
 
@@ -63,7 +65,56 @@ def best_cast(spells, key, has_creature, auras_need_creature, must=None):
         dfs(j, chosen)
 
     dfs(0, list(base))
-    return best[0], best[1]
+    return best[0], best[1][len(fixed):]
+
+
+def resolve_draws(hand, library, chosen, pool, battlefield, land_played, has_creature, auras_need_creature,
+                  walker_bf, jace_bf):
+    """Draw-Zauber (und Kreaturen, die beim Betreten ziehen) nach dem Zaubern abhandeln: die Karten kommen sofort auf
+    die Hand. Ist der Landdrop noch frei, wird ein gezogenes Land gelegt (wie choose_land: meistes Mana in Zauber,
+    dann getappt zuerst, dann mehr Farben). Mit dem uebrigen Mana wird weiter gezaubert, auch weitere Draw-Zauber.
+    hand enthaelt die gewirkten Karten noch (sie werden spaeter entfernt); pool: untappte Laender vor dem Zaubern.
+    Veraendert hand, library und battlefield. Gibt {chosen, land, tapped, pool, drawn, used} zurueck:
+    chosen = alle gewirkten Zauber der Runde, land = nachgeholter Landdrop (sonst None), drawn = gezogene Karten,
+    used = danach zusaetzlich gelegte Laender und gewirkte Zauber."""
+    cast, pool = list(chosen), list(pool)
+    land, tapped = None, False
+    drawn = used = 0
+    pending = sum(c.draws for c in cast)
+    while pending:
+        for _ in range(pending):
+            if not library:
+                break
+            hand.append(library.pop(0))
+            drawn += 1
+        left = Counter(c for c in hand if not c.is_land)
+        left.subtract(Counter(cast))
+        spells_left = sorted(left.elements())
+        hc = has_creature or any(c.is_creature for c in cast)
+        options = sorted({c for c in hand if c.is_land})
+        if land_played is None and land is None and options:
+            walker = walker_bf or any(creates_walker(c) for c in cast)
+            jace = jace_bf or any(creates_jace(c) for c in cast) or any(c.is_jace for c in hand)
+            bf_cols = [c.land_colors for c in battlefield]
+
+            def score(option):
+                t = enters_tapped(option, battlefield, walker=walker, jace=jace)
+                sc = best_cast(spells_left, land_key(pool + ([] if t else [option.land_colors])), hc,
+                               auras_need_creature, fixed=cast)[0]
+                return sc, t, len(set().union(*(bf_cols + [option.land_colors])))
+
+            land = max(options, key=score)
+            tapped = enters_tapped(land, battlefield, walker=walker, jace=jace)
+            hand.remove(land)
+            battlefield.append(land)
+            used += 1
+            if not tapped:
+                pool.append(land.land_colors)
+        _, extra = best_cast(spells_left, land_key(pool), hc, auras_need_creature, fixed=cast)
+        cast += extra
+        used += len(extra)
+        pending = sum(c.draws for c in extra)
+    return {"chosen": cast, "land": land, "tapped": tapped, "pool": pool, "drawn": drawn, "used": used}
 
 
 def choose_land(hand, spells, pool, battlefield, walker_bf, jace_bf, has_creature, auras_need_creature):
@@ -284,6 +335,8 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
     played, max_deals = 0, sims * 50 + 1000
     has_jace = jace_on and any(once_effects(c) or recurring_effects(c) for c in cards)
     samples = {"creatures": [], "power": [], "toughness": [], "util": [], "jace": []}  # je gespieltes Spiel
+    has_draws = any(c.draws for c in cards)
+    dr = {"cards": 0, "games": 0, "used": 0}
     jc = {"on": has_jace, "games_any": 0, "acts_win": 0, "gained_win": 0, "dist_win": Counter(),
           "acts_all": 0, "surveil_all": 0, "surveil_lands_all": 0, "gained_all": 0, "dist_all": Counter(), "first": [], "empty_reached": 0}
 
@@ -315,6 +368,7 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
         acts_empty = gained_empty = None
         snap = (0, 0, 0)
         g_avail = g_spent = 0
+        g_drawn = 0
 
         for turn in range(1, horizon + 1):
             drew = None
@@ -428,6 +482,21 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                     if not done:
                         break
 
+            drawn_now = 0
+            if has_draws and any(c.draws for c in chosen):
+                rd = resolve_draws(hand, library, chosen, pool, battlefield, land_played, has_creature,
+                                   auras_need_creature, jst.loyalty > 0 or bool(walkers),
+                                   jst.loyalty > 0 or any(c.is_jace for c in walkers))
+                chosen, pool, drawn_now = rd["chosen"], rd["pool"], rd["drawn"]
+                if rd["land"] is not None:
+                    land_played, tapped_now = rd["land"], rd["tapped"]
+                    if not tapped_now and land_played.land_colors:
+                        avail_total += 1
+                key = land_key(pool)
+                full_key = land_key([c.land_colors for c in battlefield])
+                g_drawn += drawn_now
+                dr["used"] += rd["used"]
+
             if has_jace and land_played is not None:
                 for e in once_effects(land_played):
                     if e[1] == "etb":
@@ -496,7 +565,7 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
             turn_dmg = sum(c.power for c, t in board if not c.defender and (t < turn or c.haste)) if board else 0
             dmg_total += turn_dmg
             log.append((turn, drew, land_played, tapped_now, chosen, turn_dmg, dmg_total, cycled_log,
-                        (jst.gained - turn_gain0, jst.acts - turn_acts0, jst.loyalty)))
+                        (jst.gained - turn_gain0, jst.acts - turn_acts0, jst.loyalty, drawn_now)))
             if not dmg_done and dmg_total >= dmg_target:
                 dmg_turns.append(turn)
                 dmg_done = True
@@ -552,6 +621,8 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
             if jst.first is not None:
                 jc["first"].append(jst.first)
 
+        dr["cards"] += g_drawn
+        dr["games"] += g_drawn > 0
         samples["creatures"].append(snap[0])
         samples["power"].append(snap[1])
         samples["toughness"].append(snap[2])
@@ -591,6 +662,7 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
         "best_lethal": best_lethal,
         "mulligan": mull,
         "jace": jc,
+        "draws": {"on": has_draws, "cards": dr["cards"] / sims, "games": dr["games"] / sims, "used": dr["used"] / sims},
         "samples": samples,
         "curve": {"avail": curve_avail, "spent": curve_spent, "full": curve_full, "games": curve_games},
         "landcycle": cyc,

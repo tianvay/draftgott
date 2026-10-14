@@ -401,6 +401,8 @@ def render_details(ctx, suffix=""):
                 cyc_txt += f'<span class="tag">Jace +{jinfo[0]} → {jinfo[2]} Loyalty</span>'
             if jinfo[1]:
                 cyc_txt += '<span class="tag">Jace aktiviert (+1 Karte)</span>'
+            if len(jinfo) > 3 and jinfo[3]:
+                cyc_txt += f'<span class="tag">Draw-Zauber: +{jinfo[3]} Karte{"n" if jinfo[3] > 1 else ""}</span>'
             trs.append([f'<td class="l">Runde {t}</td>', f'<td class="l">{esc(drew.name) if drew else "–"}</td>',
                         f'<td class="l">{land_txt}</td>', f'<td class="l">{cast_txt} {cyc_txt}</td>',
                         f'<td class="dmg">+{tdmg}</td>',
@@ -443,6 +445,21 @@ def render_details(ctx, suffix=""):
                 f'<div class="grid g2"><div><b class="muted">Grund</b><table>{reasons}</table></div>'
                 f'<div><b class="muted">Meistgenutzte Karte</b><table>{cards_}</table></div></div></div>')
         add("landcycling", "Landcycling", "Karten im Deck: " + esc(", ".join(ctx["cyc_names"])),
+            f'<div class="grid">{"".join(panels)}</div>')
+
+    # ---------------- Draw-Zauber
+    if ctx.get("draw_names"):
+        panels = []
+        for l in labels:
+            d = res[l]["draws"]
+            panels.append(
+                f'<div class="panel"><b>{esc(l)}</b><div class="grid g4" style="margin:10px 0">'
+                f'<div class="kpi"><div class="l">Spiele mit Draw-Zauber</div><div class="v">{h_pct(d["games"])}</div></div>'
+                f'<div class="kpi"><div class="l">Ø zusätzlich gezogen</div><div class="v">{d["cards"]:.2f}</div>'
+                f'<div class="s">Karten pro Spiel bis Runde {H}</div></div>'
+                f'<div class="kpi"><div class="l">Ø gleich genutzt</div><div class="v">{d["used"]:.2f}</div>'
+                f'<div class="s">Länder und Zauber im selben Zug</div></div></div></div>')
+        add("ziehen", "Draw-Zauber", "Karten im Deck: " + esc(", ".join(ctx["draw_names"])),
             f'<div class="grid">{"".join(panels)}</div>')
 
     # ---------------- Tempo

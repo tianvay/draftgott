@@ -13,7 +13,7 @@ from components.stats import TRAFFIC
 
 _D = parse_args(["deck.txt"])  # Standardwerte der Kommandozeile
 # Abschnitte, die nur erscheinen, wenn der Bericht sie auch hat (z. B. Deck-Vergleich nur bei mehreren Decks)
-CONDITIONAL = {"vergleich", "great", "mulligan", "jace", "farben", "landcycling"}
+CONDITIONAL = {"vergleich", "great", "mulligan", "jace", "farben", "landcycling", "ziehen"}
 
 
 def _ul(items):
@@ -79,7 +79,8 @@ def _sections():
             "Die Erkennung arbeitet über den Kartentext von Scryfall und sortiert nur grob, weil Magic dasselbe oft "
             "unterschiedlich formuliert. Status jeder gelisteten Karte: „To Do: Noch nicht implementiert“.",
             "Nicht gemeldet wird, was die Simulation abbildet: aufgedrucktes Haste und Defender, Landcycling, die "
-            "Bedingungen getappter Länder, Empower Jace mit festem Wert und Kampf-Schlüsselwörter ohne Gegner.",
+            "Bedingungen getappter Länder, Empower Jace mit festem Wert, Draw-Zauber mit fester Zahl und "
+            "Kampf-Schlüsselwörter ohne Gegner.",
             "Kategorien: Tokens erzeugen, Direkter Schaden, Zählmarken / Stärkebonus, Haste verleihen, Mana außer "
             "Ländern, Kartenfluss, Kostensenkung / Convoke, Zweitverwertung (Friedhof), Timing (Flash), Zusatzkosten, "
             "Prepared-Zauberhälfte, Planeswalker-Fähigkeit, Defender-Ausnahme, Interaktion mit dem Gegner, "
@@ -158,6 +159,17 @@ def _sections():
             "Die letzte Karte auf der Hand wird nicht gecycelt (außer mit <code>--landcycling-letzte-karte</code>); "
             "mit <code>--ohne-landcycling</code> wird nie gecycelt.",
             "„Nicht-Land-Chance“: wie stark das Cycling die Chance erhöht, im nächsten Zug ein Nicht-Land zu ziehen."]))),
+        ("ziehen", "Draw-Zauber", _panel("Regeln", _ul([
+            "Modelliert sind Instants und Sorceries, die mit „Draw N cards.“ beginnen (N fest), und bleibende Karten "
+            "mit „When this … enters, draw N cards.“. Steht in der Zeile noch mehr (z. B. Schaden), bleibt dieser Teil "
+            "in der Modell-Abdeckung.",
+            "Nicht modelliert: modale Karten („Choose one“), Ziehen mit Abwerfen, „you may“, X-Werte, Auslöser wie "
+            "„whenever you gain life“ und bezahlbare Fähigkeiten. Sie stehen in der Modell-Abdeckung.",
+            "Draw-Zauber werden bei der Auswahl nicht bevorzugt, sondern nach denselben Auswahlregeln wie alle Zauber "
+            "gewählt. Nach dem Zaubern kommen die Karten sofort auf die Hand: Ist der Landdrop noch frei, wird ein "
+            "gezogenes Land gelegt, und mit dem übrigen Mana wird weiter gezaubert (auch weitere Draw-Zauber).",
+            "„Ø zusätzlich gezogen“: Karten pro Spiel durch Draw-Zauber, bis zum Ende der Beobachtung. „Ø gleich "
+            "genutzt“: danach im selben Zug zusätzlich gelegte Länder und gewirkte Zauber."]))),
         ("tempo", "Tempo", _panel("Bedeutung", _p(
             "Ø und Median nur über Spiele, in denen das Ereignis bis zum Ende der Beobachtung eintritt. Top Card: die "
             "Karte(n) mit dem höchsten Manawert; gezählt wird die erste Runde, in der sie spielbar wäre."))),
@@ -175,7 +187,7 @@ def _sections():
             "Auras werden nur mit eigener Kreatur gespielt (außer mit <code>--auras-ohne-kreatur</code>).",
             "Kreaturen: aufgedruckte Power/Toughness, Einsatzverzögerung außer Haste, Defender greift nie an, keine "
             "Blocker oder Removal.",
-            "Landcycling und Empower Jace: Regeln in den jeweiligen Abschnitten.",
+            "Landcycling, Empower Jace und Draw-Zauber: Regeln in den jeweiligen Abschnitten.",
             "Was die Simulation nicht abbildet, zeigt der Abschnitt Modell-Abdeckung je Deck."]))),
         ("drafthelper", "Drafthelper", _drafthelper_help()),
     ]

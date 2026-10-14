@@ -30,6 +30,7 @@ class Card(NamedTuple):
     pw_tags: tuple = ()        # jace / pw_help / pw_removal / is_pw
     defender: bool = False     # Kreatur mit Defender: kann nicht angreifen
     is_jace: bool = False      # Planeswalker mit Untertyp Jace (fuer "behold a Jace")
+    draws: int = 0             # Karten, die der Zauber (bzw. die Kreatur beim Betreten) sofort zieht
 
 
 LANDCYCLE_RE = re.compile(
@@ -96,6 +97,39 @@ def tap_tag(mode, arg):
         "planeswalker": "   [getappt, ausser du kontrollierst einen Planeswalker]",
         "jace": "   [getappt, ausser du kontrollierst oder zeigst einen Jace]",
     }[mode]
+
+
+_DRAW_NUM = {"a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7}
+_DRAW_N = r"(a|an|one|two|three|four|five|six|seven|\d+) cards?\."
+# Zauber: "Draw N cards." am Zeilenanfang (Twinned Vision: nicht von der Hand gewirkt kommt nie vor)
+DRAW_SPELL_RE = re.compile(r"^draw " + _DRAW_N +
+                           r"(\s*if this spell wasn't cast from your hand, draw [^.]* instead\.)?(?=\s|$)")
+# Bleibende Karte: "When this creature enters, draw N cards."
+DRAW_ETB_RE = re.compile(r"^when (this [a-z]+|~) enters, draw " + _DRAW_N + r"(?=\s|$)")
+
+
+def draw_line(line, spell_face, name=""):
+    """Erkennt Ziehen mit fester Zahl am Anfang einer Textzeile (ohne Erinnerungstext). Gibt (Anzahl, Resttext in
+    Kleinbuchstaben) zurueck; (0, Zeile) wenn nichts Modelliertes darin steht."""
+    low = line.lower().strip()
+    if name:
+        low = low.replace(name.lower(), "~")
+    m = (DRAW_SPELL_RE if spell_face else DRAW_ETB_RE).match(low)
+    if not m:
+        return 0, low
+    word = m.group(1) if spell_face else m.group(2)
+    return _DRAW_NUM.get(word) or int(word), low[m.end():].strip()
+
+
+def parse_draws(card, type_line):
+    """Summe der modellierten Draw-Effekte der Vorderseite."""
+    front = (card.get("card_faces") or [card])[0]
+    text = front.get("oracle_text") or card.get("oracle_text") or ""
+    spell_face = "Instant" in type_line or "Sorcery" in type_line
+    total = 0
+    for raw in text.split("\n"):
+        total += draw_line(re.sub(r"\([^)]*\)", "", raw), spell_face, card.get("name", ""))[0]
+    return total
 
 
 EMPOWER_RE = re.compile(r"empower jace (\d+|x)\b", re.I)
@@ -263,10 +297,14 @@ def card_info(card):
     shown += cycle_tag
     eff, etext = parse_empower(card)
     shown += empower_tags_text(eff)
+    draws = parse_draws(card, type_line)
+    if draws:
+        shown += f"   [Zieht {draws}]"
     return Card(False, mv, alts, (), is_creature, is_aura,
                 power if is_creature else 0, tough if is_creature else 0, haste,
                 name=card["name"], cycle_alts=cycle_alts, cycle_target=cycle_target,
                 cycle_mv=cycle_mv, is_instant_sorcery=("Instant" in type_line or "Sorcery" in type_line),
                 is_planeswalker="Planeswalker" in type_line, empower=eff, empower_text=etext,
                 pw_tags=pw_tags_for(card, type_line), defender=defender,
-                is_jace=("Planeswalker" in type_line and "Jace" in type_line.split("—")[-1].split())), shown
+                is_jace=("Planeswalker" in type_line and "Jace" in type_line.split("—")[-1].split()),
+                draws=draws), shown

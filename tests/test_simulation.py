@@ -79,8 +79,8 @@ class ReproducibilityTests(unittest.TestCase):
             "draw_lethal": draw["best_lethal"]["key"] if draw["best_lethal"] else None,
         }
         self.assertEqual(got, {
-            "play_cast": {1: 197, 2: 182, 3: 156}, "draw_cast": {1: 196, 2: 190, 3: 164},
-            "play_dmg": (200, 619), "draw_dmg": (200, 564),
+            "play_cast": {1: 197, 2: 185, 3: 168}, "draw_cast": {1: 196, 2: 190, 3: 171},
+            "play_dmg": (200, 601), "draw_dmg": (200, 558),
             "play_lethal": (2, -12), "draw_lethal": (2, -12)})
 
 

@@ -61,7 +61,8 @@ def build_deck(entry, data, args):
         unsure=sorted({n for n, _, c, _ in rows if c.is_land and c.tap_mode == "tapped?"}),
         deck_colors=deck_colors, multicolor=len(deck_colors) >= 2, top_mv=top_mv,
         top_names=sorted({n for n, _, c, _ in rows if not c.is_land and c.alts and c.mv == top_mv}),
-        cyc_names=sorted({n for n, _, c, _ in rows if c.cycle_alts}))
+        cyc_names=sorted({n for n, _, c, _ in rows if c.cycle_alts}),
+        draw_names=sorted({n for n, _, c, _ in rows if c.draws}))
 
 
 def _stderr(msg):

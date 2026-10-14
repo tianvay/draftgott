@@ -62,6 +62,8 @@ def render_logic_section(has_jace=False):
         "zuerst ein Zauber gewirkt, der einen Planeswalker erschafft, und danach das Land gelegt.",
         "<b>Zauber wählen:</b> Aus allen Kombinationen, die zusammen bezahlt werden können (Farben beachtet), "
         "wird die beste nach den vier Auswahlregeln gespielt.",
+        "<b>Draw-Zauber:</b> Gezogene Karten kommen sofort auf die Hand. Ein gezogenes Land wird gelegt, wenn der "
+        "Landdrop noch frei ist, und mit dem übrigen Mana wird weiter gezaubert.",
         "<b>Landcycling (nur wenn es sich lohnt):</b> Eine nicht spielbare Karte wird mit übrigem Mana gecycelt, "
         "wenn das diese oder nächste Runde etwas verbessert.",
         "<b>Angriff:</b> Kreaturen vom Vorzug greifen an, neue nur mit Haste, Kreaturen mit Defender nie.",

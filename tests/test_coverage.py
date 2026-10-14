@@ -88,7 +88,7 @@ class CategoryTests(unittest.TestCase):
         self.check("When this creature enters, create a Treasure token.", "Mana außer Ländern", M_MANA)
 
     def test_card_flow(self):
-        self.check("Draw two cards.", "Kartenfluss", M_FLOW, type_line="Sorcery")
+        self.check("Whenever you gain life, draw a card.", "Kartenfluss", M_FLOW)
         self.check("When this creature enters, surveil 1.", "Kartenfluss", M_FLOW)
         self.check("Search your library for a basic land card, put it onto the battlefield tapped.", "Kartenfluss",
                    M_FLOW, type_line="Sorcery")
