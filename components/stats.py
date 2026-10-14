@@ -82,6 +82,22 @@ def compare_metrics(decks, args, label):
     for t in range(1, T + 1):
         rows.append((f"Zauber gespielt in Runde {t}", "prop", True, [
             prop(d["results"][label]["cast"][t], sims) for d in decks]))
+    def avail(d):
+        return d["results"][label].get("color_avail")
+
+    if any(avail(d) and avail(d)["colors"] for d in decks):
+        rows.append(("Alle Farben bis Runde 3", "prop", True, [
+            prop(avail(d)["t3_all"], avail(d)["games"]) if avail(d) and avail(d)["colors"] else None for d in decks]))
+    doubles = []
+    for d in decks:
+        for c in (avail(d) or {}).get("double", []):
+            if c not in doubles:
+                doubles.append(c)
+    names = {"W": "Weiß", "U": "Blau", "B": "Schwarz", "R": "Rot", "G": "Grün"}
+    for c in sorted(doubles, key="WUBRG".index):
+        rows.append((f"≥ 2 Quellen {names[c]} bis Runde 4", "prop", True, [
+            prop(avail(d)["t4_double"][c], avail(d)["games"])
+            if avail(d) and c in avail(d)["double"] and avail(d)["t4_measured"] else None for d in decks]))
     rows.append((f"Mana Screw nach Runde {T}", "prop", False, [
         prop(round(d["results"][label]["any_screw"] * sims), sims) for d in decks]))
     rows.append((f"Flood ({args.flood}+ Länder bis Runde {max(args.max_runden, T, C)})",

@@ -119,3 +119,16 @@ def required_colors(card):
 
 def land_key(lands):
     return tuple(sorted(lands))
+
+
+def double_pip_colors(cards):
+    """Farben, die eine Nichtland-Karte in JEDEM Zahlungsweg mindestens zweimal verlangt (z. B. {2}{R}{R}).
+    Hybrid wie {R/G}{R/G} zaehlt nicht. Gibt {Farbe: [Kartennamen, sortiert]} zurueck."""
+    out = {}
+    for card in cards:
+        if card.is_land or not card.alts:
+            continue
+        for col in "WUBRG":
+            if min(dict(req).get(col, 0) for _, req in card.alts) >= 2:
+                out.setdefault(col, set()).add(card.name)
+    return {col: sorted(names) for col, names in out.items()}

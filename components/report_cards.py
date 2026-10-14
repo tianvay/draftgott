@@ -3,7 +3,7 @@ Die Zaehllogik ist dieselbe wie in der Seitenleiste des Drafthelpers (components
 import math
 
 from components.cardkinds import FLOW_ORDER, color_curve
-from components.html_base import esc, h_table
+from components.html_base import esc, h_level_td, h_table
 
 COLOR_HEX = {"W": "#f1e7b8", "U": "#3b82d6", "B": "#4a4a4a", "R": "#d6453b", "G": "#3f9b4f", "M": "#d9a400",
              "C": "#b7bcc6"}
@@ -165,3 +165,59 @@ def render_types_compare(decks):
         rows.append([_label_cell(label, cls)] + [f"<td{cell_cls}>{v}</td>" for v in vals])
     return (f'<div class="panel"><b>Kartentypen im Vergleich</b>{h_table(heads, rows)}'
             f'<div class="note">{esc(_note(spec))} Fett: Unterschied zwischen den Decks.</div></div>')
+
+
+AVAIL_GREEN, AVAIL_YELLOW = 90, 80  # Ampel Farbverfuegbarkeit in Prozent
+
+
+def avail_level(pct):
+    return "green" if pct >= AVAIL_GREEN else "yellow" if pct >= AVAIL_YELLOW else "red"
+
+
+def _avail_cell(n, games, measured=True):
+    if not measured or not games:
+        return '<td class="muted">–</td>'
+    pct = round(100 * n / games)
+    return h_level_td(avail_level(pct), f"{pct}%")
+
+
+def all_colors_label(colors):
+    return "Alle Farben bis Runde 3 (" + ", ".join(COLOR_NAME[c] for c in colors) + ")"
+
+
+def all_colors_row(ctx):
+    """Zeile fuer 'Auf einen Blick' (oder None, wenn das Deck keine Farben braucht)."""
+    results = ctx["results"]
+    first = next(iter(results.values())).get("color_avail")
+    if not first or not first["colors"]:
+        return None
+    return [f'<td class="l">{esc(all_colors_label(first["colors"]))}</td>'] + [
+        _avail_cell(r["color_avail"]["t3_all"], r["color_avail"]["games"]) for r in results.values()]
+
+
+def render_color_availability(ctx):
+    """Abschnitt 'Farbverfuegbarkeit': alle Farben und jede Farbe bis Runde 3 (mindestens eine Quelle), Farben mit
+    Doppel-Symbolen bis Runde 4 (mindestens zwei Quellen). Leer, wenn das Deck keine Farben braucht."""
+    results = ctx["results"]
+    labels = list(results)
+    first = results[labels[0]].get("color_avail")
+    if not first or not first["colors"]:
+        return ""
+    rows = [all_colors_row(ctx)]
+    for c in first["colors"]:
+        rows.append([f'<td class="l" style="padding-left:22px">≥ 1 Quelle {COLOR_NAME[c]} bis Runde 3</td>'] + [
+            _avail_cell(results[l]["color_avail"]["t3"][c], results[l]["color_avail"]["games"]) for l in labels])
+    pips = ctx.get("double_pips") or {}
+    for c in first["double"]:
+        cards = ", ".join(pips.get(c, []))
+        rows.append([f'<td class="l">≥ 2 Quellen {COLOR_NAME[c]} bis Runde 4'
+                     f'<div class="muted" style="font-size:12px">wegen {c}{c} in: {esc(cards)}</div></td>'] + [
+            _avail_cell(results[l]["color_avail"]["t4_double"][c], results[l]["color_avail"]["games"],
+                        results[l]["color_avail"]["t4_measured"]) for l in labels])
+    note = ("Quelle = Land auf dem Feld nach dem Landdrop der Runde (auch getappt), das die Farbe erzeugen kann; ein "
+            "Land mit mehreren Farben zählt für jede davon. Geprüft werden alle Farben, die Karten im Deck "
+            "zwingend brauchen, und zwei Quellen bis Runde 4 nur für Farben, die eine Karte doppelt verlangt "
+            f"(z. B. RR). Ampel: grün ab {AVAIL_GREEN} %, gelb ab {AVAIL_YELLOW} %, sonst rot. "
+            "Manakreaturen und andere Manaquellen sind nicht modelliert.")
+    return (f'<div class="panel">{h_table(["Kennzahl"] + [esc(l) for l in labels], rows)}'
+            f'<div class="note">{esc(note)}</div></div>')

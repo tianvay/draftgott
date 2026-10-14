@@ -256,8 +256,16 @@ def without_one(items, item):
 def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multicolor, top_mv,
              flood_lands=11, dmg_target=20, curve_turns=6,
              cycle_on=True, cycle_turns=3, cycle_cap=6, cycle_last=False, mulligan=True, min_hand=5,
-             jace_on=True):
+             jace_on=True, color_check=None):
+    """color_check: {"colors": [...], "double": [...]} misst, wie oft bis Runde 3 jede Deckfarbe mindestens eine
+    Quelle hat und bis Runde 4 die Farben mit Doppel-Symbolen mindestens zwei (Laender auf dem Feld, auch getappt).
+    Die Messung veraendert den Spielablauf nicht."""
     cast_in_turn = {t: 0 for t in range(1, max_turn + 1)}
+    cc_colors = list(color_check["colors"]) if color_check else []
+    cc_double = list(color_check["double"]) if color_check else []
+    cc_t3 = {c: 0 for c in cc_colors}
+    cc_t4 = {c: 0 for c in cc_double}
+    cc_all = 0
     opener_lands = n_creatures = power = toughness = 0
     land_screw = color_screw = any_screw = 0
     empty_hand, empty_spells, top_turns = [], [], []
@@ -504,6 +512,17 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                 empty_spells.append(turn)
                 spells_done = True
 
+            if color_check and turn in (3, 4):  # Farbverfuegbarkeit nach dem Landdrop
+                sources = Counter(col for land in battlefield for col in set(land.land_colors))
+                if turn == 3:
+                    ok = [c for c in cc_colors if sources[c] >= 1]
+                    for c in ok:
+                        cc_t3[c] += 1
+                    cc_all += len(ok) == len(cc_colors)
+                else:
+                    for c in cc_double:
+                        cc_t4[c] += sources[c] >= 2
+
             if turn == max_turn:  # Momentaufnahme fuer Kreaturen und Screw
                 short = len(battlefield) < max_turn
                 no_colors = multicolor and not has_two_colors(full_key)
@@ -551,7 +570,12 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                 cyc["p_before"] += pb
                 cyc["p_after"] += pa
 
+    extra = {}
+    if color_check:
+        extra["color_avail"] = {"colors": cc_colors, "double": cc_double, "t3": cc_t3, "t3_all": cc_all,
+                                "t4_double": cc_t4, "games": sims, "t4_measured": horizon >= 4}
     return {
+        **extra,
         "cast": cast_in_turn,
         "opener_lands": opener_lands / sims,
         "creatures": n_creatures / sims,

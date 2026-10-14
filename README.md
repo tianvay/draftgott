@@ -334,6 +334,11 @@ Diese Werte stehen im Skript und lassen sich nur dort ändern.
   bei jeder ihrer Farben). Darunter die Farbkombinationen. Daneben die Tabelle **„Kartentypen“** (Kreaturen,
   Instants, Sorceries, Artefakte, Verzauberungen, Planeswalker, Länder, Empower Jace, Kartenfluss nach Art). Im
   „Deck-Vergleich“ steht „Kartentypen im Vergleich“ mit einer Spalte je Deck, Unterschiede fett.
+- **Farbverfügbarkeit (Bericht):** Eigener Abschnitt und eine Zeile in „Auf einen Blick“: Wie oft liegen nach dem
+  Landdrop von Runde 3 **alle Farben** des Decks (mindestens eine Quelle je Farbe) und je Farbe einzeln? Für Farben, die
+  eine Karte doppelt verlangt (z. B. RR, mit Kartennamen), zusätzlich: Wie oft liegen bis Runde 4 **zwei Quellen**?
+  Quelle = Land auf dem Feld (auch getappt), ein Land mit mehreren Farben zählt für jede. Ampel: grün ab 90 %, gelb ab
+  80 %. Im Deck-Vergleich stehen „Alle Farben bis Runde 3“ und die Zwei-Quellen-Werte als eigene Kennzahlen.
 - **Modell-Abdeckung (Bericht):** Der Abschnitt „Modell-Abdeckung“ listet je Deck die Karten, deren Effekte die
   Simulation noch nicht abbildet, mit dem Status „To Do: Noch nicht implementiert“, einer groben Kategorie
   (Tokens, Direkter Schaden, Zählmarken / Stärkebonus, Haste verleihen, Mana außer Ländern, Kartenfluss,

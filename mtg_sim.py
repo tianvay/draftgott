@@ -25,7 +25,7 @@ from components.cardkinds import card_colors, empower_points, flow_kinds, type_k
 from components.coverage import analyze_card
 from components.deckfile import parse_deck, parse_deck_name, split_label
 from components.jace import analyze_jace
-from components.mana import required_colors
+from components.mana import double_pip_colors, required_colors
 from components.report import render_html
 from components.simulation import simulate
 
@@ -53,6 +53,7 @@ def build_deck(entry, data, args):
     top_mv = max((c.mv for c in castable), default=None)
     deck_colors = sorted(set().union(*(required_colors(c) for c in nonlands)))
     return dict(
+        double_pips=double_pip_colors(nonlands),
         name=entry["name"], deck=entry["deck"], parts=entry.get("parts", []), rows=rows, cards=cards, missing=missing,
         cats=entry.get("cats", {}), role=entry.get("role"), coverage=coverage, info=info,
         n_lands=len(cards) - len(nonlands),
@@ -80,7 +81,9 @@ def simulate_deck(dd, args, idx, horizon, progress=_stderr):
                                       args.schaden, args.curve_runden, not args.ohne_landcycling,
                                       args.landcycling_runden, args.landcycling_max_laender,
                                       args.landcycling_letzte_karte, not args.ohne_mulligan, args.min_handkarten,
-                                      not args.ohne_jace)
+                                      not args.ohne_jace,
+                                      color_check={"colors": sorted(dd["deck_colors"], key="WUBRG".index),
+                                                   "double": sorted(dd["double_pips"], key="WUBRG".index)})
         except RuntimeError as e:
             sys.exit(f"{dd['name']}: {e}")
     dd["results"] = results

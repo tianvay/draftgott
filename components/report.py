@@ -9,7 +9,8 @@ from components.mana import required_colors
 from components.mulligan import MULL_COLORS, MULL_LANDS_HIGH, MULL_LANDS_LOW
 from components.report_sections import render_compare_section, render_jace_section, render_logic_section
 from components.coverage import METRIC_ORDER, STATUS_TEXT, metrics_of, summarize
-from components.report_cards import render_color_curves, render_type_table
+from components.report_cards import (all_colors_row, render_color_availability, render_color_curves,
+                                     render_type_table)
 from components.simulation import card_label
 from components.stats import TRAFFIC, lethal_level, timing_stats, traffic_level
 
@@ -153,7 +154,8 @@ def render_details(ctx, suffix=""):
     if any(res[l]["jace"]["on"] for l in labels):
         jace_row = [['<td class="l">Jace-Aktivierungen bis die Hand leer ist (Ø)</td>'] + [
             f'<td>{res[l]["jace"]["acts_win"] / sims:.2f}</td>' for l in labels]]
-    rows_v = mull_rows + rows_v + jace_row + [scr, fl, avg, lt]
+    colors_row = all_colors_row(ctx)
+    rows_v = mull_rows + rows_v + jace_row + ([colors_row] if colors_row else []) + [scr, fl, avg, lt]
     legend = ("Ampel Zauber pro Runde – grün / gelb ab: " + "; ".join(
         f'{("Draw" if d else "Play")} R{t}: ≥{g}% / >{y}%'
         for d, tt in TRAFFIC.items() for t, (g, y) in tt.items()))
@@ -330,6 +332,12 @@ def render_details(ctx, suffix=""):
             f'mindestens {a.flood} Länder gezogen bis Runde {H} (inkl. Starthand)</div>'
             f'{h_table(["", "Flooded", "Ø Länder gezogen"], rows_f)}</div></div>')
     add("screw", "Mana Screw & Flood", "", body)
+
+    # ---------------- Farbverfuegbarkeit
+    avail = render_color_availability(ctx)
+    if avail:
+        add("farben", "Farbverfügbarkeit",
+            "Wie oft liegen bis Runde 3 alle Farben und bis Runde 4 zwei Quellen für Doppel-Symbole (z. B. RR)?", avail)
 
     # ---------------- Curve-Auslastung
     panels = []
