@@ -18,11 +18,13 @@ def aura_ok(chosen, has_creature, auras_need_creature):
 
 def play_score(chosen):
     """Bewertung einer Zauber-Kombination (hoeher ist besser, in dieser Reihenfolge):
-    1. ausgegebenes Mana  2. Zahl der Kreaturen  3. Power + Toughness  4. Zahl der Karten."""
+    1. ausgegebenes Mana  2. Zahl der Kreaturen  3. Power + Toughness  4. Zahl der Karten
+    5. weniger Prepared-Kopien (bei Gleichstand zuerst Handkarten, die Kopie bleibt verfuegbar)."""
     return (sum(c.mv for c in chosen),
             sum(c.is_creature for c in chosen),
             sum(c.power + c.toughness for c in chosen),
-            len(chosen))
+            len(chosen),
+            -sum(c.is_copy for c in chosen))
 
 
 def best_cast(spells, key, has_creature, auras_need_creature, must=None, fixed=()):
@@ -68,28 +70,38 @@ def best_cast(spells, key, has_creature, auras_need_creature, must=None, fixed=(
     return best[0], best[1][len(fixed):]
 
 
+def enters_prepared(cards):
+    """Kopien der Zauberhaelften von Kreaturen, die prepared ins Spiel kommen."""
+    return [c.prepared[1] for c in cards if c.prepared and c.prepared[0] in ("enters", "both")]
+
+
 def resolve_draws(hand, library, chosen, pool, battlefield, land_played, has_creature, auras_need_creature,
-                  walker_bf, jace_bf):
+                  walker_bf, jace_bf, copies=()):
     """Draw-Zauber (und Kreaturen, die beim Betreten ziehen) nach dem Zaubern abhandeln: die Karten kommen sofort auf
     die Hand. Ist der Landdrop noch frei, wird ein gezogenes Land gelegt (wie choose_land: meistes Mana in Zauber,
     dann getappt zuerst, dann mehr Farben). Mit dem uebrigen Mana wird weiter gezaubert, auch weitere Draw-Zauber.
     hand enthaelt die gewirkten Karten noch (sie werden spaeter entfernt); pool: untappte Laender vor dem Zaubern.
     Veraendert hand, library und battlefield. Gibt {chosen, land, tapped, pool, drawn, used} zurueck:
     chosen = alle gewirkten Zauber der Runde, land = nachgeholter Landdrop (sonst None), drawn = gezogene Karten,
-    used = danach zusaetzlich gelegte Laender und gewirkte Zauber."""
+    used = danach zusaetzlich gelegte Laender und gewirkte Zauber.
+    Prepared: Kommt eine Kreatur prepared ins Spiel, kann ihre Kopie mit dem uebrigen Mana noch in dieser Runde
+    gewirkt werden. copies: Kopien, die schon zu Rundenbeginn verfuegbar waren."""
     cast, pool = list(chosen), list(pool)
     land, tapped = None, False
     drawn = used = 0
     pending = sum(c.draws for c in cast)
-    while pending:
+    fresh = enters_prepared(cast)
+    while pending or fresh:
         for _ in range(pending):
             if not library:
                 break
             hand.append(library.pop(0))
             drawn += 1
         left = Counter(c for c in hand if not c.is_land)
-        left.subtract(Counter(cast))
-        spells_left = sorted(left.elements())
+        left.subtract(Counter(c for c in cast if not c.is_copy))
+        avail = Counter(copies) + Counter(enters_prepared(cast))
+        avail.subtract(Counter(c for c in cast if c.is_copy))
+        spells_left = sorted((+left + +avail).elements())
         hc = has_creature or any(c.is_creature for c in cast)
         options = sorted({c for c in hand if c.is_land})
         if land_played is None and land is None and options:
@@ -114,6 +126,7 @@ def resolve_draws(hand, library, chosen, pool, battlefield, land_played, has_cre
         cast += extra
         used += len(extra)
         pending = sum(c.draws for c in extra)
+        fresh = enters_prepared(extra)
     return {"chosen": cast, "land": land, "tapped": tapped, "pool": pool, "drawn": drawn, "used": used}
 
 
@@ -349,6 +362,8 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
     samples = {"creatures": [], "power": [], "toughness": [], "util": [], "jace": []}  # je gespieltes Spiel
     has_draws = any(c.draws for c in cards)
     has_surveil = any(c.surveil for c in cards)
+    has_prepared = any(c.prepared for c in cards)
+    pr = {"copies": 0, "games": 0, "mana": 0}
     sv = {"events": 0, "games": 0, "lands": 0}
     dr = {"cards": 0, "games": 0, "used": 0}
     jc = {"on": has_jace, "games_any": 0, "acts_win": 0, "gained_win": 0, "dist_win": Counter(),
@@ -382,7 +397,8 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
         acts_empty = gained_empty = None
         snap = (0, 0, 0)
         g_avail = g_spent = 0
-        g_drawn = g_surveils = 0
+        g_drawn = g_surveils = g_copies = 0
+        prep = []  # Prepared-Kreaturen auf dem Feld: [Karte, prepared?]
 
         for turn in range(1, horizon + 1):
             drew = None
@@ -392,6 +408,9 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                 drew = library.pop(0)
                 hand.append(drew)
             jst.used = False
+            for p_ in prep:  # Upkeep: "if this creature isn't prepared, it becomes prepared"
+                if p_[0].prepared[0] in ("upkeep", "both"):
+                    p_[1] = True
             turn_acts0, turn_gain0 = jst.acts, jst.gained
             if has_jace:
                 for pc, t_in in perms:
@@ -404,7 +423,10 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
             avail_total = sum(1 for lc in pool if lc)         # Mana dieser Runde (inkl. neu gelegter Laender)
             cycle_spent = 0
             cycled_log = []
-            spells = [c for c in hand if not c.is_land]
+            def castable():  # Handkarten und verfuegbare Prepared-Kopien
+                return [c for c in hand if not c.is_land] + [p_[0].prepared[1] for p_ in prep if p_[1]]
+
+            spells = castable()
             has_creature = bool(board)
 
             # Landcycling Regel 2: kein Land auf der Hand -> Land per Landcycling sichern
@@ -421,7 +443,7 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                         cycled_log.append((cycler, "Land fehlt"))
                         cycle_spent += cycler.cycle_mv
                         pool = rem
-                        spells = [c for c in hand if not c.is_land]
+                        spells = castable()
                         break
 
             # Land legen (getappte Laender liefern in dieser Runde kein Mana). Planeswalker-/Jace-Laender: erst ein
@@ -442,7 +464,7 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
 
             # Top Card gezogen und spielbar?
             if not top_done and top_mv is not None:
-                for c in set(x for x in spells if x.mv == top_mv and x.alts):
+                for c in set(x for x in spells if x.mv == top_mv and x.alts and not x.is_copy):
                     if top_card_playable(c, spells, key, has_creature, auras_need_creature):
                         top_turns.append(turn)
                         top_done = True
@@ -487,7 +509,7 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                                 pool = pool + [cand.land_colors]
                                 if cand.land_colors:
                                     avail_total += 1
-                        spells = [c for c in hand if not c.is_land]
+                        spells = castable()
                         key = land_key(pool)
                         full_key = land_key([c.land_colors for c in battlefield])
                         s_chosen, chosen = best_cast(spells, key, has_creature, auras_need_creature)
@@ -497,10 +519,11 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                         break
 
             drawn_now = 0
-            if has_draws and any(c.draws for c in chosen):
+            if (has_draws or has_prepared) and (any(c.draws for c in chosen) or enters_prepared(chosen)):
                 rd = resolve_draws(hand, library, chosen, pool, battlefield, land_played, has_creature,
                                    auras_need_creature, jst.loyalty > 0 or bool(walkers),
-                                   jst.loyalty > 0 or any(c.is_jace for c in walkers))
+                                   jst.loyalty > 0 or any(c.is_jace for c in walkers),
+                                   copies=[p_[0].prepared[1] for p_ in prep if p_[1]])
                 chosen, pool, drawn_now = rd["chosen"], rd["pool"], rd["drawn"]
                 if rd["land"] is not None:
                     land_played, tapped_now = rd["land"], rd["tapped"]
@@ -523,11 +546,22 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                     perms.append((land_played, turn))
 
             for c in chosen:
+                if c.is_copy:
+                    continue
                 hand.remove(c)
                 if c.is_creature:
                     board.append((c, turn))
                 if c.is_planeswalker:
                     walkers.append(c)
+                if c.prepared:
+                    prep.append([c, c.prepared[0] in ("enters", "both")])
+            for c in chosen:
+                if c.is_copy:  # Kopie gewirkt: eine passende Kreatur ist nicht mehr prepared
+                    p_ = next(p_ for p_ in prep if p_[1] and p_[0].prepared[1] == c)
+                    p_[1] = False
+                    g_copies += 1
+                    pr["copies"] += 1
+                    pr["mana"] += c.mv
             if has_surveil:  # nach dem Zaubern: erst das Land, dann die Zauber in der Reihenfolge des Wirkens
                 amounts = ([land_played.surveil] if land_played is not None else []) + [c.surveil for c in chosen]
                 if any(amounts):
@@ -645,6 +679,7 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
         dr["cards"] += g_drawn
         dr["games"] += g_drawn > 0
         sv["games"] += g_surveils > 0
+        pr["games"] += g_copies > 0
         samples["creatures"].append(snap[0])
         samples["power"].append(snap[1])
         samples["toughness"].append(snap[2])
@@ -684,6 +719,8 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
         "best_lethal": best_lethal,
         "mulligan": mull,
         "jace": jc,
+        "prepared": {"on": has_prepared, "copies": pr["copies"] / sims, "games": pr["games"] / sims,
+                     "mana": pr["mana"] / sims},
         "card_surveil": {"on": has_surveil, "events": sv["events"] / sims, "games": sv["games"] / sims,
                          "lands": sv["lands"] / sims},
         "draws": {"on": has_draws, "cards": dr["cards"] / sims, "games": dr["games"] / sims, "used": dr["used"] / sims},

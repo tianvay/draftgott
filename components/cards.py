@@ -32,6 +32,8 @@ class Card(NamedTuple):
     is_jace: bool = False      # Planeswalker mit Untertyp Jace (fuer "behold a Jace")
     draws: int = 0             # Karten, die der Zauber (bzw. die Kreatur beim Betreten) sofort zieht
     surveil: int = 0           # Surveil N beim Wirken bzw. Betreten (auch Laender)
+    prepared: tuple = ()       # Prepared: (Modus "enters"/"upkeep"/"both", Card der Zauberhaelfte)
+    is_copy: bool = False      # Kopie einer Prepared-Zauberhaelfte (verbraucht keine Handkarte)
 
 
 LANDCYCLE_RE = re.compile(
@@ -157,6 +159,27 @@ def parse_surveil(card, type_line):
     spell_face = "Instant" in type_line or "Sorcery" in type_line
     return sum(surveil_line(re.sub(r"\([^)]*\)", "", raw), spell_face, card.get("name", ""))[0]
                for raw in text.split("\n"))
+
+
+def prepared_mode(card):
+    """Prepared-Karten (Layout "prepare"): "enters prepared" -> "enters", "... becomes prepared" (im Upkeep) ->
+    "upkeep", beides -> "both"; sonst "" (Wortlaut unbekannt, nicht modelliert)."""
+    faces = card.get("card_faces") or []
+    if card.get("layout") != "prepare" or len(faces) < 2:
+        return ""
+    low = re.sub(r"\([^)]*\)", " ", faces[0].get("oracle_text") or "").lower()
+    enters = bool(re.search(r"\benters prepared\b", low))
+    upkeep = bool(re.search(r"\bupkeep\b[^.]*\bbecomes prepared\b", low))
+    return "both" if enters and upkeep else "enters" if enters else "upkeep" if upkeep else ""
+
+
+def prepared_spell(card):
+    """Die Zauberhaelfte einer Prepared-Karte als eigene Karte (Kopie, die keine Handkarte verbraucht)."""
+    face = (card.get("card_faces") or [{}, {}])[1]
+    raw = {"name": face.get("name", ""), "type_line": face.get("type_line", ""), "mana_cost": face.get("mana_cost", ""),
+           "oracle_text": face.get("oracle_text", ""), "colors": face.get("colors") or card.get("colors") or [],
+           "keywords": [], "layout": "normal"}
+    return card_info(raw)[0]._replace(is_copy=True)
 
 
 EMPOWER_RE = re.compile(r"empower jace (\d+|x)\b", re.I)
@@ -333,6 +356,12 @@ def card_info(card):
     surveil = parse_surveil(card, type_line)
     if surveil:
         shown += f"   [Surveil {surveil}]"
+    prepared = ()
+    mode = prepared_mode(card)
+    if mode:
+        spell = prepared_spell(card)
+        prepared = (mode, spell)
+        shown += f"   [Prepared: {spell.name} {faces[1].get('mana_cost', '')}]"
     return Card(False, mv, alts, (), is_creature, is_aura,
                 power if is_creature else 0, tough if is_creature else 0, haste,
                 name=card["name"], cycle_alts=cycle_alts, cycle_target=cycle_target,
@@ -340,4 +369,4 @@ def card_info(card):
                 is_planeswalker="Planeswalker" in type_line, empower=eff, empower_text=etext,
                 pw_tags=pw_tags_for(card, type_line), defender=defender,
                 is_jace=("Planeswalker" in type_line and "Jace" in type_line.split("—")[-1].split()),
-                draws=draws, surveil=surveil), shown
+                draws=draws, surveil=surveil, prepared=prepared), shown

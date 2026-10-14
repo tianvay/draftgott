@@ -10,7 +10,7 @@ import re
 from collections import Counter
 
 from components.cards import (EMPOWER_RE, LANDCYCLE_RE, classify_empower_line, draw_line, land_tap_info,
-                              surveil_line)
+                              prepared_mode, surveil_line)
 
 STATUS_TEXT = "To Do: Noch nicht implementiert"
 
@@ -129,6 +129,7 @@ def analyze_card(card):
     faces = card.get("card_faces") or [card]
     known = IGNORED_KEYWORDS | set(KEYWORD_CATEGORY) | {k.lower() for k in card.get("keywords") or []}
     prepare = card.get("layout") == "prepare" and len(faces) > 1
+    prepare_modelled = bool(prepared_mode(card))  # Zauberhaelfte wird als Kopie gewirkt (siehe cards.prepared_spell)
     items = []
     for fi, face in enumerate(faces):
         type_line = face.get("type_line") or card.get("type_line") or ""
@@ -149,8 +150,9 @@ def analyze_card(card):
             if low.startswith("enchant ") and "aura" in type_line.lower():
                 continue
             spell_face = "Instant" in type_line or "Sorcery" in type_line
-            if fi == 0 and not raw.strip().startswith("•"):
-                n, rest = surveil_line(line, spell_face, card.get("name", ""))
+            modelled_face = fi == 0 or (prepare_modelled and fi == 1)
+            if modelled_face and not raw.strip().startswith("•"):
+                n, rest = surveil_line(line, spell_face, face.get("name") or card.get("name", ""))
                 if n:  # Surveil mit fester Zahl ist modelliert; der Rest der Zeile wird weiter geprueft
                     if re.sub(r"[^a-z]", "", rest):
                         line, low = rest, rest
@@ -164,7 +166,7 @@ def analyze_card(card):
                     if mode == "tapped?":
                         face_items.append((C_LAND_COND, M_MANA, line))
                     continue
-            if fi == 0 and not is_land and not raw.strip().startswith("•"):  # Modi bleiben offen
+            if modelled_face and not is_land and not raw.strip().startswith("•"):  # Modi bleiben offen
                 n, rest = draw_line(line, "Instant" in type_line or "Sorcery" in type_line, card.get("name", ""))
                 if n:  # Ziehen mit fester Zahl ist modelliert; der Rest der Zeile wird weiter geprueft
                     if re.sub(r"[^a-z]", "", rest):
@@ -193,7 +195,7 @@ def analyze_card(card):
             if not cats:
                 cats = [(C_UNKNOWN, M_UNKNOWN)]
             face_items += [(c, m, line) for c, m in cats]
-        if prepare and fi >= 1:
+        if prepare and fi >= 1 and not prepare_modelled:
             metrics = {m for _c, m, _l in face_items} | {M_MANA}
             first = next((l for _c, _m, l in face_items), "Zauberhälfte")
             items += [(C_PREPARED, m, first) for m in sorted(metrics, key=METRIC_ORDER.index)]

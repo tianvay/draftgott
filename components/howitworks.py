@@ -13,7 +13,7 @@ from components.stats import TRAFFIC
 
 _D = parse_args(["deck.txt"])  # Standardwerte der Kommandozeile
 # Abschnitte, die nur erscheinen, wenn der Bericht sie auch hat (z. B. Deck-Vergleich nur bei mehreren Decks)
-CONDITIONAL = {"vergleich", "great", "mulligan", "jace", "farben", "landcycling", "ziehen", "surveil"}
+CONDITIONAL = {"vergleich", "great", "mulligan", "jace", "farben", "landcycling", "ziehen", "surveil", "prepared"}
 
 
 def _ul(items):
@@ -53,7 +53,8 @@ def _sections():
             "Kartenfluss: Karten, die ziehen (auch Cycling), suchen (auch Landcycling), Surveil, Scry, Explore oder Mill "
             "haben; Mill getrennt nach „sich selbst“ und „Gegner möglich“ („target player“ zählt bei beiden). Es "
             "erscheinen nur Arten, die im Deck vorkommen. Auslöser wie „whenever you draw“ und Ziehen des Gegners zählen "
-            "nicht, Empower Jace hat eine eigene Zeile."))
+            "nicht, Empower Jace hat eine eigene Zeile. „Prepared (Karten)“: Karten, deren Zauberhälfte als Kopie "
+            "gewirkt werden kann (nur, wenn solche Karten im Deck sind)."))
          + _panel("Mana-Kurve nach Farben", _ul([
              "Gezählt werden Nichtland-Karten nach Manawert (aufgerundet ab ,5; 7 und mehr zusammen).",
              "<b>Mehrfarbige gesondert:</b> Jede Karte steht genau einmal im Diagramm, die Balkenhöhe ist die "
@@ -85,8 +86,9 @@ def _sections():
             "Die Erkennung arbeitet über den Kartentext von Scryfall und sortiert nur grob, weil Magic dasselbe oft "
             "unterschiedlich formuliert. Status jeder gelisteten Karte: „To Do: Noch nicht implementiert“.",
             "Nicht gemeldet wird, was die Simulation abbildet: aufgedrucktes Haste und Defender, Landcycling, die "
-            "Bedingungen getappter Länder, Empower Jace mit festem Wert, Draw-Zauber und Surveil mit fester Zahl "
-            "und Kampf-Schlüsselwörter ohne Gegner.",
+            "Bedingungen getappter Länder, Empower Jace mit festem Wert, Draw-Zauber und Surveil mit fester Zahl, "
+            "Prepared-Zauberhälften als Kopie (deren übrige Effekte stehen mit ihrer eigenen Kategorie da) und "
+            "Kampf-Schlüsselwörter ohne Gegner.",
             "Kategorien: Tokens erzeugen, Direkter Schaden, Zählmarken / Stärkebonus, Haste verleihen, Mana außer "
             "Ländern, Kartenfluss, Kostensenkung / Convoke, Zweitverwertung (Friedhof), Timing (Flash), Zusatzkosten, "
             "Prepared-Zauberhälfte, Planeswalker-Fähigkeit, Defender-Ausnahme, Interaktion mit dem Gegner, "
@@ -187,6 +189,19 @@ def _sections():
             "Entscheidung wie bei Jace: Ein Land bleibt oben, solange für die teuerste Karte auf der Hand Länder fehlen "
             "(Länder auf dem Feld und auf der Hand zählen); sonst kommt es in den Friedhof. Zauber bleiben immer oben.",
             "Surveils durch Jace stehen im Abschnitt Jace & Planeswalker und zählen hier nicht mit."]))),
+        ("prepared", "Prepared", _panel("Regeln", _ul([
+            "Karten mit Zauberhälfte (Layout „prepare“): Die Kreatur wird normal gewirkt. Kommt sie prepared ins Spiel "
+            "(„enters prepared“), darf eine Kopie ihres Zaubers gewirkt werden; danach ist sie nicht mehr prepared. Steht "
+            "„at the beginning of your upkeep … becomes prepared“ auf der Karte, wird sie in jedem eigenen Upkeep "
+            "wieder prepared.",
+            "Die Kopie kostet die Manakosten der Zauberhälfte, verbraucht keine Handkarte und zählt als gespielter "
+            "Zauber und als ausgegebenes Mana. Sie wird mit den übrigen Zaubern nach denselben Auswahlregeln gewählt; "
+            "bei Gleichstand kommt zuerst die Handkarte (die Kopie bleibt verfügbar).",
+            "Auch in der Runde, in der die Kreatur ins Spiel kommt, wird die Kopie mit dem übrigen Mana gewirkt.",
+            "Effekte der Kopie: Draw N, Surveil N und Empower Jace wie bei anderen Zaubern. Token, Schaden an den "
+            "Gegner, Marken, Mill und Loot sind nicht modelliert und stehen in der Modell-Abdeckung.",
+            "Prepared-Karten mit anderem Wortlaut werden nicht als Kopie gewirkt und stehen in der Modell-Abdeckung als "
+            "„Prepared-Zauberhälfte“."]))),
         ("tempo", "Tempo", _panel("Bedeutung", _p(
             "Ø und Median nur über Spiele, in denen das Ereignis bis zum Ende der Beobachtung eintritt. Top Card: die "
             "Karte(n) mit dem höchsten Manawert; gezählt wird die erste Runde, in der sie spielbar wäre."))),
@@ -204,7 +219,8 @@ def _sections():
             "Auras werden nur mit eigener Kreatur gespielt (außer mit <code>--auras-ohne-kreatur</code>).",
             "Kreaturen: aufgedruckte Power/Toughness, Einsatzverzögerung außer Haste, Defender greift nie an, keine "
             "Blocker oder Removal.",
-            "Landcycling, Empower Jace, Draw-Zauber und Surveil durch Karten: Regeln in den jeweiligen Abschnitten.",
+            "Landcycling, Empower Jace, Draw-Zauber, Surveil durch Karten und Prepared: Regeln in den jeweiligen "
+            "Abschnitten.",
             "Was die Simulation nicht abbildet, zeigt der Abschnitt Modell-Abdeckung je Deck."]))),
         ("drafthelper", "Drafthelper", _drafthelper_help()),
     ]

@@ -155,8 +155,8 @@ class SpecialCardTests(unittest.TestCase):
              "oracle_text": "Create a 2/2 colorless Wizard Soldier creature token named Cadet. Surveil 1."}]
         card = sc("Foreseer // Peer Review", f"Creature {DASH} Wizard // Sorcery", layout="prepare", faces=faces,
                   keywords=["Prepared"])
-        self.assertEqual(cats(card), {"Prepared-Zauberhälfte"})
-        self.assertEqual(metrics_of(analyze_card(card)), {M_MANA, M_LETHAL, M_FLOW})
+        self.assertEqual(cats(card), {"Tokens erzeugen"})  # Kopie modelliert (Mana, Surveil 1), Token nicht
+        self.assertEqual(metrics_of(analyze_card(card)), {M_LETHAL})
 
     def test_planeswalker_ability_without_other_category(self):
         card = sc("Walker", f"Legendary Planeswalker {DASH} Ajani", "0: Put a loyalty counter on target planeswalker.",

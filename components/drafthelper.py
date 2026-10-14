@@ -77,7 +77,8 @@ def load_pool(path, refresh=False):
                 b["set"], b["number"] = r["set"], r["number"]
             continue
         type_line = sc.get("type_line") or ""
-        empower = card_info(sc)[0].empower if sc else ()
+        model = card_info(sc)[0] if sc else None
+        empower = model.empower if model else ()
         faces = sc.get("card_faces") or []
         colors = sc.get("colors") or (faces[0].get("colors") if faces else None) or []
         cards.append({
@@ -90,6 +91,7 @@ def load_pool(path, refresh=False):
             "kinds": type_kinds(type_line), "empower": bool(empower), "flow": flow_kinds(sc),
             # Loyalty, die beim Wirken bzw. Betreten sofort dazukommt (ohne X und ohne wiederkehrende Ausloeser)
             "empower_points": empower_points(empower),
+            "prepared": bool(model and model.prepared),  # Zauberhaelfte wird als Kopie modelliert
         })
     order = {"deck": 0, "sideboard": 1}  # je Bereich: Nichtlaender nach Manawert, Laender zuletzt
     cards.sort(key=lambda c: (order.get(c["section"], 2), c["land"], c["mv"], c["name"]))
@@ -848,13 +850,14 @@ function typeCounts(copies, basics){
   const rows=["creature","instant","sorcery","land","nonbasic_land","artifact","enchantment","planeswalker"];
   const out={splash:{},nosplash:{}};
   for(const g of ["splash","nosplash"]){
-    const o=out[g];rows.forEach(r=>{o[r]=0});o.cards=0;o.empower=0;o.points=0;o.flow=0;
+    const o=out[g];rows.forEach(r=>{o[r]=0});o.cards=0;o.empower=0;o.points=0;o.flow=0;o.prepared=0;
     FLOW_KINDS.forEach(k=>{o["flow_"+k]=0});
     for(const c of copies){
       if(c.mark!=="core"&&c.mark!==g)continue;
       o.cards++;
       c.kinds.forEach(k=>{if(k in o)o[k]++});
       if(c.empower){o.empower++;o.points+=c.points}
+      if(c.prepared)o.prepared++;
       const fl=c.flow||[];
       if(fl.length){o.flow++;fl.forEach(k=>{if(("flow_"+k) in o)o["flow_"+k]++})}
     }
@@ -865,7 +868,7 @@ function typeCounts(copies, basics){
 // Kacheln der Seite -> Eingabe von typeCounts (alle gezaehlten Felder muessen hier weitergegeben werden)
 function copiesOf(tiles){
   return tiles.map(x=>({kinds:x.card.kinds||[],mark:x.mark,empower:!!x.card.empower,
-    points:x.card.empower_points||0,flow:x.card.flow||[]}));
+    points:x.card.empower_points||0,flow:x.card.flow||[],...(x.card.prepared?{prepared:true}:{})}));
 }
 // END typeCounts
 const FLOW_LABELS={draw:"Ziehen (Draw)",search:"Suchen (Search)",surveil:"Surveil",scry:"Scry",explore:"Explore",
@@ -877,6 +880,7 @@ const TYPE_ROWS=[["cards","Karten gesamt",""],["creature","Kreaturen",""],["inst
 // Zeilen der Typ-Uebersicht; Kartenfluss-Arten erscheinen nur, wenn eine Karte im Pool sie hat
 function typeRows(){
   const rows=TYPE_ROWS.slice();
+  if(pool.some(c=>c.prepared))rows.push(["prepared","Prepared (Karten)","sep"]);
   const present=FLOW_KINDS.filter(k=>pool.some(c=>(c.flow||[]).includes(k)));
   if(present.length){
     rows.push(["flow","Kartenfluss (Karten)","sep"]);
@@ -905,7 +909,8 @@ function typeOverview(){
     "Verzauberungen ohne Kreaturen und Länder; eine Karte kann in mehreren Zeilen stehen. Fett: Unterschied zwischen "+
     "den Varianten. Σ Loyalty: Zahlenwerte von Empower Jace beim Zauber oder Betreten (ohne X, ohne Auslöser). "+
     "Kartenfluss: Karten, die ziehen, suchen, surveilen, scrien oder explorieren; es erscheinen nur Arten, die im Pool "+
-    "vorkommen. Empower Jace zählt nicht dazu (eigene Zeile)."));
+    "vorkommen. Empower Jace zählt nicht dazu (eigene Zeile). Prepared: Karten, deren Zauberhälfte als Kopie "+
+    "gewirkt werden kann (nur, wenn der Pool solche Karten hat)."));
 }
 // Sortierung nur der Anzeige (die Reihenfolge der Zuordnungen bleibt unberuehrt)
 const COLOR_ORDER=["W","U","B","R","G","M","C","L"];

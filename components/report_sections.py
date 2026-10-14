@@ -66,6 +66,9 @@ def render_logic_section(has_jace=False):
         "Landdrop noch frei ist, und mit dem übrigen Mana wird weiter gezaubert.",
         "<b>Surveil durch Karten:</b> Nach dem Zaubern surveilen das gelegte Land und die gewirkten Karten (Land oben "
         "lassen, wenn Länder fehlen, sonst in den Friedhof).",
+        "<b>Prepared:</b> Kopien der Zauberhälften prepared Kreaturen stehen wie Handkarten zur Auswahl (bei "
+        "Gleichstand zuerst die Handkarte); eine Kreatur, die gerade prepared ins Spiel kam, erlaubt die Kopie noch in "
+        "derselben Runde.",
         "<b>Landcycling (nur wenn es sich lohnt):</b> Eine nicht spielbare Karte wird mit übrigem Mana gecycelt, "
         "wenn das diese oder nächste Runde etwas verbessert.",
         "<b>Angriff:</b> Kreaturen vom Vorzug greifen an, neue nur mit Haste, Kreaturen mit Defender nie.",

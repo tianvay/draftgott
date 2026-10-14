@@ -97,7 +97,7 @@ def type_counts(ctx):
     """Zaehlt Kopien je Typ, Empower Jace und Kartenfluss eines Decks (gleiche Regeln wie typeCounts der Seite)."""
     info = ctx.get("info") or {}
     t = {"cards": 0, "creature": 0, "instant": 0, "sorcery": 0, "artifact": 0, "enchantment": 0, "planeswalker": 0,
-         "land": 0, "nonbasic_land": 0, "empower": 0, "points": 0, "flow": 0}
+         "land": 0, "nonbasic_land": 0, "empower": 0, "points": 0, "flow": 0, "prepared": 0}
     t.update({f"flow_{k}": 0 for k in FLOW_ORDER})
     for name, qty, card, _shown in ctx["rows"]:
         i = info.get(name) or {}
@@ -105,6 +105,8 @@ def type_counts(ctx):
         for k in i.get("kinds", []):
             if k in t:
                 t[k] += qty
+        if i.get("prepared"):
+            t["prepared"] += qty
         if i.get("empower"):
             t["empower"] += qty
             t["points"] += qty * i.get("points", 0)
@@ -137,6 +139,8 @@ def _rows(decks):
     """Zeilen (Label, Klasse, [Werte je Deck]); Kartenfluss-Arten nur, wenn eines der Decks sie hat."""
     counts = [type_counts(d) for d in decks]
     spec = list(TYPE_ROWS)
+    if any(c["prepared"] for c in counts):
+        spec.append(("prepared", "Prepared (Karten)", ""))
     present = [k for k in FLOW_ORDER if any(c[f"flow_{k}"] for c in counts)]
     if present:
         spec.append(("flow", "Kartenfluss (Karten)", ""))

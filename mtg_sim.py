@@ -45,7 +45,8 @@ def build_deck(entry, data, args):
         coverage[name] = analyze_card(sc)
         front_type = ((sc.get("card_faces") or [sc])[0].get("type_line") or sc.get("type_line") or "")
         info[name] = {"kinds": type_kinds(front_type), "flow": flow_kinds(sc), "colors": card_colors(sc),
-                      "empower": bool(card.empower), "points": empower_points(card.empower)}
+                      "empower": bool(card.empower), "points": empower_points(card.empower),
+                      "prepared": bool(card.prepared)}
         cards += [card] * qty
     if len(cards) < 7 + args.turns:
         sys.exit(f"Zu wenige Karten im Deck {entry['name']}.")
@@ -64,7 +65,8 @@ def build_deck(entry, data, args):
         top_names=sorted({n for n, _, c, _ in rows if not c.is_land and c.alts and c.mv == top_mv}),
         cyc_names=sorted({n for n, _, c, _ in rows if c.cycle_alts}),
         draw_names=sorted({n for n, _, c, _ in rows if c.draws}),
-        surveil_names=sorted({n for n, _, c, _ in rows if c.surveil}))
+        surveil_names=sorted({n for n, _, c, _ in rows if c.surveil}),
+        prepared_names=sorted({n for n, _, c, _ in rows if c.prepared}))
 
 
 def _stderr(msg):

@@ -490,6 +490,21 @@ def render_details(ctx, suffix=""):
         add("surveil", "Surveil durch Karten", "Karten im Deck: " + esc(", ".join(ctx["surveil_names"])),
             f'<div class="grid">{"".join(panels)}</div>')
 
+    # ---------------- Prepared
+    if ctx.get("prepared_names"):
+        panels = []
+        for l in labels:
+            p_ = res[l]["prepared"]
+            panels.append(
+                f'<div class="panel"><b>{esc(l)}</b><div class="grid g4" style="margin:10px 0">'
+                f'<div class="kpi"><div class="l">Spiele mit Kopie</div><div class="v">{h_pct(p_["games"])}</div></div>'
+                f'<div class="kpi"><div class="l">Ø Kopien</div><div class="v">{p_["copies"]:.2f}</div>'
+                f'<div class="s">pro Spiel bis Runde {H}</div></div>'
+                f'<div class="kpi"><div class="l">Ø Mana für Kopien</div><div class="v">{p_["mana"]:.2f}</div>'
+                f'<div class="s">pro Spiel</div></div></div></div>')
+        add("prepared", "Prepared", "Karten im Deck: " + esc(", ".join(ctx["prepared_names"])),
+            f'<div class="grid">{"".join(panels)}</div>')
+
     # ---------------- Tempo
     rows_t = []
     for l in labels:
