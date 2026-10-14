@@ -12,7 +12,7 @@ from components.mana import required_colors
 from components.mulligan import MULL_COLORS, MULL_LANDS_HIGH, MULL_LANDS_LOW
 from components.report_sections import render_compare_section, render_jace_section, render_logic_section
 from components.coverage import METRIC_ORDER, STATUS_TEXT, metrics_of, summarize
-from components.report_cards import (all_colors_row, render_color_availability, render_color_curves,
+from components.report_cards import (all_colors_row, avail_level, render_color_availability, render_color_curves,
                                      render_type_table)
 from components.simulation import card_label
 from components.stats import TRAFFIC, lethal_level, timing_stats, traffic_level
@@ -350,6 +350,39 @@ def render_details(ctx, suffix=""):
     if avail:
         add("farben", "Farbverfügbarkeit",
             "Wie oft liegen bis Runde 3 alle Farben und bis Runde 4 zwei Quellen für Doppel-Symbole (z. B. RR)?", avail)
+
+    # ---------------- Splash-Karten (nur Splash-Variante aus dem Drafthelper)
+    if ctx.get("splash_track"):
+        info = {n: (c, sh) for n, _, c, sh in rows}
+        trs = []
+        for name, model in ctx["splash_track"]:
+            card, shown = info[name]
+            for i, l in enumerate(labels):
+                s_ = res[l].get("splash_cards", {}).get(model)
+                if not s_:
+                    continue
+                drawn = s_["drawn"]
+                first = (f'<td class="l" rowspan="{len(labels)}"><b>{esc(name)}</b> '
+                         f'{html_cost(shown.split("   [")[0])}</td>') if i == 0 else ""
+                cells = ([first] if first else []) + [h_mode(l), f'<td>{h_pct(drawn / s_["games"])}</td>']
+                if drawn:
+                    ok = s_["castable"] / drawn
+                    cells += [h_level_td(avail_level(round(ok * 100)), f"{ok:.0%}"),
+                              f'<td>{s_["on_time"] / drawn:.0%}</td>',
+                              f'<td>{s_["wait_sum"] / s_["castable"]:.1f}</td>' if s_["castable"]
+                              else '<td class="muted">–</td>',
+                              f'<td>{s_["cast"] / drawn:.0%}</td>']
+                else:
+                    cells += ['<td class="muted">–</td>'] * 4
+                trs.append(cells)
+        body = ('<div class="panel">'
+                + h_table(["Karte", "", "Gezogen", "Spielbar", "Pünktlich", "Ø Wartezeit", "Gewirkt"], trs,
+                          left=(0, 1))
+                + '<div class="note">Gezogen: Anteil aller Spiele. Die übrigen Spalten beziehen sich auf die Spiele, in '
+                  'denen die Karte auf die Hand kam: Spielbar, wenn gezogen · Pünktlich (bis Runde = Manawert) · '
+                  'Ø Wartezeit in Runden bis erstmals bezahlbar · Gewirkt, wenn gezogen.</div></div>')
+        add("splashkarten", "Splash-Karten",
+            "Wie oft werden die Karten der Splash-Gruppe spielbar, wenn man sie zieht?", body)
 
     # ---------------- Curve-Auslastung
     panels = []

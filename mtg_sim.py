@@ -78,6 +78,13 @@ def simulate_deck(dd, args, idx, horizon, progress=_stderr):
     if args.seed is not None:
         random.seed(args.seed + 7919 * idx)
     progress(f"Simuliere {dd['name']}: {args.sims} Spiele pro Modus ...")
+    # Splash-Variante aus dem Drafthelper: Spielbarkeit der Nichtland-Karten der Splash-Gruppe messen
+    # (Name im Deck, Name im Kartenmodell): zweiteilige Karten heissen im Deck oft nur nach der Vorderseite
+    pairs = []
+    if dd.get("role") == "splash" and dd.get("parts"):
+        pairs = [(n, c.name) for n, _, c, _ in dd["rows"] if not c.is_land and n in dd["parts"][-1][1]]
+    dd["splash_track"] = pairs
+    track = {model for _, model in pairs}
     results = {}
     for label, on_draw in (("On the Play", False), ("On the Draw", True)):
         try:
@@ -88,7 +95,8 @@ def simulate_deck(dd, args, idx, horizon, progress=_stderr):
                                       args.landcycling_letzte_karte, not args.ohne_mulligan, args.min_handkarten,
                                       not args.ohne_jace,
                                       color_check={"colors": sorted(dd["deck_colors"], key="WUBRG".index),
-                                                   "double": sorted(dd["double_pips"], key="WUBRG".index)})
+                                                   "double": sorted(dd["double_pips"], key="WUBRG".index)},
+                                      track=track)
         except RuntimeError as e:
             sys.exit(f"{dd['name']}: {e}")
     dd["results"] = results

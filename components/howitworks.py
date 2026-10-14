@@ -13,7 +13,8 @@ from components.stats import TRAFFIC
 
 _D = parse_args(["deck.txt"])  # Standardwerte der Kommandozeile
 # Abschnitte, die nur erscheinen, wenn der Bericht sie auch hat (z. B. Deck-Vergleich nur bei mehreren Decks)
-CONDITIONAL = {"vergleich", "great", "mulligan", "jace", "farben", "landcycling", "ziehen", "surveil", "prepared"}
+CONDITIONAL = {"vergleich", "great", "mulligan", "jace", "farben", "landcycling", "ziehen", "surveil", "prepared",
+               "splashkarten"}
 
 
 def _ul(items):
@@ -144,6 +145,20 @@ def _sections():
             "Runde 4: zwei Quellen, aber nur für Farben, die eine Karte doppelt verlangt (z. B. RR); Hybrid zählt nicht.",
             f"Ampel: grün ab {AVAIL_GREEN} %, gelb ab {AVAIL_YELLOW} %, sonst rot. Manakreaturen und andere Manaquellen "
             "sind nicht modelliert."]))),
+        ("splashkarten", "Splash-Karten", _panel("Bedeutung", _ul([
+            "Nur im Bericht des Drafthelpers, für die Splash-Variante: alle Nichtland-Karten der Gruppe Splash.",
+            "<b>Gezogen:</b> Anteil der Spiele, in denen die Karte bis zum Ende der Beobachtung auf die Hand kommt "
+            "(Starthand eingerechnet).",
+            "<b>Spielbar, wenn gezogen:</b> Anteil dieser Spiele, in denen ihre Kosten irgendwann nach dem Landdrop mit "
+            "den untappten Ländern bezahlbar sind (Farben und Manamenge; andere Zauber derselben Runde zählen nicht "
+            f"dagegen). Ampel wie bei der Farbverfügbarkeit: grün ab {AVAIL_GREEN} %, gelb ab {AVAIL_YELLOW} %.",
+            "<b>Pünktlich:</b> bezahlbar spätestens in der Runde = Manawert, oder sofort, wenn sie erst später auf die "
+            "Hand kommt. Zum Vergleich mit „Ø pünktlich“ in der Farbverteilung, die nur rechnet und Mulligan, getappte "
+            "Länder, Landcycling, Draw und Surveil nicht kennt.",
+            "<b>Ø Wartezeit:</b> Runden zwischen „auf der Hand“ und „erstmals bezahlbar“ (0 = sofort).",
+            "<b>Gewirkt, wenn gezogen:</b> Anteil, in dem die Simulation die Karte tatsächlich gespielt hat (sie kann "
+            "auch zugunsten anderer Karten warten).",
+            "Die Messung verändert den Spielablauf nicht."]))),
         ("curve", "Curve-Auslastung", _panel("Bedeutung", _p(
             "Ausgegebenes geteilt durch verfügbares Mana je Runde (bis <code>--curve-runden</code>, Standard "
             f"{_D.curve_runden}). Nur Mana aus Ländern, Manakreaturen und Artefakte sind nicht modelliert. Ein "

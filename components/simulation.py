@@ -332,8 +332,10 @@ def without_one(items, item):
 def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multicolor, top_mv,
              flood_lands=11, dmg_target=20, curve_turns=6,
              cycle_on=True, cycle_turns=3, cycle_cap=6, cycle_last=False, mulligan=True, min_hand=5,
-             jace_on=True, color_check=None):
-    """color_check: {"colors": [...], "double": [...]} misst, wie oft bis Runde 3 jede Deckfarbe mindestens eine
+             jace_on=True, color_check=None, track=None):
+    """track: Kartennamen, deren Spielbarkeit gemessen wird (Splash-Karten): erstmals auf der Hand, erstmals bezahlbar
+    (nach dem Landdrop), gewirkt. Die Messung veraendert den Spielablauf nicht.
+    color_check: {"colors": [...], "double": [...]} misst, wie oft bis Runde 3 jede Deckfarbe mindestens eine
     Quelle hat und bis Runde 4 die Farben mit Doppel-Symbolen mindestens zwei (Laender auf dem Feld, auch getappt).
     Die Messung veraendert den Spielablauf nicht."""
     cast_in_turn = {t: 0 for t in range(1, max_turn + 1)}
@@ -363,6 +365,9 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
     has_draws = any(c.draws for c in cards)
     has_surveil = any(c.surveil for c in cards)
     has_prepared = any(c.prepared for c in cards)
+    track = set(track or ())
+    track_mv = {c.name: c.mv for c in cards if c.name in track}
+    sc_stats = {n: {"games": 0, "drawn": 0, "castable": 0, "on_time": 0, "cast": 0, "wait_sum": 0} for n in track}
     pr = {"copies": 0, "games": 0, "mana": 0}
     sv = {"events": 0, "games": 0, "lands": 0}
     dr = {"cards": 0, "games": 0, "used": 0}
@@ -399,6 +404,7 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
         g_avail = g_spent = 0
         g_drawn = g_surveils = g_copies = 0
         prep = []  # Prepared-Kreaturen auf dem Feld: [Karte, prepared?]
+        t_hand, t_ok, t_cast = {}, {}, set()  # Splash-Karten: erste Runde auf der Hand / bezahlbar, gewirkt
 
         for turn in range(1, horizon + 1):
             drew = None
@@ -461,6 +467,13 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                         avail_total += 1
             key = land_key(pool)
             full_key = land_key([c.land_colors for c in battlefield])
+
+            if track:  # Splash-Karten: auf der Hand und mit den Laendern dieser Runde bezahlbar?
+                for c in hand:
+                    if c.name in track:
+                        t_hand.setdefault(c.name, turn)
+                        if c.name not in t_ok and can_cast_all((c.alts,), key):
+                            t_ok[c.name] = turn
 
             # Top Card gezogen und spielbar?
             if not top_done and top_mv is not None:
@@ -562,6 +575,11 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                     g_copies += 1
                     pr["copies"] += 1
                     pr["mana"] += c.mv
+            for c in chosen:
+                if c.name in track and not c.is_copy:
+                    t_hand.setdefault(c.name, turn)
+                    t_ok.setdefault(c.name, turn)
+                    t_cast.add(c.name)
             if has_surveil:  # nach dem Zaubern: erst das Land, dann die Zauber in der Reihenfolge des Wirkens
                 amounts = ([land_played.surveil] if land_played is not None else []) + [c.surveil for c in chosen]
                 if any(amounts):
@@ -680,6 +698,15 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
         dr["games"] += g_drawn > 0
         sv["games"] += g_surveils > 0
         pr["games"] += g_copies > 0
+        for n, st in sc_stats.items():
+            st["games"] += 1
+            if n in t_hand:
+                st["drawn"] += 1
+                st["cast"] += n in t_cast
+                if n in t_ok:
+                    st["castable"] += 1
+                    st["wait_sum"] += t_ok[n] - t_hand[n]
+                    st["on_time"] += t_ok[n] <= max(track_mv[n], t_hand[n])
         samples["creatures"].append(snap[0])
         samples["power"].append(snap[1])
         samples["toughness"].append(snap[2])
@@ -719,6 +746,7 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
         "best_lethal": best_lethal,
         "mulligan": mull,
         "jace": jc,
+        "splash_cards": sc_stats,
         "prepared": {"on": has_prepared, "copies": pr["copies"] / sims, "games": pr["games"] / sims,
                      "mana": pr["mana"] / sims},
         "card_surveil": {"on": has_surveil, "events": sv["events"] / sims, "games": sv["games"] / sims,
