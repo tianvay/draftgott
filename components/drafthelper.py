@@ -26,6 +26,7 @@ from components.cardkinds import (FLOW_ORDER, empower_points, flow_kinds,  # noq
                                   type_kinds)
 from components.deckfile import parse_pool
 from components.howitworks import render_help_page
+from components.landadvice import recommend
 from components.scryfall import card_image_url, fetch_cards_cached, fetch_printing_images
 from components.suggest import WUBRG, propose, suggest
 
@@ -84,6 +85,7 @@ def load_pool(path, refresh=False):
             "cost": sc.get("mana_cost") or (faces[0].get("mana_cost") if faces else "") or "",
             "large": image.replace("/normal/", "/large/") if image else None,
             "land": "Land" in type_line.split("—")[0], "mv": sc.get("cmc") or 0, "found": bool(sc),
+            "produces": sc.get("produced_mana") or (faces[0].get("produced_mana") if faces else None) or [],
             "kinds": type_kinds(type_line), "empower": bool(empower), "flow": flow_kinds(sc),
             # Loyalty, die beim Wirken bzw. Betreten sofort dazukommt (ohne X und ohne wiederkehrende Ausloeser)
             "empower_points": empower_points(empower),
@@ -246,7 +248,7 @@ def make_handler(app):
                 self._json({"ok": True})
                 threading.Thread(target=app["server"].shutdown, daemon=True).start()
                 return
-            if path not in ("/api/simulate", "/api/suggest", "/api/propose"):
+            if path not in ("/api/simulate", "/api/suggest", "/api/propose", "/api/lands"):
                 self._send("Nicht gefunden", "text/plain; charset=utf-8", 404)
                 return
             pool = app["pool"]
@@ -261,6 +263,10 @@ def make_handler(app):
                         raise ValueError("Unbekannte Sortierung")
                 elif path == "/api/propose":
                     colors, target, sort = parse_proposal_spec(body)
+                elif path == "/api/lands":
+                    target = int(body.get("target") or 40)
+                    if not 10 <= target <= 200:
+                        raise ValueError("Die Zielgröße muss zwischen 10 und 200 Karten liegen")
                 else:
                     sims = int(body.get("sims") or app["args"].sims)
                     if not 100 <= sims <= 100000:
@@ -278,6 +284,9 @@ def make_handler(app):
             if path == "/api/suggest":
                 result = suggest(pool, marks, basics, cats, target, sort)
                 self._json({"ok": True, "marks": result["marks"], "summary": result["summary"]})
+                return
+            if path == "/api/lands":
+                self._json({"ok": True, **recommend(pool, marks, target)})
                 return
             if path == "/api/propose":
                 result = propose(pool, marks, cats, colors, target, sort)
@@ -469,6 +478,7 @@ h2 small{color:var(--muted);font-weight:400}
 .ptag{margin-left:6px;font-size:11px;font-weight:700;color:#fff;background:var(--splash);border-radius:999px;padding:0 7px}
 .nhint{color:#8a5a00;font-weight:600}
 .nmuted{color:var(--muted)}
+.nsub{padding-left:18px;font-size:13.5px}
 .notice{display:none;background:#eef4ff;border:1px solid #b7cdf5;border-radius:10px;padding:10px 14px;margin:0 0 12px;
   font-size:13.5px;line-height:1.55}
 .notice .nh{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:4px}
@@ -547,6 +557,7 @@ h2 small{color:var(--muted);font-weight:400}
         <label title="Simuliert den Deckvorschlag als weitere Variante neben Splash und NoSplash"><input type="checkbox"
           id="simprop"> mitsimulieren</label>
         <button class="btn" id="suggest" title="Setzt die Zuordnung Core/Splash/NoSplash nach den Kategorien und füllt mit Filler auf">Zuordnung nach Kategorien setzen</button>
+        <button class="btn" id="lands" title="Setzt Standardländer je Gruppe und ordnet passende Nicht-Standardländer zu (nach der aktuellen Zuordnung)">Länder empfehlen</button>
         <button class="btn" id="undo" style="display:none">↶ Rückgängig</button>
         <span class="hint">Deckvorschlag: eigenes Deck aus den Kategorien in den gewählten Farben, mit Ländern auf die
           Faustregel aufgefüllt; die Zuordnung bleibt unverändert. MustPlay und Filler nur in den gewählten Farben,
@@ -556,6 +567,7 @@ h2 small{color:var(--muted);font-weight:400}
       <div class="notice" id="notice"></div>
       <h2 style="margin-top:0">Standardländer <small>(Menge je Gruppe – auch Länder, die nicht im Pool sind, lassen sich hinzufügen)</small></h2>
       <div class="basics" id="basics"></div>
+      <div id="nonbasics"></div>
       <div id="sections"></div>
     </div>
   </div>
@@ -614,24 +626,24 @@ function buildBasics(){
     d.appendChild(r);box.appendChild(d)}
 }
 
+// Nicht-Standardlaender stehen in einem eigenen Bereich direkt unter den Standardlaendern. Die Reihenfolge in
+// state bleibt die des Pools (Deck, Sideboard), weil der gespeicherte Stand und die Anfragen sie benutzen.
 function build(){
-  state=[];const box=$("sections");box.textContent="";
-  for(const [sec,title] of [["deck","Deck"],["sideboard","Sideboard"]]){
-    const cards=pool.filter(c=>c.section===sec);if(!cards.length)continue;
-    const h=el("h2",null,title+" ");const small=el("small",null,"");h.appendChild(small);box.appendChild(h);
-    const grid=el("div","grid");box.appendChild(grid);let n=0;
-    for(const c of cards){
-      for(let k=1;k<=c.qty;k++){
-        n++;const t={card:c,copy:k,mark:sec==="deck"?"core":"off"};state.push(t);
-      }
-    }
-    small.textContent="("+n+" Karten)";
-    grid._cards=cards;
-  }
+  state=[];const box=$("sections");box.textContent="";const nb=$("nonbasics");nb.textContent="";
+  const grids={};
+  const section=(parent,key,title,cards,note)=>{
+    if(!cards.length)return;
+    const h=el("h2",null,title+" ");
+    const n=cards.reduce((m,c)=>m+c.qty,0);
+    h.appendChild(el("small",null,"("+n+(n===1?" Karte":" Karten")+(note||"")+")"));
+    parent.appendChild(h);grids[key]=el("div","grid");parent.appendChild(grids[key]);
+  };
+  section(nb,"land","Nicht-Standardländer",pool.filter(c=>c.land),", aus Deck und Sideboard der Datei");
+  section(box,"deck","Deck",pool.filter(c=>c.section==="deck"&&!c.land));
+  section(box,"sideboard","Sideboard",pool.filter(c=>c.section==="sideboard"&&!c.land));
+  for(const c of pool)for(let k=1;k<=c.qty;k++)state.push({card:c,copy:k,mark:c.section==="deck"?"core":"off"});
   restore();buildBasics();
-  // Tiles in Reihenfolge der Sektionen erzeugen
-  let idx=0;const grids=[...box.querySelectorAll(".grid")];
-  grids.forEach(grid=>{for(const c of grid._cards){for(let k=1;k<=c.qty;k++){state[idx].grid=grid;grid.appendChild(tile(state[idx]));idx++}}});
+  for(const t of state){t.grid=grids[t.card.land?"land":t.card.section];t.grid.appendChild(tile(t))}
   refresh();
 }
 function tile(t){
@@ -999,7 +1011,8 @@ function showNotice(title,lines,warnings,withUndo){
   const head=el("div","nh");head.appendChild(el("b",null,title));
   const x=el("button","btn","Schließen");x.onclick=()=>{box.style.display="none"};head.appendChild(x);
   box.appendChild(head);
-  lines.forEach(t=>noticeLine(box,t));warnings.forEach(t=>noticeLine(box,t,"nw"));
+  lines.forEach(t=>t.startsWith("   ")?noticeLine(box,t.trim(),"nsub"):noticeLine(box,t));
+  warnings.forEach(t=>noticeLine(box,t,"nw"));
   box.style.display="block";
 }
 function updateUndo(){$("undo").style.display=undoStack.length?"":"none"}
@@ -1022,9 +1035,45 @@ async function suggestDeck(){
 }
 function undoSuggest(){
   const snap=undoStack.pop();if(!snap)return;
-  snap.forEach((m,i)=>{if(state[i])state[i].mark=m});
+  const ms=Array.isArray(snap)?snap:snap.marks;  // Land-Empfehlung merkt sich auch die Standardlaender
+  ms.forEach((m,i)=>{if(state[i])state[i].mark=m});
+  if(!Array.isArray(snap)){snap.basics.forEach((v,i)=>GROUPS.forEach((g,k)=>{basics[i][g]=v[k]}));buildBasics()}
   state.forEach(paint);summary();save();updateUndo();
-  showNotice("Rückgängig gemacht",["Die Zuordnung vor dem letzten Vorschlag ist wiederhergestellt."],[]);
+  showNotice("Rückgängig gemacht",["Der Stand vor dem letzten Vorschlag ist wiederhergestellt."],[]);
+}
+// Land-Empfehlung: Regeln auf dem Server (components/landadvice.py); hier Anwenden, Anzeige und Rueckgaengig
+const BASIC_OF={W:"Plains",U:"Island",B:"Swamp",R:"Mountain",G:"Forest"};
+const pct=p=>Math.round(p*100)+" %";
+const ampel=p=>p>=0.9?"grün":p>=0.8?"gelb":"rot";
+async function recommendLands(){
+  showErr("");
+  const before=marksPerCard(),bBefore=basics.map(b=>GROUPS.map(g=>b[g]));
+  const r=await api("/api/lands",{marks:before,basics:basicsBody(),cats,target:+$("target").value||40});
+  if(!r.ok){showErr(r.error||"Fehler bei der Land-Empfehlung");return}
+  undoStack.push({marks:before.flat(),basics:bBefore});
+  let i=0;r.marks.forEach(ms=>ms.forEach(m=>{state[i++].mark=m}));
+  basics.forEach(b=>{const v=r.basics[b.name];if(v)GROUPS.forEach(g=>{b[g]=v[g]})});
+  buildBasics();state.forEach(paint);summary();save();updateUndo();
+  const lines=[];
+  for(const v of r.variants){
+    const bs=Object.entries(v.basics).map(([c,k])=>k+" "+BASIC_OF[c]).join(", ")||"keine Standardländer";
+    lines.push(v.label+" ("+(v.colors.join("")||"farblos")+"): "+v.lands+" Länder = "+
+      (v.nonbasic?v.nonbasic+" Nicht-Standard + ":"")+bs+" · "+v.spells+" Zauber, "+v.size+" Karten");
+    for(const [c,x] of Object.entries(v.report)){
+      if(!x.cards)continue;
+      lines.push("   "+c+": "+x.sources+" Quellen · "+x.cards+(x.cards===1?" Karte":" Karten")+" · Ø "+pct(x.avg)+" pünktlich ("+ampel(x.avg)+")"+
+        (x.worst?" · am knappsten: "+x.worst.name+" "+pct(x.worst.p):""));
+    }
+  }
+  const to={core:"Core",splash:"Splash",nosplash:"NoSplash"};
+  const fit=r.lands.filter(l=>l.group!=="off").map(l=>l.name+" → "+to[l.group]);
+  const bad=r.lands.filter(l=>l.group==="off").map(l=>l.name+(l.colors.length?" ("+l.colors.join("")+
+    (l.missing.length?", "+l.missing.join("")+" fehlt":", passt zu keiner Variante")+")":" (keine Farbe)"));
+  if(fit.length)lines.push("Nicht-Standardländer empfohlen: "+fit.join("; "));
+  if(bad.length)lines.push("Nicht empfohlen (Aus): "+bad.join("; "));
+  lines.push("Pünktlich: Chance, die Farbsymbole einer Karte bis zur Runde = Manawert zu haben (auf dem Play). "+
+    "Mit „Rückgängig“ stellst du den vorherigen Stand wieder her.");
+  showNotice("Länder empfohlen",lines,r.warnings);
 }
 function showErr(msg){const e=$("err");e.textContent=msg||"";e.style.display=msg?"block":"none"}
 async function api(path,body){
@@ -1062,6 +1111,7 @@ $("suggest").onclick=suggestDeck;
 $("propose").onclick=createProposal;
 document.querySelectorAll(".colpick input").forEach(i=>{i.onchange=save});
 $("undo").onclick=undoSuggest;
+$("lands").onclick=recommendLands;
 $("target").onchange=save;
 $("xclose").onclick=()=>$("exportbox").classList.remove("show");
 $("exportbox").onclick=e=>{if(e.target===$("exportbox"))$("exportbox").classList.remove("show")};

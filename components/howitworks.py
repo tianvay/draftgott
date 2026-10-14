@@ -63,7 +63,12 @@ def _sections():
              "Darunter: Zahl der Karten, davon mehrfarbig und farblos, und die vorkommenden Farbkombinationen."]))
          + _panel("Farbverteilung", _p(
              "Karten = Nichtland-Karten, die die Farbe brauchen (in jedem Zahlungsweg; Hybrid zählt nicht) · Quellen = "
-             "Länder, die sie erzeugen. Ein Land mit mehreren Farben zählt für jede davon."))
+             "Länder, die sie erzeugen. Ein Land mit mehreren Farben zählt für jede davon. Ø pünktlich: Chance, dass "
+             "bis zur Runde = Manawert (mindestens Runde 1, auf dem Play) genug Quellen für die Farbsymbole der Karte "
+             "gezogen sind, gerechnet mit Hypergeometrie und gemittelt über die Karten der Farbe. Bei mehrfarbigen "
+             "Karten werden die Farben multipliziert, die Gesamtzahl der Länder spielt keine Rolle. Ampel wie bei der "
+             f"Farbverfügbarkeit: grün ab {AVAIL_GREEN} %, gelb ab {AVAIL_YELLOW} %. „Am knappsten“: die Karte der Farbe mit der "
+             "niedrigsten Chance. Dieselbe Rechnung nutzt „Länder empfehlen“ im Drafthelper."))
          + _panel("Kartentabelle und Bereiche", _p(
              "Beim Vergleich mit gemeinsamem Kern (Drafthelper oder <code>--core</code>) steht jede Karte mit ihrem "
              "Bereich (Core, Splash, NoSplash …). Mengen werden je Bereich getrennt geführt; blass dargestellte Bereiche "
@@ -201,6 +206,8 @@ def _drafthelper_help():
             "Jede Kopie einer Karte wird einzeln zugeordnet (z. B. 2 von 3 Kopien in Core).",
             "Standardländer werden oben als Menge je Gruppe eingestellt, auch Länder, die nicht im Pool sind. Startwert: "
             "die Länder aus dem Deck der Pool-Datei als Core.",
+            "Nicht-Standardländer stehen direkt darunter in einem eigenen Bereich (aus Deck und Sideboard der Datei) und "
+            "werden wie andere Karten je Kopie zugeordnet.",
             "Der Stand wird im Browser gemerkt, und zwar je Inhalt der Pool-Datei: ein anderer Pool startet neu."]))
         + _panel("Kategorien", _ul([
             "<b>★ Splashworthy</b> – entscheidet Spiele allein, soll auf jeden Fall rein, auch wenn wir die Farbe nicht "
@@ -216,6 +223,23 @@ def _drafthelper_help():
             "werden, dann die NoSplash-Gruppe als Ersatz für die Splash-Karten; übrige Filler → Aus.",
             "Reihenfolge der Filler: nach der gewählten Sortierung, dann Farben, die schon im Deck sind, dann Manawert "
             "aufsteigend. „↶ Rückgängig“ stellt den Stand davor wieder her."]))
+        + _panel("Länder empfehlen", _ul([
+            "Nimmt die aktuelle Zuordnung (Core, Splash, NoSplash) und setzt die Standardländer je Gruppe sowie die "
+            "Zuordnung der Nicht-Standardländer neu. Die Zauber bleiben unverändert; „↶ Rückgängig“ stellt den Stand "
+            "davor wieder her.",
+            "Farben einer Variante: jede Farbe, deren Symbol auf mindestens einer Nichtland-Karte steht (Hybrid zählt für "
+            "beide Farben).",
+            "Nicht-Standardland: passt, wenn alle seine Farben in der Variante vorkommen (ein R/G-Land passt zu R/G/W, "
+            "aber nicht zu G/W). Passt es zu beiden Varianten → Core, nur zu einer → Splash bzw. NoSplash, sonst Aus. "
+            "Passende Länder werden immer genommen, auch wenn sie getappt kommen.",
+            "Zahl der Länder je Variante: Zielgröße minus Zauber, begrenzt auf die Faustregel (40 Karten: 15 bis 17). "
+            "Nicht-Standardländer ersetzen Standardländer.",
+            "Verteilung: Jede Farbe, die eine Karte zwingend verlangt, bekommt mindestens 3 Quellen (Nicht-Standardländer "
+            "zählen mit). Die übrigen Standardländer gehen einzeln an die Farbe, die die Summe der Chancen „pünktlich“ "
+            "aller Karten am stärksten erhöht (siehe Farbverteilung im Bericht).",
+            "Core enthält die Standardländer, die beide Varianten brauchen, der Rest steht in Splash bzw. NoSplash.",
+            "Die Meldung zeigt je Variante die Länder und je Farbe Quellen, Karten, Ø pünktlich und die knappste "
+            "Karte."]))
         + _panel("Deckvorschlag", _ul([
             "Ein eigenes Deck aus den Kategorien; die Zuordnung bleibt unverändert.",
             "MustPlay und Filler nur, wenn alle Farben der Karte gewählt sind (Farblos immer); Splashworthy immer, "

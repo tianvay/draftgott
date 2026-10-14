@@ -6,6 +6,7 @@ from collections import Counter
 from components.howitworks import render_help_view
 from components.html_base import HTML_CSS, LABEL_CLASS, esc, h_bar_cell, h_legend, h_level_pill, h_level_td, h_mode, h_pct, h_section, h_table, html_cost, html_mana, svg_bars, svg_lines
 from components.jace import analyze_jace
+from components.landadvice import color_report, level, needs_of_alts
 from components.mana import required_colors
 from components.mulligan import MULL_COLORS, MULL_LANDS_HIGH, MULL_LANDS_LOW
 from components.report_sections import render_compare_section, render_jace_section, render_logic_section
@@ -198,13 +199,21 @@ def render_details(ctx, suffix=""):
 
     need = {col: sum(q for _, q, c, _ in rows if not c.is_land and col in required_colors(c)) for col in "WUBRG"}
     srcs = {col: sum(q for _, q, c, _ in rows if c.is_land and col in c.land_colors) for col in "WUBRGC"}
+    on_time = color_report([{"name": n, "needs": needs_of_alts(c.alts), "mv": c.mv, "qty": q}
+                            for n, q, c, _ in rows if not c.is_land], srcs, len(cards))
     col_rows = []
     for col in "WUBRGC":
         if need.get(col, 0) or srcs[col]:
+            ot = on_time.get(col) or {}
+            worst = ot.get("worst")
             col_rows.append([f'<td class="l">{html_mana(col)}</td>', f'<td>{need.get(col, 0)}</td>',
                              f'<td>{srcs[col]}</td>',
-                             h_bar_cell(srcs[col] / max(ctx["n_lands"], 1), f"{srcs[col] / max(ctx['n_lands'], 1):.0%}")])
-    col_table = h_table(["Farbe", "Karten", "Quellen", "Anteil der Länder"], col_rows)
+                             h_bar_cell(srcs[col] / max(ctx["n_lands"], 1), f"{srcs[col] / max(ctx['n_lands'], 1):.0%}"),
+                             h_level_td(level(ot["avg"]), f'{ot["avg"]:.0%}') if ot.get("avg") is not None
+                             else '<td class="muted">–</td>',
+                             f'<td class="l">{esc(worst["name"])} ({worst["p"]:.0%})</td>' if worst
+                             else '<td class="muted">–</td>'])
+    col_table = h_table(["Farbe", "Karten", "Quellen", "Anteil der Länder", "Ø pünktlich", "Am knappsten"], col_rows)
 
     deck_rows, origin_note, head = [], "", ["Karte", "Anz.", "Kosten", "Eigenschaften"]
     cost_tags = lambda shown: ("".join(f'<span class="tag">{html_cost(t)}</span>'
