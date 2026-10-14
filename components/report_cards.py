@@ -153,7 +153,7 @@ def render_type_table(ctx):
     spec = _rows([ctx])
     rows = [[_label_cell(label, cls), f"<td>{vals[0]}</td>"] for label, cls, vals in spec]
     return (f'<div class="panel"><b>Kartentypen</b>{h_table(["Art", "Karten"], rows)}'
-            f'<div class="note">{esc(_note(spec))}</div></div>')
+'</div>')
 
 
 def render_types_compare(decks):
@@ -164,7 +164,7 @@ def render_types_compare(decks):
         cell_cls = ' class="diff"' if len(set(vals)) > 1 else ""
         rows.append([_label_cell(label, cls)] + [f"<td{cell_cls}>{v}</td>" for v in vals])
     return (f'<div class="panel"><b>Kartentypen im Vergleich</b>{h_table(heads, rows)}'
-            f'<div class="note">{esc(_note(spec))} Fett: Unterschied zwischen den Decks.</div></div>')
+'</div>')
 
 
 AVAIL_GREEN, AVAIL_YELLOW = 90, 80  # Ampel Farbverfuegbarkeit in Prozent
@@ -214,10 +214,4 @@ def render_color_availability(ctx):
                      f'<div class="muted" style="font-size:12px">wegen {c}{c} in: {esc(cards)}</div></td>'] + [
             _avail_cell(results[l]["color_avail"]["t4_double"][c], results[l]["color_avail"]["games"],
                         results[l]["color_avail"]["t4_measured"]) for l in labels])
-    note = ("Quelle = Land auf dem Feld nach dem Landdrop der Runde (auch getappt), das die Farbe erzeugen kann; ein "
-            "Land mit mehreren Farben zählt für jede davon. Geprüft werden alle Farben, die Karten im Deck "
-            "zwingend brauchen, und zwei Quellen bis Runde 4 nur für Farben, die eine Karte doppelt verlangt "
-            f"(z. B. RR). Ampel: grün ab {AVAIL_GREEN} %, gelb ab {AVAIL_YELLOW} %, sonst rot. "
-            "Manakreaturen und andere Manaquellen sind nicht modelliert.")
-    return (f'<div class="panel">{h_table(["Kennzahl"] + [esc(l) for l in labels], rows)}'
-            f'<div class="note">{esc(note)}</div></div>')
+    return f'<div class="panel">{h_table(["Kennzahl"] + [esc(l) for l in labels], rows)}</div>'

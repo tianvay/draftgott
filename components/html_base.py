@@ -67,6 +67,14 @@ td.bad{background:var(--badbg);color:var(--bad)}
 .tag.t2{background:#fff0b3;color:#7a5a00;border-color:transparent;font-weight:650}
 .tag.off{opacity:.55}
 .diff{font-weight:700}
+.js .view:not(.on){display:none}
+.views{display:flex;gap:6px;margin-top:14px}
+.views a{font-size:13.5px;padding:5px 14px;border-radius:999px;border:1px solid var(--line);background:var(--chip);color:var(--text);text-decoration:none}
+.views a.on{background:var(--text);color:var(--bg);border-color:var(--text)}
+a.hiw{font-size:12.5px;font-weight:500;margin-left:12px;color:var(--accent);text-decoration:none;white-space:nowrap}
+a.hiw:hover{text-decoration:underline}
+nav a.back{color:var(--text);font-weight:650;margin-bottom:8px}
+#view-help section p{margin:6px 0 0;color:var(--text);font-size:14px}
 .cc-legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;color:var(--muted);margin:8px 0 4px}
 .cc-legend i{display:inline-block;width:11px;height:11px;border:1px solid rgba(0,0,0,.25);border-radius:3px;margin-right:5px;vertical-align:-1px}
 .cc-note{font-size:12.5px;color:var(--muted);margin-top:6px;line-height:1.45}
@@ -119,7 +127,7 @@ ol.ass b,ul.ass b{color:var(--text)}
 tr.win td{background:var(--goodbg);color:var(--good);font-weight:650}
 footer{max-width:1380px;margin:0 auto;padding:0 20px 40px;color:var(--muted);font-size:12.5px}
 @media (max-width:900px){.layout{grid-template-columns:1fr;padding:0}nav{top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line);max-height:none;padding:0}nav .in{flex-direction:row;overflow-x:auto;white-space:nowrap;padding:8px 20px}main{padding:8px 20px 60px}}
-@media print{nav{display:none}.layout{display:block}body{background:#fff}.panel{box-shadow:none}}
+@media print{nav{display:none}.layout{display:block}#view-help,.views,a.hiw{display:none}body{background:#fff}.panel{box-shadow:none}}
 """
 
 
@@ -249,6 +257,7 @@ def h_legend(labels):
         f'<span><span class="dot {LABEL_CLASS.get(l, "")}"></span>{esc(l)}</span>' for l in labels) + "</div>"
 
 
-def h_section(sid, title, hint, body):
+def h_section(sid, title, hint, body, help_id=None):
     hint_html = f'<p class="hint">{hint}</p>' if hint else ""
-    return f'<section id="{sid}"><h2>{esc(title)}</h2>{hint_html}{body}</section>'
+    link = (f'<a class="hiw" href="#{help_id}" data-back="{sid}">ⓘ So funktioniert es</a>' if help_id else "")
+    return f'<section id="{sid}"><h2>{esc(title)}{link}</h2>{hint_html}{body}</section>'

@@ -3,6 +3,7 @@ import datetime
 import re
 from collections import Counter
 
+from components.howitworks import render_help_view
 from components.html_base import HTML_CSS, LABEL_CLASS, esc, h_bar_cell, h_legend, h_level_pill, h_level_td, h_mode, h_pct, h_section, h_table, html_cost, html_mana, svg_bars, svg_lines
 from components.jace import analyze_jace
 from components.mana import required_colors
@@ -14,6 +15,31 @@ from components.report_cards import (all_colors_row, render_color_availability, 
 from components.simulation import card_label
 from components.stats import TRAFFIC, lethal_level, timing_stats, traffic_level
 
+
+VIEW_JS = """<script>
+(function(){
+  document.documentElement.classList.add('js');
+  var back='';
+  function show(view){
+    document.querySelectorAll('.view').forEach(function(v){v.classList.toggle('on',v.id==='view-'+view);});
+    document.querySelectorAll('.views a').forEach(function(a){a.classList.toggle('on',a.getAttribute('data-view')===view);});
+  }
+  function route(){
+    var h=decodeURIComponent(location.hash.slice(1));
+    var el=h?document.getElementById(h):null;
+    show(h.indexOf('hiw-')===0?'help':'report');
+    if(el){el.scrollIntoView({behavior:'instant',block:'start'});}else{window.scrollTo({top:0,behavior:'instant'});}
+  }
+  document.addEventListener('click',function(e){
+    var a=e.target.closest('a.hiw');
+    if(a){back=a.getAttribute('data-back')||'';}
+    var b=e.target.closest('a.back');
+    if(b&&b.getAttribute('href')==='#top'){e.preventDefault();location.hash=back||'top';}
+  });
+  window.addEventListener('hashchange',route);
+  route();
+})();
+</script>"""
 
 SWITCH_JS = """<script>
 document.documentElement.classList.add('js');
@@ -78,8 +104,7 @@ def render_coverage(ctx):
     qty = {name: q for name, q, _c, _s in ctx["rows"]}
     summary = summarize(coverage, qty)
     if not summary["flagged_cards"]:
-        return ('<div class="panel"><p class="muted">Keine Karte mit nicht implementierten Effekten gefunden. '
-                'Die Erkennung arbeitet über den Kartentext und ist grob; sie ersetzt keine Prüfung der Karten.</p></div>')
+        return '<div class="panel"><p class="muted">Keine Karte mit nicht implementierten Effekten gefunden.</p></div>'
     kpis = "".join(
         f'<div class="kpi"><div class="l">{esc(m)}</div><div class="v">{summary["by_metric"][m]}</div>'
         f'<div class="s">Karten</div></div>' for m in METRIC_ORDER if summary["by_metric"][m])
@@ -101,9 +126,7 @@ def render_coverage(ctx):
                      f'<td class="l">{esc(", ".join(metrics))}</td>'])
     note = (f'<div class="note" style="margin:0 0 10px"><b>{summary["flagged_cards"]} Karten</b> '
             f'({summary["flagged_copies"]} Kopien) haben Effekte, die die Simulation noch nicht abbildet. Die Zahlen in '
-            'diesem Bericht berücksichtigen sie nicht. Die Erkennung arbeitet über den Kartentext und sortiert nur grob; '
-            'bei Karten mit „unklar“ ist nicht bekannt, was genau fehlt. Mit der Maus über der Kategorie steht die '
-            'betreffende Textstelle.</div>')
+            'diesem Bericht berücksichtigen sie nicht.</div>')
     table = h_table(["Karte", "Anz.", "Status", "Kategorie", "Betroffene Kennzahl"], rows, left=(0, 2, 3, 4))
     return f'<div class="panel">{note}<div class="grid g4" style="margin-bottom:12px">{kpis}</div>{table}</div>'
 
@@ -116,7 +139,7 @@ def render_details(ctx, suffix=""):
     sections, nav = [], []
 
     def add(sid, title, hint, body):
-        sections.append(h_section(sid + suffix, title, hint, body))
+        sections.append(h_section(sid + suffix, title, hint, body, "hiw-" + sid))
         nav.append((sid + suffix, title))
 
     # ---------------- Auf einen Blick
@@ -156,11 +179,7 @@ def render_details(ctx, suffix=""):
             f'<td>{res[l]["jace"]["acts_win"] / sims:.2f}</td>' for l in labels]]
     colors_row = all_colors_row(ctx)
     rows_v = mull_rows + rows_v + jace_row + ([colors_row] if colors_row else []) + [scr, fl, avg, lt]
-    legend = ("Ampel Zauber pro Runde – grün / gelb ab: " + "; ".join(
-        f'{("Draw" if d else "Play")} R{t}: ≥{g}% / >{y}%'
-        for d, tt in TRAFFIC.items() for t, (g, y) in tt.items()))
-    body = (f'<div class="panel">{h_table(["Kennzahl"] + [esc(l) for l in labels], rows_v)}'
-            f'<div class="note">{esc(legend)}. Lethal: grün ≤ Runde 5, gelb 6–7, rot ab 8.</div></div>')
+    body = f'<div class="panel">{h_table(["Kennzahl"] + [esc(l) for l in labels], rows_v)}</div>'
     add("blick", "Auf einen Blick", "Die wichtigsten Kennzahlen im Vergleich Play gegen Draw.", body)
 
     # ---------------- Deck
@@ -227,7 +246,7 @@ def render_details(ctx, suffix=""):
             f'<div style="margin-top:14px">{render_color_curves(ctx)}</div>'
             f'<div class="grid g2" style="margin-top:14px">'
             f'{render_type_table(ctx)}'
-            f'<div class="panel"><b>Farbverteilung</b><div class="note" style="margin:0 0 4px">Karten = Nichtland-Karten, die die Farbe brauchen · Quellen = Länder, die sie erzeugen</div>{col_table}</div></div>'
+            f'<div class="panel"><b>Farbverteilung</b>{col_table}</div></div>'
             f'<div class="panel" style="margin-top:14px">{unsure}'
             f'{origin_note}{h_table(head, deck_rows, left=(0, 2, 3, 4) if len(head) == 5 else (0, 2, 3))}</div>')
     add("deck", "Deck", "Kartendaten von Scryfall.", body)
@@ -264,28 +283,11 @@ def render_details(ctx, suffix=""):
             d = mu["deals"]
             rows_r.append([h_mode(l), f'<td><b>{h_pct(mu["first_any"] / d, 1)}</b></td>']
                           + [f'<td>{h_pct(mu["first"][key] / d, 1)}</td>' for key, _ in reasons])
-        rules = [
-            "<b>Farben:</b> Mit den Farben der Länder auf der Starthand ist keine Karte spielbar "
-            "(nur die Farben zählen, nicht die Manamenge).",
-            "<b>Zu viele Länder:</b> 6 oder mehr Länder auf der Starthand.",
-            "<b>Zu wenige Länder:</b> Höchstens 2 Länder und weniger als 3 Karten, die sich mit diesen Ländern bezahlen "
-            "lassen (Manawert und Farben). Zwei Länder plus lauter 1- und 2-Mana-Karten werden also behalten.",
-        ]
         body = (
-            '<div class="grid"><div class="panel"><b>Wann es einen Mulligan gibt</b><ul class="ass">'
-            + "".join(f"<li>{x}</li>" for x in rules) + '</ul>'
-            f'<div class="note">Bei einem Mulligan wird das Deck neu gemischt und eine neue Starthand mit einer Karte weniger '
-            f'gezogen. Dieselben Regeln gelten für jede neue Hand. Fällt die Hand unter {mh} Karten, gilt das Spiel als '
-            f'verloren. Auch eine {mh}-Karten-Hand, die einen Mulligan auslösen würde, zählt deshalb als verloren.</div></div>'
             '<div class="panel"><b>Erste 7-Karten-Hand: Gründe für einen Mulligan</b>'
-            + h_table(["", "Mulligan gesamt"] + [r for _, r in reasons], rows_r)
-            + '<div class="note">Anteil aller Starthände. Die Gründe können zusammen auftreten, ihre Summe kann deshalb '
-              'über dem Gesamtwert liegen.</div></div></div>'
-            '<div class="panel" style="margin-top:14px"><b>Mit wie vielen Karten startet das Spiel?</b> <span class="muted">(Behalten mit … Karten)</span>'
-            + h_table(heads, rows_m)
-            + f'<div class="note">Prozent aller ausgeteilten Starthände. Verlorene Spiele werden nicht gespielt und fließen '
-              f'<b>nicht</b> in die übrigen Zahlen des Berichts ein: Alle anderen Auswertungen beruhen auf {sims} gespielten '
-              f'Spielen pro Modus nach dem Mulligan.</div></div>')
+            + h_table(["", "Mulligan gesamt"] + [r for _, r in reasons], rows_r) + '</div>'
+            '<div class="panel" style="margin-top:14px"><b>Mit wie vielen Karten startet das Spiel?</b> '
+            '<span class="muted">(Behalten mit … Karten)</span>' + h_table(heads, rows_m) + '</div>')
         add("mulligan", "Mulligan", "Wie oft die Starthand getauscht werden muss und wie oft das Spiel dadurch verloren geht.", body)
 
     if ctx["jace"]["any"]:
@@ -303,19 +305,17 @@ def render_details(ctx, suffix=""):
         cells.append(f'<td>{r["opener_lands"]:.2f}</td>')
         rows_c.append(cells)
     body = (f'<div class="panel">{h_table([""] + [f"Runde {t}" for t in range(1, T + 1)] + ["Ø Länder in Starthand (nach Mulligan)"], rows_c)}'
-            f'<div class="note">Anteil der Spiele, in denen in dieser Runde mindestens ein Zauber gespielt wird (Farben beachtet, '
-            f'gespielte Karten sind weg).</div></div>')
+'</div>')
     add("zauber", "Zauber pro Runde", f"{sims} Simulationen pro Modus.", body)
 
     # ---------------- Kreaturen
     rows_k = [[h_mode(l), f'<td>{res[l]["creatures"]:.2f}</td>', f'<td>{res[l]["power"]:.2f}</td>',
                f'<td>{res[l]["toughness"]:.2f}</td>'] for l in labels]
     body = (f'<div class="panel">{h_table(["", "Kreaturen", "Gesamt-Power", "Gesamt-Toughness"], rows_k)}'
-            f'<div class="note">Durchschnitt auf dem Feld nach Runde {T}, aufgedruckte Werte ohne Auras und Boni.</div></div>')
+'</div>')
     add("kreaturen", f"Kreaturen nach Runde {T}", "", body)
 
     # ---------------- Screw & Flood
-    rule = f"weniger als {T} Länder auf dem Feld" + (" oder keine zwei Farben" if ctx["multicolor"] else "")
     rows_s = []
     for l in labels:
         r = res[l]
@@ -326,10 +326,9 @@ def render_details(ctx, suffix=""):
     rows_f = [[h_mode(l), h_bar_cell(res[l]["flood"], cls=LABEL_CLASS.get(l, "")),
                f'<td>{res[l]["lands_drawn"]:.1f}</td>'] for l in labels]
     body = (f'<div class="grid"><div class="panel"><b>Mana Screw nach Runde {T}</b>'
-            f'<div class="note" style="margin:0 0 6px">{esc(rule)}</div>'
+
             f'{h_table(["", "Zu wenig Länder", "Farben fehlen", "Gesamt"], rows_s)}</div>'
-            f'<div class="panel"><b>Flood</b><div class="note" style="margin:0 0 6px">'
-            f'mindestens {a.flood} Länder gezogen bis Runde {H} (inkl. Starthand)</div>'
+            f'<div class="panel"><b>Flood ({a.flood}+ Länder bis Runde {H})</b>'
             f'{h_table(["", "Flooded", "Ø Länder gezogen"], rows_f)}</div></div>')
     add("screw", "Mana Screw & Flood", "", body)
 
@@ -364,12 +363,10 @@ def render_details(ctx, suffix=""):
                 for t in range(1, C + 1)] for l in labels}
     chart = (f'<div class="panel" style="margin-top:14px"><b>Auslastung je Runde</b>{h_legend(labels)}'
              f'{svg_bars([f"R{t}" for t in range(1, C + 1)], util, 1.0, lambda v: f"{v:.0%}")}'
-             f'<div class="note">Ausgegebenes geteilt durch verfügbares Mana. Nur Mana aus Ländern, '
-             f'Manakreaturen und Artefakte sind nicht modelliert.</div></div>')
+'</div>')
     add("curve", "Curve-Auslastung", f"Runde 1–{C}: wie gut wird das Mana genutzt?",
         f'<div class="grid">{"".join(panels)}</div>{chart}')
 
-    add("logik", "Spiellogik", "Nach welchen Regeln der Simulator Länder und Zauber auswählt.", render_logic_section(any(res[l]["jace"]["on"] for l in labels)))
 
     # ---------------- Schaden & Lethal
     rows_d = []
@@ -382,10 +379,7 @@ def render_details(ctx, suffix=""):
     chart = (f'<div class="panel"><b>Wahrscheinlichkeit, bis Runde X mindestens {a.schaden} Schaden verursacht zu haben</b>'
              f'{h_legend(labels)}{svg_lines(xs, cum)}</div>')
     table = (f'<div class="panel"><b>Erste Runde mit {a.schaden} Schaden</b>'
-             f'{h_table(["", "Ø Runde", "Median", "Eintritt"], rows_d)}'
-             f'<div class="note">Ø und Median nur über Spiele, in denen es bis Runde {H} eintritt. '
-             f'Alle Kreaturen greifen jede Runde an, Einsatzverzögerung außer Haste, Defender greift nie an, keine Blocker oder Removal, '
-             f'nur aufgedruckte Power.</div></div>')
+             f'{h_table(["", "Ø Runde", "Median", "Eintritt"], rows_d)}</div>')
     add("schaden", "Schaden durch Kreaturen", "", f'<div class="grid g2">{table}{chart}</div>')
 
     lethals = []
@@ -464,32 +458,10 @@ def render_details(ctx, suffix=""):
                           ([f"<td>{st[0]:.1f}</td>", f"<td>{st[1]:.1f}</td>", h_bar_cell(st[2], cls=LABEL_CLASS.get(l, ""))] if st
                            else ['<td class="muted">–</td>'] * 2 + [h_bar_cell(0)]))
     body = (f'<div class="panel">{h_table(["", "Ereignis", "Ø Runde", "Median", "Eintritt"], rows_t, left=(0, 1))}'
-            f'<div class="note">Beobachtung bis Runde {H}; Ø und Median nur über Spiele, in denen das Ereignis eintritt. '
-            + (f'Top Card: {esc(", ".join(ctx["top_names"]))} (Manawert {ctx["top_mv"]}).' if ctx["top_mv"] is not None else "")
-            + '</div></div>')
+            + (f'<div class="note">Top Card: {esc(", ".join(ctx["top_names"]))} (Manawert {ctx["top_mv"]}).</div>' if ctx["top_mv"] is not None else "")
+            + '</div>')
     add("tempo", "Tempo", "", body)
 
-    # ---------------- Annahmen
-    ass = [
-        ("Starthand 7 Karten mit Mulligan-Regeln (siehe Abschnitt Mulligan); jede Runde ziehen (On the Play erst ab Runde 2), "
-         "ein Land legen, zaubern." if mu0["on"] else
-         "Starthand 7 Karten ohne Mulligans; jede Runde ziehen (On the Play erst ab Runde 2), ein Land legen, zaubern."),
-        "Jede Nichtland-Karte wird gespielt, sobald sie bezahlbar ist; pro Runde wird möglichst viel Mana ausgegeben.",
-        "Farben, Hybrid- und Phyrexian-Mana werden beachtet; Manakreaturen und Artefakte sind nicht modelliert.",
-        "Länder, die getappt ins Spiel kommen, werden aus dem Kartentext erkannt; Shock-Länder zahlen die 2 Leben.",
-        "Auras werden nur mit eigener Kreatur gespielt" if not a.auras_ohne_kreatur else "Auras dürfen ohne eigene Kreatur gespielt werden.",
-        "Kreaturen: aufgedruckte Power/Toughness, Einsatzverzögerung außer Haste, Defender greift nie an, keine Blocker oder Removal.",
-    ]
-    if ctx["cyc_names"]:
-        ass.append("Landcycling ist deaktiviert." if a.ohne_landcycling else
-                   f"Landcycling mit Vorausschau (nur wenn es sich lohnt); fehlender Landdrop wird bis Runde {a.landcycling_runden} "
-                   f"gesichert; Cycling nicht spielbarer Karten nur unter {a.landcycling_max_laender} Ländern; "
-                   + ("auch die letzte Karte darf gecycelt werden." if a.landcycling_letzte_karte
-                      else "die letzte Karte auf der Hand wird nicht gecycelt."))
-    if any(res[l]["jace"]["on"] for l in labels):
-        ass.append("Empower Jace: Jace-Token mit −3 (Karte ziehen), aktiviert ab 3 Loyalty, höchstens einmal pro Runde; "
-                   "Regeln im Abschnitt Jace & Planeswalker.")
-    add("annahmen", "Modellannahmen", "", '<div class="panel"><ul class="ass">' + "".join(f"<li>{esc(x)}</li>" for x in ass) + "</ul></div>")
 
     return sections, nav
 
@@ -505,7 +477,7 @@ def render_html(ctx):
     if multi:
         cmp_body = h_section("vergleich", "Deck-Vergleich",
                              f"Hauptdeck gegen {len(ctx['alts'])} Alternative(n), mit statistischer Einordnung der Unterschiede.",
-                             render_compare_section(ctx))
+                             render_compare_section(ctx), "hiw-vergleich")
         sections.append(cmp_body)
         cmp_nav = [("vergleich", "Deck-Vergleich")]
         btns = "".join(f'<button type="button" data-g="{i}" class="{"on" if i == 0 else ""}">{esc(d["name"])}</button>'
@@ -523,6 +495,7 @@ def render_html(ctx):
         sections += sec
         nav_html = '<div class="in">' + "".join(f'<a href="#{k}">{esc(t)}</a>' for k, t in nv) + "</div>"
 
+    present = {re.sub(r"-\d+$", "", sid) for sid in re.findall(r'<section id="([^"]+)"', "".join(sections))}
     chips = ([f"Vergleich mit {len(ctx['alts'])} Alternative(n)"] if ctx.get("alts") else []) + (
         [f"Seed {a.seed}"] if a.seed is not None else []) + [f"{sims} gespielte Spiele pro Modus", "Mulligan an" if mu0["on"] else "ohne Mulligan", f"Auswertung Runde {T}", f"Beobachtung bis Runde {H}",
              f"{a.schaden} Schaden", f"Flood ab {a.flood} Ländern"]
@@ -532,9 +505,13 @@ def render_html(ctx):
     return (f'<!DOCTYPE html><html lang="de"><head><meta charset="utf-8">'
             f'<meta name="viewport" content="width=device-width,initial-scale=1">'
             f'<title>{esc(ctx["name"])} – MTG Simulation</title><style>{HTML_CSS}</style></head><body>'
-            f'<header class="top"><h1>{esc(ctx["name"])}</h1>'
+            f'<header class="top" id="top"><h1>{esc(ctx["name"])}</h1>'
             f'<div class="sub">Starthand-Simulation · erstellt am {stamp}</div>'
-            f'<div class="chips">{"".join(f"<span class=chip>{esc(c)}</span>" for c in chips)}</div></header>'
-            f'<div class="layout"><nav>{nav_html}</nav><main>{missing_html}{"".join(sections)}</main></div>'
+            f'<div class="chips">{"".join(f"<span class=chip>{esc(c)}</span>" for c in chips)}</div>'
+            '<div class="views"><a href="#top" data-view="report" class="on">Bericht</a>'
+            '<a href="#hiw-start" data-view="help">So funktioniert es</a></div></header>'
+            f'<div class="view on" id="view-report"><div class="layout"><nav>{nav_html}</nav>'
+            f'<main>{missing_html}{"".join(sections)}</main></div></div>'
+            f'{render_help_view(present=present)}'
             f'<footer>Erzeugt mit mtg_sim.py · Kartendaten von Scryfall</footer>'
-            + (SWITCH_JS if multi else "") + '</body></html>')
+            + (SWITCH_JS if multi else "") + VIEW_JS + '</body></html>')

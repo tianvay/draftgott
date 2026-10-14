@@ -229,16 +229,11 @@ def render_compare_section(ctx):
                            f'<td>{t["same"]}</td>'])
     fazit = h_table(["Alternative gegen Hauptdeck", "Klar besser", "Klar schlechter", "Kein klarer Unterschied"], fazit_rows)
 
-    note = (f"Jedes Deck wird unabhängig mit {sims} gespielten Spielen pro Modus simuliert. Hinter den Werten steht das 95-%-"
-            "Konfidenzintervall (±). Ein Unterschied (Δ) ist farbig, wenn er größer ist als der zufällige Fehler "
-            "(|Δ| > 1,96 × Standardfehler), grün bei besser und rot bei schlechter. Mit ≈ markierte Unterschiede sind nicht "
-            "von Zufall zu trennen. PP = Prozentpunkte. Bei so vielen Kennzahlen sind einzelne zufällige Ausreißer zu erwarten, "
-            "achte deshalb auf das Gesamtbild. Für eine höhere Genauigkeit hilft eine größere --sims-Zahl.")
     types_compare = render_types_compare(decks)
     return (f'<div class="panel">{overview}{warn}</div>'
             f'<div style="margin-top:14px">{types_compare}</div>'
             f'<div class="panel" style="margin-top:14px"><b>Fazit über alle Kennzahlen (Play und Draw zusammen)</b>{fazit}'
-            f'<div class="note">{esc(note)}</div></div>'
+            '</div>'
             f'<div class="grid" style="margin-top:14px">{"".join(panels)}</div>')
 
 
@@ -308,15 +303,10 @@ def render_jace_section(ctx):
         sim_html = (
             '<div class="panel" style="margin-top:14px"><b>Bis die Hand leer ist</b>'
             + h_table(heads_a, rows_a)
-            + '<div class="note">Gezählt wird bis zum ersten Rundenende ohne Karten auf der Hand (nach dem Zaubern und '
-              'einer möglichen Jace-Aktivierung). Wird die Hand nie leer, zählt der ganze Beobachtungszeitraum. '
-              'Jede Aktivierung (−3) zieht genau eine Karte: Ø Aktivierungen ist deshalb zugleich die Zahl der durch Jace gezogenen Karten. '
-              '„Ø Empower“ ist die erhaltene Loyalty insgesamt, „Hand leer erreicht“ der Anteil der Spiele, in denen die Hand innerhalb des '
-              'Beobachtungszeitraums leer wurde.</div></div>'
+            + '</div>'
             f'<div class="panel" style="margin-top:14px"><b>Im ganzen Beobachtungszeitraum (bis Runde {H})</b>'
             + h_table(heads_b, rows_b)
-            + '<div class="note">„Aktivierungen“ zählen das Ziehen (−3). „Ø Surveil“ zählt die −1-Aktivierungen, „Ø Länder '
-              'in den Friedhof“ die Länder, die dabei abgelegt wurden.</div></div>')
++ '</div>')
 
     card_rows = []
     for r in sorted(ja["cards"], key=lambda r: (not r["kinds"], r["name"])):
@@ -334,12 +324,8 @@ def render_jace_section(ctx):
         notes.append("Wirkt in der Simulation nicht (Auslöser oder Kosten nicht modelliert, zählt aber in der Statistik): "
                      + ", ".join(ja["unmodeled"]))
     warn = "".join(f'<div class="warnbox">{esc(n)}</div>' for n in notes)
-    rules = JACE_RULES
     return (f'<div class="grid g3">{kpi_html}</div>'
             f'<div class="panel" style="margin-top:14px"><b>Empower Jace nach Art</b>{kind_table}'
-            f'<div class="note">Bei wiederkehrenden Karten ist Σ Empower der Wert je Auslösung beziehungsweise je Aktivierung. '
-            f'Eine Karte kann in mehreren Kategorien stehen, deshalb ist die Summe der Zeilen größer als „gesamt“.</div></div>'
+            '</div>'
             f'{sim_html}'
-            f'<div class="panel" style="margin-top:14px">{warn}<b>Karten</b>{card_table}</div>'
-            f'<div class="panel" style="margin-top:14px"><b>Modellregeln</b><ul class="ass">'
-            + "".join(f"<li>{esc(r)}</li>" for r in rules) + "</ul></div>")
+            f'<div class="panel" style="margin-top:14px">{warn}<b>Karten</b>{card_table}</div>')

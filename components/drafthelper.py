@@ -25,6 +25,7 @@ from components.cards import card_info
 from components.cardkinds import (FLOW_ORDER, empower_points, flow_kinds,  # noqa: F401 (auch von Tests benutzt)
                                   type_kinds)
 from components.deckfile import parse_pool
+from components.howitworks import render_help_page
 from components.scryfall import card_image_url, fetch_cards_cached, fetch_printing_images
 from components.suggest import WUBRG, propose, suggest
 
@@ -229,6 +230,8 @@ def make_handler(app):
                 self._json({"cards": app["pool"], "basics": app["basics"], "sims": app["args"].sims,
                             "options": app["options"], "file": app["file"],
                             "signature": app["signature"]})
+            elif path == "/howitworks.html":
+                self._send(render_help_page())
             elif path == "/api/status":
                 self._json(app["job"].status())
             elif path == "/report":
@@ -508,25 +511,10 @@ h2 small{color:var(--muted);font-weight:400}
   <button class="btn" id="quit" title="Draft-Helper beenden">Beenden</button>
 </header>
 <main>
-  <div class="help"><b>So geht's:</b> Wähle unter jeder Karte, wohin sie gehört.
-    <ul>
-      <li><b style="color:var(--core)">Core</b> – Karte ist in beiden Varianten dabei.</li>
-      <li><b style="color:var(--splash)">Splash</b> – Karte ist nur in der Variante „Splash“ dabei.</li>
-      <li><b style="color:#a37c00">NoSplash</b> – Karte ist nur in der Variante „NoSplash“ dabei.</li>
-      <li><b style="color:var(--off)">Aus</b> – Karte ist in keiner Variante dabei.</li>
-    </ul>
-    Zusätzlich bekommt jede Karte unter dem Bild eine <b>Kategorie</b> (unabhängig von der Zuordnung):
-    <ul>
-      <li><b>★ Splashworthy</b> – entscheidet Spiele allein, soll auf jeden Fall rein, auch wenn wir die Farbe nicht spielen.</li>
-      <li><b>MustPlay</b> – wird auf jeden Fall gespielt, wenn wir diese Farbe spielen.</li>
-      <li><b>Filler</b> – füllt das Deck auf, wenn wir die Farbe spielen und nicht splashen.</li>
-      <li><b>NeverPlay</b> – zu schlecht oder zu situativ.</li>
-    </ul>
-    Die Kategorie beeinflusst die Simulation nicht; ★ Splashworthy und MustPlay erscheinen im Bericht unter
-    „Great in this deck!“. Links siehst du, wie viele Karten es je Farbe und Kategorie gibt.
-    Mehrfach vorhandene Karten erscheinen einzeln und können unterschiedlich zugeordnet werden.
-    Standardländer stellst du oben als Menge je Gruppe ein; dort kannst du auch Länder hinzufügen, die nicht im Pool sind.
-    Ein Klick auf das Bild zeigt die Karte groß. Danach auf <b>Simulieren</b> klicken.</div>
+  <div class="help"><b>So geht's:</b> Ordne unter jeder Karte zu (<b>Core</b>, <b>Splash</b>, <b>NoSplash</b> oder
+    <b>Aus</b>), wähle bei Bedarf eine <b>Kategorie</b> und stelle oben die Standardländer ein. Danach auf
+    <b>Simulieren</b> klicken. Alle Regeln (Zuordnung, Kategorien, Deckvorschlag, Übersichten):
+    <a href="/howitworks.html#hiw-drafthelper" target="_blank">So funktioniert es</a>.</div>
   <div class="err" id="err"></div>
   <div class="layout">
     <aside class="side"><h3>Übersicht nach Farbe</h3><div id="overview"></div>

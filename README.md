@@ -340,6 +340,13 @@ Diese Werte stehen im Skript und lassen sich nur dort ändern.
   Hand noch nicht gespielt werden kann, weil Länder fehlen (Länder auf dem Feld und auf der Hand weniger als ihr
   Manawert); sonst kommt es in den Friedhof. Zauber bleiben immer oben. Der Jace-Abschnitt im Bericht zeigt
   zusätzlich Ø Surveil und Ø abgelegte Länder.
+- **Bericht und Erklärung getrennt („So funktioniert es“):** Der Bericht zeigt nur noch Daten. Alle Regeln und
+  Lesehilfen (Spiellogik, Modellannahmen, Mulligan- und Jace-Regeln, Ampel-Schwellen, Statistik des Vergleichs,
+  Zählregeln, Drafthelper …) stehen auf einer eigenen Erklärseite, Abschnitt für Abschnitt wie im Bericht. Oben im
+  Bericht wechselt „Bericht | So funktioniert es“ die Ansicht; jeder Abschnitt hat einen Link „ⓘ So funktioniert es“
+  zu seiner Erklärung, von dort führt „← Zurück zum Bericht“ wieder an dieselbe Stelle. Beides steckt in derselben
+  HTML-Datei. Die Erklärseite beschreibt die Regeln allgemein mit Parametern und Standardwerten; die Werte des Laufs
+  stehen oben im Bericht. Im Drafthelper gibt es die Erklärseite zusätzlich unter „So funktioniert es“ im Hilfekasten.
 - **Navigation im Bericht:** Die Sprungmarken zu den Abschnitten stehen links neben dem Inhalt und bleiben beim
   Scrollen sichtbar. Auf schmalen Bildschirmen (unter 900 Pixel) stehen sie wie bisher als Leiste oben.
 - **Farbverfügbarkeit (Bericht):** Eigener Abschnitt und eine Zeile in „Auf einen Blick“: Wie oft liegen nach dem
