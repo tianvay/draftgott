@@ -535,6 +535,6 @@ def render_html(ctx):
             f'<header class="top"><h1>{esc(ctx["name"])}</h1>'
             f'<div class="sub">Starthand-Simulation · erstellt am {stamp}</div>'
             f'<div class="chips">{"".join(f"<span class=chip>{esc(c)}</span>" for c in chips)}</div></header>'
-            f'<nav>{nav_html}</nav><main>{missing_html}{"".join(sections)}</main>'
+            f'<div class="layout"><nav>{nav_html}</nav><main>{missing_html}{"".join(sections)}</main></div>'
             f'<footer>Erzeugt mit mtg_sim.py · Kartendaten von Scryfall</footer>'
             + (SWITCH_JS if multi else "") + '</body></html>')

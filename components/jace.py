@@ -4,10 +4,34 @@ from functools import lru_cache
 from components.cards import EMPOWER_ONCE, EMPOWER_RECURRING
 
 
+def surveil(library, n, hand, battlefield):
+    """Surveil n: die obersten n Karten ansehen. Ein Land bleibt oben, solange die teuerste Karte auf der Hand nicht
+    bezahlbar ist, weil Laender fehlen (Laender auf dem Feld und auf der Hand < ihr Manawert); sonst kommt es in den
+    Friedhof. Zauber bleiben immer oben. Die Reihenfolge der behaltenen Karten bleibt gleich.
+    Veraendert library und gibt die abgelegten Karten zurueck."""
+    top, rest = library[:n], library[n:]
+    spells = [c for c in hand if not c.is_land]
+    need = max((c.mv for c in spells), default=None)
+    have = len(battlefield) + sum(1 for c in hand if c.is_land)
+    keep, binned = [], []
+    for card in top:
+        if card.is_land:
+            if need is not None and have < need:
+                keep.append(card)
+                have += 1
+            else:
+                binned.append(card)
+        else:
+            keep.append(card)
+    library[:] = keep + rest
+    return binned
+
+
 class JaceState:
     """Jace-Planeswalker-Token: nur eine Zahl (Loyalty). Bei 0 Loyalty gibt es keinen Token mehr,
-    ein weiterer Empower erstellt einen neuen. Aktiviert wird (-3: Karte ziehen) hoechstens 1x pro Runde."""
-    __slots__ = ("loyalty", "used", "acts", "gained", "first")
+    ein weiterer Empower erstellt einen neuen. Hoechstens eine Aktivierung pro Runde:
+    ab 3 Loyalty -3 (Karte ziehen), sonst -1 (Surveil 1, nur wenn erlaubt; auch bis 0)."""
+    __slots__ = ("loyalty", "used", "acts", "gained", "first", "surveils", "surveil_lands")
 
     def __init__(self):
         self.loyalty = 0
@@ -15,15 +39,27 @@ class JaceState:
         self.acts = 0
         self.gained = 0
         self.first = None
+        self.surveils = 0
+        self.surveil_lands = 0
 
     def add(self, n):
         if n > 0:
             self.loyalty += n
             self.gained += n
 
-    def try_activate(self, hand, library, turn):
-        if self.used or self.loyalty < 3 or not library:
+    def try_activate(self, hand, library, turn, battlefield=None, allow_surveil=False):
+        """Ab 3 Loyalty: -3, eine Karte ziehen. Darunter (wenn allow_surveil, also nach dem Zaubern): -1, Surveil 1.
+        acts zaehlt nur das Ziehen, surveils das Surveil."""
+        if self.used or not library or self.loyalty <= 0:
             return False
+        if self.loyalty < 3:
+            if not allow_surveil:
+                return False
+            self.loyalty -= 1
+            self.used = True
+            self.surveils += 1
+            self.surveil_lands += len(surveil(library, 1, hand, battlefield or []))
+            return True
         self.loyalty -= 3
         self.used = True
         self.acts += 1

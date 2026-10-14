@@ -334,6 +334,14 @@ Diese Werte stehen im Skript und lassen sich nur dort ändern.
   bei jeder ihrer Farben). Darunter die Farbkombinationen. Daneben die Tabelle **„Kartentypen“** (Kreaturen,
   Instants, Sorceries, Artefakte, Verzauberungen, Planeswalker, Länder, Empower Jace, Kartenfluss nach Art). Im
   „Deck-Vergleich“ steht „Kartentypen im Vergleich“ mit einer Spalte je Deck, Unterschiede fett.
+- **Jace und Surveil:** Der Jace-Token hat −1: Surveil 1 und −3: eine Karte ziehen, höchstens eine Aktivierung pro
+  Runde. Zu Rundenbeginn wird nur gezogen (ab 3 Loyalty). Nach dem Zaubern: ab 3 Loyalty ziehen, sonst Surveil 1, auch
+  wenn Jace dadurch auf 0 sinkt und verschwindet. Beim Surveil bleibt ein Land oben, wenn die teuerste Karte auf der
+  Hand noch nicht gespielt werden kann, weil Länder fehlen (Länder auf dem Feld und auf der Hand weniger als ihr
+  Manawert); sonst kommt es in den Friedhof. Zauber bleiben immer oben. Der Jace-Abschnitt im Bericht zeigt
+  zusätzlich Ø Surveil und Ø abgelegte Länder.
+- **Navigation im Bericht:** Die Sprungmarken zu den Abschnitten stehen links neben dem Inhalt und bleiben beim
+  Scrollen sichtbar. Auf schmalen Bildschirmen (unter 900 Pixel) stehen sie wie bisher als Leiste oben.
 - **Farbverfügbarkeit (Bericht):** Eigener Abschnitt und eine Zeile in „Auf einen Blick“: Wie oft liegen nach dem
   Landdrop von Runde 3 **alle Farben** des Decks (mindestens eine Quelle je Farbe) und je Farbe einzeln? Für Farben, die
   eine Karte doppelt verlangt (z. B. RR, mit Kartennamen), zusätzlich: Wie oft liegen bis Runde 4 **zwei Quellen**?

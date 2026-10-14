@@ -285,7 +285,7 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
     has_jace = jace_on and any(once_effects(c) or recurring_effects(c) for c in cards)
     samples = {"creatures": [], "power": [], "toughness": [], "util": [], "jace": []}  # je gespieltes Spiel
     jc = {"on": has_jace, "games_any": 0, "acts_win": 0, "gained_win": 0, "dist_win": Counter(),
-          "acts_all": 0, "gained_all": 0, "dist_all": Counter(), "first": [], "empty_reached": 0}
+          "acts_all": 0, "surveil_all": 0, "surveil_lands_all": 0, "gained_all": 0, "dist_all": Counter(), "first": [], "empty_reached": 0}
 
     while played < sims:
         mull["deals"] += 1
@@ -489,7 +489,8 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                                 break
                             paid.append(e[4])
                             jst.add(e[2])
-                jst.try_activate(hand, library, turn)  # Loyalty aus dieser Runde
+                # Loyalty aus dieser Runde: ab 3 ziehen, sonst Surveil 1 (auch bis 0)
+                jst.try_activate(hand, library, turn, battlefield=battlefield, allow_surveil=True)
 
             # Angriff: Kreaturen vom Vorzug greifen an, neue nur mit Haste, Defender nie (keine Blocker, kein Removal)
             turn_dmg = sum(c.power for c, t in board if not c.defender and (t < turn or c.haste)) if board else 0
@@ -542,6 +543,8 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
             jc["dist_win"][min(a_win, 6)] += 1
             jc["games_any"] += a_win > 0
             jc["acts_all"] += jst.acts
+            jc["surveil_all"] += jst.surveils
+            jc["surveil_lands_all"] += jst.surveil_lands
             jc["gained_all"] += jst.gained
             jc["dist_all"][min(jst.acts, 6)] += 1
             samples["jace"].append(a_win)

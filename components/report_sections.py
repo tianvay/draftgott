@@ -129,6 +129,31 @@ def deck_diff_chips(main_deck, alt_deck):
     return "".join(out) or '<span class="muted">identisch</span>'
 
 
+JACE_RULES = [
+    "Der Jace-Token startet mit 0 Loyalty und hat die Fähigkeiten −1: Surveil 1 und −3: eine Karte ziehen. Empower legt "
+    "Loyalty auf den Token, ohne Token wird ein neuer erstellt. Bei 0 Loyalty verschwindet er, der nächste Empower "
+    "erstellt einen neuen.",
+    "Jace wird höchstens einmal pro Runde aktiviert und nur, wenn die Bibliothek nicht leer ist. Zu Rundenbeginn mit "
+    "Loyalty aus früheren Runden nur zum Ziehen (ab 3 Loyalty, die Karte kann dann noch gespielt werden). Nach dem "
+    "Zaubern: ab 3 Loyalty ziehen, sonst −1: Surveil 1, auch wenn er dadurch auf 0 sinkt und verschwindet.",
+    "Surveil: Ein Land bleibt oben, wenn die teuerste Karte auf der Hand noch nicht gespielt werden kann, weil Länder "
+    "fehlen (Länder auf dem Feld und auf der Hand weniger als ihr Manawert). Sonst kommt das Land in den Friedhof. "
+    "Zauber bleiben immer oben.",
+    "Einmalig: Zauber (Instant, Sorcery) und „beim Betreten“-Effekte wirken sofort beim Ausspielen, auch bei Ländern.",
+    "Wiederkehrend, modelliert: „whenever you cast …“ (alle, Kreatur, Nichtkreatur, Instant oder Sorcery), „whenever … "
+    "enters“ (Kreatur, Land, Permanent), „whenever … attacks“ (ab der Runde nach dem Ausspielen, mit Haste sofort, nie "
+    "bei Defender) und „at the beginning of …“ (einmal pro Runde ab der Folgerunde). Karten reagieren nur auf "
+    "Ereignisse, nachdem sie im Spiel sind.",
+    "Bezahlbare Fähigkeiten werden mit dem Mana benutzt, das nach dem Zaubern übrig ist, so oft es reicht (höchstens "
+    "10-mal pro Runde). Mit {T} im Preis nur einmal pro Runde und bei Kreaturen erst ab der Folgerunde. Andere Kosten "
+    "(Opfern, Ablegen) sind nicht modelliert.",
+    "Modale Zauber zählen ihren Empower immer. Es wird nur die Vorderseite einer Karte simuliert, die Zählung "
+    "berücksichtigt alle Seiten.",
+    "Die Einordnung stammt aus dem Kartentext von Scryfall und ist unten zur Kontrolle neben jeder Karte aufgeführt. "
+    "Karten mit weiteren Planeswalker-Bezügen werden nur gezählt und nicht simuliert.",
+]
+
+
 def render_compare_section(ctx):
     a = ctx["args"]
     main_deck = ctx
@@ -275,9 +300,11 @@ def render_jace_section(ctx):
             rows_b.append([h_mode(l), h_bar_cell(ge(jc["dist_all"], 1), cls=cls), f'<td>{h_pct(ge(jc["dist_all"], 2))}</td>',
                            f'<td>{h_pct(ge(jc["dist_all"], 3))}</td>',
                            f'<td><b>{jc["acts_all"] / sims:.2f}</b></td>', f'<td>{jc["gained_all"] / sims:.2f}</td>',
-                           f'<td>{f"{first:.1f}" if first else "–"}</td>'])
+                           f'<td>{f"{first:.1f}" if first else "–"}</td>',
+                           f'<td>{jc.get("surveil_all", 0) / sims:.2f}</td>',
+                           f'<td>{jc.get("surveil_lands_all", 0) / sims:.2f}</td>'])
         heads_a = ["", "≥ 1 Aktivierung", "≥ 2", "≥ 3", "Ø Aktivierungen", "Ø Empower", "Hand leer erreicht"]
-        heads_b = heads_a[:-1] + ["Erste Aktivierung (Ø Runde)"]
+        heads_b = heads_a[:-1] + ["Erste Aktivierung (Ø Runde)", "Ø Surveil (−1)", "Ø Länder in den Friedhof"]
         sim_html = (
             '<div class="panel" style="margin-top:14px"><b>Bis die Hand leer ist</b>'
             + h_table(heads_a, rows_a)
@@ -287,7 +314,9 @@ def render_jace_section(ctx):
               '„Ø Empower“ ist die erhaltene Loyalty insgesamt, „Hand leer erreicht“ der Anteil der Spiele, in denen die Hand innerhalb des '
               'Beobachtungszeitraums leer wurde.</div></div>'
             f'<div class="panel" style="margin-top:14px"><b>Im ganzen Beobachtungszeitraum (bis Runde {H})</b>'
-            + h_table(heads_b, rows_b) + '</div>')
+            + h_table(heads_b, rows_b)
+            + '<div class="note">„Aktivierungen“ zählen das Ziehen (−3). „Ø Surveil“ zählt die −1-Aktivierungen, „Ø Länder '
+              'in den Friedhof“ die Länder, die dabei abgelegt wurden.</div></div>')
 
     card_rows = []
     for r in sorted(ja["cards"], key=lambda r: (not r["kinds"], r["name"])):
@@ -305,21 +334,7 @@ def render_jace_section(ctx):
         notes.append("Wirkt in der Simulation nicht (Auslöser oder Kosten nicht modelliert, zählt aber in der Statistik): "
                      + ", ".join(ja["unmodeled"]))
     warn = "".join(f'<div class="warnbox">{esc(n)}</div>' for n in notes)
-    rules = [
-        "Der Jace-Token startet mit 0 Loyalty und hat die Fähigkeit −3: eine Karte ziehen. Empower legt Loyalty auf den Token, "
-        "ohne Token wird ein neuer erstellt. Bei 0 Loyalty verschwindet er, der nächste Empower erstellt einen neuen.",
-        "Jace wird aktiviert, sobald er mindestens 3 Loyalty hat und die Bibliothek nicht leer ist, höchstens einmal pro Runde: "
-        "zu Rundenbeginn mit Loyalty aus früheren Runden (die Karte kann dann noch gespielt werden), sonst nach dem Zaubern.",
-        "Einmalig: Zauber (Instant, Sorcery) und „beim Betreten“-Effekte wirken sofort beim Ausspielen, auch bei Ländern.",
-        "Wiederkehrend, modelliert: „whenever you cast …“ (alle, Kreatur, Nichtkreatur, Instant oder Sorcery), „whenever … enters“ "
-        "(Kreatur, Land, Permanent), „whenever … attacks“ (ab der Runde nach dem Ausspielen, mit Haste sofort, nie bei Defender) und „at the beginning of …“ "
-        "(einmal pro Runde ab der Folgerunde). Karten reagieren nur auf Ereignisse, nachdem sie im Spiel sind.",
-        "Bezahlbare Fähigkeiten werden mit dem Mana benutzt, das nach dem Zaubern übrig ist, so oft es reicht (höchstens 10-mal pro Runde). "
-        "Mit {T} im Preis nur einmal pro Runde und bei Kreaturen erst ab der Folgerunde. Andere Kosten (Opfern, Ablegen) sind nicht modelliert.",
-        "Modale Zauber zählen ihren Empower immer. Es wird nur die Vorderseite einer Karte simuliert, die Zählung berücksichtigt alle Seiten.",
-        "Die Einordnung stammt aus dem Kartentext von Scryfall und ist unten zur Kontrolle neben jeder Karte aufgeführt. "
-        "Karten mit weiteren Planeswalker-Bezügen werden nur gezählt und nicht simuliert.",
-    ]
+    rules = JACE_RULES
     return (f'<div class="grid g3">{kpi_html}</div>'
             f'<div class="panel" style="margin-top:14px"><b>Empower Jace nach Art</b>{kind_table}'
             f'<div class="note">Bei wiederkehrenden Karten ist Σ Empower der Wert je Auslösung beziehungsweise je Aktivierung. '
