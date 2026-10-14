@@ -62,7 +62,8 @@ def build_deck(entry, data, args):
         deck_colors=deck_colors, multicolor=len(deck_colors) >= 2, top_mv=top_mv,
         top_names=sorted({n for n, _, c, _ in rows if not c.is_land and c.alts and c.mv == top_mv}),
         cyc_names=sorted({n for n, _, c, _ in rows if c.cycle_alts}),
-        draw_names=sorted({n for n, _, c, _ in rows if c.draws}))
+        draw_names=sorted({n for n, _, c, _ in rows if c.draws}),
+        surveil_names=sorted({n for n, _, c, _ in rows if c.surveil}))
 
 
 def _stderr(msg):

@@ -5,7 +5,7 @@ from collections import Counter
 
 from components.cards import enters_tapped
 from components.jace import (JaceState, cast_filter_matches, creates_jace, creates_walker, enter_filter_matches,
-                             once_effects, recurring_effects)
+                             once_effects, recurring_effects, surveil)
 from components.mana import can_cast_all, can_pay, has_two_colors, land_key
 from components.mulligan import deal_opening
 
@@ -115,6 +115,18 @@ def resolve_draws(hand, library, chosen, pool, battlefield, land_played, has_cre
         used += len(extra)
         pending = sum(c.draws for c in extra)
     return {"chosen": cast, "land": land, "tapped": tapped, "pool": pool, "drawn": drawn, "used": used}
+
+
+def apply_surveils(amounts, library, hand, battlefield):
+    """Surveil durch Karten: je Quelle Surveil N nacheinander (Entscheidung wie bei Jace, siehe jace.surveil).
+    Gibt (Zahl der Surveils, abgelegte Laender) zurueck; ein Surveil mit leerer Bibliothek zaehlt nicht."""
+    events = lands = 0
+    for n in amounts:
+        if not library or n <= 0:
+            continue
+        events += 1
+        lands += sum(c.is_land for c in surveil(library, n, hand, battlefield))
+    return events, lands
 
 
 def choose_land(hand, spells, pool, battlefield, walker_bf, jace_bf, has_creature, auras_need_creature):
@@ -336,6 +348,8 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
     has_jace = jace_on and any(once_effects(c) or recurring_effects(c) for c in cards)
     samples = {"creatures": [], "power": [], "toughness": [], "util": [], "jace": []}  # je gespieltes Spiel
     has_draws = any(c.draws for c in cards)
+    has_surveil = any(c.surveil for c in cards)
+    sv = {"events": 0, "games": 0, "lands": 0}
     dr = {"cards": 0, "games": 0, "used": 0}
     jc = {"on": has_jace, "games_any": 0, "acts_win": 0, "gained_win": 0, "dist_win": Counter(),
           "acts_all": 0, "surveil_all": 0, "surveil_lands_all": 0, "gained_all": 0, "dist_all": Counter(), "first": [], "empty_reached": 0}
@@ -368,7 +382,7 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
         acts_empty = gained_empty = None
         snap = (0, 0, 0)
         g_avail = g_spent = 0
-        g_drawn = 0
+        g_drawn = g_surveils = 0
 
         for turn in range(1, horizon + 1):
             drew = None
@@ -514,6 +528,13 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                     board.append((c, turn))
                 if c.is_planeswalker:
                     walkers.append(c)
+            if has_surveil:  # nach dem Zaubern: erst das Land, dann die Zauber in der Reihenfolge des Wirkens
+                amounts = ([land_played.surveil] if land_played is not None else []) + [c.surveil for c in chosen]
+                if any(amounts):
+                    ev, binned = apply_surveils([a for a in amounts if a], library, hand, battlefield)
+                    g_surveils += ev
+                    sv["events"] += ev
+                    sv["lands"] += binned
             if has_jace:
                 for c in sorted(chosen, key=lambda x: (not recurring_effects(x), x.mv)):
                     for pc, _t in perms:
@@ -623,6 +644,7 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
 
         dr["cards"] += g_drawn
         dr["games"] += g_drawn > 0
+        sv["games"] += g_surveils > 0
         samples["creatures"].append(snap[0])
         samples["power"].append(snap[1])
         samples["toughness"].append(snap[2])
@@ -662,6 +684,8 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
         "best_lethal": best_lethal,
         "mulligan": mull,
         "jace": jc,
+        "card_surveil": {"on": has_surveil, "events": sv["events"] / sims, "games": sv["games"] / sims,
+                         "lands": sv["lands"] / sims},
         "draws": {"on": has_draws, "cards": dr["cards"] / sims, "games": dr["games"] / sims, "used": dr["used"] / sims},
         "samples": samples,
         "curve": {"avail": curve_avail, "spent": curve_spent, "full": curve_full, "games": curve_games},

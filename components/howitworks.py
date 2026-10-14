@@ -13,7 +13,7 @@ from components.stats import TRAFFIC
 
 _D = parse_args(["deck.txt"])  # Standardwerte der Kommandozeile
 # Abschnitte, die nur erscheinen, wenn der Bericht sie auch hat (z. B. Deck-Vergleich nur bei mehreren Decks)
-CONDITIONAL = {"vergleich", "great", "mulligan", "jace", "farben", "landcycling", "ziehen"}
+CONDITIONAL = {"vergleich", "great", "mulligan", "jace", "farben", "landcycling", "ziehen", "surveil"}
 
 
 def _ul(items):
@@ -84,8 +84,8 @@ def _sections():
             "Die Erkennung arbeitet über den Kartentext von Scryfall und sortiert nur grob, weil Magic dasselbe oft "
             "unterschiedlich formuliert. Status jeder gelisteten Karte: „To Do: Noch nicht implementiert“.",
             "Nicht gemeldet wird, was die Simulation abbildet: aufgedrucktes Haste und Defender, Landcycling, die "
-            "Bedingungen getappter Länder, Empower Jace mit festem Wert, Draw-Zauber mit fester Zahl und "
-            "Kampf-Schlüsselwörter ohne Gegner.",
+            "Bedingungen getappter Länder, Empower Jace mit festem Wert, Draw-Zauber und Surveil mit fester Zahl "
+            "und Kampf-Schlüsselwörter ohne Gegner.",
             "Kategorien: Tokens erzeugen, Direkter Schaden, Zählmarken / Stärkebonus, Haste verleihen, Mana außer "
             "Ländern, Kartenfluss, Kostensenkung / Convoke, Zweitverwertung (Friedhof), Timing (Flash), Zusatzkosten, "
             "Prepared-Zauberhälfte, Planeswalker-Fähigkeit, Defender-Ausnahme, Interaktion mit dem Gegner, "
@@ -175,6 +175,17 @@ def _sections():
             "gezogenes Land gelegt, und mit dem übrigen Mana wird weiter gezaubert (auch weitere Draw-Zauber).",
             "„Ø zusätzlich gezogen“: Karten pro Spiel durch Draw-Zauber, bis zum Ende der Beobachtung. „Ø gleich "
             "genutzt“: danach im selben Zug zusätzlich gelegte Länder und gewirkte Zauber."]))),
+        ("surveil", "Surveil durch Karten", _panel("Regeln", _ul([
+            "Modelliert ist „Surveil N.“ als eigener Satz in Instants und Sorceries sowie „When this … enters, surveil "
+            "N.“ bei Kreaturen, anderen bleibenden Karten und Ländern (N fest). Der Rest einer Zeile (z. B. Exil) bleibt "
+            "in der Modell-Abdeckung.",
+            "Nicht modelliert: Auslöser wie „whenever another creature enters“, bezahlbare Fähigkeiten, modale Karten, "
+            "X-Werte und Prepared-Zauberhälften.",
+            "Zeitpunkt: nach dem Zaubern der Runde, zuerst das gelegte Land, dann die Zauber in der Reihenfolge des "
+            "Wirkens.",
+            "Entscheidung wie bei Jace: Ein Land bleibt oben, solange für die teuerste Karte auf der Hand Länder fehlen "
+            "(Länder auf dem Feld und auf der Hand zählen); sonst kommt es in den Friedhof. Zauber bleiben immer oben.",
+            "Surveils durch Jace stehen im Abschnitt Jace & Planeswalker und zählen hier nicht mit."]))),
         ("tempo", "Tempo", _panel("Bedeutung", _p(
             "Ø und Median nur über Spiele, in denen das Ereignis bis zum Ende der Beobachtung eintritt. Top Card: die "
             "Karte(n) mit dem höchsten Manawert; gezählt wird die erste Runde, in der sie spielbar wäre."))),
@@ -192,7 +203,7 @@ def _sections():
             "Auras werden nur mit eigener Kreatur gespielt (außer mit <code>--auras-ohne-kreatur</code>).",
             "Kreaturen: aufgedruckte Power/Toughness, Einsatzverzögerung außer Haste, Defender greift nie an, keine "
             "Blocker oder Removal.",
-            "Landcycling, Empower Jace und Draw-Zauber: Regeln in den jeweiligen Abschnitten.",
+            "Landcycling, Empower Jace, Draw-Zauber und Surveil durch Karten: Regeln in den jeweiligen Abschnitten.",
             "Was die Simulation nicht abbildet, zeigt der Abschnitt Modell-Abdeckung je Deck."]))),
         ("drafthelper", "Drafthelper", _drafthelper_help()),
     ]

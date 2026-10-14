@@ -89,7 +89,7 @@ class CategoryTests(unittest.TestCase):
 
     def test_card_flow(self):
         self.check("Whenever you gain life, draw a card.", "Kartenfluss", M_FLOW)
-        self.check("When this creature enters, surveil 1.", "Kartenfluss", M_FLOW)
+        self.check("Whenever another creature you control enters, surveil 1.", "Kartenfluss", M_FLOW)
         self.check("Search your library for a basic land card, put it onto the battlefield tapped.", "Kartenfluss",
                    M_FLOW, type_line="Sorcery")
 

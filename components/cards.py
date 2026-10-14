@@ -31,6 +31,7 @@ class Card(NamedTuple):
     defender: bool = False     # Kreatur mit Defender: kann nicht angreifen
     is_jace: bool = False      # Planeswalker mit Untertyp Jace (fuer "behold a Jace")
     draws: int = 0             # Karten, die der Zauber (bzw. die Kreatur beim Betreten) sofort zieht
+    surveil: int = 0           # Surveil N beim Wirken bzw. Betreten (auch Laender)
 
 
 LANDCYCLE_RE = re.compile(
@@ -130,6 +131,32 @@ def parse_draws(card, type_line):
     for raw in text.split("\n"):
         total += draw_line(re.sub(r"\([^)]*\)", "", raw), spell_face, card.get("name", ""))[0]
     return total
+
+
+# Surveil N: im Zauber als eigener Satz, bei bleibenden Karten (auch Laendern) beim Betreten
+SURVEIL_SPELL_RE = re.compile(r"(?:^|(?<=\. ))surveil (\d+)\.(?=\s|$)")
+SURVEIL_ETB_RE = re.compile(r"^when (this [a-z]+|~) enters, surveil (\d+)\.(?=\s|$)")
+
+
+def surveil_line(line, spell_face, name=""):
+    """Erkennt Surveil mit fester Zahl in einer Textzeile (ohne Erinnerungstext). Gibt (Anzahl, Resttext in
+    Kleinbuchstaben) zurueck; (0, Zeile) wenn nichts Modelliertes darin steht."""
+    low = line.lower().strip()
+    if name:
+        low = low.replace(name.lower(), "~")
+    m = SURVEIL_SPELL_RE.search(low) if spell_face else SURVEIL_ETB_RE.match(low)
+    if not m:
+        return 0, low
+    return int(m.group(1 if spell_face else 2)), (low[:m.start()] + low[m.end():]).strip()
+
+
+def parse_surveil(card, type_line):
+    """Summe der modellierten Surveil-Effekte der Vorderseite."""
+    front = (card.get("card_faces") or [card])[0]
+    text = front.get("oracle_text") or card.get("oracle_text") or ""
+    spell_face = "Instant" in type_line or "Sorcery" in type_line
+    return sum(surveil_line(re.sub(r"\([^)]*\)", "", raw), spell_face, card.get("name", ""))[0]
+               for raw in text.split("\n"))
 
 
 EMPOWER_RE = re.compile(r"empower jace (\d+|x)\b", re.I)
@@ -259,9 +286,12 @@ def card_info(card):
         shown = "Land " + ("".join("{%s}" % c for c in ordered) or "(-)") + tap_tag(tap_mode, tap_arg)
         eff, etext = parse_empower(card)
         shown += empower_tags_text(eff)
+        surveil = parse_surveil(card, type_line)
+        if surveil:
+            shown += f"   [Surveil {surveil}]"
         return (Card(True, 0, (), colors, False, False, 0, 0, False, tap_mode, tap_arg, subtypes,
                      card["name"], is_basic="Basic" in type_line, empower=eff, empower_text=etext,
-                     pw_tags=pw_tags_for(card, type_line)), shown)
+                     pw_tags=pw_tags_for(card, type_line), surveil=surveil), shown)
 
     if card.get("layout") in ("split", "room", "adventure", "flip") and len(faces) > 1:
         used = [f for f in faces if f.get("mana_cost")]  # jede Haelfte ist spielbar
@@ -300,6 +330,9 @@ def card_info(card):
     draws = parse_draws(card, type_line)
     if draws:
         shown += f"   [Zieht {draws}]"
+    surveil = parse_surveil(card, type_line)
+    if surveil:
+        shown += f"   [Surveil {surveil}]"
     return Card(False, mv, alts, (), is_creature, is_aura,
                 power if is_creature else 0, tough if is_creature else 0, haste,
                 name=card["name"], cycle_alts=cycle_alts, cycle_target=cycle_target,
@@ -307,4 +340,4 @@ def card_info(card):
                 is_planeswalker="Planeswalker" in type_line, empower=eff, empower_text=etext,
                 pw_tags=pw_tags_for(card, type_line), defender=defender,
                 is_jace=("Planeswalker" in type_line and "Jace" in type_line.split("—")[-1].split()),
-                draws=draws), shown
+                draws=draws, surveil=surveil), shown

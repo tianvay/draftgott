@@ -471,6 +471,21 @@ def render_details(ctx, suffix=""):
         add("ziehen", "Draw-Zauber", "Karten im Deck: " + esc(", ".join(ctx["draw_names"])),
             f'<div class="grid">{"".join(panels)}</div>')
 
+    # ---------------- Surveil durch Karten
+    if ctx.get("surveil_names"):
+        panels = []
+        for l in labels:
+            s_ = res[l]["card_surveil"]
+            panels.append(
+                f'<div class="panel"><b>{esc(l)}</b><div class="grid g4" style="margin:10px 0">'
+                f'<div class="kpi"><div class="l">Spiele mit Surveil</div><div class="v">{h_pct(s_["games"])}</div></div>'
+                f'<div class="kpi"><div class="l">Ø Surveils</div><div class="v">{s_["events"]:.2f}</div>'
+                f'<div class="s">pro Spiel bis Runde {H}</div></div>'
+                f'<div class="kpi"><div class="l">Ø Länder in den Friedhof</div><div class="v">{s_["lands"]:.2f}</div>'
+                f'<div class="s">pro Spiel</div></div></div></div>')
+        add("surveil", "Surveil durch Karten", "Karten im Deck: " + esc(", ".join(ctx["surveil_names"])),
+            f'<div class="grid">{"".join(panels)}</div>')
+
     # ---------------- Tempo
     rows_t = []
     for l in labels:

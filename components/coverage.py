@@ -9,7 +9,8 @@ analyze_card(scryfall_card) -> Liste von (Kategorie, Kennzahl, Textzeile); leer 
 import re
 from collections import Counter
 
-from components.cards import EMPOWER_RE, LANDCYCLE_RE, classify_empower_line, draw_line, land_tap_info
+from components.cards import (EMPOWER_RE, LANDCYCLE_RE, classify_empower_line, draw_line, land_tap_info,
+                              surveil_line)
 
 STATUS_TEXT = "To Do: Noch nicht implementiert"
 
@@ -147,6 +148,14 @@ def analyze_card(card):
                 continue
             if low.startswith("enchant ") and "aura" in type_line.lower():
                 continue
+            spell_face = "Instant" in type_line or "Sorcery" in type_line
+            if fi == 0 and not raw.strip().startswith("•"):
+                n, rest = surveil_line(line, spell_face, card.get("name", ""))
+                if n:  # Surveil mit fester Zahl ist modelliert; der Rest der Zeile wird weiter geprueft
+                    if re.sub(r"[^a-z]", "", rest):
+                        line, low = rest, rest
+                    else:
+                        continue
             if is_land:
                 if re.match(r"^\{t\}: add ", low):
                     continue
