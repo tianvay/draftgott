@@ -26,7 +26,8 @@ from components.cardkinds import (FLOW_ORDER, empower_points, flow_kinds,  # noq
                                   type_kinds)
 from components.deckfile import parse_pool
 from components.howitworks import render_help_page
-from components.landadvice import recommend
+from components.landadvice import color_overview, recommend
+from components.symbols import active as active_symbols, symbol_css
 from components.scryfall import card_image_url, fetch_cards_cached, fetch_printing_images
 from components.suggest import WUBRG, propose, suggest
 
@@ -227,7 +228,7 @@ def make_handler(app):
         def do_GET(self):
             path = self.path.split("?", 1)[0]
             if path == "/":
-                self._send(PAGE)
+                self._send(render_page())
             elif path == "/api/pool":
                 self._json({"cards": app["pool"], "basics": app["basics"], "sims": app["args"].sims,
                             "options": app["options"], "file": app["file"],
@@ -248,7 +249,7 @@ def make_handler(app):
                 self._json({"ok": True})
                 threading.Thread(target=app["server"].shutdown, daemon=True).start()
                 return
-            if path not in ("/api/simulate", "/api/suggest", "/api/propose", "/api/lands"):
+            if path not in ("/api/simulate", "/api/suggest", "/api/propose", "/api/lands", "/api/colors"):
                 self._send("Nicht gefunden", "text/plain; charset=utf-8", 404)
                 return
             pool = app["pool"]
@@ -287,6 +288,9 @@ def make_handler(app):
                 return
             if path == "/api/lands":
                 self._json({"ok": True, **recommend(pool, marks, target)})
+                return
+            if path == "/api/colors":
+                self._json({"ok": True, **color_overview(pool, marks, basics)})
                 return
             if path == "/api/propose":
                 result = propose(pool, marks, cats, colors, target, sort)
@@ -436,6 +440,9 @@ h2 small{color:var(--muted);font-weight:400}
 .side td.z{color:#c3c8d2}
 .side tr.tot td{font-weight:700;border-top:2px solid var(--line)}
 .side .note{font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.35}
+.side td.good{background:#d9f3e4;color:#146c3d;font-weight:700}.side td.warn{background:#ffedc2;color:#7a5200;font-weight:700}
+.side td.bad{background:#fde0e0;color:#a82a2a;font-weight:700}
+.side .m.ms{margin-right:4px}.side .csym{display:inline-block;min-width:18px;font-weight:700}
 .cdot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:baseline;border:1px solid rgba(0,0,0,.2)}
 @media(max-width:1100px){.layout{grid-template-columns:1fr}.side{position:static;max-height:none}}
 .toolbar{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;margin:0 0 12px}
@@ -507,6 +514,7 @@ h2 small{color:var(--muted);font-weight:400}
 .ccleg i{display:inline-block;width:10px;height:10px;border:1px solid rgba(0,0,0,.25);margin-right:4px;border-radius:2px}
 .ccnote{font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.4}
 .err{background:#fef3f2;border:1px solid #fda29b;color:#b42318;border-radius:10px;padding:12px 16px;margin:10px 0;display:none}
+/*SYMBOL_CSS*/
 </style></head><body>
 <header class="bar">
   <h1>Draft-Helper</h1>
@@ -538,6 +546,10 @@ h2 small{color:var(--muted);font-weight:400}
           <option value="percolor">Je Farbe (Mehrfarbige in jeder Farbe)</option></select></label>
       </div>
       <div id="colorcurve" class="colorcurve"></div>
+      <h3 style="margin-top:18px">Farben und Quellen</h3>
+      <div class="cc-controls"><label>Variante <select id="fqvar"><option value="splash">Splash</option>
+          <option value="nosplash">NoSplash</option></select></label></div>
+      <div id="colorsrc"></div>
       <h3 style="margin-top:18px">Kartentypen je Variante</h3><div id="types"></div></aside>
     <div>
       <div class="toolbar">
@@ -584,6 +596,8 @@ h2 small{color:var(--muted);font-weight:400}
   <span id="rnote" style="color:var(--muted)"></span></div><iframe id="frame" title="Bericht"></iframe></div>
 <script>
 const LABEL={core:"Core",splash:"Splash",nosplash:"NoSplash",off:"Aus"};
+const SYMBOLS=[];  // vorhandene Original-Manasymbole (vom Server eingesetzt, siehe render_page)
+function manaSym(k){if(!SYMBOLS.includes(k))return null;const s=el("span","m ms ms-"+k);s.title="{"+k+"}";return s}
 let pool=[], state=[], basics=[], storeKey="", searchQ="", sortKey="mv", proposal=null, colorsFromSave=false;
 const $=id=>document.getElementById(id);
 const el=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e};
@@ -691,7 +705,44 @@ function summary(){
   s.appendChild(document.createTextNode("Splash-Variante: "));s.appendChild(el("b",null,a+" Karten"));
   s.appendChild(document.createTextNode(" · NoSplash-Variante: "));s.appendChild(el("b",null,b+" Karten"));
   if(a!==b)s.appendChild(el("span","warn","  – unterschiedlich groß"));
-  overview();curve();typeOverview();renderColorCurve();
+  overview();curve();typeOverview();renderColorCurve();scheduleColors();
+}
+// Farben und Quellen: gerechnet auf dem Server (components/landadvice.py, wie Land-Empfehlung und Bericht)
+let colorTimer=null,colorData=null;
+function scheduleColors(){clearTimeout(colorTimer);colorTimer=setTimeout(loadColors,200)}
+async function loadColors(){
+  try{const r=await api("/api/colors",{marks:marksPerCard(),basics:basicsBody(),cats});if(r.ok){colorData=r;renderColors()}}
+  catch(e){}
+}
+function renderColors(){
+  const box=$("colorsrc");box.textContent="";if(!colorData)return;
+  const vs=colorData.variants,sel=$("fqvar");
+  sel.parentNode.style.display=vs.length>1?"":"none";
+  const v=vs.length>1?(vs.find(x=>x.key===sel.value)||vs[0]):vs[0];
+  if(!v.rows.length){box.appendChild(el("div","note","Keine farbigen Karten oder Quellen in dieser Variante."));return}
+  const tb=el("table"),hr=el("tr");
+  [["Farbe","l",""],["Symbole","","Farbsymbole, die die Karten zwingend verlangen ({R}{R} zählt 2, Hybrid nicht)"],
+   ["Karten","","Karten, die die Farbe zwingend verlangen"],["Quellen","","Standardländer der Variante und zugeordnete Nicht-Standardländer"],
+   ["Ø pünktlich","","Chance, die Farbsymbole einer Karte bis Runde = Manawert zu haben (Play), gemittelt über die Karten der Farbe"]]
+    .forEach(([t,cls,tip])=>{const h=el("th",cls||null,t);if(tip)h.title=tip;hr.appendChild(h)});
+  const th=el("thead");th.appendChild(hr);tb.appendChild(th);
+  const body=el("tbody");
+  for(const r of v.rows){
+    const tr=el("tr"),lab=el("td","l");
+    lab.appendChild(manaSym(r.color)||el("span","csym",r.color));lab.append(COLOR_NAME[r.color]);tr.appendChild(lab);
+    tr.appendChild(el("td",r.pips?null:"z",r.pips?String(r.pips):"·"));
+    tr.appendChild(el("td",r.cards?null:"z",r.cards?String(r.cards):"·"));
+    const src=el("td",r.sources?null:"z",r.sources?String(r.sources):"0");
+    if(r.nonbasic){src.appendChild(el("small",null," ("+r.nonbasic+" NS)"));src.title="davon "+r.nonbasic+" Nicht-Standardländer"}
+    tr.appendChild(src);
+    const p=r.avg;
+    const pc=el("td",p===null?"z":p>=0.9?"good":p>=0.8?"warn":"bad",p===null?"–":Math.round(p*100)+" %");
+    if(r.worst)pc.title="Am knappsten: "+r.worst.name+" ("+Math.round(r.worst.p*100)+" %)";
+    tr.appendChild(pc);body.appendChild(tr);
+  }
+  tb.appendChild(body);box.appendChild(tb);
+  box.appendChild(el("div","note",v.label+": "+v.deck+" Karten. NS = Nicht-Standardländer. Ø pünktlich wie in der "+
+    "Farbverteilung des Berichts; Ampel grün ab 90 %, gelb ab 80 %. Mit der Maus über dem Wert: die knappste Karte."));
 }
 // Mana-Kurve: Nichtland-Karten je Manawert, Splash- und NoSplash-Variante nebeneinander
 function curve(){
@@ -944,7 +995,8 @@ function overview(){
   const cell=(tr,v,cls)=>{tr.appendChild(el("td",v?cls||null:"z",v?String(v):"·"))};
   for(const [k,name,col] of COLORS){
     const a=acc[k],tr=el("tr");
-    const lab=el("td","l");const dot=el("span","cdot");dot.style.background=col;lab.append(dot,name);tr.appendChild(lab);
+    const lab=el("td","l");const dot=manaSym(k)||el("span","cdot");if(!dot.title)dot.style.background=col;
+    lab.append(dot,name);tr.appendChild(lab);
     cell(tr,a.pool);cell(tr,a.core);cell(tr,a.splash);cell(tr,a.nosplash);
     for(const c of CATS)cell(tr,a.cat[c.key]||0);cell(tr,a.none);
     body.appendChild(tr);
@@ -1109,9 +1161,11 @@ $("ccvar").onchange=renderColorCurve;
 $("ccmode").onchange=renderColorCurve;
 $("suggest").onclick=suggestDeck;
 $("propose").onclick=createProposal;
-document.querySelectorAll(".colpick input").forEach(i=>{i.onchange=save});
+document.querySelectorAll(".colpick input").forEach(i=>{i.onchange=save;
+  const sym=manaSym(i.value);if(sym&&i.nextSibling){i.nextSibling.textContent="";i.parentNode.appendChild(sym)}});
 $("undo").onclick=undoSuggest;
 $("lands").onclick=recommendLands;
+$("fqvar").onchange=renderColors;
 $("target").onchange=save;
 $("xclose").onclick=()=>$("exportbox").classList.remove("show");
 $("exportbox").onclick=e=>{if(e.target===$("exportbox"))$("exportbox").classList.remove("show")};
@@ -1141,3 +1195,13 @@ $("quit").onclick=async()=>{if(!confirm("Draft-Helper beenden?"))return;
 })();
 </script></body></html>
 """
+
+
+SYMBOL_KEYS = ("W", "U", "B", "R", "G", "C")
+
+
+def render_page():
+    """Die Seite mit den vorhandenen Original-Manasymbolen (Farben und Farblos) als eingebettetem CSS."""
+    have = [k for k in SYMBOL_KEYS if k in active_symbols()]
+    return (PAGE.replace("/*SYMBOL_CSS*/", symbol_css(have))
+            .replace("const SYMBOLS=[];", "const SYMBOLS=" + json.dumps(have, separators=(",", ":")) + ";"))

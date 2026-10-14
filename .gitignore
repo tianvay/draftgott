@@ -4,6 +4,7 @@
 # Scryfall-Cache
 scryfall_cache.json
 scryfall_images_cache.json
+scryfall_symbols.json
 
 # Python
 __pycache__/

@@ -2,6 +2,8 @@
 import html as html_lib
 import re
 
+from components import symbols
+
 
 HTML_CSS = """
 :root{
@@ -142,6 +144,9 @@ def esc(x):
 
 
 def html_mana(sym):
+    symbols.mark_used(sym)
+    if symbols.has(sym):  # Original-Symbol (Scryfall-SVG ueber CSS, siehe components/symbols.py)
+        return f'<span class="m ms {symbols.css_class(sym)}" title="{{{esc(sym)}}}" role="img" aria-label="{{{esc(sym)}}}"></span>'
     if "/" in sym:
         cols = [MANA_BG.get(p, MANA_NEUTRAL) for p in sym.split("/")[:2]]
         if len(cols) == 1:

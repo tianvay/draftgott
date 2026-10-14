@@ -217,3 +217,48 @@ def recommend(pool, marks, target=40):
             basics[BASIC_FOR_COLOR[c]][k] = counts[k] - shared
     return {"marks": new_marks, "basics": basics, "lands": lands_out, "variants": out_variants,
             "warnings": warnings}
+
+
+def color_overview(pool, marks, basics):
+    """Farben und Quellen je Variante fuer die Seitenleiste des Drafthelpers (aktueller Stand, keine Empfehlung).
+    basics: {Landname: {core, splash, nosplash}}. Je Farbe: Symbole (zwingend verlangte Farbsymbole mal Kopien),
+    Karten, Quellen (Standardlaender der Variante plus zugeordnete Nicht-Standardlaender, davon nonbasic) und
+    Ø puenktlich mit der knappsten Karte wie im Bericht. Gibt {variants: [{key, label, deck, rows}]} zurueck."""
+    basics = {n: {g: int((v or {}).get(g) or 0) for g in GROUP_LABEL} for n, v in (basics or {}).items()}
+    two = any(m in ("splash", "nosplash") for ms in marks for m in ms) or \
+        any(v["splash"] or v["nosplash"] for v in basics.values())
+    variants = [("splash", ("core", "splash")), ("nosplash", ("core", "nosplash"))] if two else [("core", ("core",))]
+    color_of_basic = {name: c for c, name in BASIC_FOR_COLOR.items()}
+    out = []
+    for key, groups in variants:
+        items, nonbasic, n_lands = [], {c: 0 for c in WUBRG}, 0
+        for card, ms in zip(pool, marks):
+            n = sum(m in groups for m in ms)
+            if not n:
+                continue
+            if card.get("land"):
+                n_lands += n
+                for c in set(card.get("produces") or []) & set(WUBRG):
+                    nonbasic[c] += n
+                continue
+            items.append({"name": card["name"], "needs": needs_of_alts(cost_alternatives(card.get("cost") or "")),
+                          "mv": card.get("mv") or 0, "qty": n})
+        basic_src = {c: 0 for c in WUBRG}
+        for name, v in basics.items():
+            k = sum(v[g] for g in groups)
+            n_lands += k
+            if name in color_of_basic:
+                basic_src[color_of_basic[name]] += k
+        sources = {c: basic_src[c] + nonbasic[c] for c in WUBRG}
+        deck = sum(it["qty"] for it in items) + n_lands
+        rep = color_report(items, sources, deck) if deck else {}
+        rows = []
+        for c in WUBRG:
+            pips = sum(it["qty"] * it["needs"].get(c, 0) for it in items)
+            if c not in rep and not pips:
+                continue
+            r = rep.get(c) or {"cards": 0, "avg": None, "worst": None}
+            rows.append({"color": c, "pips": pips, "cards": r["cards"], "sources": sources[c], "nonbasic": nonbasic[c],
+                         "avg": r["avg"], "worst": r["worst"]})
+        out.append({"key": key, "label": GROUP_LABEL[key], "deck": deck, "rows": rows})
+    return {"variants": out}

@@ -188,6 +188,53 @@ class RecommendTests(unittest.TestCase):
         self.assertTrue(r["warnings"])
 
 
+class ColorOverviewTests(unittest.TestCase):
+    """color_overview: Symbole, Karten, Quellen und Ø puenktlich je Farbe fuer die Seitenleiste des Drafthelpers."""
+
+    def setUp(self):
+        self.pool = [spell("Black", "{1}{B}", 2, 4), spell("Red Double", "{2}{R}{R}", 4, 2),
+                     spell("Hybrid", "{1}{B/R}", 2, 1), spell("Green Splash", "{3}{G}", 4, 1),
+                     land("BG Land", "BG"), land("BR Land", "BR")]
+        self.basics = {"Swamp": {"core": 6, "splash": 0, "nosplash": 1}, "Mountain": {"core": 5, "splash": 0, "nosplash": 0},
+                       "Forest": {"core": 0, "splash": 2, "nosplash": 0}}
+
+    def marks(self, **by_name):
+        return [[by_name.get(c["name"], "off")] * c["qty"] for c in self.pool]
+
+    def test_core_only(self):
+        r = la.color_overview(self.pool, self.marks(Black="core", **{"Red Double": "core", "Hybrid": "core",
+                                                                     "BR Land": "core"}),
+                              {"Swamp": {"core": 8}, "Mountain": {"core": 8}})
+        self.assertEqual([v["key"] for v in r["variants"]], ["core"])
+        rows = {row["color"]: row for row in r["variants"][0]["rows"]}
+        self.assertEqual(set(rows), {"B", "R"})
+        self.assertEqual((rows["B"]["pips"], rows["B"]["cards"], rows["B"]["sources"], rows["B"]["nonbasic"]),
+                         (4, 4, 9, 1))
+        self.assertEqual((rows["R"]["pips"], rows["R"]["cards"], rows["R"]["sources"]), (4, 2, 9))  # RR zaehlt doppelt
+        v = r["variants"][0]
+        self.assertEqual(v["deck"], 7 + 1 + 16)
+        expected = la.on_time({"needs": {"R": 2}, "mv": 4}, {"R": 9}, v["deck"])
+        self.assertAlmostEqual(rows["R"]["avg"], expected)
+        self.assertEqual(rows["R"]["worst"]["name"], "Red Double")
+
+    def test_splash_and_nosplash_sources(self):
+        marks = self.marks(Black="core", **{"Red Double": "core", "Green Splash": "splash", "BG Land": "splash",
+                                            "BR Land": "nosplash"})
+        r = la.color_overview(self.pool, marks, self.basics)
+        by = {v["key"]: {row["color"]: row for row in v["rows"]} for v in r["variants"]}
+        self.assertEqual(set(by), {"splash", "nosplash"})
+        self.assertEqual(by["splash"]["G"]["sources"], 3)        # 2 Forest + BG Land
+        self.assertEqual(by["splash"]["B"]["sources"], 7)        # 6 Swamp + BG Land
+        self.assertEqual(by["nosplash"]["B"]["sources"], 8)      # 6 + 1 Swamp + BR Land
+        self.assertEqual(by["nosplash"]["R"]["sources"], 6)      # 5 Mountain + BR Land
+        self.assertNotIn("G", by["nosplash"])
+
+    def test_sources_without_cards_are_listed(self):
+        r = la.color_overview(self.pool, self.marks(Black="core"), {"Swamp": {"core": 10}, "Forest": {"core": 7}})
+        rows = {row["color"]: row for row in r["variants"][0]["rows"]}
+        self.assertEqual((rows["G"]["cards"], rows["G"]["sources"], rows["G"]["avg"]), (0, 7, None))
+
+
 class LandsApiTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -228,6 +275,18 @@ class LandsApiTests(unittest.TestCase):
         self.assertGreater(sum(b["core"] for b in answer["basics"].values()), 0)
         self.assertEqual(answer["variants"][0]["key"], "core")
 
+    def test_color_overview_endpoint(self):
+        pool = self.app["pool"]
+        marks = [["core" if not c["land"] else "off"] * c["qty"] for c in pool]
+        req = urllib.request.Request(self.base + "/api/colors", data=json.dumps(
+            {"marks": marks, "basics": {"Plains": {"core": 9}, "Mountain": {"core": 8}}}).encode(),
+            headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            answer = json.loads(r.read())
+        self.assertTrue(answer["ok"])
+        rows = {row["color"]: row for row in answer["variants"][0]["rows"]}
+        self.assertEqual(rows["W"]["sources"], 9)
+
     def test_invalid_target(self):
         pool = self.app["pool"]
         status, answer = self.post({"marks": [["off"] * c["qty"] for c in pool], "target": 5})
@@ -248,6 +307,7 @@ class ReportOnTimeTests(unittest.TestCase):
             html = mtg_sim.simulate_entries(entries, args_for(["deck.txt", "--sims", "100"]), progress=lambda m: None)
         report = html[:html.index('id="view-help"')]
         self.assertIn("Ø pünktlich", report)
+        self.assertIn(">Symbole<", report)
         self.assertIn("Am knappsten", report)
         p = la.on_time(item("{W}", 1), {"W": 9}, 40)
         self.assertIn(f"{p:.0%}", report)

@@ -5,6 +5,7 @@ from collections import Counter
 
 from components.howitworks import render_help_view
 from components.html_base import HTML_CSS, LABEL_CLASS, esc, h_bar_cell, h_legend, h_level_pill, h_level_td, h_mode, h_pct, h_section, h_table, html_cost, html_mana, svg_bars, svg_lines
+from components import symbols
 from components.jace import analyze_jace
 from components.landadvice import color_report, level, needs_of_alts
 from components.mana import required_colors
@@ -199,21 +200,24 @@ def render_details(ctx, suffix=""):
 
     need = {col: sum(q for _, q, c, _ in rows if not c.is_land and col in required_colors(c)) for col in "WUBRG"}
     srcs = {col: sum(q for _, q, c, _ in rows if c.is_land and col in c.land_colors) for col in "WUBRGC"}
-    on_time = color_report([{"name": n, "needs": needs_of_alts(c.alts), "mv": c.mv, "qty": q}
-                            for n, q, c, _ in rows if not c.is_land], srcs, len(cards))
+    spell_items = [{"name": n, "needs": needs_of_alts(c.alts), "mv": c.mv, "qty": q}
+                   for n, q, c, _ in rows if not c.is_land]
+    on_time = color_report(spell_items, srcs, len(cards))
+    pips = {col: sum(it["qty"] * it["needs"].get(col, 0) for it in spell_items) for col in "WUBRG"}
     col_rows = []
     for col in "WUBRGC":
         if need.get(col, 0) or srcs[col]:
             ot = on_time.get(col) or {}
             worst = ot.get("worst")
-            col_rows.append([f'<td class="l">{html_mana(col)}</td>', f'<td>{need.get(col, 0)}</td>',
+            col_rows.append([f'<td class="l">{html_mana(col)}</td>', f'<td>{pips.get(col, 0)}</td>',
+                             f'<td>{need.get(col, 0)}</td>',
                              f'<td>{srcs[col]}</td>',
                              h_bar_cell(srcs[col] / max(ctx["n_lands"], 1), f"{srcs[col] / max(ctx['n_lands'], 1):.0%}"),
                              h_level_td(level(ot["avg"]), f'{ot["avg"]:.0%}') if ot.get("avg") is not None
                              else '<td class="muted">–</td>',
                              f'<td class="l">{esc(worst["name"])} ({worst["p"]:.0%})</td>' if worst
                              else '<td class="muted">–</td>'])
-    col_table = h_table(["Farbe", "Karten", "Quellen", "Anteil der Länder", "Ø pünktlich", "Am knappsten"], col_rows)
+    col_table = h_table(["Farbe", "Symbole", "Karten", "Quellen", "Anteil der Länder", "Ø pünktlich", "Am knappsten"], col_rows)
 
     deck_rows, origin_note, head = [], "", ["Karte", "Anz.", "Kosten", "Eigenschaften"]
     cost_tags = lambda shown: ("".join(f'<span class="tag">{html_cost(t)}</span>'
@@ -508,6 +512,7 @@ def render_details(ctx, suffix=""):
 
 
 def render_html(ctx):
+    symbols.reset_used()  # Symbole, die diese Seite zeigt, werden eingebettet
     a, res = ctx["args"], ctx["results"]
     sims, T, H = a.sims, a.turns, ctx["horizon"]
     mu0 = res[list(res.keys())[0]]["mulligan"]
@@ -543,9 +548,11 @@ def render_html(ctx):
     missing_html = ('<div class="warnbox" style="margin-top:14px"><b>Nicht bei Scryfall gefunden (nicht simuliert):</b> '
                     + esc(", ".join(ctx["missing"])) + "</div>") if ctx.get("missing") else ""
     stamp = datetime.datetime.now().strftime("%d.%m.%Y %H:%M")
+    help_html = render_help_view(present=present)
+    css = HTML_CSS + symbols.symbol_css(symbols.used())
     return (f'<!DOCTYPE html><html lang="de"><head><meta charset="utf-8">'
             f'<meta name="viewport" content="width=device-width,initial-scale=1">'
-            f'<title>{esc(ctx["name"])} – MTG Simulation</title><style>{HTML_CSS}</style></head><body>'
+            f'<title>{esc(ctx["name"])} – MTG Simulation</title><style>{css}</style></head><body>'
             f'<header class="top" id="top"><h1>{esc(ctx["name"])}</h1>'
             f'<div class="sub">Starthand-Simulation · erstellt am {stamp}</div>'
             f'<div class="chips">{"".join(f"<span class=chip>{esc(c)}</span>" for c in chips)}</div>'
@@ -553,6 +560,6 @@ def render_html(ctx):
             '<a href="#hiw-start" data-view="help">So funktioniert es</a></div></header>'
             f'<div class="view on" id="view-report"><div class="layout"><nav>{nav_html}</nav>'
             f'<main>{missing_html}{"".join(sections)}</main></div></div>'
-            f'{render_help_view(present=present)}'
+            f'{help_html}'
             f'<footer>Erzeugt mit mtg_sim.py · Kartendaten von Scryfall</footer>'
             + (SWITCH_JS if multi else "") + VIEW_JS + '</body></html>')

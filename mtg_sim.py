@@ -20,6 +20,7 @@ from collections import Counter
 
 from components.cli import parse_args
 from components.scryfall import fetch_cards_cached
+from components.symbols import fetch_symbols
 from components.cards import card_info
 from components.cardkinds import card_colors, empower_points, flow_kinds, type_kinds
 from components.coverage import analyze_card
@@ -145,6 +146,7 @@ def save_report(html, args):
 
 
 def run(args):
+    fetch_symbols(args.neu_laden)  # Original-Manasymbole (einmalig von Scryfall, danach aus dem Cache)
     if args.drafthelper is not None:
         from components.drafthelper import serve
         serve(args, simulate_entries, save_report)

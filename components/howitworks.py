@@ -62,6 +62,7 @@ def _sections():
              "Weiß). Die Balken ergeben deshalb zusammen mehr als die Kartenzahl.",
              "Darunter: Zahl der Karten, davon mehrfarbig und farblos, und die vorkommenden Farbkombinationen."]))
          + _panel("Farbverteilung", _p(
+             "Symbole = Farbsymbole, die diese Karten zwingend verlangen, mal Kopien ({R}{R} zählt 2, Hybrid nicht) · "
              "Karten = Nichtland-Karten, die die Farbe brauchen (in jedem Zahlungsweg; Hybrid zählt nicht) · Quellen = "
              "Länder, die sie erzeugen. Ein Land mit mehreren Farben zählt für jede davon. Ø pünktlich: Chance, dass "
              "bis zur Runde = Manawert (mindestens Runde 1, auf dem Play) genug Quellen für die Farbsymbole der Karte "
@@ -264,6 +265,11 @@ def _drafthelper_help():
             "Übersicht nach Farbe: Pool, Zuordnung und Kategorien je Farbe (Kopien, ohne Standardländer).",
             "Mana-Kurve (Splash gegen NoSplash), Mana-Kurve nach Farben (wie im Bericht, Abschnitt Deck) und "
             "Kartentypen je Variante mit Empower Jace und Kartenfluss (gezählt wie im Bericht).",
+            "Farben und Quellen: je Farbe Symbole, Karten, Quellen (Standardländer der Variante und zugeordnete "
+            "Nicht-Standardländer, NS) und Ø pünktlich mit Ampel, gerechnet wie die Farbverteilung im Bericht. Der Block "
+            "aktualisiert sich bei jeder Änderung; mit der Maus über Ø pünktlich steht die knappste Karte.",
+            "Manasymbole: die Originalsymbole von Scryfall (einmal geladen und in scryfall_symbols.json gespeichert); "
+            "ohne sie erscheinen einfache Symbole.",
             "Suche, Sortierung und Filter ändern nur die Anzeige, nicht die Zuordnung."]))
         + _panel("Simulieren und Export", _ul([
             "„Simulieren“ vergleicht Core + Splash mit Core + NoSplash (und optional den Deckvorschlag); der Bericht "
