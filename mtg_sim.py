@@ -48,7 +48,7 @@ def build_deck(entry, data, args):
         info[name] = {"kinds": type_kinds(front_type), "flow": flow_kinds(sc), "colors": card_colors(sc),
                       "empower": bool(card.empower), "points": empower_points(card.empower),
                       "prepared": bool(card.prepared), **{k: True for k in keyword_flags(sc)},
-                      "removal": removal_info(sc)}
+                      "removal": removal_info(sc), "ramp": bool(card.mana_src or card.treasure)}
         cards += [card] * qty
     if len(cards) < 7 + args.turns:
         sys.exit(f"Zu wenige Karten im Deck {entry['name']}.")
@@ -68,7 +68,8 @@ def build_deck(entry, data, args):
         cyc_names=sorted({n for n, _, c, _ in rows if c.cycle_alts}),
         draw_names=sorted({n for n, _, c, _ in rows if c.draws}),
         surveil_names=sorted({n for n, _, c, _ in rows if c.surveil}),
-        prepared_names=sorted({n for n, _, c, _ in rows if c.prepared}))
+        prepared_names=sorted({n for n, _, c, _ in rows if c.prepared}),
+        ramp_names=sorted({n for n, _, c, _ in rows if c.mana_src or c.treasure}))
 
 
 def _stderr(msg):

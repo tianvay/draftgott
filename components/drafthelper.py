@@ -95,6 +95,7 @@ def load_pool(path, refresh=False):
             "prepared": bool(model and model.prepared),  # Zauberhaelfte wird als Kopie modelliert
             **{k: True for k in keyword_flags(sc)},
             "removal_points": (removal_info(sc) or {}).get("points", 0),
+            "ramp": bool(model and (model.mana_src or model.treasure)),  # Manaquelle oder Treasure
         })
     order = {"deck": 0, "sideboard": 1}  # je Bereich: Nichtlaender nach Manawert, Laender zuletzt
     cards.sort(key=lambda c: (order.get(c["section"], 2), c["land"], c["mv"], c["name"]))
@@ -854,7 +855,7 @@ function typeCounts(copies, basics){
   const out={splash:{},nosplash:{}};
   for(const g of ["splash","nosplash"]){
     const o=out[g];rows.forEach(r=>{o[r]=0});o.cards=0;o.empower=0;o.points=0;o.flow=0;o.prepared=0;
-    o.flash=0;o.deathtouch=0;o.removal=0;o.removal_points=0;
+    o.flash=0;o.deathtouch=0;o.removal=0;o.removal_points=0;o.ramp=0;
     FLOW_KINDS.forEach(k=>{o["flow_"+k]=0});
     for(const c of copies){
       if(c.mark!=="core"&&c.mark!==g)continue;
@@ -863,6 +864,7 @@ function typeCounts(copies, basics){
       if(c.empower){o.empower++;o.points+=c.points}
       if(c.prepared)o.prepared++;
       if(c.flash)o.flash++;
+      if(c.ramp)o.ramp++;
       if(c.deathtouch)o.deathtouch++;
       if(c.removal){o.removal++;o.removal_points=Math.round((o.removal_points+c.removal)*100)/100}
       const fl=c.flow||[];
@@ -876,7 +878,7 @@ function typeCounts(copies, basics){
 function copiesOf(tiles){
   return tiles.map(x=>({kinds:x.card.kinds||[],mark:x.mark,empower:!!x.card.empower,
     points:x.card.empower_points||0,flow:x.card.flow||[],...(x.card.prepared?{prepared:true}:{}),
-    ...(x.card.flash?{flash:true}:{}),...(x.card.deathtouch?{deathtouch:true}:{}),
+    ...(x.card.flash?{flash:true}:{}),...(x.card.deathtouch?{deathtouch:true}:{}),...(x.card.ramp?{ramp:true}:{}),
     ...(x.card.removal_points?{removal:x.card.removal_points}:{})}));
 }
 // Ampel Removal-Punkte: gruen ab 4, gelb ab 2,5 bei 40 Karten (anteilig), wie components/removal.py
@@ -894,6 +896,7 @@ const TYPE_ROWS=[["cards","Karten gesamt",""],["creature","Kreaturen",""],["inst
 function typeRows(){
   const rows=TYPE_ROWS.slice();
   if(pool.some(c=>c.prepared))rows.push(["prepared","Prepared (Karten)","sep"]);
+  if(pool.some(c=>c.ramp))rows.push(["ramp","Manaquellen (Karten)","sep"]);
   const present=FLOW_KINDS.filter(k=>pool.some(c=>(c.flow||[]).includes(k)));
   if(present.length){
     rows.push(["flow","Kartenfluss (Karten)","sep"]);

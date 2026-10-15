@@ -10,7 +10,7 @@ import re
 from collections import Counter
 
 from components.cards import (EMPOWER_RE, LANDCYCLE_RE, classify_empower_line, draw_line, land_tap_info,
-                              prepared_mode, surveil_line)
+                              mana_ability_units, prepared_mode, surveil_line, treasure_line)
 
 STATUS_TEXT = "To Do: Noch nicht implementiert"
 
@@ -151,6 +151,10 @@ def analyze_card(card):
                 continue
             spell_face = "Instant" in type_line or "Sorcery" in type_line
             modelled_face = fi == 0 or (prepare_modelled and fi == 1)
+            if modelled_face and not is_land and (
+                    (not spell_face and mana_ability_units(line))
+                    or treasure_line(line, spell_face, face.get("name") or card.get("name", ""))):
+                continue  # Manaquelle bzw. Treasure ist modelliert
             if modelled_face and not raw.strip().startswith("•"):
                 n, rest = surveil_line(line, spell_face, face.get("name") or card.get("name", ""))
                 if n:  # Surveil mit fester Zahl ist modelliert; der Rest der Zeile wird weiter geprueft

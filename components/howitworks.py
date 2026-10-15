@@ -14,7 +14,7 @@ from components.stats import TRAFFIC
 _D = parse_args(["deck.txt"])  # Standardwerte der Kommandozeile
 # Abschnitte, die nur erscheinen, wenn der Bericht sie auch hat (z. B. Deck-Vergleich nur bei mehreren Decks)
 CONDITIONAL = {"vergleich", "great", "mulligan", "jace", "farben", "landcycling", "ziehen", "surveil", "prepared",
-               "splashkarten", "removal"}
+               "splashkarten", "removal", "ramp"}
 
 
 def _ul(items):
@@ -164,8 +164,8 @@ def _sections():
             "Runde 3: von jeder Farbe, die Karten im Deck zwingend brauchen, mindestens eine Quelle (alle zusammen und "
             "jede einzeln).",
             "Runde 4: zwei Quellen, aber nur für Farben, die eine Karte doppelt verlangt (z. B. RR); Hybrid zählt nicht.",
-            f"Ampel: grün ab {AVAIL_GREEN} %, gelb ab {AVAIL_YELLOW} %, sonst rot. Manakreaturen und andere Manaquellen "
-            "sind nicht modelliert."]))),
+            f"Ampel: grün ab {AVAIL_GREEN} %, gelb ab {AVAIL_YELLOW} %, sonst rot. Gezählt werden nur Länder; Mana aus "
+            "Manaquellen außer Ländern steht im Abschnitt Ramp."]))),
         ("splashkarten", "Splash-Karten", _panel("Bedeutung", _ul([
             "Nur im Bericht des Drafthelpers, für die Splash-Variante: alle Nichtland-Karten der Gruppe Splash.",
             "<b>Gezogen:</b> Anteil der Spiele, in denen die Karte bis zum Ende der Beobachtung auf die Hand kommt "
@@ -182,7 +182,8 @@ def _sections():
             "Die Messung verändert den Spielablauf nicht."]))),
         ("curve", "Curve-Auslastung", _panel("Bedeutung", _p(
             "Ausgegebenes geteilt durch verfügbares Mana je Runde (bis <code>--curve-runden</code>, Standard "
-            f"{_D.curve_runden}). Nur Mana aus Ländern, Manakreaturen und Artefakte sind nicht modelliert. Ein "
+            f"{_D.curve_runden}). Verfügbar ist das Mana aus Ländern und aus Manaquellen außer Ländern (Manakreaturen, "
+            "Artefakte, genutzte Treasure, siehe Ramp). Ein "
             "Rechenbeispiel steht unter Spiellogik."))),
         ("schaden", "Schaden durch Kreaturen", _panel("Bedeutung", _p(
             "Erste Runde, in der der Gesamtschaden das Ziel erreicht (<code>--schaden</code>, Standard "
@@ -238,6 +239,23 @@ def _sections():
             "Gegner, Marken, Mill und Loot sind nicht modelliert und stehen in der Modell-Abdeckung.",
             "Prepared-Karten mit anderem Wortlaut werden nicht als Kopie gewirkt und stehen in der Modell-Abdeckung als "
             "„Prepared-Zauberhälfte“."]))),
+        ("ramp", "Ramp", _panel("Regeln", _ul([
+            "Manaquellen außer Ländern: bleibende Karten mit „{T}: Add …“ ohne Zusatzkosten, also eine Farbe "
+            "(„Add {G}“), eine Auswahl („Add {R} or {G}“), jede Farbe („one mana of any color“) oder mehrere Mana "
+            "(„Add {C}{C}“). Sie zählen wie zusätzliche Länder.",
+            "Kreaturen liefern Mana ab der Runde nach dem Wirken (außer mit Haste), Artefakte und Verzauberungen sofort; "
+            "kommen sie in dieser Runde ins Spiel, wird mit ihrem Mana noch weiter gezaubert.",
+            "Wird das Mana einer Kreatur gebraucht, ist sie getappt und greift nicht an. Zuerst werden Länder, "
+            "Artefakte und Treasure genutzt, dann die Kreaturen mit der kleinsten Power.",
+            "Treasure (aus „When … enters, create a Treasure token“ oder einem Zauber): bleibt liegen und wird nur "
+            "geopfert, wenn er in einer Runde mehr Mana in Zauber bringt; ein Treasure gibt einmal ein Mana "
+            "beliebiger Farbe.",
+            "Nicht modelliert (Modell-Abdeckung): Fähigkeiten mit Zusatzkosten („{1}, {T}: Add …“), Mana durch Opfern, "
+            "Rituale, Treasure aus anderen Auslösern und Planeswalker-Mana.",
+            "„Spiele mit Ramp“: mindestens eine Runde mit Mana aus solchen Quellen; „Ø zusätzliches Mana“: Mana aus "
+            "Manaquellen und genutzten Treasure je Runde; „Ø Angriffe ausgelassen“: Kreaturen, die für Mana getappt "
+            "wurden und sonst hätten angreifen können.",
+            "Mana Screw, Flood und Farbverfügbarkeit zählen weiter nur Länder."]))),
         ("tempo", "Tempo", _panel("Bedeutung", _p(
             "Ø und Median nur über Spiele, in denen das Ereignis bis zum Ende der Beobachtung eintritt. Top Card: die "
             "Karte(n) mit dem höchsten Manawert; gezählt wird die erste Runde, in der sie spielbar wäre."))),
@@ -247,7 +265,7 @@ def _sections():
             "ein Land legen, zaubern.",
             "Jede Nichtland-Karte wird gespielt, sobald sie bezahlbar ist; pro Runde wird möglichst viel Mana "
             "ausgegeben.",
-            "Farben, Hybrid- und Phyrexian-Mana werden beachtet; Manakreaturen und Artefakte sind nicht modelliert.",
+            "Farben, Hybrid- und Phyrexian-Mana werden beachtet; Manaquellen außer Ländern und Treasure siehe Ramp.",
             "Länder, die getappt ins Spiel kommen, werden aus dem Kartentext erkannt; Shock-Länder zahlen die 2 Leben. "
             "Länder mit Planeswalker-Bedingung kommen untapped, wenn ein Planeswalker liegt; wenn möglich wird dafür "
             "zuerst ein Zauber gewirkt, der einen Planeswalker erschafft. „Behold a Jace“ gilt auch mit einer "

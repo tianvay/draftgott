@@ -84,8 +84,8 @@ class CategoryTests(unittest.TestCase):
         self.check("Creatures you control have haste.", "Haste verleihen", M_LETHAL)
 
     def test_mana_outside_lands(self):
-        self.check("{T}: Add {G}.", "Mana außer Ländern", M_MANA)
-        self.check("When this creature enters, create a Treasure token.", "Mana außer Ländern", M_MANA)
+        self.check("{1}, {T}: Add {R}{G}.", "Mana außer Ländern", M_MANA)
+        self.check("Sacrifice this creature: Add {C}.", "Mana außer Ländern", M_MANA)
 
     def test_card_flow(self):
         self.check("Whenever you gain life, draw a card.", "Kartenfluss", M_FLOW)

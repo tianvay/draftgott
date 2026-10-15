@@ -34,6 +34,8 @@ class Card(NamedTuple):
     surveil: int = 0           # Surveil N beim Wirken bzw. Betreten (auch Laender)
     prepared: tuple = ()       # Prepared: (Modus "enters"/"upkeep"/"both", Card der Zauberhaelfte)
     is_copy: bool = False      # Kopie einer Prepared-Zauberhaelfte (verbraucht keine Handkarte)
+    mana_src: tuple = ()       # Mana-Faehigkeit "{T}: Add ...": je Mana ein Farbtupel (wie land_colors)
+    treasure: int = 0          # Treasure-Token beim Wirken bzw. Betreten
 
 
 LANDCYCLE_RE = re.compile(
@@ -111,12 +113,17 @@ DRAW_SPELL_RE = re.compile(r"^draw " + _DRAW_N +
 DRAW_ETB_RE = re.compile(r"^when (this [a-z]+|~) enters, draw " + _DRAW_N + r"(?=\s|$)")
 
 
+def _name_to_tilde(low, name):
+    """Ersetzt den Kartennamen (als ganzes Wort) durch "~", damit Texte wie "When <Name> enters" erkannt werden."""
+    if not name:
+        return low
+    return re.sub(r"(?<![a-z])" + re.escape(name.lower()) + r"(?![a-z])", "~", low)
+
+
 def draw_line(line, spell_face, name=""):
     """Erkennt Ziehen mit fester Zahl am Anfang einer Textzeile (ohne Erinnerungstext). Gibt (Anzahl, Resttext in
     Kleinbuchstaben) zurueck; (0, Zeile) wenn nichts Modelliertes darin steht."""
-    low = line.lower().strip()
-    if name:
-        low = low.replace(name.lower(), "~")
+    low = _name_to_tilde(line.lower().strip(), name)
     m = (DRAW_SPELL_RE if spell_face else DRAW_ETB_RE).match(low)
     if not m:
         return 0, low
@@ -143,9 +150,7 @@ SURVEIL_ETB_RE = re.compile(r"^when (this [a-z]+|~) enters, surveil (\d+)\.(?=\s
 def surveil_line(line, spell_face, name=""):
     """Erkennt Surveil mit fester Zahl in einer Textzeile (ohne Erinnerungstext). Gibt (Anzahl, Resttext in
     Kleinbuchstaben) zurueck; (0, Zeile) wenn nichts Modelliertes darin steht."""
-    low = line.lower().strip()
-    if name:
-        low = low.replace(name.lower(), "~")
+    low = _name_to_tilde(line.lower().strip(), name)
     m = SURVEIL_SPELL_RE.search(low) if spell_face else SURVEIL_ETB_RE.match(low)
     if not m:
         return 0, low
@@ -159,6 +164,56 @@ def parse_surveil(card, type_line):
     spell_face = "Instant" in type_line or "Sorcery" in type_line
     return sum(surveil_line(re.sub(r"\([^)]*\)", "", raw), spell_face, card.get("name", ""))[0]
                for raw in text.split("\n"))
+
+
+ANY_COLOR = ("B", "G", "R", "U", "W")
+_MANA_ABILITY_RE = re.compile(r"^\{t\}: add (.+?)\.?$")
+_NUMBER = {"one": 1, "two": 2, "three": 3}
+
+
+def mana_ability_units(line):
+    """Mana-Faehigkeit ohne Zusatzkosten ("{T}: Add {G}.", "{T}: Add {R} or {G}.", "{T}: Add one mana of any color.",
+    "{T}: Add {C}{C}."). Gibt je Mana ein Farbtupel zurueck, sonst ()."""
+    m = _MANA_ABILITY_RE.match(line.lower().strip())
+    if not m:
+        return ()
+    what = m.group(1).strip()
+    if re.fullmatch(r"(\{[wubrgc]\})+", what):
+        return tuple((sym.upper(),) for sym in re.findall(r"\{([wubrgc])\}", what))
+    if re.fullmatch(r"\{[wubrg]\}(, \{[wubrg]\})*,? or \{[wubrg]\}", what):
+        return (tuple(sorted({sym.upper() for sym in re.findall(r"\{([wubrg])\}", what)})),)
+    m = re.fullmatch(r"(one|two|three) mana of any (?:one )?color", what)
+    if m:
+        return (ANY_COLOR,) * _NUMBER[m.group(1)]
+    return ()
+
+
+_TREASURE_ETB_RE = re.compile(r"^when (this [a-z]+|~) enters, create (a|an|one|two|three) treasure tokens?\.")
+_TREASURE_SPELL_RE = re.compile(r"(?:^|(?<=\. ))create (a|an|one|two|three) treasure tokens?\.")
+
+
+def treasure_line(line, spell_face, name=""):
+    """Treasure-Token beim Betreten bzw. als Satz eines Zaubers (fester Wert); sonst 0."""
+    low = _name_to_tilde(line.lower().strip(), name)
+    m = (_TREASURE_SPELL_RE.search(low) if spell_face else _TREASURE_ETB_RE.match(low))
+    if not m:
+        return 0
+    word = m.group(1 if spell_face else 2)
+    return {"a": 1, "an": 1}.get(word) or _NUMBER[word]
+
+
+def parse_mana(card, type_line):
+    """(Manaquellen-Tupel, Treasure) der Vorderseite."""
+    front = (card.get("card_faces") or [card])[0]
+    text = front.get("oracle_text") or card.get("oracle_text") or ""
+    spell_face = "Instant" in type_line or "Sorcery" in type_line
+    units, treasures = (), 0
+    for raw in text.split("\n"):
+        line = re.sub(r"\([^)]*\)", "", raw).strip()
+        if not spell_face:
+            units += mana_ability_units(line)
+        treasures += treasure_line(line, spell_face, card.get("name", ""))
+    return units, treasures
 
 
 def prepared_mode(card):
@@ -356,6 +411,11 @@ def card_info(card):
     surveil = parse_surveil(card, type_line)
     if surveil:
         shown += f"   [Surveil {surveil}]"
+    mana_src, treasure = parse_mana(card, type_line)
+    if mana_src:
+        shown += "   [Mana: " + " ".join("{" + "/".join(u) + "}" if len(u) < 5 else "{beliebig}" for u in mana_src) + "]"
+    if treasure:
+        shown += f"   [Treasure {treasure}]"
     prepared = ()
     mode = prepared_mode(card)
     if mode:
@@ -369,4 +429,4 @@ def card_info(card):
                 is_planeswalker="Planeswalker" in type_line, empower=eff, empower_text=etext,
                 pw_tags=pw_tags_for(card, type_line), defender=defender,
                 is_jace=("Planeswalker" in type_line and "Jace" in type_line.split("—")[-1].split()),
-                draws=draws, surveil=surveil, prepared=prepared), shown
+                draws=draws, surveil=surveil, prepared=prepared, mana_src=mana_src, treasure=treasure), shown

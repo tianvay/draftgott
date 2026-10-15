@@ -70,6 +70,53 @@ def best_cast(spells, key, has_creature, auras_need_creature, must=None, fixed=(
     return best[0], best[1][len(fixed):]
 
 
+ANY_COLOR = ("B", "G", "R", "U", "W")
+
+
+def usable_now(card):
+    """Liefert eine Manaquelle schon in der Runde, in der sie ins Spiel kommt (Nichtkreatur oder Haste)?"""
+    return bool(card.mana_src) and (not card.is_creature or card.haste)
+
+
+def mana_units(perms, turn):
+    """Mana aus Manaquellen in dieser Runde: [(Farbtupel, Index in perms oder None)].
+    Kreaturen erst ab der Runde nach dem Wirken (ausser Haste); der Index ist nur bei Kreaturen gesetzt."""
+    out = []
+    for i, (card, t_in) in enumerate(perms):
+        if card.is_creature and not (t_in < turn or card.haste):
+            continue
+        out += [(u, i if card.is_creature else None) for u in card.mana_src]
+    return out
+
+
+def tapped_for_mana(alts_list, other_pool, creature_units, creatures):
+    """Welche Kreaturen muessen fuer Mana getappt werden, damit alle Zauber (alts_list) bezahlt sind?
+    other_pool: Mana aus Laendern, Artefakten und Treasure; creature_units: [(Farbtupel, Index)]; creatures[Index]:
+    die Kreatur. Zuerst wird auf die staerksten Kreaturen verzichtet (sie sollen angreifen). Gibt {Index} zurueck."""
+    if not alts_list or not creature_units:
+        return set()
+    need = tuple(sorted(alts_list))
+    keep = {i for _u, i in creature_units}
+    for i in sorted(keep, key=lambda i: (-creatures[i].power, i)):
+        trial = keep - {i}
+        pool = list(other_pool) + [u for u, j in creature_units if j in trial]
+        if can_cast_all(need, land_key(pool)):
+            keep = trial
+    return keep
+
+
+def use_treasures(spells, pool, treasures, has_creature, auras_need_creature):
+    """Treasure nur einsetzen, wenn er in dieser Runde mehr ermoeglicht: kleinste Zahl k, mit der die beste
+    Kombination erreicht wird. Gibt (k, gewaehlte Zauber) zurueck; k = 0, wenn Treasure nichts bringt."""
+    base_score, base = best_cast(spells, land_key(pool), has_creature, auras_need_creature)
+    best = (base_score, 0, base)
+    for k in range(1, treasures + 1):
+        sc, ch = best_cast(spells, land_key(list(pool) + [ANY_COLOR] * k), has_creature, auras_need_creature)
+        if sc > best[0]:
+            best = (sc, k, ch)
+    return best[1], best[2]
+
+
 def enters_prepared(cards):
     """Kopien der Zauberhaelften von Kreaturen, die prepared ins Spiel kommen."""
     return [c.prepared[1] for c in cards if c.prepared and c.prepared[0] in ("enters", "both")]
@@ -91,7 +138,11 @@ def resolve_draws(hand, library, chosen, pool, battlefield, land_played, has_cre
     drawn = used = 0
     pending = sum(c.draws for c in cast)
     fresh = enters_prepared(cast)
-    while pending or fresh:
+    new_mana = [u for c in cast if usable_now(c) for u in c.mana_src]
+    mana_added = 0
+    while pending or fresh or new_mana:
+        pool += new_mana
+        mana_added += len(new_mana)
         for _ in range(pending):
             if not library:
                 break
@@ -127,7 +178,9 @@ def resolve_draws(hand, library, chosen, pool, battlefield, land_played, has_cre
         used += len(extra)
         pending = sum(c.draws for c in extra)
         fresh = enters_prepared(extra)
-    return {"chosen": cast, "land": land, "tapped": tapped, "pool": pool, "drawn": drawn, "used": used}
+        new_mana = [u for c in extra if usable_now(c) for u in c.mana_src]
+    return {"chosen": cast, "land": land, "tapped": tapped, "pool": pool, "drawn": drawn, "used": used,
+            "mana_added": mana_added}
 
 
 def apply_surveils(amounts, library, hand, battlefield):
@@ -365,6 +418,9 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
     has_draws = any(c.draws for c in cards)
     has_surveil = any(c.surveil for c in cards)
     has_prepared = any(c.prepared for c in cards)
+    has_ramp = any(c.mana_src or c.treasure for c in cards)
+    rp = {"games": 0, "first": [], "extra": {t: 0 for t in range(1, curve_turns + 1)}, "held": 0, "made": 0,
+          "used": 0}
     track = set(track or ())
     track_mv = {c.name: c.mv for c in cards if c.name in track}
     sc_stats = {n: {"games": 0, "drawn": 0, "castable": 0, "on_time": 0, "cast": 0, "wait_sum": 0} for n in track}
@@ -403,6 +459,7 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
         snap = (0, 0, 0)
         g_avail = g_spent = 0
         g_drawn = g_surveils = g_copies = 0
+        mana_perms, treasures, ramp_first = [], 0, None  # Manaquellen auf dem Feld (Karte, Runde), Treasure-Token
         prep = []  # Prepared-Kreaturen auf dem Feld: [Karte, prepared?]
         t_hand, t_ok, t_cast = {}, {}, set()  # Splash-Karten: erste Runde auf der Hand / bezahlbar, gewirkt
 
@@ -427,6 +484,11 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                 jst.try_activate(hand, library, turn)  # Loyalty aus frueheren Runden: Karte vor dem Landdrop ziehen
             pool = [c.land_colors for c in battlefield]      # zu Rundenbeginn sind alle Laender untapped
             avail_total = sum(1 for lc in pool if lc)         # Mana dieser Runde (inkl. neu gelegter Laender)
+            units = mana_units(mana_perms, turn) if has_ramp else []
+            creature_units = [(u, i) for u, i in units if i is not None]
+            pool = pool + [u for u, _i in units]              # Manaquellen wie zusaetzliche Laender
+            avail_total += len(units)
+            extra_now = len(units)
             cycle_spent = 0
             cycled_log = []
             def castable():  # Handkarten und verfuegbare Prepared-Kopien
@@ -484,6 +546,16 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                         break
 
             s_chosen, chosen = best_cast(spells, key, has_creature, auras_need_creature, must=forced)
+            if treasures and forced is None:  # Treasure nur, wenn er diese Runde mehr ermoeglicht
+                k_t, ch_t = use_treasures(spells, pool, treasures, has_creature, auras_need_creature)
+                if k_t:
+                    treasures -= k_t
+                    rp["used"] += k_t
+                    pool = pool + [ANY_COLOR] * k_t
+                    avail_total += k_t
+                    extra_now += k_t
+                    key = land_key(pool)
+                    s_chosen, chosen = best_cast(spells, key, has_creature, auras_need_creature)
 
             # Landcycling Regel 1: Karte ist diesmal nicht spielbar -> mit uebrigem Mana cyceln.
             # Entfaellt in Runden, in denen ein Zauber vor dem Land gewirkt wurde (Bezahlung sonst nicht gesichert).
@@ -532,12 +604,15 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                         break
 
             drawn_now = 0
-            if (has_draws or has_prepared) and (any(c.draws for c in chosen) or enters_prepared(chosen)):
+            if (has_draws or has_prepared or has_ramp) and (any(c.draws for c in chosen) or enters_prepared(chosen)
+                                                             or any(usable_now(c) for c in chosen)):
                 rd = resolve_draws(hand, library, chosen, pool, battlefield, land_played, has_creature,
                                    auras_need_creature, jst.loyalty > 0 or bool(walkers),
                                    jst.loyalty > 0 or any(c.is_jace for c in walkers),
                                    copies=[p_[0].prepared[1] for p_ in prep if p_[1]])
                 chosen, pool, drawn_now = rd["chosen"], rd["pool"], rd["drawn"]
+                avail_total += rd["mana_added"]
+                extra_now += rd["mana_added"]
                 if rd["land"] is not None:
                     land_played, tapped_now = rd["land"], rd["tapped"]
                     if not tapped_now and land_played.land_colors:
@@ -568,6 +643,11 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                     walkers.append(c)
                 if c.prepared:
                     prep.append([c, c.prepared[0] in ("enters", "both")])
+                if c.mana_src:
+                    mana_perms.append((c, turn))
+                if c.treasure:
+                    treasures += c.treasure
+                    rp["made"] += c.treasure
             for c in chosen:
                 if c.is_copy:  # Kopie gewirkt: eine passende Kreatur ist nicht mehr prepared
                     p_ = next(p_ for p_ in prep if p_[1] and p_[0].prepared[1] == c)
@@ -604,6 +684,11 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                             perms.append((c, turn))
             if turn <= max_turn and chosen:
                 cast_in_turn[turn] += 1
+            if has_ramp and extra_now:
+                if ramp_first is None:
+                    ramp_first = turn
+                if turn <= curve_turns:
+                    rp["extra"][turn] += extra_now
             if turn <= curve_turns:
                 spent = min(sum(c.mv for c in chosen) + cycle_spent, avail_total)
                 curve_avail[turn] += avail_total
@@ -635,7 +720,23 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                 jst.try_activate(hand, library, turn, battlefield=battlefield, allow_surveil=True)
 
             # Angriff: Kreaturen vom Vorzug greifen an, neue nur mit Haste, Defender nie (keine Blocker, kein Removal)
-            turn_dmg = sum(c.power for c, t in board if not c.defender and (t < turn or c.haste)) if board else 0
+            held = Counter()  # Kreaturen, die fuer Mana getappt wurden, greifen nicht an
+            if creature_units and chosen:
+                other = list(pool)
+                for u, _i in creature_units:
+                    other.remove(u)
+                for i in tapped_for_mana([c.alts for c in chosen if c.alts], other, creature_units,
+                                         [card for card, _t in mana_perms]):
+                    held[mana_perms[i]] += 1
+                    if not mana_perms[i][0].defender and mana_perms[i][0].power > 0:
+                        rp["held"] += 1
+            attackers = [(c, t) for c, t in board if not c.defender and (t < turn or c.haste)]
+            turn_dmg = 0
+            for c, t in attackers:
+                if held[(c, t)]:
+                    held[(c, t)] -= 1
+                    continue
+                turn_dmg += c.power
             dmg_total += turn_dmg
             log.append((turn, drew, land_played, tapped_now, chosen, turn_dmg, dmg_total, cycled_log,
                         (jst.gained - turn_gain0, jst.acts - turn_acts0, jst.loyalty, drawn_now)))
@@ -698,6 +799,9 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
         dr["games"] += g_drawn > 0
         sv["games"] += g_surveils > 0
         pr["games"] += g_copies > 0
+        if ramp_first is not None:
+            rp["games"] += 1
+            rp["first"].append(ramp_first)
         for n, st in sc_stats.items():
             st["games"] += 1
             if n in t_hand:
@@ -747,6 +851,10 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
         "mulligan": mull,
         "jace": jc,
         "splash_cards": sc_stats,
+        "ramp": {"on": has_ramp, "games": rp["games"] / sims,
+                 "first_avg": sum(rp["first"]) / len(rp["first"]) if rp["first"] else None,
+                 "extra": {t: v / sims for t, v in rp["extra"].items()}, "held_back": rp["held"] / sims,
+                 "treasure_made": rp["made"] / sims, "treasure_used": rp["used"] / sims},
         "prepared": {"on": has_prepared, "copies": pr["copies"] / sims, "games": pr["games"] / sims,
                      "mana": pr["mana"] / sims},
         "card_surveil": {"on": has_surveil, "events": sv["events"] / sims, "games": sv["games"] / sims,

@@ -543,6 +543,29 @@ def render_details(ctx, suffix=""):
         add("prepared", "Prepared", "Karten im Deck: " + esc(", ".join(ctx["prepared_names"])),
             f'<div class="grid">{"".join(panels)}</div>')
 
+    # ---------------- Ramp (Mana ausser Laendern)
+    if ctx.get("ramp_names"):
+        panels = []
+        for l in labels:
+            rp_ = res[l]["ramp"]
+            first = f'Runde {rp_["first_avg"]:.1f}' if rp_["first_avg"] is not None else "–"
+            kpi = (f'<div class="kpi"><div class="l">Spiele mit Ramp</div><div class="v">{h_pct(rp_["games"])}</div>'
+                   f'<div class="s">mehr Mana als Länder</div></div>'
+                   f'<div class="kpi"><div class="l">Erstmals Ø in</div><div class="v">{first}</div></div>'
+                   f'<div class="kpi"><div class="l">Ø Angriffe ausgelassen</div><div class="v">{rp_["held_back"]:.2f}</div>'
+                   f'<div class="s">Kreatur für Mana getappt</div></div>')
+            if rp_["treasure_made"]:
+                kpi += (f'<div class="kpi"><div class="l">Treasure Ø</div>'
+                        f'<div class="v">{rp_["treasure_used"]:.2f} / {rp_["treasure_made"]:.2f}</div>'
+                        f'<div class="s">genutzt / erzeugt pro Spiel</div></div>')
+            turns = sorted(rp_["extra"])
+            table = h_table(["Runde"] + [str(t) for t in turns],
+                            [['<td class="l">Ø zusätzliches Mana</td>'] + [f'<td>{rp_["extra"][t]:.2f}</td>' for t in turns]])
+            panels.append(f'<div class="panel"><b>{esc(l)}</b><div class="grid g4" style="margin:10px 0">{kpi}</div>'
+                          f'{table}</div>')
+        add("ramp", "Ramp", "Mana außer Ländern – Karten im Deck: " + esc(", ".join(ctx["ramp_names"])),
+            f'<div class="grid">{"".join(panels)}</div>')
+
     # ---------------- Tempo
     rows_t = []
     for l in labels:
