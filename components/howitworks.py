@@ -83,7 +83,8 @@ def _sections():
              "alle Kopien und liest sich wie „so viele harte Removals“.",
              "<b>Hart</b> (destroy/exile target creature) 1,0 · <b>Massenremoval</b> 1,0 · <b>Exil bis verlassen</b> "
              "(„until … leaves the battlefield“) 0,9 · <b>Edikt</b> (Gegner opfert) 0,7, mit „greatest mana value“ "
-             "0,9 · <b>Lock</b>-Aura (enttappt nicht, kann nicht angreifen) 0,7 · <b>Fight</b> 0,5 · "
+             "0,9 · <b>Toughness 0</b> (z. B. „has base power and toughness 0/0“; die Kreatur stirbt mit 0 "
+             "Toughness) 0,7 · <b>Lock</b>-Aura (enttappt nicht, kann nicht angreifen) 0,7 · <b>Fight</b> 0,5 · "
              "<b>Bounce</b> 0,3.",
              "<b>Schaden und −X/−X</b> nach Höhe: 1 → 0,2 · 2 → 0,4 · 3 → 0,6 · 4 → 0,8 · ab 5 → 0,9; X oder "
              "„damage equal to …“ 0,5. −X/−0 zählt nicht.",

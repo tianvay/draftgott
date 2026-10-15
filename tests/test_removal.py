@@ -174,6 +174,33 @@ class OtherKindsTests(unittest.TestCase):
                          0.5)
 
 
+class ToughnessZeroTests(unittest.TestCase):
+    """Toughness 0 toetet die Kreatur (zustandsbasierte Aktion): 0,7 Punkte."""
+
+    def test_multiply_by_zero(self):
+        text = "Target creature has base power and toughness 0/0 until end of turn."
+        self.assertEqual(points(text, type_line="Sorcery"), 0.7)
+        self.assertEqual(kind(text, type_line="Sorcery"), "Toughness 0")
+
+    def test_other_wordings(self):
+        for text in ("Target creature becomes a 0/0 until end of turn.",
+                     "Until end of turn, target creature an opponent controls has base toughness 0.",
+                     "Target creature loses all abilities and has base power and toughness 3/0 until end of turn."):
+            with self.subTest(text=text):
+                self.assertEqual(points(text), 0.7)
+
+    def test_toughness_above_zero_is_no_removal(self):
+        self.assertIsNone(removal_info(card("Target creature loses all abilities and has base power and toughness "
+                                            "0/1 until end of turn.")))
+        self.assertIsNone(removal_info(card("Target creature you control has base power and toughness 0/0 until end "
+                                            "of turn.")))
+
+    def test_condition_and_ability(self):
+        self.assertEqual(points("Target creature with flying has base power and toughness 0/0 until end of turn."), 0.5)
+        self.assertEqual(points("{2}, {T}: Target creature has base power and toughness 0/0 until end of turn.",
+                                type_line=CREATURE), 0.35)
+
+
 class NoRemovalTests(unittest.TestCase):
     def test_not_removal(self):
         for text, type_line in (

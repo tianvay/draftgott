@@ -5,7 +5,8 @@ keyword_flags(card) -> ["flash", "deathtouch"]: Schluesselwoerter, die die Karte
 removal_info(card) -> {"points", "kind", "text"} oder None: bester Removal-Effekt der Karte (alle Seiten, bei modalen
     Karten der beste Modus). Punkte 0 bis 1, 1 = entfernt jede gegnerische Kreatur zuverlaessig:
         Hart (destroy/exile target creature) 1,0 · Massenremoval 1,0 · Exil bis verlassen (O-Ring) 0,9
-        Edikt 0,7 (mit "greatest mana value" 0,9) · Schaden und -X/-X nach Hoehe (1: 0,2 · 2: 0,4 · 3: 0,6 · 4: 0,8
+        Edikt 0,7 (mit "greatest mana value" 0,9) · Toughness 0 (z. B. "base power and toughness 0/0") 0,7
+        · Schaden und -X/-X nach Hoehe (1: 0,2 · 2: 0,4 · 3: 0,6 · 4: 0,8
         · 5+: 0,9, X: 0,5) · Lock-Aura 0,7 · Fight 0,5 · Bounce 0,3
         Bedingung am Ziel (Manawert, Toughness, Flying, Farbe ...) oder eigenes Opfer ("you may sacrifice"): hoechstens
         0,5 · bezahlbare Faehigkeiten und Planeswalker-Faehigkeiten ("Faehigkeit") sowie andere Ausloeser als das
@@ -31,6 +32,9 @@ _DAMAGE_EACH = re.compile(r"\bdeals? (\d+) damage to each (creature|other creatu
 _MINUS = re.compile(r"\b" + _TARGET + r" creature[^.]*? gets? -(\d+|x)/-(\d+|x)")
 _FIGHT = re.compile(r"\bfights? (" + _TARGET + r" creature[^.]*|another target creature[^.]*)")
 _BOUNCE = re.compile(r"\breturn " + _TARGET + r" ([^.]*?) to (its|their) owner'?s'? hand")
+# Basis-Toughness 0: "has base power and toughness 0/0", "becomes a 0/0", "has base toughness 0"
+_TOUGH0 = re.compile(r"\b(" + _TARGET + r" creature[^.]*?)\b(?:has base power and toughness (?:\d+|x)/0|"
+                     r"becomes an? (?:\d+|x)/0|has base toughness 0)\b")
 _LOCK = re.compile(r"\benchanted creature (?:[^.]*?\b)?(doesn't untap|can't attack|can't block)")
 _ACTIVATED = re.compile(r"^[^:\"]*(\{[^}]+\}|\bsacrifice\b|\bdiscard\b|\bexile this\b)[^:\"]*:")
 _LOYALTY = re.compile(r"^[+−\-]?(\d+|x):")
@@ -107,6 +111,11 @@ def _classify(low):
     m = _BOUNCE.search(low)
     if m and _HOLDS_CREATURE.search(m.group(1)) and "you control" not in m.group(1):
         found.append((0.3, "Bounce"))
+    for m in _TOUGH0.finditer(low):
+        target = m.group(1)
+        if "you control" in target:
+            continue
+        found.append((0.5, "Bedingt") if _CONDITION.search(target) else (0.7, "Toughness 0"))
     if _LOCK.search(low):
         found.append((0.7, "Lock"))
     found = [f for f in found if f[0] > 0]
