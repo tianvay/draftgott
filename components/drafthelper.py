@@ -27,6 +27,7 @@ from components.cardkinds import (FLOW_ORDER, empower_points, flow_kinds,  # noq
 from components.deckfile import parse_pool
 from components.howitworks import render_help_page
 from components.landadvice import color_overview, recommend
+from components.removal import keyword_flags, removal_info
 from components.symbols import active as active_symbols, symbol_css
 from components.scryfall import card_image_url, fetch_cards_cached, fetch_printing_images
 from components.suggest import WUBRG, propose, suggest
@@ -92,6 +93,8 @@ def load_pool(path, refresh=False):
             # Loyalty, die beim Wirken bzw. Betreten sofort dazukommt (ohne X und ohne wiederkehrende Ausloeser)
             "empower_points": empower_points(empower),
             "prepared": bool(model and model.prepared),  # Zauberhaelfte wird als Kopie modelliert
+            **{k: True for k in keyword_flags(sc)},
+            "removal_points": (removal_info(sc) or {}).get("points", 0),
         })
     order = {"deck": 0, "sideboard": 1}  # je Bereich: Nichtlaender nach Manawert, Laender zuletzt
     cards.sort(key=lambda c: (order.get(c["section"], 2), c["land"], c["mv"], c["name"]))
@@ -851,6 +854,7 @@ function typeCounts(copies, basics){
   const out={splash:{},nosplash:{}};
   for(const g of ["splash","nosplash"]){
     const o=out[g];rows.forEach(r=>{o[r]=0});o.cards=0;o.empower=0;o.points=0;o.flow=0;o.prepared=0;
+    o.flash=0;o.deathtouch=0;o.removal=0;o.removal_points=0;
     FLOW_KINDS.forEach(k=>{o["flow_"+k]=0});
     for(const c of copies){
       if(c.mark!=="core"&&c.mark!==g)continue;
@@ -858,6 +862,9 @@ function typeCounts(copies, basics){
       c.kinds.forEach(k=>{if(k in o)o[k]++});
       if(c.empower){o.empower++;o.points+=c.points}
       if(c.prepared)o.prepared++;
+      if(c.flash)o.flash++;
+      if(c.deathtouch)o.deathtouch++;
+      if(c.removal){o.removal++;o.removal_points=Math.round((o.removal_points+c.removal)*100)/100}
       const fl=c.flow||[];
       if(fl.length){o.flow++;fl.forEach(k=>{if(("flow_"+k) in o)o["flow_"+k]++})}
     }
@@ -868,15 +875,21 @@ function typeCounts(copies, basics){
 // Kacheln der Seite -> Eingabe von typeCounts (alle gezaehlten Felder muessen hier weitergegeben werden)
 function copiesOf(tiles){
   return tiles.map(x=>({kinds:x.card.kinds||[],mark:x.mark,empower:!!x.card.empower,
-    points:x.card.empower_points||0,flow:x.card.flow||[],...(x.card.prepared?{prepared:true}:{})}));
+    points:x.card.empower_points||0,flow:x.card.flow||[],...(x.card.prepared?{prepared:true}:{}),
+    ...(x.card.flash?{flash:true}:{}),...(x.card.deathtouch?{deathtouch:true}:{}),
+    ...(x.card.removal_points?{removal:x.card.removal_points}:{})}));
 }
+// Ampel Removal-Punkte: gruen ab 4, gelb ab 2,5 bei 40 Karten (anteilig), wie components/removal.py
+function removalLevel(points,cards){const s=(cards||40)/40;return points+1e-9>=4*s?"good":points+1e-9>=2.5*s?"warn":"bad"}
 // END typeCounts
 const FLOW_LABELS={draw:"Ziehen (Draw)",search:"Suchen (Search)",surveil:"Surveil",scry:"Scry",explore:"Explore",
   mill_self:"Mill: sich selbst",mill_opp:"Mill: Gegner möglich (auch „target player“)"};
 const TYPE_ROWS=[["cards","Karten gesamt",""],["creature","Kreaturen",""],["instant","Instants",""],
   ["sorcery","Sorceries",""],["artifact","Artefakte (ohne Kreaturen)",""],["enchantment","Verzauberungen",""],
   ["planeswalker","Planeswalker",""],["land","Länder gesamt","sep"],["nonbasic_land","davon Nicht-Standard-Länder","sub"],
-  ["empower","Empower Jace (Karten)","sep"],["points","Σ Loyalty beim Wirken/Betreten","sub"]];
+  ["empower","Empower Jace (Karten)","sep"],["points","Σ Loyalty beim Wirken/Betreten","sub"],
+  ["flash","Flash (bleibende Karten)","sep"],["deathtouch","Deathtouch",""],
+  ["removal","Removal (Karten)","sep"],["removal_points","Σ Removal-Punkte","sub"]];
 // Zeilen der Typ-Uebersicht; Kartenfluss-Arten erscheinen nur, wenn eine Karte im Pool sie hat
 function typeRows(){
   const rows=TYPE_ROWS.slice();
@@ -898,8 +911,13 @@ function typeOverview(){
     const tr=el("tr",cls==="sep"?"sep":null);
     tr.appendChild(el("td","l"+(cls==="sub"?" sub":""),label));
     const a=t.splash[key],b=t.nosplash[key];
-    tr.appendChild(el("td",a!==b?"diff":null,String(a)));
-    tr.appendChild(el("td",a!==b?"diff":null,String(b)));
+    if(key==="removal_points"){
+      for(const [v,g] of [[a,"splash"],[b,"nosplash"]])
+        tr.appendChild(el("td",removalLevel(v,t[g].cards)+(a!==b?" diff":""),v.toFixed(1)));
+    }else{
+      tr.appendChild(el("td",a!==b?"diff":null,String(a)));
+      tr.appendChild(el("td",a!==b?"diff":null,String(b)));
+    }
     body.appendChild(tr);
   }
   tb.appendChild(body);
@@ -910,7 +928,9 @@ function typeOverview(){
     "den Varianten. Σ Loyalty: Zahlenwerte von Empower Jace beim Zauber oder Betreten (ohne X, ohne Auslöser). "+
     "Kartenfluss: Karten, die ziehen, suchen, surveilen, scrien oder explorieren; es erscheinen nur Arten, die im Pool "+
     "vorkommen. Empower Jace zählt nicht dazu (eigene Zeile). Prepared: Karten, deren Zauberhälfte als Kopie "+
-    "gewirkt werden kann (nur, wenn der Pool solche Karten hat)."));
+    "gewirkt werden kann (nur, wenn der Pool solche Karten hat). Flash nur bei bleibenden Karten. Removal-Punkte: "+
+    "1 = entfernt jede gegnerische Kreatur (Details unter „So funktioniert es“); Ampel grün ab 4, gelb ab 2,5 "+
+    "Punkten bei 40 Karten."));
 }
 // Sortierung nur der Anzeige (die Reihenfolge der Zuordnungen bleibt unberuehrt)
 const COLOR_ORDER=["W","U","B","R","G","M","C","L"];

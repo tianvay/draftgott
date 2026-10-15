@@ -20,6 +20,7 @@ from collections import Counter
 
 from components.cli import parse_args
 from components.scryfall import fetch_cards_cached
+from components.removal import keyword_flags, removal_info
 from components.symbols import fetch_symbols
 from components.cards import card_info
 from components.cardkinds import card_colors, empower_points, flow_kinds, type_kinds
@@ -46,7 +47,8 @@ def build_deck(entry, data, args):
         front_type = ((sc.get("card_faces") or [sc])[0].get("type_line") or sc.get("type_line") or "")
         info[name] = {"kinds": type_kinds(front_type), "flow": flow_kinds(sc), "colors": card_colors(sc),
                       "empower": bool(card.empower), "points": empower_points(card.empower),
-                      "prepared": bool(card.prepared)}
+                      "prepared": bool(card.prepared), **{k: True for k in keyword_flags(sc)},
+                      "removal": removal_info(sc)}
         cards += [card] * qty
     if len(cards) < 7 + args.turns:
         sys.exit(f"Zu wenige Karten im Deck {entry['name']}.")

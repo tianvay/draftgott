@@ -14,7 +14,7 @@ from components.stats import TRAFFIC
 _D = parse_args(["deck.txt"])  # Standardwerte der Kommandozeile
 # Abschnitte, die nur erscheinen, wenn der Bericht sie auch hat (z. B. Deck-Vergleich nur bei mehreren Decks)
 CONDITIONAL = {"vergleich", "great", "mulligan", "jace", "farben", "landcycling", "ziehen", "surveil", "prepared",
-               "splashkarten"}
+               "splashkarten", "removal"}
 
 
 def _ul(items):
@@ -55,7 +55,8 @@ def _sections():
             "haben; Mill getrennt nach „sich selbst“ und „Gegner möglich“ („target player“ zählt bei beiden). Es "
             "erscheinen nur Arten, die im Deck vorkommen. Auslöser wie „whenever you draw“ und Ziehen des Gegners zählen "
             "nicht, Empower Jace hat eine eigene Zeile. „Prepared (Karten)“: Karten, deren Zauberhälfte als Kopie "
-            "gewirkt werden kann (nur, wenn solche Karten im Deck sind)."))
+            "gewirkt werden kann (nur, wenn solche Karten im Deck sind). Flash zählt nur bei bleibenden Karten, "
+            "Deathtouch nur, wenn die Karte es selbst hat (nicht, wenn sie es verleiht)."))
          + _panel("Mana-Kurve nach Farben", _ul([
              "Gezählt werden Nichtland-Karten nach Manawert (aufgerundet ab ,5; 7 und mehr zusammen).",
              "<b>Mehrfarbige gesondert:</b> Jede Karte steht genau einmal im Diagramm, die Balkenhöhe ist die "
@@ -76,6 +77,25 @@ def _sections():
              "Beim Vergleich mit gemeinsamem Kern (Drafthelper oder <code>--core</code>) steht jede Karte mit ihrem "
              "Bereich (Core, Splash, NoSplash …). Mengen werden je Bereich getrennt geführt; blass dargestellte Bereiche "
              "gehören nur zu einer anderen Variante."))),
+        ("removal", "Removal", _panel("Bewertung", _ul([
+             "Jede Karte bekommt Punkte für ihren besten Removal-Effekt (alle Seiten, bei modalen Karten der beste "
+             "Modus); 1 Punkt = entfernt jede gegnerische Kreatur zuverlässig. Σ Removal-Punkte ist die Summe über "
+             "alle Kopien und liest sich wie „so viele harte Removals“.",
+             "<b>Hart</b> (destroy/exile target creature) 1,0 · <b>Massenremoval</b> 1,0 · <b>Exil bis verlassen</b> "
+             "(„until … leaves the battlefield“) 0,9 · <b>Edikt</b> (Gegner opfert) 0,7, mit „greatest mana value“ "
+             "0,9 · <b>Lock</b>-Aura (enttappt nicht, kann nicht angreifen) 0,7 · <b>Fight</b> 0,5 · "
+             "<b>Bounce</b> 0,3.",
+             "<b>Schaden und −X/−X</b> nach Höhe: 1 → 0,2 · 2 → 0,4 · 3 → 0,6 · 4 → 0,8 · ab 5 → 0,9; X oder "
+             "„damage equal to …“ 0,5. −X/−0 zählt nicht.",
+             "<b>Bedingt</b> (Bedingung am Ziel wie Manawert, Toughness, Flying, Farbe, oder eigenes Opfer): höchstens "
+             "0,5. <b>Fähigkeit</b> (bezahlbare Fähigkeit oder Planeswalker-Fähigkeit) und <b>Auslöser</b> (außer "
+             "beim Betreten): halber Wert.",
+             "Nicht gezählt: Counterspells, Kampftricks, Schaden nur an Spieler und verliehene Fähigkeiten in "
+             "Anführungszeichen.",
+             "Ampel: grün ab 4, gelb ab 2,5 Punkten bei 40 Karten, bei anderer Kartenzahl anteilig. Richtwert für "
+             "Limited: etwa 4 bis 6 Removal-Karten.",
+             "Die Tabelle zeigt jede erkannte Karte mit Art, Punkten je Karte, Summe und der erkannten Textstelle zur Kontrolle. Die "
+             "Simulation nutzt den Score nicht (es gibt keinen Gegner)."]))),
         ("great", "Great in this deck!", _panel("Was hier steht", _ul([
             "Karten mit der Kategorie ★ Splashworthy oder MustPlay aus dem Drafthelper, mit Bereich, Kosten und "
             "Eigenschaften.",

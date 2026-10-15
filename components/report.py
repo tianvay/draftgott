@@ -13,7 +13,7 @@ from components.mulligan import MULL_COLORS, MULL_LANDS_HIGH, MULL_LANDS_LOW
 from components.report_sections import render_compare_section, render_jace_section, render_logic_section
 from components.coverage import METRIC_ORDER, STATUS_TEXT, metrics_of, summarize
 from components.report_cards import (all_colors_row, avail_level, render_color_availability, render_color_curves,
-                                     render_type_table)
+                                     render_removal_table, render_type_table)
 from components.simulation import card_label
 from components.stats import TRAFFIC, lethal_level, timing_stats, traffic_level
 
@@ -263,6 +263,11 @@ def render_details(ctx, suffix=""):
             f'<div class="panel" style="margin-top:14px">{unsure}'
             f'{origin_note}{h_table(head, deck_rows, left=(0, 2, 3, 4) if len(head) == 5 else (0, 2, 3))}</div>')
     add("deck", "Deck", "Kartendaten von Scryfall.", body)
+
+    # ---------------- Removal (Bewertung aus dem Kartentext)
+    removal_html = render_removal_table(ctx)
+    if removal_html:
+        add("removal", "Removal", "Wie viel Removal hat das Deck? Bewertung je Karte aus dem Kartentext.", removal_html)
 
     # ---------------- Great in this deck! (Kategorien aus dem Draft-Helper)
     great_html = render_great(ctx)
