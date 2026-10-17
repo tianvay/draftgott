@@ -33,7 +33,7 @@ CYCLE_CAP = 6    # Ende des gegnerischen Zugs: nur cyceln, solange Laender auf F
 class Creature:
     """Eine Kreatur auf dem Feld (Karte, Schritt des Eintritts, getappt, Schaden, Marken, Pump)."""
     __slots__ = ("card", "entered", "tapped", "damage", "bonus", "pump", "dead", "touched", "locked", "prepared",
-                 "tpump", "extra", "lifted", "owner")
+                 "tpump", "extra", "lifted", "owner", "at_jace")
 
     def __init__(self, card, entered=0):
         self.card = card
@@ -50,6 +50,7 @@ class Creature:
         self.extra = set()    # verliehene Schluesselwoerter bis Rundenende
         self.lifted = False   # Defender gilt in diesem Zug nicht (Surveillance Phantasm nach einem Surveil)
         self.owner = None     # Besitzer, wenn nicht der Kontrolleur (aus dem Exil gewirkt, Null Summoner)
+        self.at_jace = False  # greift in diesem Kampf den Jace-Token an statt den Spieler
 
     @property
     def power(self):
@@ -65,7 +66,7 @@ class Creature:
     def copy(self):
         c = Creature(self.card, self.entered)
         for attr in ("tapped", "damage", "bonus", "pump", "dead", "touched", "locked", "prepared", "tpump",
-                     "lifted"):
+                     "lifted", "at_jace"):
             setattr(c, attr, getattr(self, attr))
         c.extra = set(self.extra)
         c.owner = self.owner
@@ -102,8 +103,9 @@ def _lethal_need(blocker, deathtouch):
 
 def resolve_combat(pairs):
     """Kampfschaden fuer [(Angreifer, [Blocker])]. Veraendert Schaden und dead der Kreaturen.
-    Gibt {"player": Schaden am Verteidiger, "lifelink_attacker", "lifelink_defender"} zurueck."""
-    out = {"player": 0, "lifelink_attacker": 0, "lifelink_defender": 0, "to_player": {},
+    Gibt {"player": Schaden am Verteidiger, "jace": Schaden am Jace-Token (Angreifer mit at_jace), "lifelink_attacker",
+    "lifelink_defender", ...} zurueck."""
+    out = {"player": 0, "jace": 0, "lifelink_attacker": 0, "lifelink_defender": 0, "to_player": {},
            "lifelink_events_attacker": 0, "lifelink_events_defender": 0}
     for first_step in (True, False):
         hits = []  # (Ziel-Kreatur, Schaden, Deathtouch)
@@ -111,8 +113,7 @@ def resolve_combat(pairs):
             if not att.dead and _deals_in(att, first_step) and att.power > 0:
                 power, dt = att.power, att.has("deathtouch")
                 if not blockers:
-                    out["player"] += power
-                    out["to_player"][id(att)] = out["to_player"].get(id(att), 0) + power
+                    _hit_player(out, att, power)
                 else:
                     alive = sorted((b for b in blockers if not b.dead), key=lambda b: (b.toughness - b.damage,))
                     rest = power
@@ -124,8 +125,7 @@ def resolve_combat(pairs):
                     if rest > 0:
                         if att.has("trample") or not alive:
                             if att.has("trample"):
-                                out["player"] += rest
-                                out["to_player"][id(att)] = out["to_player"].get(id(att), 0) + rest
+                                _hit_player(out, att, rest)
                         else:
                             hits.append((alive[-1], rest, dt))
                 if att.has("lifelink"):
@@ -147,6 +147,14 @@ def resolve_combat(pairs):
     return out
 
 
+def _hit_player(out, att, amount):
+    if att.at_jace:
+        out["jace"] += amount
+    else:
+        out["player"] += amount
+        out["to_player"][id(att)] = out["to_player"].get(id(att), 0) + amount
+
+
 def outcome(attacker, blockers):
     """(Angreifer stirbt, [Blocker sterben]) fuer einen Kampf, ohne die Kreaturen zu veraendern."""
     a, bs = attacker.copy(), [b.copy() for b in blockers]
@@ -161,6 +169,22 @@ def _value(c):
 # ---------------------------------------------------------------------------------------------------------------------
 # Entscheidungen
 # ---------------------------------------------------------------------------------------------------------------------
+
+def choose_jace_attackers(attackers, defender, blockers):
+    """Angreifer auf den Jace-Token des Verteidigers: nicht bei Lethal auf den Spieler; sonst die schwaechsten
+    Angreifer, gerade so viele, dass Jace (auch nach bestmoeglichem Block) unter 3 Loyalty faellt bzw. stirbt.
+    Reicht das nicht, greifen alle den Spieler an."""
+    loyalty = defender.jace.loyalty
+    if loyalty <= 0 or not attackers or max_through(attackers, blockers) >= defender.life:
+        return []
+    need = loyalty if loyalty < 3 else loyalty - 2
+    picked = []
+    for a in sorted(attackers, key=lambda a: (a.power, a.toughness, a.card.mv)):
+        picked.append(a)
+        if max_through(picked, blockers) >= need:
+            return picked
+    return []
+
 
 def max_through(attackers, blockers):
     """Schaden, der bei bestmoeglichem Blocken mindestens durchkommt (gierige Naeherung, ohne Kampftricks)."""
@@ -604,7 +628,7 @@ def creature_enters(p, new, step, e, opp=None, cast=True):
         if c.card.enter_counter:
             fresh = [x for x in alive if x.entered == step]
             if fresh:
-                pick = max(fresh, key=danger)
+                pick = max(fresh, key=lambda x: (can_attack(x, step), danger(x)))  # Angreifer zuerst
                 pick.bonus += c.card.enter_counter
                 e["events"].append(f"{p.name}: {c.card.name} – Marke auf {pick.card.name}")
     if new.card.artifact_pump:
@@ -1293,7 +1317,7 @@ def _ab_score(pairs, attacking, defender_life):
         score += sum(10 * c.card.mv + c.power + c.toughness for c in other if c.dead)
     lethal = res["player"] >= defender_life
     if attacking:
-        score += res["player"] + res["lifelink_attacker"] + (1000 if lethal else 0)
+        score += res["player"] + res["jace"] + res["lifelink_attacker"] + (1000 if lethal else 0)
     else:
         score += -res["player"] + res["lifelink_defender"] - (1000 if lethal else 0)
     return score, lethal
@@ -1458,6 +1482,33 @@ def _desc(cs):
     return [c.label() + (" (getappt)" if c.tapped else "") + (" (gesperrt)" if c.locked else "") for c in cs]
 
 
+def combat_etb(me, opp, card, step, chosen=()):
+    """Verbessert das Betreten dieser Kreatur den Kampf in diesem Zug? Dann kommt sie in Main 1:
+    Surveil, waehrend eine Kreatur auf ein Surveil wartet (Surveillance Phantasm); Removal, das einen Blocker entfernt,
+    der einen unserer Angreifer fressen wuerde; Pumps/Marken, wenn Kreaturen angreifen koennen (auch Mabel fuer eine
+    Kreatur mit Haste aus diesem Zug, auch eine, die in diesem Zug noch gewirkt wird); Lebensgewinn, der angreifende Engel wachsen laesst (Lyra)."""
+    alive = [c for c in me.creatures if not c.dead]
+    attackers = [c for c in alive if can_attack(c, step)]
+    waiting = [c for c in alive if c.card.surveil_attack and not c.lifted and not c.tapped and c.power > 0
+               and (c.entered < step or c.card.haste)]
+    if card.surveil and waiting and not me.surveilled:
+        return True
+    if card.removal and card.removal[4] == "etb" and attackers:
+        if any(any(_eats(t, a) for a in attackers) for t in valid_targets(card.removal, me, opp)):
+            return True
+    if attackers and (card.artifact_pump or any(a[0] in ("counter", "counter_all", "pump", "pump_all")
+                                                 for m in card.modes for a in m)):
+        return True
+    if card.enter_counter or any(c.card.enter_counter for c in alive):
+        if any(c.entered == step for c in attackers) or any(c.is_creature and c.haste for c in chosen):
+            return True
+    if any(c.card.ally_enter_life for c in alive):
+        angels = {c.card.lifegain_counter[1] for c in alive if c.card.lifegain_counter}
+        if any(t in a.card.creature_types for a in attackers for t in angels):
+            return True
+    return False
+
+
 def take_turn(me, opp, step, rnd, skip_draw):
     """Ein Zug von me. Gibt den Protokolleintrag zurueck."""
     e = {"player": me.name, "round": rnd, "drew": None, "land": None, "main1": [], "main2": [], "attacks": [],
@@ -1585,8 +1636,9 @@ def take_turn(me, opp, step, rnd, skip_draw):
             owner = owner_of
         _resolve(me, opp, c, step, e, owner)
     me.cast_count += len(chosen)
-    main1 = [c for c in chosen if not (c.is_creature and not c.haste)]
-    main2 = [c for c in chosen if c.is_creature and not c.haste]
+    early = [c for c in chosen if c.is_creature and not c.haste and combat_etb(me, opp, c, step, chosen)]
+    main1 = [c for c in chosen if not (c.is_creature and not c.haste) or c in early]
+    main2 = [c for c in chosen if c.is_creature and not c.haste and c not in early]
     done1 = []
     for c in main1:
         if c.is_copy and not any(x.prepared and x.card.prepared[1] == c for x in me.creatures):
@@ -1620,6 +1672,8 @@ def take_turn(me, opp, step, rnd, skip_draw):
             if ef[1] == "trigger" and ef[3] == "attack" and any(pc == a.card for pc, _t in me.jace_perms):
                 n = sum(1 for c in me.creatures if not c.dead) if ef[7] else ef[2]  # X = eigene Kreaturen
                 _jace_add(me, n, e)
+    for a in choose_jace_attackers(attackers, opp, [b for b in opp.creatures if not b.tapped and not b.dead]):
+        a.at_jace = True
     attackers = respond_to_attack(opp, me, attackers, e, step)
     pre_block_abilities(opp, me, attackers, e, step)
     blocks = choose_blocks(attackers, opp.creatures, opp.life)
@@ -1631,6 +1685,9 @@ def take_turn(me, opp, step, rnd, skip_draw):
     combat_tricks(opp, blocks, me, e, step, attacking=False)
     before = [(a.label(), [b.label() for b in bs]) for a, bs in blocks]
     res = resolve_combat(blocks)
+    if res["jace"]:
+        opp.jace.loyalty = max(0, opp.jace.loyalty - res["jace"])
+        e["events"].append(f"{me.name}: {res['jace']} Schaden an Jace von {opp.name} (Loyalty {opp.jace.loyalty})")
     opp.life -= res["player"]
     me.dealt_combat += res["player"]
     combat_life(me, opp, res)
@@ -1641,8 +1698,8 @@ def take_turn(me, opp, step, rnd, skip_draw):
                 if me.library:
                     me.hand.append(me.library.pop(0))
             e["events"].append(f"{me.name}: {a.card.name} zieht {a.card.combat_draw}")
-    e["attacks"] = [{"attacker": lab, "blockers": blabs, "attacker_dies": a.dead,
-                     "blockers_die": [b.dead for b in bs]} for (lab, blabs), (a, bs) in zip(before, blocks)]
+    e["attacks"] = [{"attacker": lab, "blockers": blabs, "attacker_dies": a.dead, "blockers_die": [b.dead for b in bs],
+                     "jace": a.at_jace} for (lab, blabs), (a, bs) in zip(before, blocks)]
     bury((me, opp), e)
     if opp.life <= 0:
         return e
@@ -1672,7 +1729,7 @@ def cleanup(players):
     """Rundenende: Schaden, Pumps und verliehene Schluesselwoerter verfallen."""
     for p in players:
         for c in p.creatures:
-            c.damage, c.pump, c.tpump, c.touched, c.lifted = 0, 0, 0, False, False
+            c.damage, c.pump, c.tpump, c.touched, c.lifted, c.at_jace = 0, 0, 0, False, False, False
             c.extra = set()
         p.surveilled = False
         p.gained = 0

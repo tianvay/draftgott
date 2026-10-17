@@ -18,7 +18,10 @@ RULES = [
     "Gegner gibt nie auf: Er behält dann seine Hand mit der Mindestzahl an Karten.",
     "Gespielt wird mit derselben Auswahl wie im Goldfish, in den Main Phases aber nur Sorcery-Speed (Permanents, "
     "Sorceries, Sorcery-Removal mit gültigem Ziel). Main 1: das Land und alle Zauber außer Kreaturen ohne Haste; Main 2: "
-    "Kreaturen ohne Haste. Übriges Mana bleibt offen für Instants und Flash, auch im Zug des Gegners.",
+    "Kreaturen ohne Haste. Kreaturen, deren Betreten den Kampf verbessert, kommen schon in Main 1: Surveil, während "
+    "eine Kreatur auf ein Surveil wartet (Surveillance Phantasm), Removal gegen einen Blocker, der einen Angreifer "
+    "fressen würde, Pumps/Marken für Angreifer, Lebensgewinn für angreifende Engel (Lyra). Übriges Mana bleibt offen "
+    "für Instants und Flash, auch im Zug des Gegners.",
     "<b>Removal</b> trifft die gefährlichste passende Kreatur (höchste Power, dann Flying/Trample/Deathtouch, dann "
     "Manawert): Destroy/Exile, Schaden und −X/−X nur, wenn sie tötet, Edikt (der Gegner opfert seine schwächste "
     "Kreatur, bei „greatest mana value“ die teuerste), Fight, Bounce (zurück auf die Hand), Lock-Aura (greift nicht an, "
@@ -52,7 +55,9 @@ RULES = [
     "Treasure: im eigenen Zug nur, wenn er mehr Zauber ermöglicht; im Zug des Gegners für Instants und Flash nur, wenn "
     "das offene Mana nicht reicht.",
     "Jace (Empower): Loyalty aus Zaubern, Betreten, Auslösern und Fähigkeiten (siehe unten). Zu Beginn des Zugs ab 3 "
-    "Loyalty −3: Karte ziehen; nach Main 2 ab 3 ziehen, sonst −1: Surveil 1. Jace wird nicht angegriffen.",
+    "Loyalty −3: Karte ziehen; nach Main 2 ab 3 ziehen, sonst −1: Surveil 1. Jace wird angegriffen, wenn er "
+    "dadurch unter 3 Loyalty fällt oder stirbt (nicht, wenn wir stattdessen Lethal auf den Spieler hätten): dafür die "
+    "schwächsten Angreifer, gerade so viele, wie nötig; kein Chump-Block zum Schutz von Jace.",
     "Fähigkeiten mit Kosten (nur Mana und {T}): „Activate only as a sorcery“ nur in der eigenen Main Phase, „only "
     "during your turn“ nur im eigenen Zug, sonst jederzeit. Freies Mana: Mana, nach dessen Einsatz jede bezahlbare "
     "Instant-, Flash- oder Landcycling-Karte der Hand bezahlbar bleibt.",
@@ -130,6 +135,8 @@ def _attacks_html(attacks):
     out = []
     for at in attacks:
         att = esc(at["attacker"]) + (' <span class="dead">†</span>' if at["attacker_dies"] else "")
+        if at.get("jace"):
+            att += " (auf Jace)"
         if not at["blockers"]:
             out.append(f"{att} → ungeblockt")
         else:
