@@ -4,7 +4,7 @@ import re
 from collections import Counter
 
 from components.howitworks import render_help_view
-from components.html_base import HTML_CSS, LABEL_CLASS, esc, h_bar_cell, h_legend, h_level_pill, h_level_td, h_mode, h_pct, h_section, h_table, html_cost, html_mana, svg_bars, svg_lines
+from components.html_base import HTML_CSS, LAYOUT_JS, LABEL_CLASS, esc, h_bar_cell, h_legend, h_level_pill, h_level_td, h_mode, h_pct, h_section, h_table, html_cost, html_mana, svg_bars, svg_lines
 from components import symbols
 from components.jace import analyze_jace
 from components.landadvice import color_report, level, needs_of_alts
@@ -72,8 +72,8 @@ FIGHT_JS = """<script>
     document.body.innerHTML='<p style="padding:30px">draftgott wurde beendet. Dieses Fenster kann geschlossen werden.</p>'})});
 })();
 </script>"""
-FIGHT_BAR = ('<div class="fightbar" id="fightbar"><span id="fbnote" class="muted">Kampf gegen ein Gegnerdeck ist '
-             'nur möglich, solange draftgott läuft (Analyse oder Drafthelper).</span>'
+FIGHT_BAR = ('<div class="fightbar" id="fightbar"><span id="fbnote" class="muted" title="Kampf gegen ein Gegnerdeck ist '
+             'nur möglich, solange draftgott läuft (Analyse oder Drafthelper).">Kampf: nur solange draftgott läuft</span>'
              '<span id="fbctl" style="display:none;gap:8px;align-items:center">Kampf gegen '
              '<select id="fbenemy" title="Gegnerdecks im Projektordner (_enemydeck*.txt)"></select>'
              '<button type="button" id="fbgo">Kampf simulieren</button><span id="fbstatus" class="muted"></span>'
@@ -81,6 +81,9 @@ FIGHT_BAR = ('<div class="fightbar" id="fightbar"><span id="fbnote" class="muted
 
 SWITCH_JS = """<script>
 document.documentElement.classList.add('js');
+document.querySelectorAll('.grpbar button,.gsw button').forEach(function(b){
+  var t=b.textContent.trim().toLowerCase();
+  if(t==='splash')b.classList.add('v-splash');else if(t==='nosplash')b.classList.add('v-nosplash');});
 function showGroup(g){
   document.querySelectorAll('[data-g]').forEach(function(e){e.classList.toggle('on',e.getAttribute('data-g')===g)});
 }
@@ -96,6 +99,34 @@ document.querySelectorAll('.gsw button').forEach(function(b){b.addEventListener(
   if(!target){var grp=document.querySelector('.grp[data-g="'+g+'"]');target=grp&&grp.querySelector('h2.gh');top=60}
   if(target)window.scrollTo({top:window.scrollY+target.getBoundingClientRect().top-top,behavior:'instant'});});});
 </script>"""
+
+
+def sidebar_kpis(ctx):
+    """Kernzahlen fuer die Seitenleiste (Play / Draw): Mulligan, Zauber bis zur Auswertungsrunde, schnellster Lethal,
+    Durchschnittsrunde fuer den Schaden."""
+    a, res = ctx["args"], ctx["results"]
+    labels = list(res.keys())
+    short = {"On the Play": "Play", "On the Draw": "Draw"}
+    rows = []
+    mu0 = res[labels[0]]["mulligan"]
+    if mu0["on"]:
+        rows.append(['<td class="l">Mulligan</td>'] + [
+            f'<td>{h_pct(res[l]["mulligan"]["first_any"] / res[l]["mulligan"]["deals"])}</td>' for l in labels])
+    t = a.turns
+    rows.append([f'<td class="l">Zauber R{t}</td>'] + [
+        h_level_td(traffic_level(round(res[l]["cast"][t] / a.sims * 100), l == "On the Draw", t),
+                   f'{round(res[l]["cast"][t] / a.sims * 100)}%') for l in labels])
+    lethal = ['<td class="l">Lethal ab</td>']
+    for l in labels:
+        b = res[l]["best_lethal"]
+        lethal.append(h_level_td(lethal_level(b["key"][0]) if b else "red", f'R{b["key"][0]}' if b else "–"))
+    rows.append(lethal)
+    avg = [f'<td class="l">Ø {a.schaden} Schaden</td>']
+    for l in labels:
+        st = timing_stats(res[l]["dmg"], a.sims)
+        avg.append(f'<td>R{st[0]:.1f}</td>' if st else '<td class="muted">–</td>')
+    rows.append(avg)
+    return h_table([""] + [esc(short.get(l, l)) for l in labels], rows)
 
 
 CAT_LABEL = {"splashworthy": "★ Splashworthy", "mustplay": "MustPlay", "filler": "Filler", "neverplay": "NeverPlay"}
@@ -712,17 +743,25 @@ def render_html(ctx):
                     + esc(", ".join(ctx["missing"])) + "</div>") if ctx.get("missing") else ""
     stamp = datetime.datetime.now().strftime("%d.%m.%Y %H:%M")
     help_html = render_help_view(present=present)
+    if multi:
+        kpi_html = "".join(f'<div class="sidekpi grpkpi{" on" if i == 0 else ""}" data-g="{i}">'
+                           f'<div class="kvar">{esc(d["name"])}</div>{sidebar_kpis(d)}</div>'
+                           for i, d in enumerate(decks))
+    else:
+        kpi_html = f'<div class="sidekpi">{sidebar_kpis(ctx)}</div>'
+    side_html = (f'<h3>Kernzahlen</h3>{kpi_html}<div class="navsep"></div><h3>Abschnitte</h3>{nav_html}'
+                 f'<div class="navsep"></div><h3>Einstellungen</h3>'
+                 f'<div class="chips">{"".join(f"<span class=chip>{esc(c)}</span>" for c in chips)}</div>')
     css = HTML_CSS + symbols.symbol_css(symbols.used())
     return (f'<!DOCTYPE html><html lang="de"><head><meta charset="utf-8">'
             f'<meta name="viewport" content="width=device-width,initial-scale=1">'
             f'<title>{esc(ctx["name"])} – MTG Simulation</title><style>{css}</style></head><body>'
             f'<header class="top" id="top"><h1>{esc(ctx["name"])}</h1>'
-            f'<div class="sub">Starthand-Simulation · erstellt am {stamp}</div>'
-            f'<div class="chips">{"".join(f"<span class=chip>{esc(c)}</span>" for c in chips)}</div>'
+            f'<span class="sub">Starthand-Simulation · erstellt am {stamp}</span>'
             '<div class="views"><a href="#top" data-view="report" class="on">Bericht</a>'
             '<a href="#hiw-start" data-view="help">So funktioniert es</a></div>' + FIGHT_BAR + '</header>'
-            f'<div class="view on" id="view-report"><div class="layout"><nav>{nav_html}</nav>'
+            f'<div class="view on" id="view-report"><div class="layout"><nav>{side_html}</nav>'
             f'<main>{missing_html}{"".join(sections)}</main></div></div>'
             f'{help_html}'
             f'<footer>Erzeugt mit mtg_sim.py · Kartendaten von Scryfall</footer>'
-            + (SWITCH_JS if multi else "") + VIEW_JS + FIGHT_JS + '</body></html>')
+            + LAYOUT_JS + (SWITCH_JS if multi else "") + VIEW_JS + FIGHT_JS + '</body></html>')

@@ -7,7 +7,7 @@ Zugprotokoll beider Spieler, Regeln des Kampfs. Bei mehreren Decks (Splash/NoSpl
 import datetime
 
 from components.battle import _end_life, _max_gap
-from components.html_base import HTML_CSS, LABEL_CLASS, esc, h_bar_cell, h_mode, h_section, h_table, svg_lines
+from components.html_base import HTML_CSS, LAYOUT_JS, LABEL_CLASS, esc, h_bar_cell, h_mode, h_section, h_table, svg_lines
 
 MODES = ("On the Play", "On the Draw")
 
@@ -127,7 +127,8 @@ RULES = [
 ]
 
 CSS = """
-.proto td{vertical-align:top;font-size:13px}
+.proto td{vertical-align:top;font-size:12.5px;padding:5px 6px}
+.proto th{white-space:normal;vertical-align:bottom;padding:5px 6px}
 .proto tr.p-Wir td:first-child,.proto tr.p-Wir td:nth-child(2){border-left:3px solid var(--play)}
 .proto tr.p-Gegner td:first-child,.proto tr.p-Gegner td:nth-child(2){border-left:3px solid var(--draw)}
 .proto .dead{color:var(--bad);font-weight:600}
@@ -141,6 +142,8 @@ CSS = """
 .res-win{color:var(--good);font-weight:600}.res-loss{color:var(--bad);font-weight:600}
 .mull{color:var(--bad);font-weight:700}
 .hands{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;margin:8px 0 12px}
+.kpi .v .vs{font-size:14px;color:var(--muted);font-weight:600;margin:0 4px}
+.kpi .v small{font-size:12px;color:var(--muted);font-weight:600;margin-right:2px}
 """
 
 
@@ -209,6 +212,9 @@ def _protocol(game, mode, title):
 
 SWITCH_JS = """<script>
 document.documentElement.classList.add('js');
+document.querySelectorAll('.gsw button').forEach(function(b){  // Farben wie im Drafthelper
+  var t=b.textContent.trim().toLowerCase();
+  if(t==='splash')b.classList.add('v-splash');else if(t==='nosplash')b.classList.add('v-nosplash');});
 function showGroup(g){
   document.querySelectorAll('[data-g]').forEach(function(e){e.classList.toggle('on',e.getAttribute('data-g')===g)});
 }
@@ -275,8 +281,26 @@ def _pct(n, d):
     return f"{n / d:.0%}" if d else "–"
 
 
+def _kpi_tiles(decks):
+    """Kacheln: Siegquote je Gegner (und Variante), Play und Draw."""
+    multi = len(decks) > 1
+    tiles = []
+    for dd in decks:
+        for b in dd.get("battles") or []:
+            vals = []
+            for mode in MODES:
+                r = b["results"][mode]
+                vals.append(f'<small>{"Play" if mode == MODES[0] else "Draw"}</small>{r["wins"] / (r["games"] or 1):.0%}')
+            head = (f'{esc(dd["name"])} · ' if multi else "") + f'gegen {esc(b["enemy"])}'
+            tiles.append(f'<div class="panel kpi"><div class="l">{head}</div>'
+                         f'<div class="v">{vals[0]}<span class="vs">/</span>{vals[1]}</div>'
+                         f'<div class="s">Siege On the Play / On the Draw</div></div>')
+    return f'<div class="grid g4" style="margin-bottom:14px">{"".join(tiles)}</div>' if tiles else ""
+
+
 def _overview(decks):
     rows, warnings = [], []
+    draws = any(b["results"][m]["draws"] for dd in decks for b in dd.get("battles") or [] for m in MODES)
     for dd in decks:
         for b in dd.get("battles") or []:
             for mode in MODES:
@@ -287,18 +311,20 @@ def _overview(decks):
                         if r["mull_losses"] else '<td class="muted">0</td>')
                 rows.append([f'<td class="l"><b>{esc(dd["name"])}</b></td>', f'<td class="l">{esc(b["enemy"])}</td>',
                              h_mode(mode), h_bar_cell(r["wins"] / n, f'{r["wins"] / n:.0%}', LABEL_CLASS.get(mode, "")),
-                             f'<td>{r["losses"] / n:.0%}</td>', mull, f'<td>{r["draws"] / n:.0%}</td>',
-                             f'<td>{_pct(r["wins"], played)}</td>',
-                             f'<td>{_avg(r["win_rounds"])}</td>', f'<td>{_avg(r["loss_rounds"])}</td>'])
+                             f'<td>{r["losses"] / n:.0%}</td>', mull]
+                            + ([f'<td>{r["draws"] / n:.0%}</td>'] if draws else [])
+                            + [f'<td>{_pct(r["wins"], played)}</td>',
+                               f'<td>{_avg(r["win_rounds"])}</td>', f'<td>{_avg(r["loss_rounds"])}</td>'])
                 if r["mull_losses"] / n > MULL_WARN:
                     warnings.append(f'{esc(dd["name"])} ({esc(mode)}): {r["mull_losses"]} von {n} Spielen '
                                     f'({r["mull_losses"] / n:.0%}) geben wir schon beim Mulligan auf')
     games = next((b["results"][MODES[0]]["games"] for dd in decks for b in dd.get("battles") or []), 0)
     warn = ('<div class="warnbox"><b>Mulligan-Aufgaben:</b> ' + "; ".join(warnings) + '. Die Hand fiel dabei unter '
             'die Mindestzahl an Karten (<code>--min-handkarten</code>).</div>') if warnings else ""
-    return (warn + '<div class="panel">' + h_table(
-        ["Deck", "Gegner", "", "Siege", "Niederlagen", "davon durch Mulligan", "Unentschieden",
-         "Siege ohne Mulligan-Aufgaben", "Ø Runde Sieg", "Ø Runde Niederlage"], rows, left=(0, 1, 2))
+    heads = (["Deck", "Gegner", "", "Siege", "Niederlagen", "davon durch Mulligan"] + (["Unentschieden"] if draws else [])
+             + ["Siege ohne Mulligan-Aufgaben", "Ø Runde Sieg", "Ø Runde Niederlage"])
+    return (_kpi_tiles(decks) + warn + '<div class="panel">' + h_table(heads, rows, extra='class="wrap"',
+                                                                        left=(0, 1, 2))
         + f'<div class="note">{games} Spiele je Deck und Modus. Runde = Zahl der eigenen Züge. „davon durch Mulligan“: '
           f'Niederlagen, weil unsere Hand unter die Mindestzahl fiel (der Gegner gibt nie auf). „Siege ohne '
           f'Mulligan-Aufgaben“: Siege unter den Spielen, die wirklich gespielt wurden. Mulligan-Aufgaben zählen nicht '
@@ -376,6 +402,43 @@ def _games_list(d_idx, e_idx, b):
             f'<tbody>{"".join(rows)}</tbody></table></div><div class="gameview" id="gameview"></div></div>')
 
 
+def _nav_links(items):
+    """Links der Seitenleiste; Abschnitte je Gegner in einer einklappbaren Gruppe."""
+    out, groups = [], {}
+    for item in items:
+        sid, label = item[0], item[1]
+        enemy = item[2] if len(item) > 2 else None
+        if enemy is None:
+            out.append(f'<a href="#{sid}">{esc(label)}</a>')
+        else:
+            if enemy not in groups:
+                groups[enemy] = []
+                out.append(enemy)
+            groups[enemy].append(f'<a href="#{sid}">{esc(label)}</a>')
+    return "".join(x if x.startswith("<a") else
+                   f'<details open><summary>gegen {esc(x)}</summary>{"".join(groups[x])}</details>' for x in out)
+
+
+def _side_kpis(decks):
+    """Siegquote je Gegner (Play / Draw) fuer die Seitenleiste; bei mehreren Varianten je Variante umschaltbar."""
+    blocks = []
+    for i, dd in enumerate(decks):
+        rows = []
+        for b in dd.get("battles") or []:
+            cells = [f'<td class="l">{esc(b["enemy"])}</td>']
+            for mode in MODES:
+                r = b["results"][mode]
+                cells.append(f'<td>{r["wins"] / (r["games"] or 1):.0%}</td>')
+            rows.append(cells)
+        table = h_table(["Gegner", "Play", "Draw"], rows) if rows else '<p class="muted">–</p>'
+        if len(decks) > 1:
+            blocks.append(f'<div class="sidekpi grpkpi{" on" if i == 0 else ""}" data-g="{i}">'
+                          f'<div class="kvar">{esc(dd["name"])}</div>{table}</div>')
+        else:
+            blocks.append(f'<div class="sidekpi">{table}</div>')
+    return "".join(blocks)
+
+
 def render_battle_html(decks, args):
     enemies = []
     for dd in decks:
@@ -394,19 +457,20 @@ def render_battle_html(decks, args):
         suffix = "" if i == 0 else f"-{i}"
         secs, nv = [], []
 
-        def add(base, heading, body, hint=""):
+        def add(base, heading, body, hint="", short=None, enemy=None):
             html = h_section(base + suffix, heading, hint, body)
             if multi:
                 buttons = "".join(f'<button type="button" data-g="{k}" data-sec="{base}" '
                                   f'class="{"on" if k == i else ""}">{esc(n)}</button>' for k, n in enumerate(names))
                 html = html.replace("</h2>", f'<span class="gsw">{buttons}</span></h2>', 1)
             secs.append(html)
-            nv.append((base + suffix, heading))
+            nv.append((base + suffix, short or heading, enemy))
 
         for e_idx, b in enumerate(dd.get("battles") or []):
             tag = "" if e_idx == 0 else str(e_idx)
             vs = f" gegen {b['enemy']}" if len(enemies) > 1 else ""
-            add("verlauf" + tag, "Verlauf und Kennzahlen" + vs, _verlauf(b))
+            add("verlauf" + tag, "Verlauf und Kennzahlen" + vs, _verlauf(b), short="Verlauf und Kennzahlen",
+                enemy=b["enemy"])
             for key, sid, label, order in SPECIALS:
                 cands = [(b["results"][m][key], m) for m in MODES if b["results"][m].get(key)]
                 if cands:
@@ -415,13 +479,12 @@ def render_battle_html(decks, args):
                 else:
                     body = (f'<div class="panel"><p class="muted">In keinem Spiel gegen {esc(b["enemy"])} '
                             f'({"kein Sieg" if "win" in key else "keine Niederlage"}).</p></div>')
-                add(sid + tag, label + vs, body, SPECIAL_NOTE.get(key, ""))
-            add("spiele" + tag, "Alle Spiele" + vs, _games_list(i, e_idx, b))
+                add(sid + tag, label + vs, body, SPECIAL_NOTE.get(key, ""), short=label, enemy=b["enemy"])
+            add("spiele" + tag, "Alle Spiele" + vs, _games_list(i, e_idx, b), short="Alle Spiele", enemy=b["enemy"])
         if multi:
             groups.append(f'<div class="grp{" on" if i == 0 else ""}" data-g="{i}">'
                           f'<h2 class="gh">Details: {esc(dd["name"])}</h2>{"".join(secs)}</div>')
-            navs.append(f'<div class="in grpnav{" on" if i == 0 else ""}" data-g="{i}">'
-                        + "".join(f'<a href="#{k}">{esc(t)}</a>' for k, t in nav + nv) + "</div>")
+            navs.append(f'<div class="in grpnav{" on" if i == 0 else ""}" data-g="{i}">' + _nav_links(nav + nv) + "</div>")
         else:
             groups += secs
             nav += nv
@@ -430,20 +493,23 @@ def render_battle_html(decks, args):
     if multi:
         nav_html = "".join(navs)
     else:
-        nav_html = '<div class="in">' + "".join(f'<a href="#{k}">{esc(t)}</a>' for k, t in nav) + "</div>"
+        nav_html = '<div class="in">' + _nav_links(nav) + "</div>"
     nav_html += '<div class="in"><a href="#regeln">So funktioniert der Kampf</a></div>'
     stamp = datetime.datetime.now().strftime("%d.%m.%Y %H:%M")
     chips = [f"{games} Spiele je Modus", f"Rundengrenze {getattr(args, 'kampf_runden', 20)}",
              "Varianten: " + ", ".join(names)] + ([f"Seed {args.seed}"] if getattr(args, "seed", None) is not None else [])
+    side_html = (f'<h3>Siegquote</h3>{_side_kpis(decks)}<div class="navsep"></div><h3>Abschnitte</h3>{nav_html}'
+                 f'<div class="navsep"></div><h3>Einstellungen</h3>'
+                 f'<div class="chips">{"".join(f"<span class=chip>{esc(c)}</span>" for c in chips)}</div>')
     return (f'<!DOCTYPE html><html lang="de"><head><meta charset="utf-8">'
             f'<meta name="viewport" content="width=device-width,initial-scale=1">'
             f'<title>{esc(title)} – MTG Simulation</title><style>{HTML_CSS}{CSS}</style></head><body>'
             f'<header class="top" id="top"><h1>{esc(title)}</h1>'
-            f'<div class="sub">Kampf-Simulation · erstellt am {stamp}</div>'
-            f'<div class="chips">{"".join(f"<span class=chip>{esc(c)}</span>" for c in chips)}</div>'
-            '<a id="backlink" href="report" style="display:none;margin-top:10px">← Zurück zum Bericht</a></header>'
-            f'<div class="layout"><nav>{nav_html}</nav><main>{"".join(sections)}{"".join(groups)}{rules}</main></div>'
+            f'<span class="sub">Kampf-Simulation · erstellt am {stamp}</span>'
+            '<a id="backlink" class="btn" href="report" style="display:none;margin-left:auto">← Zurück zum Bericht</a>'
+            '</header>'
+            f'<div class="layout"><nav>{side_html}</nav><main>{"".join(sections)}{"".join(groups)}{rules}</main></div>'
             f'<footer>Erzeugt mit mtg_sim.py · Kartendaten von Scryfall</footer>'
-            + (SWITCH_JS if multi else "") + GAMES_JS
+            + LAYOUT_JS + (SWITCH_JS if multi else "") + GAMES_JS
             + "<script>if(location.protocol.indexOf('http')===0)document.getElementById('backlink').style.display="
               "'inline-block'</script></body></html>")
