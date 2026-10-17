@@ -3,7 +3,7 @@ import re
 from typing import NamedTuple
 
 from components.mana import cost_alternatives, mana_value
-from components.removal import discard_count, has_flash, removal_spec
+from components.removal import _classify, _spec_from, discard_count, has_flash, removal_spec
 
 
 class Card(NamedTuple):
@@ -52,6 +52,18 @@ class Card(NamedTuple):
     abilities: tuple = ()      # aktivierbare Faehigkeiten im Kampf (parse_abilities)
     pump_tough: tuple = ()     # je Modus: Toughness der Pumps ("pump"/"pump_all") in ihrer Reihenfolge (+P/+T)
     legendary: bool = False    # Legendary im Typ
+    is_artifact: bool = False  # Artifact im Typ
+    combat_draw: int = 0       # zieht N Karten, wenn die Kreatur einem Spieler Kampfschaden zufuegt
+    end_sacrifice: bool = False  # wird zu Beginn des Endsegments geopfert
+    ally_enter_life: int = 0   # Leben, wenn eine andere eigene Kreatur ins Spiel kommt
+    enter_counter: int = 0     # Marken auf eine Kreatur, die in diesem Zug kam, wenn sie oder eine andere kommt (Mabel)
+    artifact_pump: tuple = ()  # beim Betreten: eigene Kreaturen +X/+0 (X = Artefakte) und diese Schluesselwoerter
+    spell_discount: int = 0    # Nichtkreatur-Zauber kosten {N} weniger
+    target_cast_counter: int = 0  # Marken auf sich, wenn man einen Zauber mit Ziel beim Gegner wirkt (Danitha)
+    targets_opp: bool = False  # Zauber mit Ziel beim Gegner (Spieler oder seine Kreatur)
+    hand_removal: tuple = ()   # "Kosten, Discard this card: Removal" - (Zahlungswege, Removal-Spec)
+    gy_ability: tuple = ()     # "Kosten, Exile this card from your graveyard: Effekt" - (Zahlungswege, Effekte)
+    surveil_attack: bool = False  # Defender gilt nicht, wenn man in diesem Zug gesurveilt hat
 
 
 LANDCYCLE_RE = re.compile(
@@ -419,6 +431,7 @@ _ABILITY_COUNTER_RE = re.compile(r"^put (a|an|one|two|three|\d+) \+1/\+1 counter
 _ABILITY_COUNTER_SCOPE = {"~": "self", "this creature": "self", "target creature": "target",
                           "target creature you control": "target", "target nonlegendary creature": "nonlegendary"}
 _ABILITY_EMPOWER_RE = re.compile(r"^empower jace (\d+)\.?$")
+_ABILITY_SURVEIL_RE = re.compile(r"^surveil (\d+)\.?$")
 
 
 def _ability_atoms(body):
@@ -428,6 +441,9 @@ def _ability_atoms(body):
     m = _ABILITY_EMPOWER_RE.match(body)
     if m:
         return (("empower", int(m.group(1))),)
+    m = _ABILITY_SURVEIL_RE.match(body)
+    if m:
+        return (("surveil", int(m.group(1))),)
     m = _ABILITY_COUNTER_RE.match(body)
     if m:
         scope = _ABILITY_COUNTER_SCOPE.get(m.group(2), "countered")
@@ -475,6 +491,76 @@ def parse_abilities(card):
             out.append((cost_alternatives(mana) if mana else ((0, ()),), mana_value(mana) if mana else 0, tap, speed,
                         atoms))
     return tuple(out)
+
+
+_SUBJ = r"(?:~|this creature)"
+_COMBAT_DRAW_RE = re.compile(rf"^whenever {_SUBJ} deals combat damage to a player, draw (a|an|one|two|three|\d+) cards?")
+_END_SAC_RE = re.compile(rf"^at the beginning of (?:the|your) end step, sacrifice {_SUBJ}\.?$")
+_ALLY_LIFE_RE = re.compile(r"^whenever another creature you control enters, you gain (a|one|two|three|\d+) life")
+_ENTER_COUNTER_RE = re.compile(r"^whenever (?:~|this creature) or another creature you control enters, put "
+                               r"(a|an|one|two|three|\d+) \+1/\+1 counters? on target creature that entered this turn")
+_ARTIFACT_PUMP_RE = re.compile(rf"^when {_SUBJ} enters, creatures you control gain ([a-z ,]+?) and get \+x/\+0 until "
+                               r"end of turn, where x is the number of artifacts you control")
+_DISCOUNT_RE = re.compile(r"^noncreature spells you cast cost \{(\d+)\} less to cast")
+_TARGET_CAST_RE = re.compile(r"^whenever you cast a spell that targets [^,]*opponent[^,]*, put (a|an|one|two|\d+) "
+                             r"\+1/\+1 counters? on ~")
+_SURVEIL_ATTACK_RE = re.compile(r"^as long as you've (?:scried or )?surveilled this turn, " + _SUBJ +
+                                r" can attack as though it didn't have defender")
+_HAND_REMOVAL_RE = re.compile(r"^((?:\{[^}]+\})+),\s*discard (?:~|this card):\s*(.+)$")
+_GY_ABILITY_RE = re.compile(r"^((?:\{[^}]+\})+),\s*exile (?:~|this card) from your graveyard:\s*(.+)$")
+
+
+def battle_triggers(card):
+    """Weitere Ausloeser und Faehigkeiten fuer den Kampf (Stufe 4b), als dict mit den Card-Feldern."""
+    out = {}
+    for raw, low in _clean_lines(card):
+        m = _COMBAT_DRAW_RE.match(low)
+        if m:
+            out["combat_draw"] = _count(m.group(1))
+        if _END_SAC_RE.match(low):
+            out["end_sacrifice"] = True
+        m = _ALLY_LIFE_RE.match(low)
+        if m:
+            out["ally_enter_life"] = _EFFECT_NUM.get(m.group(1)) or int(m.group(1))
+        m = _ENTER_COUNTER_RE.match(low)
+        if m:
+            out["enter_counter"] = _count(m.group(1))
+        m = _ARTIFACT_PUMP_RE.match(low)
+        if m:
+            kws = tuple(k.strip() for k in re.split(r",\s*(?:and\s+)?|\s+and\s+", m.group(1)) if k.strip())
+            if all(k in COMBAT_KEYWORDS for k in kws):
+                out["artifact_pump"] = kws
+        m = _DISCOUNT_RE.match(low)
+        if m:
+            out["spell_discount"] = int(m.group(1))
+        m = _TARGET_CAST_RE.match(low)
+        if m:
+            out["target_cast_counter"] = _count(m.group(1))
+        if _SURVEIL_ATTACK_RE.match(low):
+            out["surveil_attack"] = True
+        head = raw.split(":", 1)[0]
+        mana = "".join(re.findall(r"\{[^}]+\}", head))
+        m = _HAND_REMOVAL_RE.match(low)
+        if m:
+            res = _classify(m.group(2))
+            spec = _spec_from(m.group(2), res[1]) if res else None
+            if spec:
+                out["hand_removal"] = (cost_alternatives(mana), spec + ("spell", False))
+        m = _GY_ABILITY_RE.match(low)
+        if m:
+            atoms = _ability_atoms(m.group(2).strip())
+            if atoms:
+                out["gy_ability"] = (cost_alternatives(mana), atoms)
+    return out
+
+
+def targets_opponent(card, type_line, spec):
+    """Zauber (Instant, Sorcery, Aura) mit Ziel beim Gegner: Removal auf eine Kreatur oder "target opponent/player"."""
+    if not ("Instant" in type_line or "Sorcery" in type_line or "Aura" in type_line):
+        return False
+    if spec and spec[0] not in ("sweep", "sweep_damage", "edict"):
+        return True
+    return any("target opponent" in low or "target player" in low for _raw, low in _clean_lines(card))
 
 
 def prepared_mode(card):
@@ -698,4 +784,6 @@ def card_info(card):
                 is_instant="Instant" in type_line, flash="Instant" not in type_line and has_flash(card),
                 removal=removal_spec(card), discard=discard_count(card),
                 abilities=parse_abilities(card) if not ("Instant" in type_line or "Sorcery" in type_line) else (),
-                pump_tough=pump_toughness(card, type_line), legendary="Legendary" in type_line), shown
+                pump_tough=pump_toughness(card, type_line), legendary="Legendary" in type_line,
+                is_artifact="Artifact" in type_line,
+                targets_opp=targets_opponent(card, type_line, removal_spec(card)), **battle_triggers(card)), shown

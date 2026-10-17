@@ -66,8 +66,17 @@ RULES = [
     "Landcycling: Fehlt bis Runde 3 im eigenen Zug ein Land für den Landdrop, wird sofort gecycelt. Sonst am Ende des "
     "gegnerischen Zugs mit dem offenen Mana, das Instants und Flash übrig lassen (bis 6 Länder auf Feld und Hand, nicht "
     "die letzte Handkarte, nicht wenn die Karte nächste Runde spielbar ist).",
-    "Noch nicht im Kampf: Fähigkeiten mit weiteren Kosten (Opfern, Abwerfen, aus dem Friedhof, z. B. Sureshot Sower), "
-    "Fähigkeiten mit anderen Effekten (Token, Zurückholen) und Auslöser außer beim Betreten. Solche Karten werden "
+    "Weitere Auslöser: Kampfschaden am Spieler zieht Karten (Frostbite Pyromental), Opfern zu Beginn des Endsegments, "
+    "Leben und Marken, wenn eigene Kreaturen ins Spiel kommen (Greenhouse Propagator, Mabel: auf die stärkste Kreatur, "
+    "die in diesem Zug kam), Team-Pump nach Artefakten (Craterclaw Colossus), Kostensenkung für Nichtkreatur-Zauber "
+    "(Geist of Saint Thalia), Marken bei Zaubern mit Ziel beim Gegner (Danitha), Empower X beim Angriff "
+    "(X = eigene Kreaturen).",
+    "Fähigkeiten mit Sonderkosten: „Discard this card“ als Removal von der Hand wie ein Instant (Sureshot Sower, kein "
+    "Zauber); „Exile this card from your graveyard“ wie Marken und Empower (Campus Crier). Surveil-Fähigkeiten am Ende "
+    "des gegnerischen Zugs; im eigenen Zug nur, wenn eine Kreatur dadurch trotz Defender angreifen darf "
+    "(Surveillance Phantasm, auch nach Surveil durch Karten oder Jace).",
+    "Noch nicht im Kampf: Token (Tenured Tethermage, Vraska), Mill und Länder aus dem Friedhof (Primal Witchstalker), "
+    "Enlightened Confidant, Null Summoner, Fähigkeiten mit Opfern als Kosten und weitere Auslöser. Solche Karten werden "
     "gewirkt, wirken aber nur mit den schon modellierten Effekten.",
 ]
 

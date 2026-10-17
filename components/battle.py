@@ -32,7 +32,7 @@ CYCLE_CAP = 6    # Ende des gegnerischen Zugs: nur cyceln, solange Laender auf F
 class Creature:
     """Eine Kreatur auf dem Feld (Karte, Schritt des Eintritts, getappt, Schaden, Marken, Pump)."""
     __slots__ = ("card", "entered", "tapped", "damage", "bonus", "pump", "dead", "touched", "locked", "prepared",
-                 "tpump", "extra")
+                 "tpump", "extra", "lifted")
 
     def __init__(self, card, entered=0):
         self.card = card
@@ -47,6 +47,7 @@ class Creature:
         self.prepared = bool(card.prepared) and card.prepared[0] in ("enters", "both")
         self.tpump = 0        # Toughness-Pump bis Rundenende (Faehigkeiten)
         self.extra = set()    # verliehene Schluesselwoerter bis Rundenende
+        self.lifted = False   # Defender gilt in diesem Zug nicht (Surveillance Phantasm nach einem Surveil)
 
     @property
     def power(self):
@@ -61,7 +62,8 @@ class Creature:
 
     def copy(self):
         c = Creature(self.card, self.entered)
-        for attr in ("tapped", "damage", "bonus", "pump", "dead", "touched", "locked", "prepared", "tpump"):
+        for attr in ("tapped", "damage", "bonus", "pump", "dead", "touched", "locked", "prepared", "tpump",
+                     "lifted"):
             setattr(c, attr, getattr(self, attr))
         c.extra = set(self.extra)
         return c
@@ -71,7 +73,7 @@ class Creature:
 
 
 def can_attack(c, step):
-    return (not c.tapped and not c.dead and not c.locked and not c.card.defender and c.power > 0
+    return (not c.tapped and not c.dead and not c.locked and (not c.card.defender or c.lifted) and c.power > 0
             and (c.entered < step or c.card.haste))
 
 
@@ -98,7 +100,7 @@ def _lethal_need(blocker, deathtouch):
 def resolve_combat(pairs):
     """Kampfschaden fuer [(Angreifer, [Blocker])]. Veraendert Schaden und dead der Kreaturen.
     Gibt {"player": Schaden am Verteidiger, "lifelink_attacker", "lifelink_defender"} zurueck."""
-    out = {"player": 0, "lifelink_attacker": 0, "lifelink_defender": 0}
+    out = {"player": 0, "lifelink_attacker": 0, "lifelink_defender": 0, "to_player": {}}
     for first_step in (True, False):
         hits = []  # (Ziel-Kreatur, Schaden, Deathtouch)
         for att, blockers in pairs:
@@ -106,6 +108,7 @@ def resolve_combat(pairs):
                 power, dt = att.power, att.has("deathtouch")
                 if not blockers:
                     out["player"] += power
+                    out["to_player"][id(att)] = out["to_player"].get(id(att), 0) + power
                 else:
                     alive = sorted((b for b in blockers if not b.dead), key=lambda b: (b.toughness - b.damage,))
                     rest = power
@@ -118,6 +121,7 @@ def resolve_combat(pairs):
                         if att.has("trample") or not alive:
                             if att.has("trample"):
                                 out["player"] += rest
+                                out["to_player"][id(att)] = out["to_player"].get(id(att), 0) + rest
                         else:
                             hits.append((alive[-1], rest, dt))
                 if att.has("lifelink"):
@@ -276,6 +280,7 @@ class Player:
         self.jace = JaceState()  # Jace-Token (Empower Jace), unangreifbar
         self.jace.graveyard = self.graveyard
         self.jace_perms = []  # Permanents mit wiederkehrendem Empower: (Karte, Schritt des Eintritts)
+        self.surveilled = False  # in diesem Zug gesurveilt (Surveillance Phantasm)
 
     def board(self):
         return [(c.card, c.entered) for c in self.creatures], [c.bonus for c in self.creatures], \
@@ -309,6 +314,27 @@ def pay(pool, alts):
     return max(rems, key=lambda r: (len(set().union(*r)) if r else 0, len(r)))
 
 
+def discount(p):
+    """Nichtkreatur-Zauber kosten so viel generisches Mana weniger (Geist of Saint Thalia)."""
+    return sum(c.card.spell_discount for c in p.creatures if not c.dead) + sum(c.spell_discount for c in p.perms)
+
+
+def _discounted(card, d):
+    if not d or card.is_creature or card.is_land or not card.alts:
+        return card
+    return card._replace(alts=tuple(sorted({(max(0, g - d), cols) for g, cols in card.alts})))
+
+
+def _alts(p, card):
+    return _discounted(card, discount(p)).alts
+
+
+def _payable(p, alts):
+    if pay(p.open, alts) is not None:
+        return True
+    return p.treasures > 0 and pay(list(p.open) + [ANY_COLOR] * p.treasures, alts) is not None
+
+
 def _pay_open(p, alts, treasure=True):
     """Bezahlt alts aus p.open; Treasure nur, wenn es ohne nicht reicht (so wenige wie moeglich)."""
     rest = pay(p.open, alts)
@@ -328,9 +354,7 @@ def _pay_open(p, alts, treasure=True):
 
 def affordable(p, card):
     """Kann p die Karte mit offenem Mana (notfalls mit Treasure) bezahlen?"""
-    if pay(p.open, card.alts) is not None:
-        return True
-    return p.treasures > 0 and pay(list(p.open) + [ANY_COLOR] * p.treasures, card.alts) is not None
+    return _payable(p, _alts(p, card))
 
 
 def danger(c):
@@ -415,6 +439,7 @@ def _jace_activate(p, step, e, allow_surveil):
         if p.jace.loyalty == loyalty - 3:
             e["events"].append(f"{p.name}: Jace −3, zieht eine Karte (Loyalty {p.jace.loyalty})")
         else:
+            mark_surveil(p)
             binned = p.jace.surveil_lands - lands
             e["events"].append(f"{p.name}: Jace −1, Surveil 1" + (" (Land abgelegt)" if binned else "")
                                + f" (Loyalty {p.jace.loyalty})")
@@ -429,6 +454,47 @@ def jace_turn_start(p, step, e=None):
                 if ef[1] == "trigger" and ef[3] == "turn":
                     _jace_add(p, ef[2], e)
     _jace_activate(p, step, e if e is not None else {"events": []}, False)
+
+
+def mark_surveil(p):
+    p.surveilled = True
+    for c in p.creatures:
+        if c.card.surveil_attack:
+            c.lifted = True
+
+
+def on_cast(p, card, step, e):
+    """Ein Zauber wurde gewirkt: Jace-Ausloeser, Marken fuer Zauber mit Ziel beim Gegner (Danitha)."""
+    _jace_on_cast(p, card, step, e)
+    if card.targets_opp:
+        for c in p.creatures:
+            if c.card.target_cast_counter and not c.dead:
+                c.bonus += c.card.target_cast_counter
+                e["events"].append(f"{p.name}: {c.card.name} +{c.card.target_cast_counter}/+"
+                                   f"{c.card.target_cast_counter}")
+
+
+def creature_enters(p, new, step, e):
+    """Eine Kreatur kam ins Spiel (schon in p.creatures): Leben (Greenhouse Propagator), Marken auf eine Kreatur, die
+    in diesem Zug kam (Mabel), Team-Pump nach Artefakten (Craterclaw Colossus)."""
+    new.lifted = p.surveilled and new.card.surveil_attack
+    alive = [c for c in p.creatures if not c.dead]
+    for c in alive:
+        if c is not new and c.card.ally_enter_life:
+            p.life += c.card.ally_enter_life
+    for c in alive:
+        if c.card.enter_counter:
+            fresh = [x for x in alive if x.entered == step]
+            if fresh:
+                pick = max(fresh, key=danger)
+                pick.bonus += c.card.enter_counter
+                e["events"].append(f"{p.name}: {c.card.name} – Marke auf {pick.card.name}")
+    if new.card.artifact_pump:
+        x = sum(c.card.is_artifact for c in alive) + sum(c.is_artifact for c in p.perms)
+        for c in alive:
+            c.pump += x
+            c.extra |= set(new.card.artifact_pump)
+        e["events"].append(f"{p.name}: {new.card.name} – alle +{x}/+0 und {', '.join(new.card.artifact_pump)}")
 
 
 def _jace_on_cast(p, card, step, e):
@@ -472,6 +538,7 @@ def surveil_cards(p, amounts, e, source):
     if not amounts:
         return
     before = len(p.graveyard)
+    mark_surveil(p)
     apply_surveils(amounts, p.library, p.hand, p.lands, graveyard=p.graveyard)
     binned = len(p.graveyard) - before
     e["events"].append(f"{p.name}: {source} – Surveil {sum(amounts)}" + (f" ({binned} abgelegt)" if binned else ""))
@@ -630,7 +697,9 @@ def _resolve(me, opp, card, step, entry):
         me.perms.append(card)
     if card.treasure:
         me.treasures += card.treasure
-    _jace_on_cast(me, card, step, entry)
+    on_cast(me, card, step, entry)
+    if card.is_creature and not card.is_copy:
+        creature_enters(me, me.creatures[-1], step, entry)
     if card.self_damage:  # "damage to each player" trifft auch uns
         me.life -= card.self_damage
     effects = card
@@ -684,7 +753,7 @@ def copies(p):
 
 
 def _cast_from_open(p, card):
-    if not _pay_open(p, card.alts):
+    if not _pay_open(p, _alts(p, card)):
         return False
     p.hand.remove(card)
     return True
@@ -756,9 +825,36 @@ def combat_tricks(p, pairs, opp, e, step, attacking):
         _apply_trick(best[1], own[best[2]], own, best[3])
         if card.is_creature:
             p.creatures.append(Creature(card, step))
+            creature_enters(p, p.creatures[-1], step, e)
         elif card.is_instant_sorcery:
             p.graveyard.append(card)
+        on_cast(p, card, step, e)
         e["events"].append(f"{p.name}: Kampftrick {card.name} auf {own[best[2]].card.name}")
+
+
+def instant_removals(p):
+    """Removal, das p jederzeit einsetzen kann: [(Handkarte, Kosten, Karte mit Removal-Spec, ist Zauber)].
+    Instants mit Removal und Faehigkeiten "Kosten, Discard this card: Removal" (Sureshot Sower, kein Zauber)."""
+    out = []
+    for card in p.hand:
+        if card.is_instant and card.removal and card.removal[4] == "spell":
+            out.append((card, _alts(p, card), card, True))
+        elif card.hand_removal:
+            out.append((card, card.hand_removal[0], card._replace(removal=card.hand_removal[1]), False))
+    return out
+
+
+def _use_removal(p, card, alts, is_spell, step, e):
+    """Bezahlt und legt die Karte in den Friedhof (gewirkt oder abgeworfen)."""
+    if not _pay_open(p, alts):
+        return False
+    p.hand.remove(card)
+    p.graveyard.append(card)
+    if is_spell:
+        on_cast(p, card, step, e)
+    else:
+        e["events"].append(f"{p.name}: wirft {card.name} ab (Fähigkeit)")
+    return True
 
 
 def respond_to_attack(dfn, att, attackers, e, step):
@@ -767,20 +863,20 @@ def respond_to_attack(dfn, att, attackers, e, step):
     while True:
         alive = [a for a in attackers if a in att.creatures and not a.dead and not a.locked]
         options = []
-        for card in dfn.hand:
-            if card.is_instant and card.removal and card.removal[4] == "spell" and affordable(dfn, card):
-                spec = card.removal
-                if spec[0] in ("sweep", "sweep_damage", "edict"):
-                    continue
-                targets = [a for a in valid_targets(spec, dfn, att) if a in alive]
-                if targets:
-                    options.append((danger(max(targets, key=danger)), card, max(targets, key=danger)))
+        for card, alts, rc, is_spell in instant_removals(dfn):
+            if not _payable(dfn, alts):
+                continue
+            spec = rc.removal
+            if spec[0] in ("sweep", "sweep_damage", "edict"):
+                continue
+            targets = [a for a in valid_targets(spec, dfn, att) if a in alive]
+            if targets:
+                options.append((danger(max(targets, key=danger)), card, max(targets, key=danger), alts, rc, is_spell))
         if not options:
             break
-        _d, card, target = max(options, key=lambda o: (o[0], -o[1].mv))
-        _cast_from_open(dfn, card)
-        dfn.graveyard.append(card)
-        cast_removal(card, dfn, att, e, step, target=target)
+        _d, card, target, alts, rc, is_spell = max(options, key=lambda o: (o[0], -o[1].mv))
+        _use_removal(dfn, card, alts, is_spell, step, e)
+        cast_removal(rc, dfn, att, e, step, target=target)
     alive = [a for a in attackers if a in att.creatures and not a.dead and not a.locked]
     for card in sorted([c for c in dfn.hand if c.flash and c.is_creature], key=lambda c: -c.mv):
         if not affordable(dfn, card):
@@ -795,22 +891,21 @@ def respond_to_attack(dfn, att, attackers, e, step):
             e["events"].append(f"{dfn.name}: {card.name} mit Flash als Blocker")
             if card.treasure:
                 dfn.treasures += card.treasure
-            _jace_on_cast(dfn, card, step, e)
+            on_cast(dfn, card, step, e)
+            creature_enters(dfn, new, step, e)
     return alive
 
 
 def end_step_instants(dfn, act, e, step):
     """Am Ende des Zugs von act nutzt dfn sein offenes Mana: Removal auf die gefaehrlichste Kreatur, Flash-Kreaturen,
     sonstige Instants (z. B. Ziehen), danach Landcycling mit dem Rest. Kampftricks bleiben auf der Hand."""
-    for card in sorted([c for c in dfn.hand if c.is_instant and c.removal and c.removal[4] == "spell"],
-                       key=lambda c: c.mv):
-        if card not in dfn.hand or not affordable(dfn, card) or not has_target(card, dfn, act):
+    for card, alts, rc, is_spell in sorted(instant_removals(dfn), key=lambda o: o[0].mv):
+        if card not in dfn.hand or not _payable(dfn, alts) or not has_target(rc, dfn, act):
             continue
-        if card.removal[3] and choose_target(card.removal, dfn, act) is None and act.life > _amount(card.removal, dfn):
+        if rc.removal[3] and choose_target(rc.removal, dfn, act) is None and act.life > _amount(rc.removal, dfn):
             continue  # "any target" am Endstep nur gegen eine Kreatur oder als Lethal
-        _cast_from_open(dfn, card)
-        dfn.graveyard.append(card)
-        cast_removal(card, dfn, act, e, step)
+        _use_removal(dfn, card, alts, is_spell, step, e)
+        cast_removal(rc, dfn, act, e, step)
     for card in sorted([c for c in dfn.hand if c.flash], key=lambda c: -c.mv):
         if card in dfn.hand and _cast_from_open(dfn, card):
             e["events"].append(f"{dfn.name}: {card.name} mit Flash am Ende des Zugs")
@@ -924,6 +1019,11 @@ def apply_ability(p, src, ab, target, e=None):
                 p.jace.add(atom[1])
             did = True
             continue
+        if kind == "surveil":
+            if e is not None:
+                surveil_cards(p, [atom[1]], e, "Fähigkeit")
+            did = True
+            continue
         scope = atom[-1]
         if scope == "all":
             hit = [c for c in p.creatures if not c.dead]
@@ -970,15 +1070,17 @@ def _pay_ability(p, alts, mode):
     return _pay_open(p, alts, treasure=(mode == "any"))
 
 
-def _activate(p, src, ab, target, e, mode):
+def _activate(p, src, ab, target, e, mode, gy=None):
+    """Bezahlt und wirkt eine Faehigkeit; gy: Karte im Friedhof, die dafuer exiliert wird (Campus Crier)."""
     if not _pay_ability(p, ab[0], mode):
         return False
     if ab[2] and src is not None:
         src.tapped = True
+    if gy is not None:
+        p.graveyard.remove(gy)
+    who = src.card.name if src is not None else (f"{gy.name} (aus dem Friedhof)" if gy is not None else "Permanent")
+    e["events"].append(f"{p.name}: Fähigkeit von {who}" + (f" auf {target.card.name}" if target is not None else ""))
     apply_ability(p, src, ab, target, e)
-    who = src.card.name if src is not None else "Permanent"
-    tail = f" auf {target.card.name}" if target is not None else ""
-    e["events"].append(f"{p.name}: Fähigkeit von {who}{tail}")
     return True
 
 
@@ -1039,12 +1141,19 @@ def _attack_value(me, opp, step):
 
 
 def lasting_abilities(p, opp, step, e, own_turn, mode):
-    """Marken und Empower: Marken zuerst (auf die gefaehrlichste passende Kreatur), dann Empower."""
+    """Marken, Empower und Surveil (nur am Ende des gegnerischen Zugs): Marken zuerst (auf die gefaehrlichste passende
+    Kreatur), dann Empower, dann Surveil. Dazu Faehigkeiten aus dem Friedhof (Campus Crier)."""
+    rank = {"counter": 0, "empower": 1, "surveil": 2}
     for _round in range(10):
+        sources = [(src, ab, None) for src, ab in ability_sources(p, step, own_turn, main=own_turn)]
+        sources += [(None, (card.gy_ability[0], 0, False, "instant", card.gy_ability[1]), card)
+                    for card in dict.fromkeys(p.graveyard) if card.gy_ability]
         options = []
-        for src, ab in ability_sources(p, step, own_turn, main=own_turn):
+        for src, ab, gy in sources:
             kinds = _kinds(ab)
-            if not kinds or not kinds <= {"counter", "empower"}:
+            if not kinds or not kinds <= set(rank):
+                continue
+            if "surveil" in kinds and (own_turn or not p.library):
                 continue
             for target in _targets(p, src, ab):
                 if "counter" in kinds:
@@ -1053,11 +1162,11 @@ def lasting_abilities(p, opp, step, e, own_turn, mode):
                     _restore(snap)
                     if not useful:
                         continue
-                options.append(("empower" in kinds, -(danger(target) if target is not None else (0, False, 0))[0],
-                                src, ab, target))
+                options.append((min(rank[k] for k in kinds),
+                                -(danger(target) if target is not None else (0, False, 0))[0], src, ab, target, gy))
         done = False
-        for _emp, _d, src, ab, target in sorted(options, key=lambda o: (o[0], o[1])):
-            if _activate(p, src, ab, target, e, mode):
+        for _r, _d, src, ab, target, gy in sorted(options, key=lambda o: (o[0], o[1])):
+            if _activate(p, src, ab, target, e, mode, gy):
                 done = True
                 break
         if not done:
@@ -1068,6 +1177,7 @@ def pre_attack_abilities(me, opp, step, e):
     """Eigene Main Phase vor dem Angriff: Marken und Empower mit freiem Mana, danach Flying/Menace verleihen, wenn
     dadurch mehr Schaden durchkommt (bei Lethal auch mit Mana fuer Instants und Treasure, sonst mit freiem Mana)."""
     lasting_abilities(me, opp, step, e, own_turn=True, mode="free")
+    _surveil_to_attack(me, opp, step, e)
     for _round in range(10):
         base = _attack_value(me, opp, step)
         options = []
@@ -1092,6 +1202,26 @@ def pre_attack_abilities(me, opp, step, e):
                 break
         if not done:
             return
+
+
+def _surveil_to_attack(me, opp, step, e):
+    """Surveil-Faehigkeit, damit eine Kreatur trotz Defender angreifen darf (Surveillance Phantasm), wenn dadurch
+    mehr Schaden durchkommt (bei Lethal auch mit Mana fuer Instants und Treasure, sonst mit freiem Mana)."""
+    waiting = [c for c in me.creatures if c.card.surveil_attack and not c.lifted and not c.dead]
+    if me.surveilled or not waiting or not me.library:
+        return
+    base = _attack_value(me, opp, step)
+    for c in waiting:
+        c.lifted = True
+    value = _attack_value(me, opp, step)
+    for c in waiting:
+        c.lifted = False
+    if value <= base:
+        return
+    for src, ab in ability_sources(me, step, own_turn=True, main=True):
+        if _kinds(ab) == {"surveil"} and not (ab[2] and src in waiting):
+            if _activate(me, src, ab, None, e, "any" if value >= opp.life > base else "free"):
+                return
 
 
 def pre_block_abilities(dfn, att, attackers, e, step):
@@ -1146,6 +1276,13 @@ def take_turn(me, opp, step, rnd, skip_draw):
         me.hand.append(card)
         e["drew"] = card.name
     jace_turn_start(me, step, e)
+    disc, orig = discount(me), {}  # Kostensenkung: verbilligte Handkarten fuer die Main Phase
+    if disc:
+        for i, c in enumerate(me.hand):
+            cheap = _discounted(c, disc)
+            if cheap != c:
+                orig[cheap] = c
+                me.hand[i] = cheap
     # Main 1: Landcycling, wenn ein Land fuer den Landdrop fehlt
     pool, creature_units = _mana(me, step)
     spells = main_phase_spells(me, opp)
@@ -1208,6 +1345,9 @@ def take_turn(me, opp, step, rnd, skip_draw):
     for c in chosen:
         if not c.is_copy:
             me.hand.remove(c)
+    if orig:  # wieder die Originalkarten
+        me.hand[:] = [orig.get(c, c) for c in me.hand]
+        chosen = [orig.get(c, c) for c in chosen]
     me.cast_count += len(chosen)
     main1 = [c for c in chosen if not (c.is_creature and not c.haste)]
     main2 = [c for c in chosen if c.is_creature and not c.haste]
@@ -1224,16 +1364,14 @@ def take_turn(me, opp, step, rnd, skip_draw):
         return e
     # Removal-Instants vor dem Angriff: Blocker entfernen, die einen unserer Angreifer fressen wuerden
     candidates = [c for c in me.creatures if can_attack(c, step)]
-    for card in sorted([c for c in me.hand if c.is_instant and c.removal and c.removal[4] == "spell"],
-                       key=lambda c: c.mv):
-        if card not in me.hand or not affordable(me, card):
+    for card, alts, rc, is_spell in sorted(instant_removals(me), key=lambda o: o[0].mv):
+        if card not in me.hand or not _payable(me, alts):
             continue
-        eaters = [t for t in valid_targets(card.removal, me, opp) if any(_eats(t, a) for a in candidates)]
+        eaters = [t for t in valid_targets(rc.removal, me, opp) if any(_eats(t, a) for a in candidates)]
         if eaters:
-            _cast_from_open(me, card)
-            me.graveyard.append(card)
-            me.cast_count += 1
-            cast_removal(card, me, opp, e, step, target=max(eaters, key=danger))
+            _use_removal(me, card, alts, is_spell, step, e)
+            me.cast_count += 1 if is_spell else 0
+            cast_removal(rc, me, opp, e, step, target=max(eaters, key=danger))
     # Faehigkeiten vor dem Angriff: Marken und Empower mit freiem Mana, Flying/Menace fuer den Angriff
     pre_attack_abilities(me, opp, step, e)
     # Kampf
@@ -1243,7 +1381,8 @@ def take_turn(me, opp, step, rnd, skip_draw):
             a.tapped = True
         for ef in recurring_effects(a.card):  # Angriffs-Ausloeser (Empower)
             if ef[1] == "trigger" and ef[3] == "attack" and any(pc == a.card for pc, _t in me.jace_perms):
-                _jace_add(me, ef[2], e)
+                n = sum(1 for c in me.creatures if not c.dead) if ef[7] else ef[2]  # X = eigene Kreaturen
+                _jace_add(me, n, e)
     attackers = respond_to_attack(opp, me, attackers, e, step)
     pre_block_abilities(opp, me, attackers, e, step)
     blocks = choose_blocks(attackers, opp.creatures, opp.life)
@@ -1260,6 +1399,12 @@ def take_turn(me, opp, step, rnd, skip_draw):
     me.life += res["lifelink_attacker"]
     opp.life += res["lifelink_defender"]
     e["damage"] = res["player"]
+    for a, _bs in blocks:  # "deals combat damage to a player, draw ..." (Frostbite Pyromental)
+        if a.card.combat_draw and res["to_player"].get(id(a)):
+            for _ in range(a.card.combat_draw):
+                if me.library:
+                    me.hand.append(me.library.pop(0))
+            e["events"].append(f"{me.name}: {a.card.name} zieht {a.card.combat_draw}")
     e["attacks"] = [{"attacker": lab, "blockers": blabs, "attacker_dies": a.dead,
                      "blockers_die": [b.dead for b in bs]} for (lab, blabs), (a, bs) in zip(before, blocks)]
     bury((me, opp), e)
@@ -1275,6 +1420,12 @@ def take_turn(me, opp, step, rnd, skip_draw):
         for c in me.creatures:
             if c.card.endstep_counters:
                 c.bonus += c.card.endstep_counters
+    for p_ in (me, opp):  # "At the beginning of the end step, sacrifice this creature"
+        for c in p_.creatures:
+            if c.card.end_sacrifice:
+                c.dead = True
+                e["events"].append(f"{p_.name}: opfert {c.card.name}")
+    bury((me, opp), e)
     end_step_instants(opp, me, e, step)
     cleanup((me, opp))
     return e
@@ -1284,8 +1435,9 @@ def cleanup(players):
     """Rundenende: Schaden, Pumps und verliehene Schluesselwoerter verfallen."""
     for p in players:
         for c in p.creatures:
-            c.damage, c.pump, c.tpump, c.touched = 0, 0, 0, False
+            c.damage, c.pump, c.tpump, c.touched, c.lifted = 0, 0, 0, False, False
             c.extra = set()
+        p.surveilled = False
 
 
 def _finish(entry, me, opp):
