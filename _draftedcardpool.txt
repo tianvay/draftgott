@@ -1,40 +1,40 @@
 Deck
-1 Rescue Girl, First Responder (FRA) 202
-7 Island (SPM) 195
-1 Semester Foreseer (FRA) 39
-2 Unsummon (FRA) 46
-1 Tomik, Orzhov Lawmage (FRA) 206
-1 Jace's Machinations (FRA) 32
-1 Proft, Consulting Detective (FRA) 218
-1 Repurposed Enforcer (FRA) 19
-1 Blossom-Blessed Angel (FRA) 3
-1 Saheeli, Jewel of Avishkar (FRA) 275
-3 Mountain (SPM) 197
-2 Saheeli, Consul of Oversight (FRA) 203
-1 Desperate Futurescribe (FRA) 129
-1 Campus Crier (FRA) 4
-1 Prudent Fateseer (FRA) 146
-1 Fatehold Chronologist (FRA) 133
-1 Way of the Warlord (FRA) 255
-1 Kindred Judgment (FRA) 13
-1 Vigorbloom Vanguard (FRA) 161
-2 Fatehold Charm (FRA) 132
-1 Surgical Precision (FRA) 22
-7 Plains (SPM) 194
-1 Infinite Coursework (FRA) 31
+2 Edgar, Moonlit Sovereign (FRA) 257
+2 Wrecking Gecko (FRA) 120
+2 Afterthought Sentry (FRA) 166
+1 Marwyn, the Preserver (FRA) 263
+8 Swamp (SPM) 196
+1 Greenhouse Propagator (FRA) 104
+1 Tam's Resistance (FRA) 153
+1 Inspired Tethermage (FRA) 109
+1 Hapatra, the Desert Fang (FRA) 271
+1 Garruk, Curse Breaker (FRA) 259
+1 Primal Witchstalker (FRA) 144
+1 Last Gasp (FRA) 56
+1 Compel Brutality (FRA) 101
+9 Forest (SPM) 198
+1 Ghalta the Unstoppable (FRA) 260
+1 Sureshot Sower (FRA) 115
+1 Cast Away Doubt (FRA) 51
+1 Way of the Necromancer (FRA) 239
+1 Blessed Ghoul (FRA) 123
+1 Break Under Pressure (FRA) 50
+1 Apex Witchstalker (FRA) 48
+1 Arcane Amphisbaena (FRA) 97
 
 Sideboard
-1 Keeper of the Quiet Hour (FRA) 171
-1 Way of the Warlord (FRA) 255
-2 Protege's Awakening (FRA) 37
-2 Arni, Humble Scribe (FRA) 211
-1 Icy Reception (FRA) 30
-1 Generous Revival (FRA) 8
-1 Skilled Battlecarver (FRA) 92
-1 Innovative Commons (FRA) 182
-1 Academic Ascent (FRA) 2
+1 Bloombrute (FRA) 124
+1 Koth of the Homestead (FRA) 199
+1 Prudent Fateseer (FRA) 146
+2 Twisted Fates (FRA) 158
+2 Edgar, Ancient Bloodlord (FRA) 270
+1 Vigorbloom Charm (FRA) 160
+1 Charge the Sanctum (FRA) 125
+1 Ghalta the Immovable (FRA) 197
+1 Rank Rat (FRA) 61
+1 Koth, the Geomancer (FRA) 248
+1 Rampart Hunter (FRA) 60
+2 Precise Redaction (FRA) 36
+1 Essence Burn (FRA) 82
 1 Shatterwing Pegasus (FRA) 21
-1 Shipwreck Marsh (FRA) 189
-1 Graft Surgeon (FRA) 10
-1 Inspired Tethermage (FRA) 109
-1 Eardrum Rattler (FRA) 81
+1 Predictive Preparations (FRA) 16
