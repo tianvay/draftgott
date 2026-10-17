@@ -1,0 +1,27 @@
+Deck
+2 Campus Crier (FRA) 4
+5 Forest (SPM) 198
+2 Enlightened Confidant (FRA) 5
+2 Repurposed Enforcer (FRA) 19
+2 Geist of Saint Thalia (FRA) 214
+7 Mountain (SPM) 197
+2 Surveillance Phantasm (FRA) 42
+2 Mindseeker Oculus (FRA) 33
+2 Rank Rat (FRA) 61
+4 Swamp (SPM) 196
+2 Danitha, Spear of Agony (FRA) 227
+2 Yargle, Glutton of Urborg (MUL) 84
+2 Koth, the Geomancer (FRA) 248
+4 Island (SPM) 195
+2 Tether Technician (FRA) 94
+2 Craterclaw Colossus (FRA) 78
+2 Sureshot Sower (FRA) 115
+4 Plains (SPM) 194
+2 Greenhouse Propagator (FRA) 104
+2 Edgar, Moonlit Sovereign (FRA) 257
+1 Primal Witchstalker (FRA) 144
+1 Tenured Tethermage (FRA) 154
+1 Vraska, Soul of Stone (FRA) 277
+1 Mabel, Valley Hero (FRA) 274
+1 Frostbite Pyromental (FRA) 135
+1 Null Summoner (FRA) 142

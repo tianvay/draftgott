@@ -31,6 +31,8 @@ from components.jace import analyze_jace
 from components.mana import double_pip_colors, pip_checks, required_colors
 from components.report import render_html
 from components.simulation import simulate
+from components.battle import battle
+from components.battle_report import render_battle_html
 
 
 def build_deck(entry, data, args):
@@ -134,6 +136,66 @@ def entries_from_files(args):
     return entries
 
 
+def enemy_name(path):
+    """Anzeigename eines Gegnerdecks: 'Name' aus der Datei, sonst Dateiname ohne '_enemydeck_'."""
+    p = pathlib.Path(path)
+    stem = p.stem
+    for prefix in ("_enemydeck_", "_enemydeck", "enemydeck_"):
+        if stem.startswith(prefix):
+            stem = stem[len(prefix):]
+    fallback = stem.replace("_", " ").strip() or p.stem
+    return parse_deck_name(p.read_text(encoding="utf-8"), fallback)
+
+
+def load_enemy(path):
+    """Ein Gegnerdeck: {"name", "deck"}."""
+    p = pathlib.Path(path)
+    if not p.exists() and (pathlib.Path(__file__).resolve().parent / p).exists():
+        p = pathlib.Path(__file__).resolve().parent / p
+    if not p.exists():
+        sys.exit(f"Gegnerdeck nicht gefunden: {path}")
+    return {"name": enemy_name(p), "deck": parse_deck(p.read_text(encoding="utf-8"))}
+
+
+def battle_entries(entries, enemy_paths, args, progress=_stderr):
+    """Kampf der Decks (entries, z. B. Splash und NoSplash) gegen ein oder mehrere Gegnerdecks. Gibt den Kampfbericht
+    (HTML) zurueck. Der Goldfish wird dafuer nicht simuliert."""
+    if isinstance(enemy_paths, (str, pathlib.Path)):
+        enemy_paths = [enemy_paths]
+    enemies = [load_enemy(p) for p in enemy_paths]
+    progress("Lade Kartendaten von Scryfall ...")
+    try:
+        names = set().union(*(e["deck"].keys() for e in entries), *(e["deck"].keys() for e in enemies))
+        data = fetch_cards_cached(sorted(names), args.neu_laden)
+    except urllib.error.URLError as e:
+        sys.exit(f"Scryfall nicht erreichbar: {e}")
+    decks = [build_deck(e, data, args) for e in entries]
+    simulate_battles(decks, enemies, data, args, progress)
+    return render_battle_html(decks, args)
+
+
+def save_battle_report(html, args):
+    out_path = pathlib.Path(getattr(args, "kampf_ausgabe", None) or "mtg_kampf.html")
+    out_path.write_text(html, encoding="utf-8")
+    print(f"Kampfbericht gespeichert: {out_path.resolve()}", file=sys.stderr)
+    return out_path
+
+
+def simulate_battles(decks, enemies, data, args, progress=_stderr):
+    """Kampf jedes Decks gegen jedes Gegnerdeck, getrennt nach On the Play / On the Draw."""
+    for e_idx, enemy in enumerate(enemies):
+        edd = build_deck({"name": enemy["name"], "deck": enemy["deck"], "parts": []}, data, args)
+        for idx, dd in enumerate(decks):
+            if args.seed is not None:
+                random.seed(args.seed + 104729 * (idx + 1) + 7907 * e_idx)
+            progress(f"Kampf {dd['name']} gegen {enemy['name']}: {args.kaempfe} Spiele pro Modus ...")
+            results = {}
+            for label, on_draw in (("On the Play", False), ("On the Draw", True)):
+                results[label] = battle(dd["cards"], edd["cards"], args.kaempfe, on_draw, args.kampf_runden,
+                                        not args.ohne_mulligan, args.min_handkarten)
+            dd.setdefault("battles", []).append({"enemy": enemy["name"], "results": results})
+
+
 def simulate_entries(entries, args, progress=_stderr):
     """Laedt die Kartendaten, simuliert alle Decks und gibt den HTML-Bericht als Text zurueck.
     Bei Fehlern (zu wenige Karten, Scryfall nicht erreichbar, ...) endet das Programm mit sys.exit(Meldung)."""
@@ -165,15 +227,24 @@ def run(args):
     fetch_symbols(args.neu_laden)  # Original-Manasymbole (einmalig von Scryfall, danach aus dem Cache)
     if args.drafthelper is not None:
         from components.drafthelper import serve
-        serve(args, simulate_entries, save_report)
+        serve(args, simulate_entries, save_report, battle=battle_entries, save_battle=save_battle_report)
         return
-    html = simulate_entries(entries_from_files(args), args)
-    out_path = save_report(html, args)
+    entries = entries_from_files(args)
+    html = simulate_entries(entries, args)
+    if args.bericht_server:  # Bericht ueber den lokalen Server: "Kampf simulieren" im Bericht
+        from components.report_server import serve_report
+        save_report(html, args)
+        serve_report(html, entries, args, battle_entries, save_battle_report, open_browser=not args.nicht_oeffnen)
+        return
+    paths = [save_report(html, args)]
+    if args.gegner:  # Kampf in einen eigenen Bericht
+        paths.append(save_battle_report(battle_entries(entries, args.gegner, args), args))
     if not args.nicht_oeffnen:
-        try:
-            webbrowser.open(out_path.resolve().as_uri())
-        except Exception:
-            pass
+        for out_path in paths:
+            try:
+                webbrowser.open(out_path.resolve().as_uri())
+            except Exception:
+                pass
 
 
 def main():

@@ -24,6 +24,7 @@ from collections import Counter
 from components.cards import card_info
 from components.cardkinds import (FLOW_ORDER, empower_points, flow_kinds,  # noqa: F401 (auch von Tests benutzt)
                                   type_kinds)
+from components.battle_server import enemy_decks as _enemy_decks, start_battle
 from components.deckfile import parse_pool
 from components.howitworks import render_help_page
 from components.landadvice import color_overview, recommend
@@ -106,6 +107,11 @@ def load_pool(path, refresh=False):
         b["image"] = b["image"] or card_image_url(data.get(b["name"]) or {})
         b["large"] = b["image"].replace("/normal/", "/large/") if b["image"] else None
     return cards, list(basics.values()), signature
+
+
+def enemy_decks():
+    """Gegnerdecks im Projektordner (_enemydeck*.txt): [{"file", "name"}] (siehe battle_server)."""
+    return _enemy_decks(SCRIPT_DIR)
 
 
 def entries_from_marks(pool, marks, basics=None, cats=None):
@@ -247,8 +253,12 @@ def make_handler(app):
             elif path == "/api/status":
                 self._json(app["job"].status())
             elif path == "/report":
-                rep = app["job"].report
+                rep = app.get("report_html") or app["job"].report
                 self._send(rep if rep else "<p>Noch kein Bericht vorhanden.</p>")
+            elif path == "/battle":
+                self._send(app.get("battle_html") or "<p>Noch kein Kampfbericht vorhanden.</p>")
+            elif path == "/api/enemies":
+                self._json({"enemies": enemy_decks(), "quit": False})
             else:
                 self._send("Nicht gefunden", "text/plain; charset=utf-8", 404)
 
@@ -257,6 +267,9 @@ def make_handler(app):
             if path == "/api/quit":
                 self._json({"ok": True})
                 threading.Thread(target=app["server"].shutdown, daemon=True).start()
+                return
+            if path == "/api/battle":
+                self._battle()
                 return
             if path not in ("/api/simulate", "/api/suggest", "/api/propose", "/api/lands", "/api/colors"):
                 self._send("Nicht gefunden", "text/plain; charset=utf-8", 404)
@@ -316,6 +329,8 @@ def make_handler(app):
                                     "cats": dict(cats), "role": "proposal"})
                 html = app["simulate"](entries, run_args, progress)
                 app["save"](html, run_args)
+                app["report_html"] = html
+                app["last_entries"], app["last_args"] = entries, run_args  # fuer "Kampf simulieren"
                 return html
 
             if not app["job"].start(work):
@@ -323,13 +338,23 @@ def make_handler(app):
                 return
             self._json({"ok": True})
 
+        def _battle(self):
+            """Kampf der Varianten des letzten Berichts gegen ein Gegnerdeck (Hintergrund-Job, battle_server)."""
+            try:
+                body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
+            except ValueError:
+                body = {}
+            code, answer = start_battle(app, body, SCRIPT_DIR)
+            self._json(answer, code)
+
     return Handler
 
 
-def serve(args, simulate, save):
+def serve(args, simulate, save, battle=None, save_battle=None):
     pool, basics, signature = load_pool(args.drafthelper, args.neu_laden)
     options = sorted(set(SIM_OPTIONS) | {args.sims})
     app = {"pool": pool, "basics": basics, "args": args, "simulate": simulate, "save": save, "job": Job(), "options": options,
+           "battle": battle, "save_battle": save_battle,
            "file": pathlib.Path(args.drafthelper).name, "signature": signature}
     try:
         server = LocalServer(("127.0.0.1", PORT), make_handler(app))

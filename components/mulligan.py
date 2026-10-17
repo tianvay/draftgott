@@ -32,9 +32,10 @@ def mulligan_reasons(hand):
     return reasons
 
 
-def deal_opening(cards, mulligan, min_hand):
+def deal_opening(cards, mulligan, min_hand, keep_at_min=False):
     """Zieht die Starthand. Bei Mulligan: Deck neu mischen, eine Karte weniger.
-    Faellt die Hand unter min_hand Karten, ist das Spiel verloren (hand = None).
+    Faellt die Hand unter min_hand Karten, ist das Spiel verloren (hand = None); mit keep_at_min wird stattdessen die
+    Hand mit min_hand Karten behalten (der Gegner im Kampf gibt nie auf).
     Gibt (Hand, Bibliothek, Anzahl Mulligans, Gruende der ersten 7er-Hand) zurueck."""
     size, mulls, first = 7, 0, None
     while True:
@@ -47,6 +48,8 @@ def deal_opening(cards, mulligan, min_hand):
         if not mulligan or not reasons:
             return hand, library, mulls, first
         if size - 1 < min_hand:
+            if keep_at_min:
+                return hand, library, mulls, first
             return None, None, mulls + 1, first
         size -= 1
         mulls += 1

@@ -45,6 +45,19 @@ def parse_args(argv=None):
                     help="Gesamtschaden der Kreaturen, dessen erste Runde gemessen wird")
     ap.add_argument("--flood", type=int, default=11,
                     help="Ab wie vielen gezogenen Laendern (bis zur Maximalrunde) gilt man als geflutet")
+    ap.add_argument("--gegner", action="append", metavar="DATEI", default=None,
+                    help="Kampf simulieren gegen dieses Gegnerdeck (z. B. _enemydeck_bad_creatures.txt); mehrfach "
+                         "angeben moeglich. Der Goldfish-Bericht bleibt unveraendert, der Kampf kommt in einen eigenen "
+                         "Bericht (--kampf-ausgabe)")
+    ap.add_argument("--bericht-server", action="store_true",
+                    help="Bericht ueber einen lokalen Server zeigen (statt nur als Datei), damit 'Kampf simulieren' im "
+                         "Bericht funktioniert; das Programm laeuft, bis es im Bericht beendet wird")
+    ap.add_argument("--kampf-ausgabe", default="mtg_kampf.html", metavar="DATEI",
+                    help="Name des Kampfberichts (Standard: mtg_kampf.html)")
+    ap.add_argument("--kaempfe", type=int, default=500,
+                    help="Kaempfe je Deck und Modus (On the Play / On the Draw) gegen jedes Gegnerdeck (Standard 500)")
+    ap.add_argument("--kampf-runden", type=int, default=20,
+                    help="Rundengrenze im Kampf; danach gilt das Spiel als unentschieden (Standard 20)")
     ap.add_argument("--ausgabe", "--html", dest="ausgabe", default="mtg_bericht.html", metavar="DATEI",
                     help="Name des HTML-Berichts (Standard: mtg_bericht.html)")
     ap.add_argument("--nicht-oeffnen", action="store_true",

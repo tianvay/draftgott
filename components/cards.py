@@ -42,6 +42,8 @@ class Card(NamedTuple):
     endstep_counters: int = 0  # Marken am Rundenende, wenn in der Runde kein Zauber gewirkt wurde (Edgar)
     loyalty_counter: int = 0   # Marken, wenn Loyalty auf einen Planeswalker kommt (Inspired Tethermage)
     gy_x: bool = False         # Wert haengt vom hoechsten Manawert im Friedhof ab (Hapatra)
+    kw: tuple = ()             # Kampf-Schluesselwoerter der Karte selbst (flying, reach, first strike, ...)
+    self_damage: int = 0       # Schaden an uns selbst beim Wirken/Betreten ("damage to each player"), nur im Kampf
 
 
 LANDCYCLE_RE = re.compile(
@@ -308,6 +310,26 @@ def effect_modes(card, type_line):
     return (tuple(common),) if common else ()
 
 
+_SELF_DAMAGE_RE = re.compile(r"(?<![a-z])(?:~|it|this [a-z]+) deals (\d+) damage to each player\b")
+
+
+def self_damage(card, type_line):
+    """Schaden, den eine Karte beim Wirken bzw. Betreten auch uns selbst zufuegt ("deals N damage to each player")."""
+    spell_face = "Instant" in type_line or "Sorcery" in type_line
+    total = 0
+    for _raw, low in _clean_lines(card):
+        body = low
+        if not spell_face:
+            m = _ETB_EFFECT_RE.match(low)
+            if not m:
+                continue
+            body = m.group(1)
+        elif re.match(r"^(when|whenever|at the beginning)\b", low):
+            continue
+        total += sum(int(m.group(1)) for m in _SELF_DAMAGE_RE.finditer(body))
+    return total
+
+
 def board_triggers(card):
     """(Landfall-Effekte, Marken am Rundenende, Marken bei Loyalty, Friedhof-X) der Vorderseite."""
     landfall, endstep, loyalty, gy_x = [], 0, 0, False
@@ -354,6 +376,21 @@ def modelled_effect_rest(line, spell_face, name=""):
         return False, low
     rest = " ".join(kept).strip()
     return True, (prefix + rest) if rest else ""
+
+
+COMBAT_KEYWORDS = ("flying", "reach", "first strike", "double strike", "deathtouch", "trample", "menace",
+                   "lifelink", "vigilance")
+
+
+def combat_keywords(card):
+    """Kampf-Schluesselwoerter, die die Vorderseite selbst als Schluesselwort-Zeile hat (Verleihen zaehlt nicht)."""
+    found = set()
+    for raw, _low in _clean_lines(card):
+        line = re.sub(r"\([^)]*\)", "", raw).strip()
+        tokens = [t.strip().lower() for t in line.split(",") if t.strip()]
+        if tokens and all(re.fullmatch(r"[a-z ]{2,20}", t) for t in tokens):
+            found |= set(tokens) & set(COMBAT_KEYWORDS)
+    return tuple(k for k in COMBAT_KEYWORDS if k in found)
 
 
 def prepared_mode(card):
@@ -572,4 +609,5 @@ def card_info(card):
                 pw_tags=pw_tags_for(card, type_line), defender=defender,
                 is_jace=("Planeswalker" in type_line and "Jace" in type_line.split("—")[-1].split()),
                 draws=draws, surveil=surveil, prepared=prepared, mana_src=mana_src, treasure=treasure,
-                modes=modes, landfall=landfall, endstep_counters=endstep, loyalty_counter=loyalty, gy_x=gy_x), shown
+                modes=modes, landfall=landfall, endstep_counters=endstep, loyalty_counter=loyalty, gy_x=gy_x,
+                kw=combat_keywords(card) if is_creature else (), self_damage=self_damage(card, type_line)), shown

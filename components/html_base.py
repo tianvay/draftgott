@@ -92,6 +92,11 @@ nav a.back{color:var(--text);font-weight:650;margin-bottom:8px}
   background:var(--chip);color:var(--text);cursor:pointer}
 .grpbar button.on{background:var(--text);color:var(--bg);border-color:var(--text)}
 .js .grp:not(.on),.js .grpnav:not(.on){display:none}
+.fightbar{margin-top:12px;font-size:13.5px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.fightbar select,.fightbar button{font:inherit;font-size:13px;padding:4px 10px;border-radius:8px;border:1px solid var(--line);
+  background:var(--panel);color:var(--text)}
+.fightbar #fbgo{background:var(--accent);color:#fff;border-color:var(--accent);cursor:pointer}
+.fightbar #fbquit{cursor:pointer}
 .gsw{display:none;float:right;gap:4px;flex-wrap:wrap;font-weight:400;margin-left:12px}
 .js .gsw{display:inline-flex}
 .gsw button{font:inherit;font-size:12px;padding:2px 10px;border-radius:999px;border:1px solid var(--line);

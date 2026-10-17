@@ -43,6 +43,42 @@ VIEW_JS = """<script>
 })();
 </script>"""
 
+FIGHT_JS = """<script>
+(function(){
+  var bar=document.getElementById('fightbar');if(!bar)return;
+  function $(id){return document.getElementById(id)}
+  function json(url,body){return fetch(url,body?{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(body)}:undefined).then(function(r){return r.json()})}
+  if(location.protocol.indexOf('http')!==0)return;  // direkt geoeffnete Datei: nur der Hinweis
+  json('api/enemies').then(function(d){
+    var list=d.enemies||[];
+    if(!list.length){$('fbnote').textContent='Kein Gegnerdeck gefunden (Dateien _enemydeck*.txt im Projektordner).';return}
+    list.forEach(function(e){var o=document.createElement('option');o.value=e.file;o.textContent=e.name;$('fbenemy').appendChild(o)});
+    $('fbnote').style.display='none';$('fbctl').style.display='inline-flex';
+    if(d.quit)$('fbquit').style.display='';
+  }).catch(function(){});
+  function poll(){json('api/status').then(function(s){
+    if(s.state==='running'){$('fbstatus').textContent=s.message+' ('+Math.round(s.elapsed)+' s)';setTimeout(poll,1000);return}
+    $('fbgo').disabled=false;
+    if(s.state==='done'){location.href='battle?'+Date.now()}else{$('fbstatus').textContent=s.message}
+  }).catch(function(){setTimeout(poll,1500)})}
+  $('fbgo').addEventListener('click',function(){
+    $('fbgo').disabled=true;$('fbstatus').textContent='Kampf startet ...';
+    json('api/battle',{enemy:$('fbenemy').value}).then(function(r){
+      if(!r.ok){$('fbgo').disabled=false;$('fbstatus').textContent=r.error||'Fehler';return}
+      poll()});
+  });
+  $('fbquit').addEventListener('click',function(){json('api/quit',{}).then(function(){
+    document.body.innerHTML='<p style="padding:30px">draftgott wurde beendet. Dieses Fenster kann geschlossen werden.</p>'})});
+})();
+</script>"""
+FIGHT_BAR = ('<div class="fightbar" id="fightbar"><span id="fbnote" class="muted">Kampf gegen ein Gegnerdeck ist '
+             'nur möglich, solange draftgott läuft (Analyse oder Drafthelper).</span>'
+             '<span id="fbctl" style="display:none;gap:8px;align-items:center">Kampf gegen '
+             '<select id="fbenemy" title="Gegnerdecks im Projektordner (_enemydeck*.txt)"></select>'
+             '<button type="button" id="fbgo">Kampf simulieren</button><span id="fbstatus" class="muted"></span>'
+             '<button type="button" id="fbquit" style="display:none">Beenden</button></span></div>')
+
 SWITCH_JS = """<script>
 document.documentElement.classList.add('js');
 function showGroup(g){
@@ -520,6 +556,7 @@ def render_details(ctx, suffix="", switch=None):
         f"Das schnellste von {sims} simulierten Spielen (bei gleicher Runde das mit mehr Schaden) – "
         f"ein Glücksfall, kein Erwartungswert.", f'<div class="grid">{"".join(lethals)}</div>')
 
+
     # ---------------- Landcycling
     if ctx["cyc_names"] and not a.ohne_landcycling:
         panels = []
@@ -683,9 +720,9 @@ def render_html(ctx):
             f'<div class="sub">Starthand-Simulation · erstellt am {stamp}</div>'
             f'<div class="chips">{"".join(f"<span class=chip>{esc(c)}</span>" for c in chips)}</div>'
             '<div class="views"><a href="#top" data-view="report" class="on">Bericht</a>'
-            '<a href="#hiw-start" data-view="help">So funktioniert es</a></div></header>'
+            '<a href="#hiw-start" data-view="help">So funktioniert es</a></div>' + FIGHT_BAR + '</header>'
             f'<div class="view on" id="view-report"><div class="layout"><nav>{nav_html}</nav>'
             f'<main>{missing_html}{"".join(sections)}</main></div></div>'
             f'{help_html}'
             f'<footer>Erzeugt mit mtg_sim.py · Kartendaten von Scryfall</footer>'
-            + (SWITCH_JS if multi else "") + VIEW_JS + '</body></html>')
+            + (SWITCH_JS if multi else "") + VIEW_JS + FIGHT_JS + '</body></html>')

@@ -1,6 +1,7 @@
 @echo off
 rem draftgott: Startmenue fuer den MTG-Simulator per Doppelklick.
-rem   1 = Analyse    (Deckliste _normaldeck.txt simulieren, Bericht meinbericht.html)
+rem   1 = Analyse    (Deckliste _normaldeck.txt simulieren, Bericht meinbericht.html; laeuft weiter fuer den
+rem                   Kampf aus dem Bericht, bis "Beenden" geklickt wird)
 rem   2 = Drafthelper (Kartenseite im Browser mit _draftedcardpool.txt)
 rem Zusaetzliche Parameter werden an den gewaehlten Aufruf angehaengt,
 rem z. B.:  draftgott.bat --sims 1000
@@ -24,7 +25,7 @@ if not defined PY (
 echo.
 echo  draftgott
 echo  ---------
-echo   1 = Analyse       (_normaldeck.txt simulieren, Bericht meinbericht.html)
+echo   1 = Analyse       (_normaldeck.txt simulieren, Bericht meinbericht.html, Kampf im Bericht)
 echo   2 = Drafthelper   (Karten aus _draftedcardpool.txt auswaehlen und vergleichen)
 echo.
 choice /c 12 /n /m "Auswahl (1 oder 2): "
@@ -35,7 +36,9 @@ exit /b 1
 :analyse
 echo.
 echo Analyse laeuft, der Bericht oeffnet sich danach im Browser ...
-%PY% mtg_sim.py _normaldeck.txt --sims 10000 --html meinbericht.html %*
+echo Dieses Fenster bitte offen lassen, solange du im Bericht "Kampf simulieren" nutzen willst.
+echo Zum Beenden: Knopf "Beenden" im Bericht oder dieses Fenster schliessen.
+%PY% mtg_sim.py _normaldeck.txt --sims 10000 --html meinbericht.html --bericht-server %*
 goto ende
 
 :drafthelper
