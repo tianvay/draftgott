@@ -96,6 +96,10 @@ class Card(NamedTuple):
     finality: bool = False     # kommt mit Finality-Marke zurueck: stirbt sie, wird sie exiliert
     phoenix: bool = False      # zu Beginn des eigenen Kampfs zurueck, wenn in diesem Zug 2+ Kreaturen starben
     combat_land_return: bool = False  # Kampfschaden am Spieler: Land aus dem Friedhof auf die Hand
+    domain_power: bool = False  # Power = Zahl der Basic-Land-Typen unter den eigenen Laendern (Fblthp)
+    x_search_basics: bool = False  # beim Betreten bis zu X Basic Lands mit verschiedenen Namen auf die Hand (Fblthp)
+    ally_death_ping: tuple = ()  # stirbt eine andere eigene Kreatur: (Schaden am Gegner, Leben) (Massacre Girl)
+    noncombat_counter: int = 0   # Marken, wenn ein Gegner Schaden ausserhalb des Kampfs bekommt (Massacre Girl)
 
 
 LANDCYCLE_RE = re.compile(
@@ -725,6 +729,14 @@ _GY_RETURN_RE = re.compile(r"^((?:\{[^}]+\})+)(, exile another creature card fro
                            r"been dealt noncombat damage this turn\.)?$")
 _PHOENIX_RE = re.compile(r"^at the beginning of combat on your turn, if two or more creatures died this turn, return "
                          r"this card from your graveyard to the battlefield")
+_DOMAIN_POWER_RE = re.compile(r"^domain — (?:~|this creature)'s power is equal to the number of basic land types among "
+                              r"lands you control")
+_X_SEARCH_RE = re.compile(r"^when (?:~|this creature) enters, search your library for up to x basic land cards with "
+                          r"different names, reveal them, put them into your hand")
+_ALLY_DEATH_RE = re.compile(r"^whenever another creature(?: or planeswalker)? you control dies, (?:~|this creature) deals "
+                            r"(\d+) damage to target opponent and you gain (\d+) life")
+_NONCOMBAT_COUNTER_RE = re.compile(r"^whenever an opponent is dealt noncombat damage, put (a|an|one|two|\d+) \+1/\+1 "
+                                   r"counters? on (?:~|this creature)")
 _COMBAT_LAND_RE = re.compile(r"^whenever (?:~|this creature) deals combat damage to a player, return target land card "
                              r"from your graveyard to your hand")
 _EXTRA_COST_RE = re.compile(r"^as an additional cost to cast this spell, [^.]*\bpay \{(\d+)\}")
@@ -786,6 +798,16 @@ def life_and_costs(card, type_line, keywords):
             out["phoenix"] = True
         if _COMBAT_LAND_RE.match(low):
             out["combat_land_return"] = True
+        if _DOMAIN_POWER_RE.match(low):
+            out["domain_power"] = True
+        if _X_SEARCH_RE.match(low):
+            out["x_search_basics"] = True
+        m = _ALLY_DEATH_RE.match(low)
+        if m:
+            out["ally_death_ping"] = (int(m.group(1)), int(m.group(2)))
+        m = _NONCOMBAT_COUNTER_RE.match(low)
+        if m:
+            out["noncombat_counter"] = _count(m.group(1))
         m = _GY_POWER_RE.match(low)
         if m:
             out["gy_power"] = tuple(m.group(1).split(" and "))

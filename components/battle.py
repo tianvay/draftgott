@@ -14,6 +14,7 @@ mit Trample), Trample, Lifelink; ein Angreifer verteilt seinen Schaden so, dass 
 Flying kann nur von Flying oder Reach geblockt werden, Menace nur von zwei oder mehr Kreaturen.
 """
 import itertools
+import random
 from collections import Counter
 
 from components.mana import land_key
@@ -30,6 +31,7 @@ CYCLE_TURNS = 3  # eigener Zug: fehlt bis Runde 3 ein Land fuer den Landdrop, wi
 CYCLE_CAP = 6    # Ende des gegnerischen Zugs: nur cyceln, solange Laender auf Feld und Hand unter 6 liegen
 
 
+BASIC_TYPES = {"plains", "island", "swamp", "mountain", "forest"}
 _GY_TYPES = {"creature": "is_creature", "planeswalker": "is_planeswalker", "artifact": "is_artifact",
              "land": "is_land", "instant": "is_instant", "sorcery": "is_instant_sorcery"}
 
@@ -37,7 +39,7 @@ _GY_TYPES = {"creature": "is_creature", "planeswalker": "is_planeswalker", "arti
 class Creature:
     """Eine Kreatur auf dem Feld (Karte, Schritt des Eintritts, getappt, Schaden, Marken, Pump)."""
     __slots__ = ("card", "entered", "tapped", "damage", "bonus", "pump", "dead", "touched", "locked", "prepared",
-                 "tpump", "extra", "lifted", "owner", "at_jace", "gy", "dealt", "finality")
+                 "tpump", "extra", "lifted", "owner", "at_jace", "gy", "dealt", "finality", "ctl")
 
     def __init__(self, card, entered=0):
         self.card = card
@@ -58,12 +60,15 @@ class Creature:
         self.gy = None        # Friedhof des Kontrolleurs (Power nach Karten im Friedhof, Winter)
         self.dealt = False    # hat schon Kampfschaden zugefuegt (Ruric Thar verliert dann Hexproof)
         self.finality = False  # Finality-Marke: stirbt sie, wird sie exiliert
+        self.ctl = None       # Kontrolleur (Player), fuer Power nach Domain (Fblthp)
 
     @property
     def power(self):
         base = self.card.power + self.bonus + self.pump
         if self.card.gy_power and self.gy is not None:
             base += sum(1 for g in self.gy if any(getattr(g, _GY_TYPES[t], False) for t in self.card.gy_power))
+        if self.card.domain_power and self.ctl is not None:
+            base += len({t for land in self.ctl.lands for t in land.land_types} & BASIC_TYPES)
         return base
 
     @property
@@ -81,6 +86,7 @@ class Creature:
         c.extra = set(self.extra)
         c.owner = self.owner
         c.gy = self.gy
+        c.ctl = self.ctl
         c.dealt = self.dealt
         return c
 
@@ -330,6 +336,7 @@ class Player:
         self.exiled = []      # vom Gegner exilierte Karten, die wir ab Threshold wirken duerfen (Null Summoner)
         self.exiled_from = None  # Besitzer dieser Karten (der Gegner)
         self.opponent = None  # der andere Spieler (Thalia: Steuer auf unsere Zauber)
+        self.next_x = 0       # X der naechsten Kreatur, die gewirkt ins Spiel kommt (Fblthp)
         self.now = 0          # aktueller Schritt (fuer Token aus Faehigkeiten)
         self.turn_start = 0   # Schritt, in dem unser letzter Zug begann (Token mit {T} erst danach nutzbar)
         self.direct_mark = 0  # dealt_direct zu Beginn des aktuellen Zugs ("noncombat damage this turn")
@@ -547,6 +554,19 @@ def jace_turn_start(p, step, e=None):
     _jace_activate(p, step, e if e is not None else {"events": []}, False)
 
 
+def deal_noncombat(src, victim, amount, e):
+    """Schaden ausserhalb des Kampfs von src an den Spieler victim (direkter Schaden). Jedes Ereignis gibt Kreaturen
+    wie Massacre Girl ("whenever an opponent is dealt noncombat damage") ihre Marken."""
+    if amount <= 0 or victim is None:
+        return
+    victim.life -= amount
+    src.dealt_direct += amount
+    e["face"] = e.get("face", 0) + amount
+    for c in src.creatures:
+        if c.card.noncombat_counter and not c.dead:
+            c.bonus += c.card.noncombat_counter
+
+
 def gain_life(p, n, events=1):
     """Lebensgewinn; events: Zahl der einzelnen Lebensgewinne (Lyra: jeder loest einmal aus, die Menge zaehlt nicht).
     Marken nur fuer Kreaturen, die noch leben (nach dem Kampfschaden); die Quelle selbst darf dabei gestorben sein."""
@@ -605,6 +625,40 @@ def _tapped_lands(p):
     return {cols: n - min(n, units[cols]) for cols, n in lands.items()}
 
 
+def basic_names_in_library(p):
+    return {c.name for c in p.library if c.is_basic}
+
+
+def search_basics(p, x, e, source=""):
+    """Bis zu x Basic Lands mit verschiedenen Namen aus der Bibliothek auf die Hand, danach mischen. Zuerst Laender mit
+    neuen Farben (nicht auf dem Feld oder der Hand), dann die haeufigsten in der Bibliothek."""
+    have = set().union(*(c.land_colors for c in p.lands + [h for h in p.hand if h.is_land])) if p.lands or p.hand \
+        else set()
+    count = Counter(c.name for c in p.library if c.is_basic)
+    first = {c.name: c for c in p.library if c.is_basic}
+    names = sorted(count, key=lambda n: (-len(set(first[n].land_colors) - have), -count[n], n))[:x]
+    for name in names:
+        card = first[name]
+        p.library.remove(card)
+        p.hand.append(card)
+    random.shuffle(p.library)
+    if names:
+        e["events"].append(f"{p.name}: {source} sucht {', '.join(names)}")
+
+
+def free_units(p):
+    """Wie viel offenes Mana frei ist: danach bleibt jede vorher bezahlbare Instant-/Flash-/Cycling-Karte bezahlbar."""
+    n = 0
+    while n < len(p.open):
+        rest = list(p.open)
+        for _ in range(n + 1):
+            rest.pop()
+        if any(pay(rest, need) is None for need in _reserved(p)):
+            break
+        n += 1
+    return n
+
+
 def _redundant_land(p):
     """Land, das am wenigsten fehlt: farblos zuerst, sonst das Land, dessen Farben am haeufigsten vorkommen; bei
     Gleichstand ein getapptes Land, dann ein Basic Land."""
@@ -620,7 +674,10 @@ def creature_enters(p, new, step, e, opp=None, cast=True):
     Tethermage), Mill und Land zurueck (Primal Witchstalker), Exil aus der Hand des Gegners (Null Summoner, nur wenn
     gewirkt)."""
     card = new.card
-    new.gy = p.graveyard
+    new.gy, new.ctl = p.graveyard, p
+    x, p.next_x = p.next_x, 0  # X des gewirkten Zaubers (107.3m); sonst 0
+    if card.x_search_basics and x:
+        search_basics(p, x, e, card.name)
     gain_life(p, card.etb_life)
     if card.land_to_tokens and p.lands:
         n, token = card.land_to_tokens
@@ -739,9 +796,7 @@ def on_land(me, opp, land, step, e, with_mana=True):
         for c in list(me.creatures):
             if c.card.landfall_life and not c.dead:
                 gain_life(me, c.card.landfall_life)
-        opp.life -= face
-        me.dealt_direct += face
-        e["face"] += face
+        deal_noncombat(me, opp, face, e)
     if land.surveil:
         surveil_cards(me, [land.surveil], e, land.name)
     for ef in once_effects(land):
@@ -796,9 +851,16 @@ def legend_ok(p, card):
 
 
 def bury(players, e):
-    """Gestorbene Kreaturen in den Friedhof (Schaden, Deathtouch, Toughness 0) und Legend-Regel."""
+    """Gestorbene Kreaturen in den Friedhof (Schaden, Deathtouch, Toughness 0) und Legend-Regel. Danach Ausloeser fuer
+    gestorbene eigene Kreaturen (Massacre Girl; sie sieht auch Tode im selben Moment wie ihren eigenen, 603.10a)."""
     for p in players:
         legend_rule(p, e)
+    triggers = []  # erst alle gleichzeitig sterben lassen (704.3), dann die Ausloeser
+    for p in players:
+        watchers = [c for c in p.creatures if c.card.ally_death_ping]
+        dying = [c for c in p.creatures
+                 if c.dead or c.toughness <= 0 or c.damage >= c.toughness or (c.touched and c.damage > 0)]
+        triggers += [(p, w.card.ally_death_ping) for w in watchers for d in dying if d is not w]
     for p in players:
         for c in list(p.creatures):
             if c.dead or c.toughness <= 0 or c.damage >= c.toughness or (c.touched and c.damage > 0):
@@ -809,6 +871,9 @@ def bury(players, e):
                 _leave(p, c.card)
                 gain_life(p, c.card.death_life)
                 e["deaths"].append(f"{c.card.name} ({p.name})")
+    for p, (dmg, life) in triggers:  # Massacre Girl
+        deal_noncombat(p, p.opponent, dmg, e)
+        gain_life(p, life)
 
 
 def choose_discard(p):
@@ -871,9 +936,7 @@ def cast_removal(card, caster, victim, e, step, target=None):
     if target is None:
         target = choose_target(spec, caster, victim)
     if kind == "damage" and any_target and (target is None or victim.life <= amount):
-        victim.life -= amount
-        caster.dealt_direct += amount
-        e["face"] += amount
+        deal_noncombat(caster, victim, amount, e)
         e["events"].append(f"{caster.name}: {card.name} – {amount} Schaden an {victim.name}")
         return
     if target is None:
@@ -967,9 +1030,7 @@ def card_effects(me, opp, card, step, entry):
             if c.pump > old:
                 c.tpump += round((c.pump - old) * ratio)
         if gain["face"] and opp is not None:
-            opp.life -= gain["face"]
-            me.dealt_direct += gain["face"]
-            entry["face"] += gain["face"]
+            deal_noncombat(me, opp, gain["face"], entry)
     if card.draws:
         for _ in range(card.draws):
             if me.library:
@@ -1223,9 +1284,7 @@ def _use_removal(p, card, alts, is_spell, step, e, zone="hand", other=None):
         on_cast(p, card, step, e)
         face = sum(a[1] for a in card.modes[0] if a[0] == "face") if card.modes and not card.removal[3] else 0
         if face and other is not None:  # z. B. Extended Absence: "deals 1 damage to each opponent"
-            other.life -= face
-            p.dealt_direct += face
-            e["face"] = e.get("face", 0) + face
+            deal_noncombat(p, other, face, e)
         gain_life(p, card.spell_life)
     else:
         e["events"].append(f"{p.name}: wirft {card.name} ab (Fähigkeit)")
@@ -1922,6 +1981,12 @@ def take_turn(me, opp, step, rnd, skip_draw):
             exile = True
         _resolve(me, opp, c, step, e, owner, exile)
     me.cast_count += len(chosen)
+    for c in chosen:  # X-Kosten (Fblthp): freies Mana, hoechstens so viel, wie es nutzt
+        if c.x_search_basics:
+            x = min(free_units(me), len(basic_names_in_library(me)))
+            for _ in range(x):
+                me.open.pop()
+            me.next_x = x
     early = [c for c in chosen if c.is_creature and not c.haste and combat_etb(me, opp, c, step, chosen)]
     main1 = [c for c in chosen if not (c.is_creature and not c.haste) or c in early]
     main2 = [c for c in chosen if c.is_creature and not c.haste and c not in early]
@@ -1963,9 +2028,9 @@ def take_turn(me, opp, step, rnd, skip_draw):
         a.at_jace = True
     ping = sum(c.card.attack_ping for c in me.creatures if not c.dead) * len(attackers)
     if ping:  # "Whenever a creature you control attacks, that creature deals 1 damage to each opponent"
-        opp.life -= ping
-        me.dealt_direct += ping
-        e["face"] += ping
+        for a in attackers:  # je Angreifer ein Schadensereignis
+            for _ in range(sum(c.card.attack_ping for c in me.creatures if not c.dead)):
+                deal_noncombat(me, opp, 1, e)
         e["events"].append(f"{me.name}: {ping} Schaden durch Angriffs-Auslöser")
     attackers = respond_to_attack(opp, me, attackers, e, step)
     pre_block_abilities(opp, me, attackers, e, step)
