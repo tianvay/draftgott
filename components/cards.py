@@ -100,6 +100,9 @@ class Card(NamedTuple):
     x_search_basics: bool = False  # beim Betreten bis zu X Basic Lands mit verschiedenen Namen auf die Hand (Fblthp)
     ally_death_ping: tuple = ()  # stirbt eine andere eigene Kreatur: (Schaden am Gegner, Leben) (Massacre Girl)
     noncombat_counter: int = 0   # Marken, wenn ein Gegner Schaden ausserhalb des Kampfs bekommt (Massacre Girl)
+    choices: tuple = ()        # modale Karte ("Choose one/two —"): (Anzahl, (Modus als Card, ...)) - nur im Kampf
+    is_mode: bool = False      # diese Card ist ein Modus einer modalen Karte
+    grant_kw: tuple = ()       # Zauber: "target creature ... gains <Schluesselwoerter> until end of turn" (Kampftrick)
 
 
 LANDCYCLE_RE = re.compile(
@@ -604,8 +607,10 @@ def _tokens_in(text):
         kws = tuple(k.strip() for k in re.split(r",\s*(?:and\s+)?|\s+and\s+", m.group(6) or "")
                     if k.strip() in COMBAT_KEYWORDS)
         name = m.group(5).capitalize() if m.group(5) else " ".join(t.capitalize() for t in types)
-        out.append((_count(m.group(1)), token_card(name, True, int(m.group(2)), int(m.group(3)), artifact,
-                                                   kw=kws, types=types)))
+        token = token_card(name, True, int(m.group(2)), int(m.group(3)), artifact, kw=kws, types=types)
+        if "it gains haste" in text[m.end():m.end() + 40]:
+            token = token._replace(haste=True)
+        out.append((_count(m.group(1)), token))
     return out
 
 
@@ -740,6 +745,60 @@ _NONCOMBAT_COUNTER_RE = re.compile(r"^whenever an opponent is dealt noncombat da
 _COMBAT_LAND_RE = re.compile(r"^whenever (?:~|this creature) deals combat damage to a player, return target land card "
                              r"from your graveyard to your hand")
 _EXTRA_COST_RE = re.compile(r"^as an additional cost to cast this spell, [^.]*\bpay \{(\d+)\}")
+
+
+_GRANT_KW_RE = re.compile(r"\btarget creature(?: you control)? (?:gets [^.]*? and )?gains ([a-z ,]+?) until end of turn")
+_CHOOSE_RE = re.compile(r"^(?:when (?:~|this creature) enters, )?choose (one|two|three) —$")
+_YOU_DRAW_LIFE_RE = re.compile(r"^you draw (a|an|one|two|three) cards? and gain (\d+) life\.", re.I)
+
+
+def grant_keywords(card, type_line):
+    """Zauber, die einer Kreatur Kampf-Schluesselwoerter bis Rundenende geben (fuer Kampftricks im Kampf)."""
+    if not ("Instant" in type_line or "Sorcery" in type_line):
+        return ()
+    found = []
+    for _raw, low in _clean_lines(card):
+        if re.match(r"^(when|whenever|at the beginning)\b", low):
+            continue
+        for m in _GRANT_KW_RE.finditer(low):
+            for k in re.split(r",\s*(?:and\s+)?|\s+and\s+", m.group(1)):
+                if k.strip() in COMBAT_KEYWORDS and k.strip() not in found:
+                    found.append(k.strip())
+    return tuple(found)
+
+
+def modal_choices(card, type_line):
+    """Modale Karten: jeder Aufzaehlungspunkt nach "Choose one/two —" (auch "When this creature enters, choose two —")
+    wird eine eigene Card mit genau diesem Text, gelesen mit denselben Bausteinen."""
+    front = (card.get("card_faces") or [card])[0]
+    lines = (front.get("oracle_text") or card.get("oracle_text") or "").split("\n")
+    name = front.get("name") or card.get("name") or ""
+    for i, raw in enumerate(lines):
+        low = re.sub(r"\([^)]*\)", "", raw).strip().lower()
+        for nm in (name, name.split(",")[0]):
+            low = _name_to_tilde(low, nm)
+        m = _CHOOSE_RE.match(low)
+        if not m:
+            continue
+        etb = low.startswith("when ")
+        subs = []
+        for bullet in lines[i + 1:]:
+            if not bullet.strip().startswith("•"):
+                break
+            text = bullet.strip().lstrip("•").strip()
+            text = _YOU_DRAW_LIFE_RE.sub(lambda mm: f"Draw {mm.group(1)} card{'s' if mm.group(1) not in ('a', 'an', 'one') else ''}. "
+                                         f"You gain {mm.group(2)} life.", text)
+            if etb:
+                text = "When this creature enters, " + text[0].lower() + text[1:]
+            raw_sub = {"name": card["name"], "type_line": front.get("type_line") or card.get("type_line", ""),
+                       "mana_cost": front.get("mana_cost") or card.get("mana_cost", ""), "cmc": card.get("cmc", 0),
+                       "colors": card.get("colors", []), "oracle_text": text, "keywords": [], "layout": "normal",
+                       "power": front.get("power") or card.get("power"),
+                       "toughness": front.get("toughness") or card.get("toughness")}
+            subs.append(card_info(raw_sub)[0]._replace(is_mode=True))
+        if subs:
+            return (_count(m.group(1)), tuple(subs))
+    return ()
 
 
 def life_and_costs(card, type_line, keywords):
@@ -1048,6 +1107,7 @@ def card_info(card):
                 is_artifact="Artifact" in type_line,
                 targets_opp=targets_opponent(card, type_line, removal_spec(card)), **battle_triggers(card),
                 **token_triggers(card), **life_and_costs(card, type_line, keywords),
-                creates_tokens=creates_tokens(card, type_line),
+                creates_tokens=creates_tokens(card, type_line), choices=modal_choices(card, type_line),
+                grant_kw=grant_keywords(card, type_line),
                 creature_types=(tuple(t.lower() for t in type_line.split("—", 1)[1].split())
                                 if is_creature and "—" in type_line else ())), shown

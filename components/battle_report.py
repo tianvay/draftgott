@@ -118,6 +118,10 @@ RULES = [
     "Zahl der Basic-Land-Typen unter unseren Ländern. Massacre Girl: Tod einer anderen eigenen Kreatur (auch im selben "
     "Moment wie sie selbst) gibt 1 Schaden am Gegner und 1 Leben; jeder Schaden außerhalb des Kampfs am Gegner gibt "
     "ihr eine Marke.",
+    "Modale Karten („Choose one/two —“): jeder Aufzählungspunkt ist ein Modus; gewählt werden die wertvollsten: "
+    "Lethal, Removal (tötet), Karte ziehen, Token, Marken/Pumps, Schaden, Leben. Modale Instants: Removal-Modi wie "
+    "Removal-Instants, Pumps und Schlüsselwörter als Kampftrick, sonst am Ende des gegnerischen Zugs ein Wert-Modus "
+    "(z. B. Cadet, Karte ziehen). Counterspells und Mana-Modi werden nicht genutzt.",
     "Noch nicht im Kampf: Fähigkeiten mit Opfern als Kosten (z. B. Edgar, Ancient Bloodlord) und weitere Auslöser. "
     "Solche Karten werden gewirkt, wirken aber nur mit den schon modellierten Effekten.",
 ]

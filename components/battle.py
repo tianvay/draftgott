@@ -732,6 +732,18 @@ def creature_enters(p, new, step, e, opp=None, cast=True):
         e["events"].append(f"{p.name}: {new.card.name} – alle +{x}/+0 und {', '.join(new.card.artifact_pump)}")
 
 
+def _mode_label(sub):
+    if sub.removal:
+        return "Removal"
+    if sub.draws:
+        return "Karte ziehen"
+    if sub.creates_tokens:
+        return "Token"
+    if sub.grant_kw or sub.modes:
+        return "Marken/Pumps"
+    return "Sonstiges"
+
+
 def _jace_on_cast(p, card, step, e):
     if not p.jace_perms and not once_effects(card) and not recurring_effects(card):
         return
@@ -739,7 +751,7 @@ def _jace_on_cast(p, card, step, e):
         for ef in recurring_effects(pc):
             if ef[1] == "trigger" and ef[3].startswith("cast:") and cast_filter_matches(ef[3][5:], card):
                 _jace_add(p, ef[2], e)
-    for ef in once_effects(card):
+    for ef in once_effects(card) if not card.choices else ():  # modale Karten: Empower nur im gewaehlten Modus
         if ef[1] == "spell":
             _jace_add(p, ef[2], e)
 
@@ -971,7 +983,7 @@ def cast_removal(card, caster, victim, e, step, target=None):
     bury((caster, victim), e)
 
 
-def _resolve(me, opp, card, step, entry, owner=None, to_exile=False):
+def _resolve(me, opp, card, step, entry, owner=None, to_exile=False, modes=None):
     """Eine gewirkte Karte kommt ins Spiel bzw. wirkt: Kreatur aufs Feld, Permanents, Instants/Sorceries in den
     Friedhof. Erst die Ausloeser beim Wirken (on_cast), dann bei Permanents die Betreten-Effekte (wie bei jedem
     anderen Weg ins Spiel), bei Instants/Sorceries und Prepared-Kopien ihre Effekte (card_effects)."""
@@ -991,10 +1003,51 @@ def _resolve(me, opp, card, step, entry, owner=None, to_exile=False):
     if card.is_creature and not card.is_copy:
         creature_enters(me, me.creatures[-1], step, entry, opp)
     elif card.is_instant_sorcery or card.is_copy:
-        card_effects(me, opp, card, step, entry)
+        card_effects(me, opp, card, step, entry, modes)
     else:
         permanent_enters(me, opp, card, step, entry)
     bury((me, opp), entry)
+
+
+def mode_value(p, opp, sub, step, end_step=False):
+    """Wert eines Modus: Lethal > Removal (toetet) > Karte ziehen > Token > Marken/Pumps > Schaden > Leben.
+    end_step: am Ende des gegnerischen Zugs zaehlen Pumps bis Rundenende nicht."""
+    spec = sub.removal
+    atoms = [a for m in sub.modes[:1] for a in m]
+    face = sum(a[1] for a in atoms if a[0] == "face")
+    any_dmg = _amount(spec, p) if spec and spec[3] and spec[0] == "damage" else 0
+    if opp is not None and (face or any_dmg) and face + any_dmg >= opp.life:
+        return (6, face + any_dmg)
+    if spec and opp is not None:
+        if spec[0] in ("sweep", "sweep_damage", "edict"):
+            if any(not c.dead for c in opp.creatures):
+                return (5, 0, False, 0)
+        else:
+            target = choose_target(spec, p, opp)
+            if target is not None:
+                return (5,) + danger(target)
+    if sub.draws:
+        return (4, sub.draws)
+    if sub.creates_tokens:
+        return (3, sum(n * (t.power + t.toughness) for n, t in sub.creates_tokens))
+    alive = [c for c in p.creatures if not c.dead]
+    if any(a[0] in ("counter", "counter_all") for a in atoms) and alive:
+        return (2, 1)
+    if not end_step and any(a[0] in ("pump", "pump_all") for a in atoms) and any(can_attack(c, step) for c in alive):
+        return (2, 0)
+    if face or any_dmg:
+        return (1.5, face + any_dmg)
+    if sub.spell_life or sub.etb_life:
+        return (1, sub.spell_life + sub.etb_life)
+    if sub.surveil:
+        return (0.5,)
+    return (0,)
+
+
+def choose_modes(p, opp, card, step, end_step=False):
+    """So viele verschiedene Modi wie verlangt, die wertvollsten zuerst."""
+    n, subs = card.choices
+    return sorted(subs, key=lambda s: mode_value(p, opp, s, step, end_step), reverse=True)[:n]
 
 
 def permanent_enters(p, opp, card, step, e):
@@ -1003,16 +1056,25 @@ def permanent_enters(p, opp, card, step, e):
     card_effects(p, opp, card, step, e)
 
 
-def card_effects(me, opp, card, step, entry):
+def card_effects(me, opp, card, step, entry, modes=None):
     """Effekte einer Karte: bei Instants/Sorceries beim Auflösen, bei Permanents beim Betreten (603.6a, egal wie sie
     ins Spiel kommen). Treasure, Schaden an uns, Removal, Abwerfen, Schaden/Marken/Pumps, Ziehen, Surveil, Leben,
     Zurueckholen aus dem Friedhof, Token."""
+    if opp is None:
+        opp = me.opponent
+    if card.choices:  # modale Karte: nur die gewaehlten Modi wirken
+        for sub in (modes if modes is not None else choose_modes(me, opp, card, step)):
+            entry["events"].append(f"{me.name}: {card.name} – Modus: {_mode_label(sub)}")
+            card_effects(me, opp, sub, step, entry)
+        return
+    if card.is_mode:
+        for ef in once_effects(card):
+            if ef[1] == "spell":
+                _jace_add(me, ef[2], entry)
     if card.treasure:
         me.treasures += card.treasure
     if card.self_damage:  # "damage to each player" trifft auch uns
         me.life -= card.self_damage
-    if opp is None:
-        opp = me.opponent
     effects = card
     if card.removal and opp is not None and _edict_paid(me, opp, card, entry):
         cast_removal(card, me, opp, entry, step)
@@ -1145,7 +1207,8 @@ def main_phase_spells(me, opp):
     Kopien der Prepared-Kreaturen."""
     cards = [c for c in me.hand if not c.is_land] + copies(me)
     return [c for c in cards if not c.is_instant and not c.flash and legend_ok(me, c) and reanimate_ok(me, c)
-            and (not c.removal or c.removal[4] == "etb" or has_target(c, me, opp))]
+            and (any(mode_value(me, opp, s, 0) > (0,) for s in c.choices[1]) if c.choices and not c.is_creature
+                 else not c.removal or c.removal[4] == "etb" or has_target(c, me, opp))]
 
 
 def copies(p):
@@ -1159,18 +1222,34 @@ def _cast_from_open(p, card):
     return True
 
 
+_TRICK_KINDS = ("pump", "counter", "pump_all", "counter_all")
+
+
 def _trick_atoms(card):
-    return [m for m in card.modes if any(a[0] in ("pump", "counter", "pump_all", "counter_all") for a in m)]
+    return _trick_modes(card)
 
 
 def _trick_modes(card):
-    """[(Modus, Toughness der Pumps)] der Kampftrick-Modi einer Karte."""
+    """[(Modus, Toughness der Pumps, verliehene Schluesselwoerter)] der Kampftrick-Modi einer Karte; bei modalen
+    Karten je Modus mit Pumps/Marken oder Schluesselwoertern."""
+    if card.choices:
+        out = []
+        for sub in card.choices[1]:
+            atoms = sub.modes[0] if sub.modes else ()
+            if any(a[0] in _TRICK_KINDS for a in atoms) or sub.grant_kw:
+                out.append((atoms, sub.pump_tough[0] if sub.pump_tough else (), sub.grant_kw))
+        return out
     tough = card.pump_tough or ()
-    return [(m, tough[i] if i < len(tough) else ()) for i, m in enumerate(card.modes)
-            if any(a[0] in ("pump", "counter", "pump_all", "counter_all") for a in m)]
+    out = [(m, tough[i] if i < len(tough) else (), card.grant_kw) for i, m in enumerate(card.modes)
+           if any(a[0] in _TRICK_KINDS for a in m)]
+    if not out and card.grant_kw:
+        out = [((), (), card.grant_kw)]
+    return out
 
 
-def _apply_trick(mode, target, own, tough=()):
+def _apply_trick(mode, target, own, tough=(), grants=()):
+    if grants:
+        target.extra |= set(grants)
     k = 0
     for atom in mode:
         if atom[0] in ("pump", "pump_all"):
@@ -1210,19 +1289,19 @@ def combat_tricks(p, pairs, opp, e, step, attacking):
             continue
         base = _score(pairs, attacking, opp.life)
         best = None
-        for mode, tough in _trick_modes(card):
+        for mode, tough, grants in _trick_modes(card):
             for i, target in enumerate(own):
-                saved = [(c.pump, c.bonus, c.tpump) for c in own]
-                _apply_trick(mode, target, own, tough)
+                saved = [(c.pump, c.bonus, c.tpump, set(c.extra)) for c in own]
+                _apply_trick(mode, target, own, tough, grants)
                 gain = _score(pairs, attacking, opp.life) - base
-                for c, (pu, bo, tp) in zip(own, saved):
-                    c.pump, c.bonus, c.tpump = pu, bo, tp
+                for c, (pu, bo, tp, ex) in zip(own, saved):
+                    c.pump, c.bonus, c.tpump, c.extra = pu, bo, tp, ex
                 if gain > 0 and (best is None or gain > best[0]):
-                    best = (gain, mode, i, tough)
+                    best = (gain, mode, i, tough, grants)
         if best is None:
             continue
         _cast_from_open(p, card)
-        _apply_trick(best[1], own[best[2]], own, best[3])
+        _apply_trick(best[1], own[best[2]], own, best[3], best[4])
         if card.is_creature:
             p.creatures.append(Creature(card, step))
             creature_enters(p, p.creatures[-1], step, e, opp)
@@ -1238,7 +1317,11 @@ def instant_removals(p):
     Threshold exilierte Removal-Instants (Null Summoner, Mana jeder Art)."""
     out = []
     for card in p.hand:
-        if card.is_instant and card.removal and card.removal[4] == "spell":
+        if card.is_instant and card.choices:
+            for sub in card.choices[1]:
+                if sub.removal and sub.removal[4] == "spell":
+                    out.append((card, _alts(p, card), sub, True, "hand"))
+        elif card.is_instant and card.removal and card.removal[4] == "spell":
             out.append((card, _alts(p, card), card, True, "hand"))
         elif card.hand_removal:
             out.append((card, card.hand_removal[0], card._replace(removal=card.hand_removal[1]), False, "hand"))
@@ -1270,7 +1353,7 @@ def _zone(p, zone):
     return {"exile": p.exiled, "flashback": p.graveyard}.get(zone, p.hand)
 
 
-def _use_removal(p, card, alts, is_spell, step, e, zone="hand", other=None):
+def _use_removal(p, card, alts, is_spell, step, e, zone="hand", other=None, fx=None):
     """Bezahlt und legt die Karte in den Friedhof (gewirkt oder abgeworfen); aus dem Exil in den Friedhof des
     Besitzers (other: der Gegner, falls der Besitzer nicht gespeichert ist)."""
     if not _pay_open(p, alts):
@@ -1282,10 +1365,11 @@ def _use_removal(p, card, alts, is_spell, step, e, zone="hand", other=None):
         ((p.exiled_from or other or p) if zone == "exile" else p).graveyard.append(card)
     if is_spell:
         on_cast(p, card, step, e)
-        face = sum(a[1] for a in card.modes[0] if a[0] == "face") if card.modes and not card.removal[3] else 0
+        fx = fx or card  # Effekte: bei modalen Karten der gewaehlte Modus
+        face = sum(a[1] for a in fx.modes[0] if a[0] == "face") if fx.modes and not fx.removal[3] else 0
         if face and other is not None:  # z. B. Extended Absence: "deals 1 damage to each opponent"
             deal_noncombat(p, other, face, e)
-        gain_life(p, card.spell_life)
+        gain_life(p, fx.spell_life)
     else:
         e["events"].append(f"{p.name}: wirft {card.name} ab (Fähigkeit)")
     return True
@@ -1310,7 +1394,7 @@ def respond_to_attack(dfn, att, attackers, e, step):
         if not options:
             break
         _d, card, target, alts, rc, is_spell, zone = max(options, key=lambda o: (o[0], -o[1].mv))
-        _use_removal(dfn, card, alts, is_spell, step, e, zone, att)
+        _use_removal(dfn, card, alts, is_spell, step, e, zone, att, rc)
         cast_removal(rc, dfn, att, e, step, target=target)
     alive = [a for a in attackers if a in att.creatures and not a.dead and not a.locked]
     for card in sorted([c for c in dfn.hand if c.flash and c.is_creature], key=lambda c: -c.mv):
@@ -1340,7 +1424,7 @@ def end_step_instants(dfn, act, e, step):
             continue
         if rc.removal[3] and choose_target(rc.removal, dfn, act) is None and act.life > _amount(rc.removal, dfn):
             continue  # "any target" am Endstep nur gegen eine Kreatur oder als Lethal
-        _use_removal(dfn, card, alts, is_spell, step, e, zone, act)
+        _use_removal(dfn, card, alts, is_spell, step, e, zone, act, rc)
         cast_removal(rc, dfn, act, e, step)
     for card in sorted([c for c in dfn.hand if c.flash], key=lambda c: -c.mv):
         if card in dfn.hand and legend_ok(dfn, card) and _cast_from_open(dfn, card):
@@ -1349,8 +1433,18 @@ def end_step_instants(dfn, act, e, step):
             if card in dfn.graveyard and not card.is_instant_sorcery:
                 dfn.graveyard.remove(card)
     flashbacks = [c for c in dfn.graveyard if c.flashback and c.is_instant and not c.removal and not _trick_atoms(c)]
-    for card in sorted([c for c in dfn.hand if c.is_instant and not c.removal and not _trick_atoms(c)],
-                       key=lambda c: -c.mv):
+    for card in sorted([c for c in dfn.hand if c.is_instant and c.choices], key=lambda c: -c.mv):
+        if card not in dfn.hand:
+            continue
+        values = [(mode_value(dfn, act, sub, step, end_step=True), i) for i, sub in enumerate(card.choices[1])]
+        best = max(values) if values else ((0,), 0)
+        if best[0] <= (0,) or best[0][0] >= 5:  # Removal und Lethal laufen ueber die Removal-Wege
+            continue
+        if _cast_from_open(dfn, card):
+            e["events"].append(f"{dfn.name}: {card.name} am Ende des Zugs")
+            _resolve(dfn, act, card, step, e, modes=[card.choices[1][best[1]]])
+    for card in sorted([c for c in dfn.hand if c.is_instant and not c.removal and not _trick_atoms(c)
+                        and not c.choices], key=lambda c: -c.mv):
         if card in dfn.hand and reanimate_ok(dfn, card) and _cast_from_open(dfn, card):
             e["events"].append(f"{dfn.name}: {card.name} am Ende des Zugs")
             _resolve(dfn, act, card, step, e)
@@ -1813,6 +1907,8 @@ def combat_etb(me, opp, card, step, chosen=()):
     Surveil, waehrend eine Kreatur auf ein Surveil wartet (Surveillance Phantasm); Removal, das einen Blocker entfernt,
     der einen unserer Angreifer fressen wuerde; Pumps/Marken, wenn Kreaturen angreifen koennen (auch Mabel fuer eine
     Kreatur mit Haste aus diesem Zug, auch eine, die in diesem Zug noch gewirkt wird); Lebensgewinn, der angreifende Engel wachsen laesst (Lyra)."""
+    if card.choices:
+        return any(combat_etb(me, opp, sub, step, chosen) for sub in card.choices[1])
     alive = [c for c in me.creatures if not c.dead]
     attackers = [c for c in alive if can_attack(c, step)]
     waiting = [c for c in alive if c.card.surveil_attack and not c.lifted and not c.tapped and c.power > 0
@@ -2008,7 +2104,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
             continue
         eaters = [t for t in valid_targets(rc.removal, me, opp) if any(_eats(t, a) for a in candidates)]
         if eaters:
-            _use_removal(me, card, alts, is_spell, step, e, zone, opp)
+            _use_removal(me, card, alts, is_spell, step, e, zone, opp, rc)
             me.cast_count += 1 if is_spell else 0
             cast_removal(rc, me, opp, e, step, target=max(eaters, key=danger))
     # Faehigkeiten vor dem Angriff: Marken und Empower mit freiem Mana, Flying/Menace fuer den Angriff
