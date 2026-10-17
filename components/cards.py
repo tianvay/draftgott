@@ -49,6 +49,9 @@ class Card(NamedTuple):
     flash: bool = False        # bleibende Karte mit Flash
     removal: tuple = ()        # Removal im Kampf (removal.removal_spec)
     discard: int = 0           # der Gegner wirft beim Wirken/Betreten Karten ab
+    abilities: tuple = ()      # aktivierbare Faehigkeiten im Kampf (parse_abilities)
+    pump_tough: tuple = ()     # je Modus: Toughness der Pumps ("pump"/"pump_all") in ihrer Reihenfolge (+P/+T)
+    legendary: bool = False    # Legendary im Typ
 
 
 LANDCYCLE_RE = re.compile(
@@ -256,8 +259,8 @@ def _count(word):
     return _EFFECT_NUM.get(word) or int(word)
 
 
-def _effect_atoms(text):
-    """Modellierte Effekte in einem Text (Reihenfolge wie im Text)."""
+def _effect_atoms(text, full=False):
+    """Modellierte Effekte in einem Text (Reihenfolge wie im Text). full: Pumps mit Toughness ("pump", P, T)."""
     found = []
     for m in _FACE_RE.finditer(text):
         found.append((m.start(), ("face", int(m.group(1)))))
@@ -268,9 +271,9 @@ def _effect_atoms(text):
         targets = 2 if ("one or two" in m.group(2) or "up to two" in m.group(2)) else 1
         found.append((m.start(), ("counter", _count(m.group(1)), targets)))
     for m in _PUMP_ALL_RE.finditer(text):
-        found.append((m.start(), ("pump_all", int(m.group(1)))))
+        found.append((m.start(), ("pump_all", int(m.group(1))) + ((int(m.group(2)),) if full else ())))
     for m in _PUMP_RE.finditer(text):
-        found.append((m.start(), ("pump", int(m.group(1)))))
+        found.append((m.start(), ("pump", int(m.group(1))) + ((int(m.group(2)),) if full else ())))
     return [a for _pos, a in sorted(found, key=lambda f: f[0])]
 
 
@@ -286,7 +289,13 @@ def _clean_lines(card):
         yield raw, low
 
 
-def effect_modes(card, type_line):
+def pump_toughness(card, type_line):
+    """Toughness der Pumps je Modus (gleiche Reihenfolge wie effect_modes), () ohne Pumps."""
+    out = tuple(tuple(a[2] for a in m if a[0] in ("pump", "pump_all")) for m in effect_modes(card, type_line, True))
+    return out if any(out) else ()
+
+
+def effect_modes(card, type_line, full=False):
     """Effekte beim Wirken (Instant/Sorcery) bzw. beim Betreten ("When this ... enters,") je Modus.
     Modale Karten ("Choose one" mit Aufzaehlung): ein Modus je Aufzaehlungspunkt mit modellierten Effekten."""
     spell_face = "Instant" in type_line or "Sorcery" in type_line
@@ -296,7 +305,7 @@ def effect_modes(card, type_line):
         body = low.lstrip("•").strip()
         if bullet:
             if spell_face or in_etb:
-                atoms = _effect_atoms(body)
+                atoms = _effect_atoms(body, full)
                 if atoms:
                     bullets.append(atoms)
             continue
@@ -304,12 +313,12 @@ def effect_modes(card, type_line):
         if spell_face:
             if re.match(r"^(when|whenever|at the beginning)\b", body):
                 continue
-            common += _effect_atoms(body)
+            common += _effect_atoms(body, full)
         else:
             m = _ETB_EFFECT_RE.match(body)
             if m:
                 in_etb = True
-                common += _effect_atoms(m.group(1))
+                common += _effect_atoms(m.group(1), full)
     if bullets:
         return tuple(tuple(common + b) for b in bullets)
     return (tuple(common),) if common else ()
@@ -396,6 +405,76 @@ def combat_keywords(card):
         if tokens and all(re.fullmatch(r"[a-z ]{2,20}", t) for t in tokens):
             found |= set(tokens) & set(COMBAT_KEYWORDS)
     return tuple(k for k in COMBAT_KEYWORDS if k in found)
+
+
+_ABILITY_RE = re.compile(r"^((?:\{[^}]+\}|,|\s)+):\s*(.+)$")
+_SELF = r"(?:~|this creature|it)"
+_ABILITY_SUBJECTS = ((re.compile(rf"^{_SELF} "), "self"),
+                     (re.compile(r"^target creature(?: you control)? "), "target"),
+                     (re.compile(r"^creatures you control "), "all"))
+_ABILITY_PUMP_RE = re.compile(r"^(?:gets? \+(\d+)/\+(\d+))?(?:,? and )?(?:gains? ([a-z ,]+?))? until end of turn\.?$")
+_ABILITY_COUNTER_RE = re.compile(r"^put (a|an|one|two|three|\d+) \+1/\+1 counters? on (~|this creature|target creature"
+                                 r"(?: you control)?|target nonlegendary creature|each creature you control with a "
+                                 r"\+1/\+1 counter on it)\.?$")
+_ABILITY_COUNTER_SCOPE = {"~": "self", "this creature": "self", "target creature": "target",
+                          "target creature you control": "target", "target nonlegendary creature": "nonlegendary"}
+_ABILITY_EMPOWER_RE = re.compile(r"^empower jace (\d+)\.?$")
+
+
+def _ability_atoms(body):
+    """Effekte einer aktivierbaren Faehigkeit: ("pump", +P, +T, Ziel), ("grant", Schluesselwoerter, Ziel),
+    ("counter", n, Ziel), ("empower", n). Ziel: self / target / all / nonlegendary / countered. None, wenn der Text
+    nicht vollstaendig modelliert ist."""
+    m = _ABILITY_EMPOWER_RE.match(body)
+    if m:
+        return (("empower", int(m.group(1))),)
+    m = _ABILITY_COUNTER_RE.match(body)
+    if m:
+        scope = _ABILITY_COUNTER_SCOPE.get(m.group(2), "countered")
+        return (("counter", _count(m.group(1)), scope),)
+    for subj, scope in _ABILITY_SUBJECTS:
+        sm = subj.match(body)
+        if not sm:
+            continue
+        m = _ABILITY_PUMP_RE.match(body[sm.end():])
+        if not m or not (m.group(1) or m.group(3)):
+            return None
+        atoms = []
+        if m.group(1):
+            atoms.append(("pump", int(m.group(1)), int(m.group(2)), scope))
+        if m.group(3):
+            kws = tuple(k.strip() for k in re.split(r",\s*(?:and\s+)?|\s+and\s+", m.group(3)) if k.strip())
+            if not all(k in COMBAT_KEYWORDS for k in kws):
+                return None
+            atoms.append(("grant", kws, scope))
+        return tuple(atoms)
+    return None
+
+
+def parse_abilities(card):
+    """Aktivierbare Faehigkeiten der Vorderseite, deren Kosten nur aus Mana und {T} bestehen:
+    ((Zahlungswege, Manawert, Tap, Tempo, Effekte), ...). Tempo: instant / sorcery ("Activate only as a sorcery") /
+    own_turn ("Activate only during your turn"). Mana-Faehigkeiten zaehlen nicht dazu."""
+    out = []
+    for raw, low in _clean_lines(card):
+        m = _ABILITY_RE.match(low)
+        if not m or "add {" in low:
+            continue
+        head = raw.split(":", 1)[0]
+        tap = "{t}" in m.group(1)
+        mana = "".join(re.findall(r"\{[^}]+\}", head.replace("{T}", "")))
+        body = m.group(2).strip()
+        speed = "instant"
+        if "activate only as a sorcery" in body:
+            speed = "sorcery"
+        elif "activate only during your turn" in body:
+            speed = "own_turn"
+        body = re.sub(r"\s*activate only[^.]*\.", "", body).strip()
+        atoms = _ability_atoms(body)
+        if atoms:
+            out.append((cost_alternatives(mana) if mana else ((0, ()),), mana_value(mana) if mana else 0, tap, speed,
+                        atoms))
+    return tuple(out)
 
 
 def prepared_mode(card):
@@ -617,4 +696,6 @@ def card_info(card):
                 modes=modes, landfall=landfall, endstep_counters=endstep, loyalty_counter=loyalty, gy_x=gy_x,
                 kw=combat_keywords(card) if is_creature else (), self_damage=self_damage(card, type_line),
                 is_instant="Instant" in type_line, flash="Instant" not in type_line and has_flash(card),
-                removal=removal_spec(card), discard=discard_count(card)), shown
+                removal=removal_spec(card), discard=discard_count(card),
+                abilities=parse_abilities(card) if not ("Instant" in type_line or "Sorcery" in type_line) else (),
+                pump_tough=pump_toughness(card, type_line), legendary="Legendary" in type_line), shown

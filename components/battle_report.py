@@ -46,9 +46,29 @@ RULES = [
     "in den Friedhof; „damage to each player“ trifft auch den Spieler selbst.",
     "Spielende: 0 Lebenspunkte, Ziehen aus leerer Bibliothek oder Aufgabe durch Mulligan. Nach der Rundengrenze "
     "(<code>--kampf-runden</code>, Standard 20 eigene Züge) ist es unentschieden.",
-    "Noch nicht im Kampf: Jace, Prepared, Landcycling, Surveil, Treasure, Fähigkeiten mit Kosten (z. B. Sureshot "
-    "Sower) und Auslöser außer beim Betreten. Solche Karten werden gewirkt, wirken aber nur mit den schon modellierten "
-    "Effekten.",
+    "Surveil durch Karten und Länder wie im Goldfish (Land bleibt oben, solange Länder für die teuerste Handkarte "
+    "fehlen). Prepared: Die Kopie ist wie eine Handkarte nur in der eigenen Main Phase spielbar; Upkeep-Karten werden "
+    "zu Beginn des Zugs wieder prepared.",
+    "Treasure: im eigenen Zug nur, wenn er mehr Zauber ermöglicht; im Zug des Gegners für Instants und Flash nur, wenn "
+    "das offene Mana nicht reicht.",
+    "Jace (Empower): Loyalty aus Zaubern, Betreten, Auslösern und Fähigkeiten (siehe unten). Zu Beginn des Zugs ab 3 "
+    "Loyalty −3: Karte ziehen; nach Main 2 ab 3 ziehen, sonst −1: Surveil 1. Jace wird nicht angegriffen.",
+    "Fähigkeiten mit Kosten (nur Mana und {T}): „Activate only as a sorcery“ nur in der eigenen Main Phase, „only "
+    "during your turn“ nur im eigenen Zug, sonst jederzeit. Freies Mana: Mana, nach dessen Einsatz jede bezahlbare "
+    "Instant-, Flash- oder Landcycling-Karte der Hand bezahlbar bleibt.",
+    "Pumps und verliehene Schlüsselwörter bis Rundenende: als Angreifer nach den Blockern bei Lethal (auch mit Treasure), "
+    "sonst mit freiem Mana, wenn der Kampf besser wird (mehr Schaden, Kreatur überlebt, Blocker stirbt); Flying und "
+    "Menace schon vor dem Angriff, wenn dadurch mehr durchkommt. Als Verteidiger vor und nach den Blockern, wenn der "
+    "Block besser wird (z. B. Reach gegen einen Flieger).",
+    "+1/+1-Marken und Empower durch Fähigkeiten: im eigenen Zug vor dem Angriff mit freiem Mana, sonst mit dem Rest am "
+    "Ende des gegnerischen Zugs (nach Instants, Flash und Landcycling, ohne Treasure); Marken vor Empower, auf die "
+    "stärkste passende Kreatur.",
+    "Landcycling: Fehlt bis Runde 3 im eigenen Zug ein Land für den Landdrop, wird sofort gecycelt. Sonst am Ende des "
+    "gegnerischen Zugs mit dem offenen Mana, das Instants und Flash übrig lassen (bis 6 Länder auf Feld und Hand, nicht "
+    "die letzte Handkarte, nicht wenn die Karte nächste Runde spielbar ist).",
+    "Noch nicht im Kampf: Fähigkeiten mit weiteren Kosten (Opfern, Abwerfen, aus dem Friedhof, z. B. Sureshot Sower), "
+    "Fähigkeiten mit anderen Effekten (Token, Zurückholen) und Auslöser außer beim Betreten. Solche Karten werden "
+    "gewirkt, wirken aber nur mit den schon modellierten Effekten.",
 ]
 
 CSS = """
