@@ -98,6 +98,9 @@ RULES = [
     "Weitere Effekte: Schaden je Angreifer beim Angriff (Ingris Stingerquill), Leben beim Betreten, Sterben und Wirken "
     "(Apex Witchstalker, Extended Absence; Schaden und Leben von Instants auch im Zug des Gegners), Prowess. "
     "Zusatzkosten „sacrifice … or pay {N}“ zahlen wir immer mit Mana (Silence the Echo: {3} mehr).",
+    "Legend-Regel: je Spieler nur ein legendäres Permanent gleichen Namens (die stärkere Kreatur bleibt); ein zweites "
+    "Exemplar wird nicht gewirkt. Handlimit: am Ende des eigenen Zugs auf 7 Karten abwerfen. Winter: wir opfern "
+    "unsere schwächste andere Kreatur, nur wenn der Gegner eine Kreatur hat; er opfert seine schwächste.",
     "Noch nicht im Kampf: Fähigkeiten mit Opfern als Kosten (z. B. Edgar, Ancient Bloodlord) und weitere Auslöser. "
     "Solche Karten werden gewirkt, wirken aber nur mit den schon modellierten Effekten.",
 ]

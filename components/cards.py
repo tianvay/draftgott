@@ -84,6 +84,8 @@ class Card(NamedTuple):
     spell_life: int = 0        # N Leben beim Wirken (Instant/Sorcery)
     extra_cost: int = 0        # Zusatzkosten {N} ("sacrifice ... or pay {N}": wir zahlen immer)
     prowess: bool = False      # +1/+1 bis Rundenende bei jedem eigenen Nichtkreatur-Zauber
+    edict_cost: bool = False   # Edikt nur, wenn wir selbst eine Kreatur opfern (Winter, Tormented Loner)
+    gy_power: tuple = ()       # +1/+0 je Karte dieser Typen im eigenen Friedhof, z. B. ("creature", "planeswalker")
 
 
 LANDCYCLE_RE = re.compile(
@@ -690,6 +692,11 @@ _ATTACK_PING_RE = re.compile(r"^whenever a creature you control attacks, that cr
 _ETB_DEATH_LIFE_RE = re.compile(r"^when (?:~|this creature) (enters or dies|enters|dies), you gain (a|one|two|three|\d+) "
                                 r"life\.?$")
 _SPELL_LIFE_RE = re.compile(r"\byou gain (a|one|two|three|\d+) life\b")
+_EDICT_COST_RE = re.compile(r"^when (?:~|this creature) enters, you may sacrifice an? (?:creature|creature or "
+                            r"planeswalker)\. when you do, each opponent sacrifices")
+_GY_POWER_RE = re.compile(r"^(?:~|this creature) gets \+1/\+0 for each ((?:creature|planeswalker|artifact|land|instant|"
+                          r"sorcery)(?: and (?:creature|planeswalker|artifact|land|instant|sorcery))*) cards? in your "
+                          r"graveyard")
 _EXTRA_COST_RE = re.compile(r"^as an additional cost to cast this spell, [^.]*\bpay \{(\d+)\}")
 
 
@@ -717,6 +724,11 @@ def life_and_costs(card, type_line, keywords):
         m = _EXTRA_COST_RE.match(low)
         if m:
             out["extra_cost"] = int(m.group(1))
+        if _EDICT_COST_RE.match(low):
+            out["edict_cost"] = True
+        m = _GY_POWER_RE.match(low)
+        if m:
+            out["gy_power"] = tuple(m.group(1).split(" and "))
     return out
 
 

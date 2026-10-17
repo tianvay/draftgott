@@ -30,10 +30,14 @@ CYCLE_TURNS = 3  # eigener Zug: fehlt bis Runde 3 ein Land fuer den Landdrop, wi
 CYCLE_CAP = 6    # Ende des gegnerischen Zugs: nur cyceln, solange Laender auf Feld und Hand unter 6 liegen
 
 
+_GY_TYPES = {"creature": "is_creature", "planeswalker": "is_planeswalker", "artifact": "is_artifact",
+             "land": "is_land", "instant": "is_instant", "sorcery": "is_instant_sorcery"}
+
+
 class Creature:
     """Eine Kreatur auf dem Feld (Karte, Schritt des Eintritts, getappt, Schaden, Marken, Pump)."""
     __slots__ = ("card", "entered", "tapped", "damage", "bonus", "pump", "dead", "touched", "locked", "prepared",
-                 "tpump", "extra", "lifted", "owner", "at_jace")
+                 "tpump", "extra", "lifted", "owner", "at_jace", "gy")
 
     def __init__(self, card, entered=0):
         self.card = card
@@ -51,10 +55,14 @@ class Creature:
         self.lifted = False   # Defender gilt in diesem Zug nicht (Surveillance Phantasm nach einem Surveil)
         self.owner = None     # Besitzer, wenn nicht der Kontrolleur (aus dem Exil gewirkt, Null Summoner)
         self.at_jace = False  # greift in diesem Kampf den Jace-Token an statt den Spieler
+        self.gy = None        # Friedhof des Kontrolleurs (Power nach Karten im Friedhof, Winter)
 
     @property
     def power(self):
-        return self.card.power + self.bonus + self.pump
+        base = self.card.power + self.bonus + self.pump
+        if self.card.gy_power and self.gy is not None:
+            base += sum(1 for g in self.gy if any(getattr(g, _GY_TYPES[t], False) for t in self.card.gy_power))
+        return base
 
     @property
     def toughness(self):
@@ -70,6 +78,7 @@ class Creature:
             setattr(c, attr, getattr(self, attr))
         c.extra = set(self.extra)
         c.owner = self.owner
+        c.gy = self.gy
         return c
 
     def label(self):
@@ -596,6 +605,7 @@ def creature_enters(p, new, step, e, opp=None, cast=True):
     Tethermage), Mill und Land zurueck (Primal Witchstalker), Exil aus der Hand des Gegners (Null Summoner, nur wenn
     gewirkt)."""
     card = new.card
+    new.gy = p.graveyard
     gain_life(p, card.etb_life)
     if card.land_to_tokens and p.lands:
         n, token = card.land_to_tokens
@@ -728,8 +738,43 @@ def _cycle_event(p, cycler, cand, e, when):
     e["events"].append(f"{p.name}: Landcycling {cycler.name} → {cand.name} ({when})")
 
 
+def legend_rule(p, e):
+    """704.5j: je Spieler nur ein legendaeres Permanent gleichen Namens. Behalten wird die staerkere Kreatur (bei
+    Gleichstand die aeltere) bzw. das erste Permanent; die anderen kommen in den Friedhof."""
+    groups = {}
+    for c in p.creatures:
+        if c.card.legendary and not c.dead:
+            groups.setdefault(c.card.name, []).append(c)
+    for same in groups.values():
+        if len(same) > 1:
+            keep = max(same, key=lambda c: (c.power + c.toughness - c.damage, -c.entered))
+            for c in same:
+                if c is not keep:
+                    c.dead = True
+                    e["events"].append(f"{p.name}: Legend-Regel – {c.card.name} in den Friedhof")
+    seen = set()
+    for card in list(p.perms):
+        if card.legendary:
+            if card.name in seen:
+                p.perms.remove(card)
+                if not card.is_token:
+                    p.graveyard.append(card)
+                e["events"].append(f"{p.name}: Legend-Regel – {card.name} in den Friedhof")
+            seen.add(card.name)
+
+
+def legend_ok(p, card):
+    """Ein weiteres legendaeres Permanent gleichen Namens wuerde sofort wieder sterben: dann nicht wirken."""
+    if not card.legendary or card.is_instant_sorcery:
+        return True
+    return not (any(c.card.name == card.name and not c.dead for c in p.creatures)
+                or any(c.name == card.name for c in p.perms))
+
+
 def bury(players, e):
-    """Gestorbene Kreaturen in den Friedhof (Schaden, Deathtouch, Toughness 0)."""
+    """Gestorbene Kreaturen in den Friedhof (Schaden, Deathtouch, Toughness 0) und Legend-Regel."""
+    for p in players:
+        legend_rule(p, e)
     for p in players:
         for c in list(p.creatures):
             if c.dead or c.toughness <= 0 or c.damage >= c.toughness or (c.touched and c.damage > 0):
@@ -861,7 +906,7 @@ def _resolve(me, opp, card, step, entry, owner=None):
     if card.self_damage:  # "damage to each player" trifft auch uns
         me.life -= card.self_damage
     effects = card
-    if card.removal:
+    if card.removal and _edict_paid(me, opp, card, entry):
         cast_removal(card, me, opp, entry, step)
         if card.removal[3]:  # any target: der Schaden ist schon verteilt
             effects = card._replace(modes=tuple(tuple(a for a in m if a[0] != "face") for m in card.modes))
@@ -910,11 +955,27 @@ def _tough_ratio(card):
     return 1.0
 
 
+def _edict_paid(me, opp, card, e):
+    """Winter: "you may sacrifice a creature ... When you do, each opponent sacrifices". Wir opfern unsere schwaechste
+    andere Kreatur, aber nur, wenn der Gegner eine Kreatur hat; sonst entfaellt das Edikt."""
+    if not card.edict_cost:
+        return True
+    source = me.creatures[-1] if card.is_creature and me.creatures and me.creatures[-1].card == card else None
+    others = [c for c in me.creatures if not c.dead and c is not source]
+    if not others or not any(not c.dead for c in opp.creatures):
+        return False
+    pick = min(others, key=_value)
+    pick.dead = True
+    e["events"].append(f"{me.name}: opfert {pick.card.name} für {card.name}")
+    bury((me,), e)
+    return True
+
+
 def main_phase_spells(me, opp):
     """Karten fuer die Main Phases: keine Instants, keine Flash-Karten, Removal nur mit gueltigem Ziel; dazu die
     Kopien der Prepared-Kreaturen."""
     cards = [c for c in me.hand if not c.is_land] + copies(me)
-    return [c for c in cards if not c.is_instant and not c.flash
+    return [c for c in cards if not c.is_instant and not c.flash and legend_ok(me, c)
             and (not c.removal or c.removal[4] == "etb" or has_target(c, me, opp))]
 
 
@@ -1071,7 +1132,7 @@ def respond_to_attack(dfn, att, attackers, e, step):
         cast_removal(rc, dfn, att, e, step, target=target)
     alive = [a for a in attackers if a in att.creatures and not a.dead and not a.locked]
     for card in sorted([c for c in dfn.hand if c.flash and c.is_creature], key=lambda c: -c.mv):
-        if not affordable(dfn, card):
+        if not affordable(dfn, card) or not legend_ok(dfn, card):
             continue
         new = Creature(card, step)
         blockers = [b for b in dfn.creatures if not b.tapped and not b.dead]
@@ -1100,7 +1161,7 @@ def end_step_instants(dfn, act, e, step):
         _use_removal(dfn, card, alts, is_spell, step, e, zone, act)
         cast_removal(rc, dfn, act, e, step)
     for card in sorted([c for c in dfn.hand if c.flash], key=lambda c: -c.mv):
-        if card in dfn.hand and _cast_from_open(dfn, card):
+        if card in dfn.hand and legend_ok(dfn, card) and _cast_from_open(dfn, card):
             e["events"].append(f"{dfn.name}: {card.name} mit Flash am Ende des Zugs")
             _resolve(dfn, act, card, step, e)
             if card in dfn.graveyard and not card.is_instant_sorcery:
@@ -1743,8 +1804,18 @@ def take_turn(me, opp, step, rnd, skip_draw):
                 e["events"].append(f"{p_.name}: opfert {c.card.name}")
     bury((me, opp), e)
     end_step_instants(opp, me, e, step)
+    hand_limit(me, e)
     cleanup((me, opp))
     return e
+
+
+def hand_limit(p, e, size=7):
+    """514.1: am Ende des eigenen Zugs auf die Handgroesse abwerfen (Auswahl wie beim Abwerfen)."""
+    while len(p.hand) > size:
+        card = choose_discard(p)
+        p.hand.remove(card)
+        p.graveyard.append(card)
+        e["events"].append(f"{p.name}: Handlimit – wirft {card.name} ab")
 
 
 def cleanup(players):
