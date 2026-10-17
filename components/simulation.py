@@ -183,16 +183,101 @@ def resolve_draws(hand, library, chosen, pool, battlefield, land_played, has_cre
             "mana_added": mana_added}
 
 
-def apply_surveils(amounts, library, hand, battlefield):
+def apply_surveils(amounts, library, hand, battlefield, graveyard=None):
     """Surveil durch Karten: je Quelle Surveil N nacheinander (Entscheidung wie bei Jace, siehe jace.surveil).
-    Gibt (Zahl der Surveils, abgelegte Laender) zurueck; ein Surveil mit leerer Bibliothek zaehlt nicht."""
+    Gibt (Zahl der Surveils, abgelegte Laender) zurueck; ein Surveil mit leerer Bibliothek zaehlt nicht.
+    graveyard: Liste, in die die abgelegten Karten kommen (Friedhof der Simulation)."""
     events = lands = 0
     for n in amounts:
         if not library or n <= 0:
             continue
         events += 1
-        lands += sum(c.is_land for c in surveil(library, n, hand, battlefield))
+        binned = surveil(library, n, hand, battlefield)
+        lands += sum(c.is_land for c in binned)
+        if graveyard is not None:
+            graveyard.extend(binned)
     return events, lands
+
+
+def _attacks(entry, turn):
+    card, t_in = entry
+    return not card.defender and (t_in < turn or card.haste)
+
+
+def _power(board, bonus, pump, i):
+    return board[i][0].power + bonus[i] + pump.get(i, 0)
+
+
+def _ranked(board, bonus, pump, turn, attackers_only):
+    """Indizes der Kreaturen, staerkste zuerst; Angreifer dieser Runde vor den uebrigen."""
+    idx = [i for i in range(len(board)) if not attackers_only or _attacks(board[i], turn)]
+    return sorted(idx, key=lambda i: (not _attacks(board[i], turn), -_power(board, bonus, pump, i), i))
+
+
+def _run_mode(mode, board, bonus, pump, turn):
+    """Wendet einen Modus an (veraendert bonus und pump). Gibt (Schaden in dieser Runde, Schaden an den Gegner,
+    gelegte Marken) zurueck."""
+    gain = face = counters = 0
+    for atom in mode:
+        kind = atom[0]
+        if kind == "face":
+            face += atom[1]
+        elif kind == "counter":
+            for i in _ranked(board, bonus, pump, turn, False)[:atom[2]]:
+                bonus[i] += atom[1]
+                counters += atom[1]
+                gain += atom[1] if _attacks(board[i], turn) else 0
+        elif kind == "counter_all":
+            for i in range(len(board)):
+                bonus[i] += atom[1]
+                counters += atom[1]
+                gain += atom[1] if _attacks(board[i], turn) else 0
+        elif kind == "pump":
+            best = _ranked(board, bonus, pump, turn, True)[:1]
+            for i in best:
+                pump[i] = pump.get(i, 0) + atom[1]
+                gain += atom[1]
+        elif kind == "pump_all":
+            for i in _ranked(board, bonus, pump, turn, True):
+                pump[i] = pump.get(i, 0) + atom[1]
+                gain += atom[1]
+    return gain, face, counters
+
+
+def apply_effects(card, board, bonus, pump, turn):
+    """Effekte einer gewirkten Karte (Card.modes): Schaden an den Gegner, +1/+1-Marken (dauerhaft, bonus) und
+    Pumps bis Rundenende (pump). Ziel ist die staerkste Kreatur, die in dieser Runde angreift; dauerhafte Marken ohne
+    Angreifer gehen an die staerkste Kreatur, Pumps ohne Angreifer verpuffen. Modale Karten: der Modus mit dem meisten
+    Schaden in dieser Runde, bei Gleichstand der mit dauerhaften Marken.
+    Gibt {"damage": zusaetzlicher Angriffsschaden, "face": Schaden an den Gegner, "counters": gelegte Marken} zurueck."""
+    if not card.modes:
+        return {"damage": 0, "face": 0, "counters": 0}
+    best = None
+    for k, mode in enumerate(card.modes):
+        b, p = list(bonus), dict(pump)
+        gain, face, counters = _run_mode(mode, board, b, p, turn)
+        key = (gain + face, counters, -k)
+        if best is None or key > best[0]:
+            best = (key, mode)
+    gain, face, counters = _run_mode(best[1], board, bonus, pump, turn)
+    return {"damage": gain, "face": face, "counters": counters}
+
+
+def landfall_effects(land, board, bonus, turn, with_mana=True):
+    """Landfall der Kreaturen auf dem Feld (Card.landfall): Schaden an den Gegner, Mana (Mountain, nur wenn with_mana)
+    und Marken bei bestimmten Landtypen. Gibt (Schaden an den Gegner, [Farbtupel], Marken) zurueck."""
+    face, mana, counters = 0, [], 0
+    for c, _t in list(board):
+        for atom in c.landfall:
+            if atom[0] == "face":
+                face += atom[1]
+            elif atom[0] == "mountain_mana" and with_mana and "mountain" in land.land_types:
+                mana.append((atom[1],))
+            elif atom[0] == "type_counter" and atom[1] in land.land_types:
+                for i in _ranked(board, bonus, {}, turn, False)[:1]:
+                    bonus[i] += atom[2]
+                    counters += atom[2]
+    return face, mana, counters
 
 
 def choose_land(hand, spells, pool, battlefield, walker_bf, jace_bf, has_creature, auras_need_creature):
@@ -361,9 +446,11 @@ def plan_cycle(cycler, pool, spells, battlefield, library, hand_lands, land_open
     return best[1], best[2]
 
 
-def do_cycle(hand, library, cycler, cand):
-    """Fuehrt das Landcycling aus: Karte weg, Land aus dem Deck auf die Hand, Deck mischen.
-    Gibt die Chance auf ein Nicht-Land im naechsten Zug vor und nach dem Cycling zurueck."""
+def do_cycle(hand, library, cycler, cand, graveyard=None):
+    """Fuehrt das Landcycling aus: Karte weg (in den Friedhof, falls graveyard), Land aus dem Deck auf die Hand, Deck
+    mischen. Gibt die Chance auf ein Nicht-Land im naechsten Zug vor und nach dem Cycling zurueck."""
+    if graveyard is not None:
+        graveyard.append(cycler)
     n = len(library)
     lands = sum(c.is_land for c in library)
     p_before = (n - lands) / n if n else 0.0
@@ -388,14 +475,16 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
              jace_on=True, color_check=None, track=None):
     """track: Kartennamen, deren Spielbarkeit gemessen wird (Splash-Karten): erstmals auf der Hand, erstmals bezahlbar
     (nach dem Landdrop), gewirkt. Die Messung veraendert den Spielablauf nicht.
-    color_check: {"colors": [...], "double": [...]} misst, wie oft bis Runde 3 jede Deckfarbe mindestens eine
-    Quelle hat und bis Runde 4 die Farben mit Doppel-Symbolen mindestens zwei (Laender auf dem Feld, auch getappt).
-    Die Messung veraendert den Spielablauf nicht."""
+    color_check: {"colors": [...], "checks": [{"color", "k", "turn", "cards"}]} misst, wie oft bis Runde 3 jede
+    Deckfarbe mindestens eine Quelle hat und fuer jede Pruefung (siehe mana.pip_checks) bis zu ihrer Runde mindestens k
+    Quellen der Farbe. Quellen: Laender auf dem Feld (auch getappt) und Manaquellen, die in der Runde Mana liefern
+    (Kreaturen ab der Folgerunde, Artefakte sofort); Treasure zaehlen nicht. Die Messung veraendert den Spielablauf
+    nicht."""
     cast_in_turn = {t: 0 for t in range(1, max_turn + 1)}
     cc_colors = list(color_check["colors"]) if color_check else []
-    cc_double = list(color_check["double"]) if color_check else []
+    cc_checks = [dict(ch, ok=0) for ch in (color_check.get("checks") or [])] if color_check else []
+    cc_turns = {3} | {ch["turn"] for ch in cc_checks}
     cc_t3 = {c: 0 for c in cc_colors}
-    cc_t4 = {c: 0 for c in cc_double}
     cc_all = 0
     opener_lands = n_creatures = power = toughness = 0
     land_screw = color_screw = any_screw = 0
@@ -419,6 +508,10 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
     has_surveil = any(c.surveil for c in cards)
     has_prepared = any(c.prepared for c in cards)
     has_ramp = any(c.mana_src or c.treasure for c in cards)
+    ef = {"face": 0, "counters": 0, "pump": 0}
+    GY_TURNS = (3, 5, 8)
+    gys = {"size": {t: 0 for t in GY_TURNS}, "max_mv": {t: 0 for t in GY_TURNS}, "n": {t: 0 for t in GY_TURNS},
+           "x": []}
     rp = {"games": 0, "first": [], "extra": {t: 0 for t in range(1, curve_turns + 1)}, "held": 0, "made": 0,
           "used": 0}
     track = set(track or ())
@@ -461,6 +554,9 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
         g_drawn = g_surveils = g_copies = 0
         mana_perms, treasures, ramp_first = [], 0, None  # Manaquellen auf dem Feld (Karte, Runde), Treasure-Token
         prep = []  # Prepared-Kreaturen auf dem Feld: [Karte, prepared?]
+        bonus = []  # dauerhafte +1/+1-Marken je Kreatur auf dem Feld (gleiche Reihenfolge wie board)
+        gy = []     # Friedhof: gewirkte Instants/Sorceries, gelandcycelte Karten, durch Surveil abgelegte Karten
+        jst.graveyard = gy
         t_hand, t_ok, t_cast = {}, {}, set()  # Splash-Karten: erste Runde auf der Hand / bezahlbar, gewirkt
 
         for turn in range(1, horizon + 1):
@@ -471,6 +567,8 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                 drew = library.pop(0)
                 hand.append(drew)
             jst.used = False
+            events0 = jst.events
+            pump, face_now, landfall_done = {}, 0, False
             for p_ in prep:  # Upkeep: "if this creature isn't prepared, it becomes prepared"
                 if p_[0].prepared[0] in ("upkeep", "both"):
                     p_[1] = True
@@ -506,7 +604,7 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                                       True, has_creature, auras_need_creature)
                     if plan:
                         rem, cand = plan
-                        pb, pa = do_cycle(hand, library, cycler, cand)
+                        pb, pa = do_cycle(hand, library, cycler, cand, graveyard=gy)
                         game_events.append((turn, "Land fehlt", cycler.name, pb, pa))
                         cycled_log.append((cycler, "Land fehlt"))
                         cycle_spent += cycler.cycle_mv
@@ -527,6 +625,13 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                     pool = pool + [land_played.land_colors]
                     if land_played.land_colors:
                         avail_total += 1
+                if board:  # Landfall (z. B. Koth): Schaden, Mana bei Mountain, Marken
+                    f_, mana_, c_ = landfall_effects(land_played, board, bonus, turn)
+                    face_now += f_
+                    ef["counters"] += c_
+                    pool = pool + mana_
+                    avail_total += len(mana_)
+                landfall_done = True
             key = land_key(pool)
             full_key = land_key([c.land_colors for c in battlefield])
 
@@ -580,7 +685,7 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                         if not plan:
                             continue
                         rem, cand = plan
-                        pb, pa = do_cycle(hand, library, cycler, cand)
+                        pb, pa = do_cycle(hand, library, cycler, cand, graveyard=gy)
                         game_events.append((turn, "Karte nicht spielbar", cycler.name, pb, pa))
                         cycled_log.append((cycler, "Karte nicht spielbar"))
                         cycle_spent += cycler.cycle_mv
@@ -639,6 +744,11 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                 hand.remove(c)
                 if c.is_creature:
                     board.append((c, turn))
+                    bonus.append(0)
+                if c.is_instant_sorcery:
+                    gy.append(c)  # gewirkte Instants und Sorceries kommen in den Friedhof
+                if c.gy_x:  # Hapatra: hoechster Manawert im Friedhof
+                    gys["x"].append(max((g.mv for g in gy), default=0))
                 if c.is_planeswalker:
                     walkers.append(c)
                 if c.prepared:
@@ -663,10 +773,19 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
             if has_surveil:  # nach dem Zaubern: erst das Land, dann die Zauber in der Reihenfolge des Wirkens
                 amounts = ([land_played.surveil] if land_played is not None else []) + [c.surveil for c in chosen]
                 if any(amounts):
-                    ev, binned = apply_surveils([a for a in amounts if a], library, hand, battlefield)
+                    ev, binned = apply_surveils([a for a in amounts if a], library, hand, battlefield, graveyard=gy)
                     g_surveils += ev
                     sv["events"] += ev
                     sv["lands"] += binned
+            if land_played is not None and not landfall_done and board:  # Land aus Landcycling oder Draw
+                f_, _mana, c_ = landfall_effects(land_played, board, bonus, turn, with_mana=False)
+                face_now += f_
+                ef["counters"] += c_
+            for c in chosen:  # Schaden an den Gegner, Marken und Pumps beim Wirken bzw. Betreten
+                if c.modes:
+                    g_ = apply_effects(c, board, bonus, pump, turn)
+                    face_now += g_["face"]
+                    ef["counters"] += g_["counters"]
             if has_jace:
                 for c in sorted(chosen, key=lambda x: (not recurring_effects(x), x.mv)):
                     for pc, _t in perms:
@@ -730,13 +849,25 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                     held[mana_perms[i]] += 1
                     if not mana_perms[i][0].defender and mana_perms[i][0].power > 0:
                         rp["held"] += 1
-            attackers = [(c, t) for c, t in board if not c.defender and (t < turn or c.haste)]
-            turn_dmg = 0
-            for c, t in attackers:
+            for i, (c, _t) in enumerate(board):  # Marken bei Loyalty (Inspired Tethermage)
+                if c.loyalty_counter and jst.events > events0:
+                    bonus[i] += c.loyalty_counter * (jst.events - events0)
+                    ef["counters"] += c.loyalty_counter * (jst.events - events0)
+            turn_dmg = face_now
+            ef["face"] += face_now
+            for i, (c, t) in enumerate(board):
+                if not _attacks((c, t), turn):
+                    continue
                 if held[(c, t)]:
                     held[(c, t)] -= 1
                     continue
-                turn_dmg += c.power
+                turn_dmg += max(0, _power(board, bonus, pump, i))
+                ef["pump"] += pump.get(i, 0)
+            if not chosen:  # Rundenende ohne Zauber: Marken (Edgar)
+                for i, (c, _t) in enumerate(board):
+                    if c.endstep_counters:
+                        bonus[i] += c.endstep_counters
+                        ef["counters"] += c.endstep_counters
             dmg_total += turn_dmg
             log.append((turn, drew, land_played, tapped_now, chosen, turn_dmg, dmg_total, cycled_log,
                         (jst.gained - turn_gain0, jst.acts - turn_acts0, jst.loyalty, drawn_now)))
@@ -756,16 +887,19 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                 empty_spells.append(turn)
                 spells_done = True
 
-            if color_check and turn in (3, 4):  # Farbverfuegbarkeit nach dem Landdrop
+            if color_check and turn in cc_turns:  # Farbverfuegbarkeit: Laender und Manaquellen dieser Runde
                 sources = Counter(col for land in battlefield for col in set(land.land_colors))
+                for u, _i in (mana_units(mana_perms, turn) if has_ramp else []):
+                    for col in set(u):
+                        sources[col] += 1
                 if turn == 3:
                     ok = [c for c in cc_colors if sources[c] >= 1]
                     for c in ok:
                         cc_t3[c] += 1
                     cc_all += len(ok) == len(cc_colors)
-                else:
-                    for c in cc_double:
-                        cc_t4[c] += sources[c] >= 2
+                for ch in cc_checks:
+                    if ch["turn"] == turn:
+                        ch["ok"] += sources[ch["color"]] >= ch["k"]
 
             if turn == max_turn:  # Momentaufnahme fuer Kreaturen und Screw
                 short = len(battlefield) < max_turn
@@ -773,10 +907,15 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                 land_screw += short
                 color_screw += no_colors
                 any_screw += (short or no_colors)
-                n_creatures += len(board)
-                power += sum(c.power for c, _ in board)
-                toughness += sum(c.toughness for c, _ in board)
-                snap = (len(board), sum(c.power for c, _ in board), sum(c.toughness for c, _ in board))
+                n_creatures += len(board)  # Power/Toughness mit dauerhaften +1/+1-Marken
+                power += sum(c.power for c, _ in board) + sum(bonus)
+                toughness += sum(c.toughness for c, _ in board) + sum(bonus)
+                snap = (len(board), sum(c.power for c, _ in board) + sum(bonus),
+                        sum(c.toughness for c, _ in board) + sum(bonus))
+            if turn in GY_TURNS:
+                gys["n"][turn] += 1
+                gys["size"][turn] += len(gy)
+                gys["max_mv"][turn] += max((g.mv for g in gy), default=0)
 
         if has_jace:
             a_win = acts_empty if acts_empty is not None else jst.acts
@@ -834,8 +973,8 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
 
     extra = {}
     if color_check:
-        extra["color_avail"] = {"colors": cc_colors, "double": cc_double, "t3": cc_t3, "t3_all": cc_all,
-                                "t4_double": cc_t4, "games": sims, "t4_measured": horizon >= 4}
+        extra["color_avail"] = {"colors": cc_colors, "t3": cc_t3, "t3_all": cc_all, "games": sims,
+                                "checks": [dict(ch, measured=horizon >= ch["turn"]) for ch in cc_checks]}
     return {
         **extra,
         "cast": cast_in_turn,
@@ -851,6 +990,13 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
         "mulligan": mull,
         "jace": jc,
         "splash_cards": sc_stats,
+        "effects": {k: v / sims for k, v in ef.items()},
+        "graveyard": {"size": {t: gys["size"][t] / gys["n"][t] if gys["n"][t] else 0.0 for t in GY_TURNS},
+                      "max_mv": {t: gys["max_mv"][t] / gys["n"][t] if gys["n"][t] else 0.0 for t in GY_TURNS},
+                      "hapatra_n": len(gys["x"]),
+                      "hapatra_x_avg": sum(gys["x"]) / len(gys["x"]) if gys["x"] else 0.0,
+                      "x_ge3": sum(x >= 3 for x in gys["x"]) / len(gys["x"]) if gys["x"] else 0.0,
+                      "x_ge5": sum(x >= 5 for x in gys["x"]) / len(gys["x"]) if gys["x"] else 0.0},
         "ramp": {"on": has_ramp, "games": rp["games"] / sims,
                  "first_avg": sum(rp["first"]) / len(rp["first"]) if rp["first"] else None,
                  "extra": {t: v / sims for t, v in rp["extra"].items()}, "held_back": rp["held"] / sims,

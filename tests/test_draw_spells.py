@@ -93,8 +93,8 @@ class DrawCoverageTests(unittest.TestCase):
         self.assertEqual(self.cats("When this creature enters, draw a card.", f"Creature {DASH} Test"), set())
 
     def test_the_rest_of_the_line_is_still_checked(self):
-        self.assertEqual(self.cats("Draw two cards. Test Draw deals 2 damage to each player."),
-                         {("Direkter Schaden", M_LETHAL)})
+        self.assertEqual(self.cats("Draw two cards. Test Draw deals 2 damage to target creature."),
+                         {("Interaktion mit dem Gegner", "keine (Gegner ist nicht Teil des Modells)")})
 
     def test_twinned_vision_only_flashback_remains(self):
         found = self.cats("Draw a card. If this spell wasn't cast from your hand, draw two cards instead.\n"

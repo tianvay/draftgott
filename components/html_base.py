@@ -92,6 +92,11 @@ nav a.back{color:var(--text);font-weight:650;margin-bottom:8px}
   background:var(--chip);color:var(--text);cursor:pointer}
 .grpbar button.on{background:var(--text);color:var(--bg);border-color:var(--text)}
 .js .grp:not(.on),.js .grpnav:not(.on){display:none}
+.gsw{display:none;float:right;gap:4px;flex-wrap:wrap;font-weight:400;margin-left:12px}
+.js .gsw{display:inline-flex}
+.gsw button{font:inherit;font-size:12px;padding:2px 10px;border-radius:999px;border:1px solid var(--line);
+  background:var(--panel);color:var(--muted);cursor:pointer}
+.gsw button.on{background:var(--text);color:var(--bg);border-color:var(--text)}
 .grp>h2.gh{margin:22px 0 0;padding:0;font-size:20px}
 .tag{display:inline-block;background:var(--chip);border:1px solid var(--line);border-radius:6px;padding:0 7px;margin:1px 3px 1px 0;font-size:12px;color:var(--muted)}
 .bar{background:var(--track);border-radius:999px;height:9px;min-width:70px;overflow:hidden}

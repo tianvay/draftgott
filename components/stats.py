@@ -88,16 +88,23 @@ def compare_metrics(decks, args, label):
     if any(avail(d) and avail(d)["colors"] for d in decks):
         rows.append(("Alle Farben bis Runde 3", "prop", True, [
             prop(avail(d)["t3_all"], avail(d)["games"]) if avail(d) and avail(d)["colors"] else None for d in decks]))
-    doubles = []
+    keys = []
     for d in decks:
-        for c in (avail(d) or {}).get("double", []):
-            if c not in doubles:
-                doubles.append(c)
+        for ch in (avail(d) or {}).get("checks", []):
+            key = (ch["color"], ch["k"], ch["turn"])
+            if key not in keys:
+                keys.append(key)
     names = {"W": "Weiß", "U": "Blau", "B": "Schwarz", "R": "Rot", "G": "Grün"}
-    for c in sorted(doubles, key="WUBRG".index):
-        rows.append((f"≥ 2 Quellen {names[c]} bis Runde 4", "prop", True, [
-            prop(avail(d)["t4_double"][c], avail(d)["games"])
-            if avail(d) and c in avail(d)["double"] and avail(d)["t4_measured"] else None for d in decks]))
+
+    def check_of(d, key):
+        return next((ch for ch in (avail(d) or {}).get("checks", []) if (ch["color"], ch["k"], ch["turn"]) == key),
+                    None)
+
+    for key in sorted(keys, key=lambda k_: ("WUBRG".index(k_[0]), k_[1], k_[2])):
+        col, k, turn = key
+        rows.append((f"≥ {k} Quellen {names[col]} bis Runde {turn}", "prop", True, [
+            prop(check_of(d, key)["ok"], avail(d)["games"])
+            if check_of(d, key) and check_of(d, key)["measured"] else None for d in decks]))
     rows.append((f"Mana Screw nach Runde {T}", "prop", False, [
         prop(round(d["results"][label]["any_screw"] * sims), sims) for d in decks]))
     rows.append((f"Flood ({args.flood}+ Länder bis Runde {max(args.max_runden, T, C)})",

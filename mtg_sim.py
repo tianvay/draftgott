@@ -20,6 +20,7 @@ from collections import Counter
 
 from components.cli import parse_args
 from components.scryfall import fetch_cards_cached
+from components.graveyard import gy_enabler, gy_info
 from components.removal import keyword_flags, removal_info
 from components.symbols import fetch_symbols
 from components.cards import card_info
@@ -27,7 +28,7 @@ from components.cardkinds import card_colors, empower_points, flow_kinds, type_k
 from components.coverage import analyze_card
 from components.deckfile import parse_deck, parse_deck_name, split_label
 from components.jace import analyze_jace
-from components.mana import double_pip_colors, required_colors
+from components.mana import double_pip_colors, pip_checks, required_colors
 from components.report import render_html
 from components.simulation import simulate
 
@@ -48,7 +49,8 @@ def build_deck(entry, data, args):
         info[name] = {"kinds": type_kinds(front_type), "flow": flow_kinds(sc), "colors": card_colors(sc),
                       "empower": bool(card.empower), "points": empower_points(card.empower),
                       "prepared": bool(card.prepared), **{k: True for k in keyword_flags(sc)},
-                      "removal": removal_info(sc), "ramp": bool(card.mana_src or card.treasure)}
+                      "removal": removal_info(sc), "ramp": bool(card.mana_src or card.treasure),
+                      "gy": gy_info(sc), "gy_enabler": gy_enabler(sc)}
         cards += [card] * qty
     if len(cards) < 7 + args.turns:
         sys.exit(f"Zu wenige Karten im Deck {entry['name']}.")
@@ -57,7 +59,7 @@ def build_deck(entry, data, args):
     top_mv = max((c.mv for c in castable), default=None)
     deck_colors = sorted(set().union(*(required_colors(c) for c in nonlands)))
     return dict(
-        double_pips=double_pip_colors(nonlands),
+        double_pips=double_pip_colors(nonlands), pip_checks=pip_checks(nonlands),
         name=entry["name"], deck=entry["deck"], parts=entry.get("parts", []), rows=rows, cards=cards, missing=missing,
         cats=entry.get("cats", {}), role=entry.get("role"), coverage=coverage, info=info,
         n_lands=len(cards) - len(nonlands),
@@ -69,7 +71,8 @@ def build_deck(entry, data, args):
         draw_names=sorted({n for n, _, c, _ in rows if c.draws}),
         surveil_names=sorted({n for n, _, c, _ in rows if c.surveil}),
         prepared_names=sorted({n for n, _, c, _ in rows if c.prepared}),
-        ramp_names=sorted({n for n, _, c, _ in rows if c.mana_src or c.treasure}))
+        ramp_names=sorted({n for n, _, c, _ in rows if c.mana_src or c.treasure}),
+        gy_x_names=sorted({n for n, _, c, _ in rows if c.gy_x}))
 
 
 def _stderr(msg):
@@ -98,7 +101,7 @@ def simulate_deck(dd, args, idx, horizon, progress=_stderr):
                                       args.landcycling_letzte_karte, not args.ohne_mulligan, args.min_handkarten,
                                       not args.ohne_jace,
                                       color_check={"colors": sorted(dd["deck_colors"], key="WUBRG".index),
-                                                   "double": sorted(dd["double_pips"], key="WUBRG".index)},
+                                                   "checks": dd["pip_checks"]},
                                       track=track)
         except RuntimeError as e:
             sys.exit(f"{dd['name']}: {e}")

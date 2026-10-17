@@ -76,7 +76,8 @@ class CategoryTests(unittest.TestCase):
                    "Tokens erzeugen", M_LETHAL)
 
     def test_direct_damage(self):
-        self.check("Test Spell deals 3 damage to any target.", "Direkter Schaden", M_LETHAL, type_line="Sorcery")
+        self.check("At the beginning of your upkeep, Test Spell deals 1 damage to each opponent.", "Direkter Schaden",
+                   M_LETHAL)
         self.check("Whenever this creature attacks, it deals 1 damage to each opponent and you gain 1 life.",
                    "Direkter Schaden", M_LETHAL)
 
@@ -98,7 +99,7 @@ class CategoryTests(unittest.TestCase):
                    "Kostensenkung / Convoke", M_MANA)
 
     def test_counters_and_bonuses(self):
-        self.check("When this creature enters, put a +1/+1 counter on target creature.", "Zählmarken / Stärkebonus",
+        self.check("Whenever this creature attacks, put a +1/+1 counter on target creature.", "Zählmarken / Stärkebonus",
                    M_LETHAL)
         self.check("Equipped creature gets +2/+1.", "Zählmarken / Stärkebonus", M_LETHAL,
                    type_line=f"Artifact {DASH} Equipment")
@@ -238,7 +239,8 @@ class MoreInteractionPatternsTests(unittest.TestCase):
 
     def test_damage_to_the_opponent_stays_direct_damage_not_interaction(self):
         found = {c for c, _m, _l in analyze_card(sc(type_line="Sorcery",
-                                                    text="Test Spell deals 2 damage to target opponent."))}
+                                                    text="Whenever you cast a spell, Test Spell deals 2 damage to "
+                                                         "target opponent."))}
         self.assertEqual(found, {"Direkter Schaden"})
 
 
@@ -246,7 +248,7 @@ class SummaryTests(unittest.TestCase):
     def test_summary_counts_cards_not_copies_per_metric(self):
         data = {
             "Token": analyze_card(sc(text="When this creature enters, create a 2/2 Cadet creature token.")),
-            "Burn": analyze_card(sc(type_line="Sorcery", text="Burn deals 3 damage to any target.")),
+            "Burn": analyze_card(sc(text="At the beginning of your upkeep, Burn deals 1 damage to each opponent.")),
             "Removal": analyze_card(sc(type_line="Sorcery", text="Destroy target creature.")),
             "Odd": analyze_card(sc(text="Whenever you sacrifice a permanent, put a bounty counter on it.")),
             "Vanilla": analyze_card(sc()),

@@ -13,7 +13,7 @@ from components.mulligan import MULL_COLORS, MULL_LANDS_HIGH, MULL_LANDS_LOW
 from components.report_sections import render_compare_section, render_jace_section, render_logic_section
 from components.coverage import METRIC_ORDER, STATUS_TEXT, metrics_of, summarize
 from components.report_cards import (all_colors_row, avail_level, render_color_availability, render_color_curves,
-                                     render_removal_table, render_type_table)
+                                     render_graveyard_table, render_removal_table, render_type_table)
 from components.simulation import card_label
 from components.stats import TRAFFIC, lethal_level, timing_stats, traffic_level
 
@@ -45,10 +45,20 @@ VIEW_JS = """<script>
 
 SWITCH_JS = """<script>
 document.documentElement.classList.add('js');
-document.querySelectorAll('.grpbar button').forEach(function(b){b.addEventListener('click',function(){
-  var g=b.getAttribute('data-g');
+function showGroup(g){
   document.querySelectorAll('[data-g]').forEach(function(e){e.classList.toggle('on',e.getAttribute('data-g')===g)});
+}
+document.querySelectorAll('.grpbar button').forEach(function(b){b.addEventListener('click',function(){
+  showGroup(b.getAttribute('data-g'));
   window.scrollTo(0,document.querySelector('.grpbar').offsetTop-60);});});
+// Umschalter an jeder Ueberschrift: gleiche Stelle in der anderen Variante, Ueberschrift bleibt im Fenster stehen
+document.querySelectorAll('.gsw button').forEach(function(b){b.addEventListener('click',function(){
+  var g=b.getAttribute('data-g'),sec=b.getAttribute('data-sec');
+  var top=b.closest('section').getBoundingClientRect().top;
+  showGroup(g);
+  var target=document.getElementById(g==='0'?sec:sec+'-'+g);
+  if(!target){var grp=document.querySelector('.grp[data-g="'+g+'"]');target=grp&&grp.querySelector('h2.gh');top=60}
+  if(target)window.scrollTo({top:window.scrollY+target.getBoundingClientRect().top-top,behavior:'instant'});});});
 </script>"""
 
 
@@ -133,7 +143,7 @@ def render_coverage(ctx):
     return f'<div class="panel">{note}<div class="grid g4" style="margin-bottom:12px">{kpis}</div>{table}</div>'
 
 
-def render_details(ctx, suffix=""):
+def render_details(ctx, suffix="", switch=None):
     """Alle Detailabschnitte (Auf einen Blick ... Modellannahmen) fuer EIN Deck. Gibt (sections, nav) zurueck."""
     a, res, rows = ctx["args"], ctx["results"], ctx["rows"]
     sims, T, C, H = a.sims, a.turns, a.curve_runden, ctx["horizon"]
@@ -141,7 +151,13 @@ def render_details(ctx, suffix=""):
     sections, nav = [], []
 
     def add(sid, title, hint, body):
-        sections.append(h_section(sid + suffix, title, hint, body, "hiw-" + sid))
+        html = h_section(sid + suffix, title, hint, body, "hiw-" + sid)
+        if switch:  # Umschalter zwischen den Varianten an der Ueberschrift
+            group, names = switch
+            buttons = "".join(f'<button type="button" data-g="{i}" data-sec="{sid}" class="{"on" if i == group else ""}">'
+                              f'{esc(n)}</button>' for i, n in enumerate(names))
+            html = html.replace("</h2>", f'<span class="gsw">{buttons}</span></h2>', 1)
+        sections.append(html)
         nav.append((sid + suffix, title))
 
     # ---------------- Auf einen Blick
@@ -269,6 +285,33 @@ def render_details(ctx, suffix=""):
     if removal_html:
         add("removal", "Removal", "Wie viel Removal hat das Deck? Bewertung je Karte aus dem Kartentext.", removal_html)
 
+    # ---------------- Friedhof (Score aus dem Kartentext und Messung in der Simulation)
+    gy_html = render_graveyard_table(ctx)
+    if gy_html or ctx.get("gy_x_names"):
+        sim_rows = []
+        for l in labels:
+            g_ = res[l]["graveyard"]
+            turns = sorted(g_["size"])
+            sim_rows.append([h_mode(l), '<td class="l">Ø Karten im Friedhof</td>']
+                            + [f'<td>{g_["size"][t]:.1f}</td>' for t in turns])
+            sim_rows.append([h_mode(l), '<td class="l">Ø höchster Manawert im Friedhof</td>']
+                            + [f'<td>{g_["max_mv"][t]:.1f}</td>' for t in turns])
+        turns = sorted(res[labels[0]]["graveyard"]["size"])
+        sim_html = ('<div class="panel" style="margin-top:14px"><b>Simulation</b>'
+                    + h_table(["", "Kennzahl"] + [f"nach Runde {t}" for t in turns], sim_rows, left=(0, 1)))
+        if ctx.get("gy_x_names"):
+            hp = []
+            for l in labels:
+                g_ = res[l]["graveyard"]
+                hp.append([h_mode(l), f'<td>{g_["hapatra_x_avg"]:.1f}</td>', f'<td>{h_pct(g_["x_ge3"])}</td>',
+                           f'<td>{h_pct(g_["x_ge5"])}</td>', f'<td>{g_["hapatra_n"]}</td>'])
+            sim_html += (f'<div style="margin-top:10px"><b class="muted">{esc(", ".join(ctx["gy_x_names"]))}: X = '
+                         f'höchster Manawert im Friedhof beim Betreten</b>'
+                         + h_table(["", "Ø X", "X ≥ 3", "X ≥ 5", "gewirkt (Anzahl)"], hp) + '</div>')
+        sim_html += '</div>'
+        add("friedhof", "Friedhof", "Wie stark nutzt das Deck den Friedhof, und was liegt in der Simulation darin?",
+            gy_html + sim_html)
+
     # ---------------- Great in this deck! (Kategorien aus dem Draft-Helper)
     great_html = render_great(ctx)
     if great_html:
@@ -354,7 +397,8 @@ def render_details(ctx, suffix=""):
     avail = render_color_availability(ctx)
     if avail:
         add("farben", "Farbverfügbarkeit",
-            "Wie oft liegen bis Runde 3 alle Farben und bis Runde 4 zwei Quellen für Doppel-Symbole (z. B. RR)?", avail)
+            "Wie oft liegen bis Runde 3 alle Farben, und wie oft genug Quellen für Mehrfach-Symbole (z. B. WW, GGGG) "
+            "bis zur Runde, in der die günstigste solche Karte spielbar wäre?", avail)
 
     # ---------------- Splash-Karten (nur Splash-Variante aus dem Drafthelper)
     if ctx.get("splash_track"):
@@ -429,8 +473,14 @@ def render_details(ctx, suffix=""):
     cum = {l: [sum(1 for v in res[l]["dmg"] if v <= t) / sims for t in xs] for l in labels}
     chart = (f'<div class="panel"><b>Wahrscheinlichkeit, bis Runde X mindestens {a.schaden} Schaden verursacht zu haben</b>'
              f'{h_legend(labels)}{svg_lines(xs, cum)}</div>')
+    effect_note = ""
+    if any(res[l]["effects"]["face"] or res[l]["effects"]["counters"] for l in labels):
+        effect_note = ('<div class="note">Pro Spiel aus Karten: '
+                       + " · ".join(f'{esc(l)}: Ø {res[l]["effects"]["face"]:.1f} Schaden an den Gegner, '
+                                    f'Ø {res[l]["effects"]["counters"]:.1f} +1/+1-Marken' for l in labels)
+                       + '</div>')
     table = (f'<div class="panel"><b>Erste Runde mit {a.schaden} Schaden</b>'
-             f'{h_table(["", "Ø Runde", "Median", "Eintritt"], rows_d)}</div>')
+             f'{h_table(["", "Ø Runde", "Median", "Eintritt"], rows_d)}{effect_note}</div>')
     add("schaden", "Schaden durch Kreaturen", "", f'<div class="grid g2">{table}{chart}</div>')
 
     lethals = []
@@ -606,7 +656,7 @@ def render_html(ctx):
                        for i, d in enumerate(decks))
         sections.append(f'<div class="grpbar"><b>Details für:</b> {btns}</div>')
         for i, d in enumerate(decks):
-            sec, nv = render_details(d, "" if i == 0 else f"-{i}")
+            sec, nv = render_details(d, "" if i == 0 else f"-{i}", switch=(i, [x["name"] for x in decks]))
             sections.append(f'<div class="grp{" on" if i == 0 else ""}" data-g="{i}">'
                             f'<h2 class="gh">Details: {esc(d["name"])}</h2>{"".join(sec)}</div>')
             nav_parts.append(f'<div class="in grpnav{" on" if i == 0 else ""}" data-g="{i}">'

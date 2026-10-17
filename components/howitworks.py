@@ -14,7 +14,7 @@ from components.stats import TRAFFIC
 _D = parse_args(["deck.txt"])  # Standardwerte der Kommandozeile
 # Abschnitte, die nur erscheinen, wenn der Bericht sie auch hat (z. B. Deck-Vergleich nur bei mehreren Decks)
 CONDITIONAL = {"vergleich", "great", "mulligan", "jace", "farben", "landcycling", "ziehen", "surveil", "prepared",
-               "splashkarten", "removal", "ramp"}
+               "splashkarten", "removal", "ramp", "friedhof"}
 
 
 def _ul(items):
@@ -97,6 +97,22 @@ def _sections():
              "Limited: etwa 4 bis 6 Removal-Karten.",
              "Die Tabelle zeigt jede erkannte Karte mit Art, Punkten je Karte, Summe und der erkannten Textstelle zur Kontrolle. Die "
              "Simulation nutzt den Score nicht (es gibt keinen Gegner)."]))),
+        ("friedhof", "Friedhof", _panel("Friedhof-Score", _ul([
+            "Jede Karte bekommt Punkte für ihre beste Nutzung des Friedhofs (aus dem Kartentext): <b>Zweitverwertung</b> "
+            "1,0 (die Karte selbst noch einmal: Flashback, Escape, Unearth, Disturb, Jump-start, Retrace, „return this "
+            "card from your graveyard“, Fähigkeiten mit „exile this card from your graveyard“) · <b>Zurückholen</b> "
+            "0,7 (andere Karten aus dem Friedhof auf die Hand oder ins Spiel) · <b>Ressource</b> 0,5 (Wert hängt vom "
+            "Friedhof ab, Threshold, Delve, andere Karten aus dem Friedhof exilieren).",
+            "<b>Enabler</b> füllen den eigenen Friedhof (Mill, Surveil, Abwerfen, Cycling und Landcycling, „into your "
+            "graveyard“); sie werden gezählt, haben aber keine Punkte.",
+            "Die Simulation wirkt Karten aus dem Friedhof (Flashback usw.) noch nicht; der Score bewertet nur."]))
+         + _panel("Friedhof in der Simulation", _ul([
+             "In den Friedhof kommen gewirkte Instants und Sorceries (Prepared-Kopien nicht), gelandcycelte Karten "
+             "und Karten, die Surveil ablegt (Karten oder Jace). Kreaturen sterben in der Simulation nicht (kein Kampf "
+             "mit Blockern).",
+             "Gezählt wird mit den Manakosten der Karte; eine gelandcycelte 6-Mana-Kreatur zählt also 6.",
+             "„Ø höchster Manawert“ ist für Karten wie Hapatra wichtig: X = höchster Manawert im Friedhof, wenn sie ins "
+             "Spiel kommt (Ø X und wie oft X ≥ 3 bzw. ≥ 5)."]))),
         ("great", "Great in this deck!", _panel("Was hier steht", _ul([
             "Karten mit der Kategorie ★ Splashworthy oder MustPlay aus dem Drafthelper, mit Bereich, Kosten und "
             "Eigenschaften.",
@@ -109,8 +125,10 @@ def _sections():
             "unterschiedlich formuliert. Status jeder gelisteten Karte: „To Do: Noch nicht implementiert“.",
             "Nicht gemeldet wird, was die Simulation abbildet: aufgedrucktes Haste und Defender, Landcycling, die "
             "Bedingungen getappter Länder, Empower Jace mit festem Wert, Draw-Zauber und Surveil mit fester Zahl, "
-            "Prepared-Zauberhälften als Kopie (deren übrige Effekte stehen mit ihrer eigenen Kategorie da) und "
-            "Kampf-Schlüsselwörter ohne Gegner.",
+            "Prepared-Zauberhälften als Kopie (deren übrige Effekte stehen mit ihrer eigenen Kategorie da), Manaquellen "
+            "und Treasure, Schaden an den Gegner beim Wirken oder Betreten, +1/+1-Marken und Pumps bis Rundenende beim "
+            "Wirken oder Betreten, Landfall-Schaden und -Marken, Marken am Rundenende ohne Zauber (Edgar) und bei "
+            "Loyalty (Tethermage) sowie Kampf-Schlüsselwörter ohne Gegner.",
             "Kategorien: Tokens erzeugen, Direkter Schaden, Zählmarken / Stärkebonus, Haste verleihen, Mana außer "
             "Ländern, Kartenfluss, Kostensenkung / Convoke, Zweitverwertung (Friedhof), Timing (Flash), Zusatzkosten, "
             "Prepared-Zauberhälfte, Planeswalker-Fähigkeit, Defender-Ausnahme, Interaktion mit dem Gegner, "
@@ -150,8 +168,8 @@ def _sections():
             "Karten sind weg). Ausgewertet bis zur eingestellten Runde (<code>--turns</code>, Standard "
             f"{_D.turns})."))),
         ("kreaturen", "Kreaturen nach Runde X", _panel("Bedeutung", _p(
-            "Durchschnitt auf dem Feld nach der Auswertungsrunde (<code>--turns</code>), aufgedruckte Werte ohne Auras "
-            "und Boni."))),
+            "Durchschnitt auf dem Feld nach der Auswertungsrunde (<code>--turns</code>), aufgedruckte Werte plus "
+            "dauerhafte +1/+1-Marken, ohne Auras und Boni bis Rundenende."))),
         ("screw", "Mana Screw & Flood", _panel("Bedeutung", _ul([
             "<b>Mana Screw:</b> nach der Auswertungsrunde (<code>--turns</code>) weniger Länder auf dem Feld als die "
             "Rundenzahl oder, bei mehrfarbigen Decks, keine zwei Farben.",
@@ -159,13 +177,16 @@ def _sections():
             f"{_D.max_runden}) mindestens so viele Länder gezogen wie mit <code>--flood</code> eingestellt "
             f"(Standard {_D.flood}), die Starthand eingerechnet."]))),
         ("farben", "Farbverfügbarkeit", _panel("Bedeutung", _ul([
-            "Quelle = Land auf dem Feld nach dem Landdrop der Runde (auch getappt), das die Farbe erzeugen kann; ein "
-            "Land mit mehreren Farben zählt für jede davon.",
+            "Quelle = Land auf dem Feld nach dem Landdrop der Runde (auch getappt), das die Farbe erzeugen kann, oder "
+            "eine Manaquelle außer Ländern, die in der Runde Mana liefert (Kreaturen ab der Runde nach dem Wirken, "
+            "Artefakte sofort; Treasure zählen nicht). Eine Quelle mit mehreren Farben zählt für jede davon.",
             "Runde 3: von jeder Farbe, die Karten im Deck zwingend brauchen, mindestens eine Quelle (alle zusammen und "
             "jede einzeln).",
-            "Runde 4: zwei Quellen, aber nur für Farben, die eine Karte doppelt verlangt (z. B. RR); Hybrid zählt nicht.",
-            f"Ampel: grün ab {AVAIL_GREEN} %, gelb ab {AVAIL_YELLOW} %, sonst rot. Gezählt werden nur Länder; Mana aus "
-            "Manaquellen außer Ländern steht im Abschnitt Ramp."]))),
+            "Mehrfach-Symbole: Für jede Farbe und Symbolzahl (WW, GGGG …), die eine Karte zwingend verlangt, zählt die "
+            "günstigste Karte. Gemessen wird, wie oft bis zur Runde = ihr Manawert mindestens so viele Quellen der Farbe "
+            "liegen, z. B. {2}{W}{W}{B} → 2 Quellen Weiß bis Runde 5, {G}{G}{G}{G} → 4 Quellen Grün bis Runde 4. Hybrid "
+            "zählt nicht; liegt die Runde nach dem Ende der Beobachtung, steht „–“.",
+            f"Ampel: grün ab {AVAIL_GREEN} %, gelb ab {AVAIL_YELLOW} %, sonst rot. Mehr zu Manaquellen im Abschnitt Ramp."]))),
         ("splashkarten", "Splash-Karten", _panel("Bedeutung", _ul([
             "Nur im Bericht des Drafthelpers, für die Splash-Variante: alle Nichtland-Karten der Gruppe Splash.",
             "<b>Gezogen:</b> Anteil der Spiele, in denen die Karte bis zum Ende der Beobachtung auf die Hand kommt "
@@ -189,7 +210,12 @@ def _sections():
             "Erste Runde, in der der Gesamtschaden das Ziel erreicht (<code>--schaden</code>, Standard "
             f"{_D.schaden}). Ø und Median nur über Spiele, in denen es bis zum Ende der Beobachtung eintritt. Alle "
             "Kreaturen greifen jede Runde an, Einsatzverzögerung außer Haste, Defender greift nie an, keine Blocker oder "
-            "Removal, nur aufgedruckte Power."))),
+            "Removal. Schaden = Power plus +1/+1-Marken und Pumps dieser Runde, dazu Schaden an den Gegner aus Zaubern, "
+            "beim Betreten und durch Landfall (auch „any target“ zählt als Schaden an den Gegner). Marken und Pumps gehen "
+            "an die stärkste Kreatur, die in dieser Runde angreift; dauerhafte Marken ohne Angreifer an die stärkste "
+            "Kreatur, Pumps ohne Angreifer verpuffen. Modale Karten: der Modus mit dem meisten Schaden, bei Gleichstand "
+            "der mit dauerhaften Marken. Edgar bekommt am Rundenende 2 Marken, wenn kein Zauber gewirkt wurde; "
+            "Inspired Tethermage 1 Marke je Empower Jace."))),
         ("lethal", "Schnellster Lethal", _panel("Bedeutung", _p(
             "Das schnellste aller simulierten Spiele, bei gleicher Runde das mit mehr Schaden, mit Starthand und "
             "Rundenprotokoll. Ein Glücksfall, kein Erwartungswert – die typische Runde steht unter „Schaden durch "
@@ -255,7 +281,7 @@ def _sections():
             "„Spiele mit Ramp“: mindestens eine Runde mit Mana aus solchen Quellen; „Ø zusätzliches Mana“: Mana aus "
             "Manaquellen und genutzten Treasure je Runde; „Ø Angriffe ausgelassen“: Kreaturen, die für Mana getappt "
             "wurden und sonst hätten angreifen können.",
-            "Mana Screw, Flood und Farbverfügbarkeit zählen weiter nur Länder."]))),
+            "Mana Screw und Flood zählen weiter nur Länder; die Farbverfügbarkeit zählt Manaquellen mit."]))),
         ("tempo", "Tempo", _panel("Bedeutung", _p(
             "Ø und Median nur über Spiele, in denen das Ereignis bis zum Ende der Beobachtung eintritt. Top Card: die "
             "Karte(n) mit dem höchsten Manawert; gezählt wird die erste Runde, in der sie spielbar wäre."))),
@@ -271,7 +297,7 @@ def _sections():
             "zuerst ein Zauber gewirkt, der einen Planeswalker erschafft. „Behold a Jace“ gilt auch mit einer "
             "Jace-Karte auf der Hand.",
             "Auras werden nur mit eigener Kreatur gespielt (außer mit <code>--auras-ohne-kreatur</code>).",
-            "Kreaturen: aufgedruckte Power/Toughness, Einsatzverzögerung außer Haste, Defender greift nie an, keine "
+            "Kreaturen: aufgedruckte Power/Toughness plus +1/+1-Marken, Einsatzverzögerung außer Haste, Defender greift nie an, keine "
             "Blocker oder Removal.",
             "Landcycling, Empower Jace, Draw-Zauber, Surveil durch Karten und Prepared: Regeln in den jeweiligen "
             "Abschnitten.",

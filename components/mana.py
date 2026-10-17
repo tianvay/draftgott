@@ -121,6 +121,25 @@ def land_key(lands):
     return tuple(sorted(lands))
 
 
+def pip_checks(cards):
+    """Pruefungen fuer Mehrfach-Farbsymbole: je Farbe und Symbolzahl k >= 2 (in jedem Zahlungsweg, Hybrid zaehlt
+    nicht) die guenstigste Karte. Gibt [{"color", "k", "turn", "cards"}] zurueck (Farbe nach WUBRG, dann k):
+    turn = Manawert der guenstigsten Karte mit genau k Symbolen (mindestens k), cards = alle Karten dieser Gruppe."""
+    groups = {}
+    for card in cards:
+        if card.is_land or not card.alts:
+            continue
+        for col in "WUBRG":
+            k = min(dict(req).get(col, 0) for _, req in card.alts)
+            if k >= 2:
+                g = groups.setdefault((col, k), {"turn": None, "cards": set()})
+                turn = max(card.mv, k)
+                g["turn"] = turn if g["turn"] is None else min(g["turn"], turn)
+                g["cards"].add(card.name)
+    return [{"color": col, "k": k, "turn": groups[(col, k)]["turn"], "cards": sorted(groups[(col, k)]["cards"])}
+            for col, k in sorted(groups, key=lambda ck: ("WUBRG".index(ck[0]), ck[1]))]
+
+
 def double_pip_colors(cards):
     """Farben, die eine Nichtland-Karte in JEDEM Zahlungsweg mindestens zweimal verlangt (z. B. {2}{R}{R}).
     Hybrid wie {R/G}{R/G} zaehlt nicht. Gibt {Farbe: [Kartennamen, sortiert]} zurueck."""

@@ -10,7 +10,8 @@ import re
 from collections import Counter
 
 from components.cards import (EMPOWER_RE, LANDCYCLE_RE, classify_empower_line, draw_line, land_tap_info,
-                              mana_ability_units, prepared_mode, surveil_line, treasure_line)
+                              mana_ability_units, modelled_effect_rest, prepared_mode, surveil_line,
+                              treasure_line)
 
 STATUS_TEXT = "To Do: Noch nicht implementiert"
 
@@ -84,6 +85,9 @@ LINE_RULES = [
      re.compile(r"\b(gains?|have|has)\b[^.\n]*\b(flying|trample|first strike|double strike|vigilance|deathtouch|"
                 r"lifelink|hexproof|indestructible|menace|reach)\b|can't be blocked")),
 ]
+# Negative Werte auf eine Kreatur, die nicht uns gehoert (z. B. "-3/-3", "-1/-1 counters on ... target creature")
+NEGATIVE_ON_OTHERS = re.compile(r"(?:-\d+/-\d+|-x/-x)(?![^.]*\byou control\b)|-1/-1 counters? on [^.]*?target "
+                                r"creature(?! you control)")
 LOYALTY_LINE = re.compile(r"^[+−\-]?(\d+|x):|^\[[^\]]+\]:")
 MODAL_HEADER = re.compile(r"\bchoose (one|two|any number)( or (both|more))?\s*(—|-)?\s*$")
 DECK_RULE = re.compile(r"^a deck can have|\bany number of cards named\b")
@@ -119,6 +123,12 @@ def _classify(low, is_planeswalker):
             found.append((category, metric))
     if any(c == "Tokens erzeugen" for c, _ in found) and re.search(r"treasure|heartwood|lotus", low):
         found = [(c, m) for c, m in found if c != "Tokens erzeugen"]
+    if any(c == "Zählmarken / Stärkebonus" for c, _ in found) and NEGATIVE_ON_OTHERS.search(low) \
+            and not re.search(r"[+]\d+/[+]\d+|\+x/\+x|\+1/\+1 counter", low):
+        # -X/-X oder -1/-1-Marken auf eine Kreatur, die nicht uns gehoert: Removal, kein Staerkebonus
+        found = [(c, m) for c, m in found if c != "Zählmarken / Stärkebonus"]
+        if ("Interaktion mit dem Gegner", M_NONE) not in found:
+            found.append(("Interaktion mit dem Gegner", M_NONE))
     if not found and is_planeswalker and LOYALTY_LINE.match(low):
         found.append((C_WALKER, M_UNKNOWN))
     return found
@@ -155,6 +165,13 @@ def analyze_card(card):
                     (not spell_face and mana_ability_units(line))
                     or treasure_line(line, spell_face, face.get("name") or card.get("name", ""))):
                 continue  # Manaquelle bzw. Treasure ist modelliert
+            if modelled_face and not is_land and not raw.strip().startswith("•") or (
+                    modelled_face and spell_face and raw.strip().startswith("•")):
+                hit, rest = modelled_effect_rest(line, spell_face, face.get("name") or card.get("name", ""))
+                if hit:  # Schaden an den Gegner, Marken, Pumps, Landfall usw. sind modelliert
+                    if not re.sub(r"[^a-z]", "", rest):
+                        continue
+                    line, low = rest, rest
             if modelled_face and not raw.strip().startswith("•"):
                 n, rest = surveil_line(line, spell_face, face.get("name") or card.get("name", ""))
                 if n:  # Surveil mit fester Zahl ist modelliert; der Rest der Zeile wird weiter geprueft

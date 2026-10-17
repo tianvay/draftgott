@@ -99,7 +99,8 @@ def type_counts(ctx):
     info = ctx.get("info") or {}
     t = {"cards": 0, "creature": 0, "instant": 0, "sorcery": 0, "artifact": 0, "enchantment": 0, "planeswalker": 0,
          "land": 0, "nonbasic_land": 0, "empower": 0, "points": 0, "flow": 0, "prepared": 0,
-         "flash": 0, "deathtouch": 0, "removal": 0, "removal_points": 0.0, "ramp": 0}
+         "flash": 0, "deathtouch": 0, "removal": 0, "removal_points": 0.0, "ramp": 0,
+         "gy": 0, "gy_points": 0.0, "gy_enabler": 0}
     t.update({f"flow_{k}": 0 for k in FLOW_ORDER})
     for name, qty, card, _shown in ctx["rows"]:
         i = info.get(name) or {}
@@ -109,9 +110,13 @@ def type_counts(ctx):
                 t[k] += qty
         if i.get("prepared"):
             t["prepared"] += qty
-        for k in ("flash", "deathtouch", "ramp"):
+        for k in ("flash", "deathtouch", "ramp", "gy_enabler"):
             if i.get(k):
                 t[k] += qty
+        gy = i.get("gy") or {}
+        if gy.get("points"):
+            t["gy"] += qty
+            t["gy_points"] = round(t["gy_points"] + qty * gy["points"], 2)
         rem = i.get("removal") or {}
         if rem.get("points"):
             t["removal"] += qty
@@ -154,6 +159,9 @@ def _rows(decks):
         spec.append(("prepared", "Prepared (Karten)", ""))
     if any(c["ramp"] for c in counts):
         spec.append(("ramp", "Manaquellen (Karten)", ""))
+    if any(c["gy"] or c["gy_enabler"] for c in counts):
+        spec += [("gy", "Friedhof-Interaktion (Karten)", ""), ("gy_points", "Σ Friedhof-Punkte", "sub"),
+                 ("gy_enabler", "Friedhof-Enabler (Karten)", "sub")]
     present = [k for k in FLOW_ORDER if any(c[f"flow_{k}"] for c in counts)]
     if present:
         spec.append(("flow", "Kartenfluss (Karten)", ""))
@@ -165,6 +173,8 @@ def _cell(key, counts):
     """Wert einer Zelle; Removal-Punkte mit einer Nachkommastelle und Ampel (anteilig zur Kartenzahl)."""
     if key == "removal_points":
         return _Level(f"{counts[key]:.1f}", removal_level(counts[key], counts["cards"]))
+    if key == "gy_points":
+        return f"{counts[key]:.1f}"
     return counts[key]
 
 
@@ -241,6 +251,33 @@ def render_removal_table(ctx):
                       left=(0, 2, 5)) + '</div>')
 
 
+def render_graveyard_table(ctx):
+    """Friedhof-Score: Kennzahlen und alle Karten mit Friedhof-Interaktion (Art, Punkte, Textstelle); dazu die
+    Enabler. '' ohne solche Karten."""
+    info = ctx.get("info") or {}
+    items = [(name, qty, info[name]["gy"]) for name, qty, _c, _s in ctx["rows"] if (info.get(name) or {}).get("gy")]
+    enablers = [(name, qty) for name, qty, _c, _s in ctx["rows"] if (info.get(name) or {}).get("gy_enabler")]
+    if not items and not enablers:
+        return ""
+    items.sort(key=lambda x: (-x[2]["points"], x[0]))
+    total = sum(q * r["points"] for _n, q, r in items)
+    kpis = (f'<div class="grid g4" style="margin-bottom:12px">'
+            f'<div class="panel kpi"><div class="l">Friedhof-Interaktion</div><div class="v">{sum(q for _n, q, _r in items)}</div>'
+            f'<div class="s">Karten</div></div>'
+            f'<div class="panel kpi"><div class="l">Σ Friedhof-Punkte</div><div class="v">{total:.1f}</div></div>'
+            f'<div class="panel kpi" style="grid-column:span 2"><div class="l">Enabler (füllen den Friedhof)</div>'
+            f'<div class="s" style="font-size:14px;margin-top:6px">'
+            f'{esc(", ".join(f"{q}× {n}" for n, q in enablers)) or "–"}</div></div></div>')
+    table = ""
+    if items:
+        rows = [[f'<td class="l">{esc(n)}</td>', f"<td>{q}</td>", f'<td class="l">{esc(r["kind"])}</td>',
+                 f'<td>{r["points"]:.2f}</td>', f'<td>{q * r["points"]:.2f}</td>',
+                 f'<td class="l muted" style="font-size:12.5px">{esc(r["text"])}</td>'] for n, q, r in items]
+        table = ('<div class="panel">' + h_table(["Karte", "Anz.", "Art", "Punkte je Karte", "Summe",
+                                                  "Erkannte Textstelle"], rows, left=(0, 2, 5)) + '</div>')
+    return kpis + table
+
+
 AVAIL_GREEN, AVAIL_YELLOW = 90, 80  # Ampel Farbverfuegbarkeit in Prozent
 
 
@@ -269,9 +306,14 @@ def all_colors_row(ctx):
         _avail_cell(r["color_avail"]["t3_all"], r["color_avail"]["games"]) for r in results.values()]
 
 
+def pip_check_label(ch):
+    return f'≥ {ch["k"]} Quellen {COLOR_NAME[ch["color"]]} bis Runde {ch["turn"]}'
+
+
 def render_color_availability(ctx):
-    """Abschnitt 'Farbverfuegbarkeit': alle Farben und jede Farbe bis Runde 3 (mindestens eine Quelle), Farben mit
-    Doppel-Symbolen bis Runde 4 (mindestens zwei Quellen). Leer, wenn das Deck keine Farben braucht."""
+    """Abschnitt 'Farbverfuegbarkeit': alle Farben und jede Farbe bis Runde 3 (mindestens eine Quelle) und je Farbe
+    und Symbolzahl k >= 2 mindestens k Quellen bis zur Runde der guenstigsten Karte (mana.pip_checks). Leer, wenn das
+    Deck keine Farben braucht."""
     results = ctx["results"]
     labels = list(results)
     first = results[labels[0]].get("color_avail")
@@ -281,11 +323,13 @@ def render_color_availability(ctx):
     for c in first["colors"]:
         rows.append([f'<td class="l" style="padding-left:22px">≥ 1 Quelle {COLOR_NAME[c]} bis Runde 3</td>'] + [
             _avail_cell(results[l]["color_avail"]["t3"][c], results[l]["color_avail"]["games"]) for l in labels])
-    pips = ctx.get("double_pips") or {}
-    for c in first["double"]:
-        cards = ", ".join(pips.get(c, []))
-        rows.append([f'<td class="l">≥ 2 Quellen {COLOR_NAME[c]} bis Runde 4'
-                     f'<div class="muted" style="font-size:12px">wegen {c}{c} in: {esc(cards)}</div></td>'] + [
-            _avail_cell(results[l]["color_avail"]["t4_double"][c], results[l]["color_avail"]["games"],
-                        results[l]["color_avail"]["t4_measured"]) for l in labels])
+    for i, ch in enumerate(first.get("checks") or []):
+        cells = []
+        for l in labels:
+            ca = results[l]["color_avail"]
+            other = (ca.get("checks") or [])[i]
+            cells.append(_avail_cell(other["ok"], ca["games"], other["measured"]))
+        rows.append([f'<td class="l">{esc(pip_check_label(ch))}'
+                     f'<div class="muted" style="font-size:12px">wegen {ch["color"] * ch["k"]} in: '
+                     f'{esc(", ".join(ch["cards"]))}</div></td>'] + cells)
     return f'<div class="panel">{h_table(["Kennzahl"] + [esc(l) for l in labels], rows)}</div>'

@@ -76,7 +76,7 @@ class PreparedCoverageTests(unittest.TestCase):
         card = P_DATA["Test Reviewer // Test Review"]
         self.assertEqual(self.cats(card), {"Tokens erzeugen"})
         self.assertEqual(metrics_of(analyze_card(card)), {M_LETHAL})
-        self.assertEqual(self.cats(P_DATA["Test Lurker // Test Jab"]), {"Direkter Schaden"})
+        self.assertEqual(self.cats(P_DATA["Test Lurker // Test Jab"]), set())  # Schaden an den Gegner modelliert
 
     def test_unknown_prepare_wording_stays_prepared_category(self):
         card = prep("Test Odd", "{W}", 1, "Flying", "Test Odd Spell", "{W}", "Draw a card.")

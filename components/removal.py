@@ -35,6 +35,7 @@ _BOUNCE = re.compile(r"\breturn " + _TARGET + r" ([^.]*?) to (its|their) owner'?
 # Basis-Toughness 0: "has base power and toughness 0/0", "becomes a 0/0", "has base toughness 0"
 _TOUGH0 = re.compile(r"\b(" + _TARGET + r" creature[^.]*?)\b(?:has base power and toughness (?:\d+|x)/0|"
                      r"becomes an? (?:\d+|x)/0|has base toughness 0)\b")
+_MINUS_COUNTERS = re.compile(r"\bput (x|\d+) -1/-1 counters? on (?:up to one )?(?:another )?target creature")
 _LOCK = re.compile(r"\benchanted creature (?:[^.]*?\b)?(doesn't untap|can't attack|can't block)")
 _ACTIVATED = re.compile(r"^[^:\"]*(\{[^}]+\}|\bsacrifice\b|\bdiscard\b|\bexile this\b)[^:\"]*:")
 _LOYALTY = re.compile(r"^[+−\-]?(\d+|x):")
@@ -118,6 +119,9 @@ def _classify(low):
         found.append((0.5, "Bedingt") if _CONDITION.search(target) else (0.7, "Toughness 0"))
     if _LOCK.search(low):
         found.append((0.7, "Lock"))
+    m = _MINUS_COUNTERS.search(low)
+    if m:
+        found.append((_amount(m.group(1)), "−1/−1-Marken"))
     found = [f for f in found if f[0] > 0]
     if not found:
         return None

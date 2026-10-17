@@ -27,6 +27,7 @@ from components.cardkinds import (FLOW_ORDER, empower_points, flow_kinds,  # noq
 from components.deckfile import parse_pool
 from components.howitworks import render_help_page
 from components.landadvice import color_overview, recommend
+from components.graveyard import gy_enabler, gy_info
 from components.removal import keyword_flags, removal_info
 from components.symbols import active as active_symbols, symbol_css
 from components.scryfall import card_image_url, fetch_cards_cached, fetch_printing_images
@@ -96,6 +97,8 @@ def load_pool(path, refresh=False):
             **{k: True for k in keyword_flags(sc)},
             "removal_points": (removal_info(sc) or {}).get("points", 0),
             "ramp": bool(model and (model.mana_src or model.treasure)),  # Manaquelle oder Treasure
+            "gy_points": (gy_info(sc) or {}).get("points", 0) if sc else 0,  # Friedhof-Score
+            "gy_enabler": bool(sc and gy_enabler(sc)),
         })
     order = {"deck": 0, "sideboard": 1}  # je Bereich: Nichtlaender nach Manawert, Laender zuletzt
     cards.sort(key=lambda c: (order.get(c["section"], 2), c["land"], c["mv"], c["name"]))
@@ -855,7 +858,7 @@ function typeCounts(copies, basics){
   const out={splash:{},nosplash:{}};
   for(const g of ["splash","nosplash"]){
     const o=out[g];rows.forEach(r=>{o[r]=0});o.cards=0;o.empower=0;o.points=0;o.flow=0;o.prepared=0;
-    o.flash=0;o.deathtouch=0;o.removal=0;o.removal_points=0;o.ramp=0;
+    o.flash=0;o.deathtouch=0;o.removal=0;o.removal_points=0;o.ramp=0;o.gy=0;o.gy_points=0;o.gy_enabler=0;
     FLOW_KINDS.forEach(k=>{o["flow_"+k]=0});
     for(const c of copies){
       if(c.mark!=="core"&&c.mark!==g)continue;
@@ -865,6 +868,8 @@ function typeCounts(copies, basics){
       if(c.prepared)o.prepared++;
       if(c.flash)o.flash++;
       if(c.ramp)o.ramp++;
+      if(c.gy){o.gy++;o.gy_points=Math.round((o.gy_points+c.gy)*100)/100}
+      if(c.gy_enabler)o.gy_enabler++;
       if(c.deathtouch)o.deathtouch++;
       if(c.removal){o.removal++;o.removal_points=Math.round((o.removal_points+c.removal)*100)/100}
       const fl=c.flow||[];
@@ -879,6 +884,7 @@ function copiesOf(tiles){
   return tiles.map(x=>({kinds:x.card.kinds||[],mark:x.mark,empower:!!x.card.empower,
     points:x.card.empower_points||0,flow:x.card.flow||[],...(x.card.prepared?{prepared:true}:{}),
     ...(x.card.flash?{flash:true}:{}),...(x.card.deathtouch?{deathtouch:true}:{}),...(x.card.ramp?{ramp:true}:{}),
+    ...(x.card.gy_points?{gy:x.card.gy_points}:{}),...(x.card.gy_enabler?{gy_enabler:true}:{}),
     ...(x.card.removal_points?{removal:x.card.removal_points}:{})}));
 }
 // Ampel Removal-Punkte: gruen ab 4, gelb ab 2,5 bei 40 Karten (anteilig), wie components/removal.py
@@ -897,6 +903,8 @@ function typeRows(){
   const rows=TYPE_ROWS.slice();
   if(pool.some(c=>c.prepared))rows.push(["prepared","Prepared (Karten)","sep"]);
   if(pool.some(c=>c.ramp))rows.push(["ramp","Manaquellen (Karten)","sep"]);
+  if(pool.some(c=>c.gy_points||c.gy_enabler))rows.push(["gy","Friedhof-Interaktion (Karten)","sep"],
+    ["gy_points","Σ Friedhof-Punkte","sub"],["gy_enabler","Friedhof-Enabler (Karten)","sub"]);
   const present=FLOW_KINDS.filter(k=>pool.some(c=>(c.flow||[]).includes(k)));
   if(present.length){
     rows.push(["flow","Kartenfluss (Karten)","sep"]);
@@ -918,8 +926,9 @@ function typeOverview(){
       for(const [v,g] of [[a,"splash"],[b,"nosplash"]])
         tr.appendChild(el("td",removalLevel(v,t[g].cards)+(a!==b?" diff":""),v.toFixed(1)));
     }else{
-      tr.appendChild(el("td",a!==b?"diff":null,String(a)));
-      tr.appendChild(el("td",a!==b?"diff":null,String(b)));
+      const fmt=v=>key==="gy_points"?v.toFixed(1):String(v);
+      tr.appendChild(el("td",a!==b?"diff":null,fmt(a)));
+      tr.appendChild(el("td",a!==b?"diff":null,fmt(b)));
     }
     body.appendChild(tr);
   }

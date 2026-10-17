@@ -65,47 +65,47 @@ class SimulationMeasurementTests(unittest.TestCase):
     def test_measurement_does_not_change_the_other_results(self):
         counts = {"Plains": 9, "Swamp": 8, "White Bear": 12, "Black Bear": 11}
         a = run(counts, None)
-        b = run(counts, {"colors": ["W", "B"], "double": []})
+        b = run(counts, {"colors": ["W", "B"], "checks": []})
         for key in ("cast", "dmg", "any_screw", "flood", "empty_hand"):
             self.assertEqual(a[key], b[key], key)
 
     def test_color_without_sources_is_never_available(self):
-        r = run({"Plains": 17, "White Bear": 20, "Black Bear": 3}, {"colors": ["W", "B"], "double": []})
+        r = run({"Plains": 17, "White Bear": 20, "Black Bear": 3}, {"colors": ["W", "B"], "checks": []})
         ca = r["color_avail"]
         self.assertEqual(ca["t3"]["B"], 0)
         self.assertEqual(ca["t3_all"], 0)
         self.assertGreater(ca["t3"]["W"], 0)
 
     def test_all_colors_never_exceeds_a_single_color(self):
-        r = run({"Plains": 9, "Swamp": 8, "White Bear": 12, "Black Bear": 11}, {"colors": ["W", "B"], "double": []})
+        r = run({"Plains": 9, "Swamp": 8, "White Bear": 12, "Black Bear": 11}, {"colors": ["W", "B"], "checks": []})
         ca = r["color_avail"]
         self.assertLessEqual(ca["t3_all"], min(ca["t3"].values()))
         self.assertLessEqual(max(ca["t3"].values()), ca["games"])
 
     def test_dual_lands_count_for_both_colors(self):
-        r = run({"Orzhov Dual": 17, "White Bear": 12, "Black Bear": 11}, {"colors": ["W", "B"], "double": []})
+        r = run({"Orzhov Dual": 17, "White Bear": 12, "Black Bear": 11}, {"colors": ["W", "B"], "checks": []})
         ca = r["color_avail"]
         self.assertEqual(ca["t3"]["W"], ca["t3"]["B"])
         self.assertEqual(ca["t3_all"], ca["t3"]["W"])
 
     def test_two_sources_impossible_with_a_single_red_land(self):
-        r = run({"Mountain": 1, "Plains": 16, "White Bear": 20, "Red Ogre": 3}, {"colors": ["W", "R"], "double": ["R"]})
-        self.assertEqual(r["color_avail"]["t4_double"]["R"], 0)
+        r = run({"Mountain": 1, "Plains": 16, "White Bear": 20, "Red Ogre": 3}, {"colors": ["W", "R"], "checks": [{"color": "R", "k": 2, "turn": 4, "cards": ["Red Ogre"]}]})
+        self.assertEqual(r["color_avail"]["checks"][0]["ok"], 0)
 
     def test_two_sources_are_reached_in_a_mono_red_deck(self):
-        r = run({"Mountain": 17, "Red Shock": 20, "Red Ogre": 3}, {"colors": ["R"], "double": ["R"]})
+        r = run({"Mountain": 17, "Red Shock": 20, "Red Ogre": 3}, {"colors": ["R"], "checks": [{"color": "R", "k": 2, "turn": 4, "cards": ["Red Ogre"]}]})
         ca = r["color_avail"]
-        self.assertGreater(ca["t4_double"]["R"], 0)
-        self.assertTrue(ca["t4_measured"])
+        self.assertGreater(ca["checks"][0]["ok"], 0)
+        self.assertTrue(ca["checks"][0]["measured"])
 
     def test_three_colors_from_basics_are_measured_after_the_third_land_drop(self):
         # drei Farben aus drei verschiedenen Standardlaendern gehen fruehestens in Runde 3; frueher gemessen waere es 0
         counts = {"Plains": 6, "Swamp": 6, "Mountain": 5, "White Bear": 8, "Black Bear": 8, "Red Shock": 7}
-        r = run(counts, {"colors": ["W", "B", "R"], "double": []}, sims=400)
+        r = run(counts, {"colors": ["W", "B", "R"], "checks": []}, sims=400)
         self.assertGreater(r["color_avail"]["t3_all"], 0)
 
     def test_played_games_are_the_denominator(self):
-        r = run({"Plains": 17, "White Bear": 23}, {"colors": ["W"], "double": []}, sims=120)
+        r = run({"Plains": 17, "White Bear": 23}, {"colors": ["W"], "checks": []}, sims=120)
         self.assertEqual(r["color_avail"]["games"], 120)
 
 
@@ -122,20 +122,20 @@ class FixedOrderGameTests(unittest.TestCase):
         # Runde 1 Mountain, 2 und 3 Plains, Runde 4 zieht Mountain und legt ihn (fuer Red Ogre)
         hand = ["Mountain", "Plains", "Plains", "Red Ogre", "Red Ogre", "Red Ogre", "Red Ogre"]
         order = hand + ["Plains", "White Bear", "Mountain"] + ["White Bear"] * 10
-        ca = self.play(order, {"colors": ["W", "R"], "double": ["R"]})
-        self.assertEqual(ca["t4_double"]["R"], 1)
+        ca = self.play(order, {"colors": ["W", "R"], "checks": [{"color": "R", "k": 2, "turn": 4, "cards": ["Red Ogre"]}]})
+        self.assertEqual(ca["checks"][0]["ok"], 1)
         self.assertEqual((ca["t3"]["R"], ca["t3"]["W"], ca["t3_all"]), (1, 1, 1))
 
     def test_third_color_arrives_in_turn_three(self):
         hand = ["Plains", "Swamp", "White Bear", "White Bear", "Black Bear", "Black Bear", "Red Shock"]
         order = hand + ["White Bear", "Mountain"] + ["White Bear"] * 10
-        ca = self.play(order, {"colors": ["W", "B", "R"], "double": []})
+        ca = self.play(order, {"colors": ["W", "B", "R"], "checks": []})
         self.assertEqual((ca["t3"]["W"], ca["t3"]["B"], ca["t3"]["R"], ca["t3_all"]), (1, 1, 1, 1))
 
     def test_third_color_in_turn_four_is_too_late(self):
         hand = ["Plains", "Swamp", "White Bear", "White Bear", "Black Bear", "Black Bear", "Red Shock"]
         order = hand + ["White Bear", "White Bear", "Mountain"] + ["White Bear"] * 10
-        ca = self.play(order, {"colors": ["W", "B", "R"], "double": []})
+        ca = self.play(order, {"colors": ["W", "B", "R"], "checks": []})
         self.assertEqual((ca["t3"]["R"], ca["t3_all"]), (0, 0))
 
 
@@ -153,7 +153,8 @@ class DeckWiringTests(unittest.TestCase):
         for mode in ("On the Play", "On the Draw"):
             ca = dd["results"][mode]["color_avail"]
             self.assertEqual(ca["colors"], ["W", "R"])
-            self.assertEqual(ca["double"], ["R"])
+            self.assertEqual([(c["color"], c["k"], c["turn"], c["cards"]) for c in ca["checks"]],
+                             [("R", 2, 4, ["Red Ogre"])])
 
 
 class ReportTests(unittest.TestCase):
@@ -182,12 +183,13 @@ class ReportTests(unittest.TestCase):
 
 
 class RenderTests(unittest.TestCase):
-    def res(self, t3, all3, dbl, games=100, measured=True):
-        return {"color_avail": {"colors": list(t3), "double": list(dbl), "t3": t3, "t3_all": all3, "t4_double": dbl,
-                                "games": games, "t4_measured": measured}}
+    def res(self, t3, all3, dbl, games=100, measured=True, cards=None):
+        checks = [{"color": c, "k": 2, "turn": 4, "cards": list((cards or {}).get(c, [])), "ok": n,
+                   "measured": measured} for c, n in dbl.items()]
+        return {"color_avail": {"colors": list(t3), "t3": t3, "t3_all": all3, "games": games, "checks": checks}}
 
-    def ctx(self, play, draw, double_pips=None):
-        return {"results": {"On the Play": play, "On the Draw": draw}, "double_pips": double_pips or {}}
+    def ctx(self, play, draw):
+        return {"results": {"On the Play": play, "On the Draw": draw}}
 
     def test_traffic_light_levels(self):
         play = self.res({"W": 95, "B": 85}, 79, {})
@@ -201,14 +203,14 @@ class RenderTests(unittest.TestCase):
         self.assertNotIn("≥ 2 Quellen", render_color_availability(self.ctx(play, play)))
 
     def test_double_row_names_the_cards(self):
-        play = self.res({"R": 99}, 99, {"R": 88})
-        html = render_color_availability(self.ctx(play, play, {"R": ["Red Ogre", "Red Giant"]}))
+        play = self.res({"R": 99}, 99, {"R": 88}, cards={"R": ["Red Ogre", "Red Giant"]})
+        html = render_color_availability(self.ctx(play, play))
         self.assertIn("≥ 2 Quellen Rot bis Runde 4", html)
         self.assertIn("Red Ogre, Red Giant", html)
 
     def test_not_measured_turn_four_is_shown_as_dash(self):
-        play = self.res({"R": 99}, 99, {"R": 0}, measured=False)
-        html = render_color_availability(self.ctx(play, play, {"R": ["Red Ogre"]}))
+        play = self.res({"R": 99}, 99, {"R": 0}, measured=False, cards={"R": ["Red Ogre"]})
+        html = render_color_availability(self.ctx(play, play))
         self.assertIn("–", html)
 
     def test_colorless_deck_has_no_section(self):

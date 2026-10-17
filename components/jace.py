@@ -31,7 +31,7 @@ class JaceState:
     """Jace-Planeswalker-Token: nur eine Zahl (Loyalty). Bei 0 Loyalty gibt es keinen Token mehr,
     ein weiterer Empower erstellt einen neuen. Hoechstens eine Aktivierung pro Runde:
     ab 3 Loyalty -3 (Karte ziehen), sonst -1 (Surveil 1, nur wenn erlaubt; auch bis 0)."""
-    __slots__ = ("loyalty", "used", "acts", "gained", "first", "surveils", "surveil_lands")
+    __slots__ = ("loyalty", "used", "acts", "gained", "first", "surveils", "surveil_lands", "events", "graveyard")
 
     def __init__(self):
         self.loyalty = 0
@@ -41,11 +41,14 @@ class JaceState:
         self.first = None
         self.surveils = 0
         self.surveil_lands = 0
+        self.events = 0          # wie oft Loyalty dazukam (fuer "whenever you put loyalty counters", Tethermage)
+        self.graveyard = None    # Friedhof der Simulation (abgelegte Laender beim Surveil)
 
     def add(self, n):
         if n > 0:
             self.loyalty += n
             self.gained += n
+            self.events += 1
 
     def try_activate(self, hand, library, turn, battlefield=None, allow_surveil=False):
         """Ab 3 Loyalty: -3, eine Karte ziehen. Darunter (wenn allow_surveil, also nach dem Zaubern): -1, Surveil 1.
@@ -58,7 +61,10 @@ class JaceState:
             self.loyalty -= 1
             self.used = True
             self.surveils += 1
-            self.surveil_lands += len(surveil(library, 1, hand, battlefield or []))
+            binned = surveil(library, 1, hand, battlefield or [])
+            self.surveil_lands += len(binned)
+            if self.graveyard is not None:
+                self.graveyard.extend(binned)
             return True
         self.loyalty -= 3
         self.used = True
