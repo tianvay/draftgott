@@ -64,6 +64,15 @@ class Card(NamedTuple):
     hand_removal: tuple = ()   # "Kosten, Discard this card: Removal" - (Zahlungswege, Removal-Spec)
     gy_ability: tuple = ()     # "Kosten, Exile this card from your graveyard: Effekt" - (Zahlungswege, Effekte)
     surveil_attack: bool = False  # Defender gilt nicht, wenn man in diesem Zug gesurveilt hat
+    is_token: bool = False     # Token (kommt nicht in den Friedhof)
+    sac_mana: bool = False     # "{T}, Sacrifice this token: Add one mana of any color" (Sculpture: wie Treasure)
+    land_to_tokens: tuple = ()  # beim Betreten Land opfern, dafuer Token: (Anzahl, Token-Card) (Tenured Tethermage)
+    tap_artifacts: tuple = ()  # "Tap N untapped artifacts you control: Effekt" - (N, Effekte)
+    cast_token: object = None  # bei jedem Nichtkreatur-Zauber ein Token (Card) (Vraska)
+    artifact_vigilance: bool = False  # eigene Artefaktkreaturen haben Vigilance
+    mill_land: int = 0         # beim Betreten Mill N, dann ein Land aus dem Friedhof getappt ins Spiel
+    confidant: bool = False    # Endsegment: nach Lebensgewinn Surveil 1, abgelegte Karte mit MW <= Gewinn auf die Hand
+    null_summoner: bool = False  # beim Wirken: Nichtland-Karte aus der Hand des Gegners exilen, ab Threshold wirken
 
 
 LANDCYCLE_RE = re.compile(
@@ -510,6 +519,55 @@ _HAND_REMOVAL_RE = re.compile(r"^((?:\{[^}]+\})+),\s*discard (?:~|this card):\s*
 _GY_ABILITY_RE = re.compile(r"^((?:\{[^}]+\})+),\s*exile (?:~|this card) from your graveyard:\s*(.+)$")
 
 
+_LAND_TOKENS_RE = re.compile(r"you may sacrifice a land\. if you do, create (a|an|one|two|three) tapped ([a-z]+) "
+                             r"tokens?\. \(they're [a-z ]+ artifacts? with \"\{t\}: add ((?:\{[wubrg]\}(?: or )?)+)\.\"\)")
+_TAP_ARTIFACTS_RE = re.compile(r"^tap (a|an|one|two|three|\d+) untapped artifacts you control:\s*(.+)$")
+_CAST_TOKEN_RE = re.compile(r"^whenever you cast a noncreature spell, create an? (\d+)/(\d+) colorless ([a-z]+) "
+                            r"(treasure )?artifact creature token")
+_ARTIFACT_VIGILANCE_RE = re.compile(r"^artifact creatures you control have vigilance")
+_MILL_LAND_RE = re.compile(r"^when (?:~|this creature) enters, mill (a|one|two|three|four|\d+) cards?\. when you do, "
+                           r"return target land card from your graveyard to the battlefield tapped")
+_CONFIDANT_RE = re.compile(r"^at the beginning of your end step, if you gained life this turn, surveil 1\. if you put "
+                           r"a card with mana value less than or equal to the amount of life you gained this turn into "
+                           r"your graveyard this way, put that card into your hand")
+_NULL_SUMMONER_RE = re.compile(r"^when (?:~|this creature) enters, if you cast it, target opponent reveals their hand\. "
+                               r"you choose a nonland card from it\. exile that card")
+
+
+def token_card(name, creature=False, power=0, toughness=0, artifact=True, mana_src=(), sac_mana=False):
+    return Card(False, 0, (), (), creature, False, power, toughness, name=name, is_artifact=artifact, is_token=True,
+                mana_src=mana_src, sac_mana=sac_mana)
+
+
+def token_triggers(card):
+    """Token, Mill, Enlightened Confidant und Null Summoner (Stufe 4b, Paket C) als dict mit den Card-Feldern."""
+    out = {}
+    for raw, low in _clean_lines(card):
+        m = _LAND_TOKENS_RE.search(raw.lower())
+        if m:
+            colors = tuple(sorted(c.upper() for c in re.findall(r"\{([wubrg])\}", m.group(3))))
+            out["land_to_tokens"] = (_count(m.group(1)), token_card(m.group(2).capitalize(), mana_src=(colors,)))
+        m = _TAP_ARTIFACTS_RE.match(low)
+        if m:
+            atoms = _ability_atoms(m.group(2).strip())
+            if atoms:
+                out["tap_artifacts"] = (_count(m.group(1)), atoms)
+        m = _CAST_TOKEN_RE.match(low)
+        if m:
+            out["cast_token"] = token_card(m.group(3).capitalize(), True, int(m.group(1)), int(m.group(2)),
+                                           sac_mana=bool(m.group(4)) and "sacrifice this token: add one mana" in low)
+        if _ARTIFACT_VIGILANCE_RE.match(low):
+            out["artifact_vigilance"] = True
+        m = _MILL_LAND_RE.match(low)
+        if m:
+            out["mill_land"] = _count(m.group(1))
+        if _CONFIDANT_RE.match(low):
+            out["confidant"] = True
+        if _NULL_SUMMONER_RE.match(low):
+            out["null_summoner"] = True
+    return out
+
+
 def battle_triggers(card):
     """Weitere Ausloeser und Faehigkeiten fuer den Kampf (Stufe 4b), als dict mit den Card-Feldern."""
     out = {}
@@ -786,4 +844,5 @@ def card_info(card):
                 abilities=parse_abilities(card) if not ("Instant" in type_line or "Sorcery" in type_line) else (),
                 pump_tough=pump_toughness(card, type_line), legendary="Legendary" in type_line,
                 is_artifact="Artifact" in type_line,
-                targets_opp=targets_opponent(card, type_line, removal_spec(card)), **battle_triggers(card)), shown
+                targets_opp=targets_opponent(card, type_line, removal_spec(card)), **battle_triggers(card),
+                **token_triggers(card)), shown

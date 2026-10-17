@@ -75,9 +75,17 @@ RULES = [
     "Zauber); „Exile this card from your graveyard“ wie Marken und Empower (Campus Crier). Surveil-Fähigkeiten am Ende "
     "des gegnerischen Zugs; im eigenen Zug nur, wenn eine Kreatur dadurch trotz Defender angreifen darf "
     "(Surveillance Phantasm, auch nach Surveil durch Karten oder Jace).",
-    "Noch nicht im Kampf: Token (Tenured Tethermage, Vraska), Mill und Länder aus dem Friedhof (Primal Witchstalker), "
-    "Enlightened Confidant, Null Summoner, Fähigkeiten mit Opfern als Kosten und weitere Auslöser. Solche Karten werden "
-    "gewirkt, wirken aber nur mit den schon modellierten Effekten.",
+    "Token: Tenured Tethermage opfert immer ein Land (farblos zuerst, sonst das, dessen Farben am häufigsten vorkommen; "
+    "bei Gleichstand ein getapptes, dann ein Basic Land; ein ungetapptes nimmt sein offenes Mana mit) für zwei Heartwood-Token "
+    "(Mana ab dem nächsten Zug); „Tap two untapped artifacts“ am Ende des gegnerischen Zugs mit Artefakten, die nicht "
+    "mehr gebraucht werden. Vraska: Sculpture-Token bei jedem Nichtkreatur-Zauber, nutzbar wie Treasure (ab dem nächsten "
+    "eigenen Zug), Artefaktkreaturen mit Vigilance. Token kommen nicht in den Friedhof.",
+    "Primal Witchstalker: Mill 4, dann das Land aus dem Friedhof mit den meisten neuen Farben. Enlightened Confidant: "
+    "nach Lebensgewinn Surveil 1; ein abgelegtes Land kommt auf die Hand. Null Summoner: exiliert aus der Hand des "
+    "Gegners zuerst das teuerste Removal, sonst die teuerste Nichtland-Karte; ab 7 Karten im eigenen Friedhof wirkt er "
+    "sie selbst mit Mana jeder Art. Sie geht danach in den Friedhof bzw. auf die Hand ihres Besitzers.",
+    "Noch nicht im Kampf: Fähigkeiten mit Opfern als Kosten (z. B. Edgar, Ancient Bloodlord) und weitere Auslöser. "
+    "Solche Karten werden gewirkt, wirken aber nur mit den schon modellierten Effekten.",
 ]
 
 CSS = """

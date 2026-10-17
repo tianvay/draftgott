@@ -14,11 +14,12 @@ mit Trample), Trample, Lifelink; ein Angreifer verteilt seinen Schaden so, dass 
 Flying kann nur von Flying oder Reach geblockt werden, Menace nur von zwei oder mehr Kreaturen.
 """
 import itertools
+from collections import Counter
 
 from components.mana import land_key
 from components.mulligan import deal_opening
 from components.jace import (JaceState, cast_filter_matches, enter_filter_matches, once_effects,
-                             recurring_effects)
+                             recurring_effects, surveil)
 from components.simulation import (ANY_COLOR, apply_effects, apply_surveils, best_cast, choose_land, do_cycle,
                                    enters_prepared, landfall_effects, pay_subsets, plan_cycle, resolve_draws,
                                    tapped_for_mana, usable_now, use_treasures)
@@ -32,7 +33,7 @@ CYCLE_CAP = 6    # Ende des gegnerischen Zugs: nur cyceln, solange Laender auf F
 class Creature:
     """Eine Kreatur auf dem Feld (Karte, Schritt des Eintritts, getappt, Schaden, Marken, Pump)."""
     __slots__ = ("card", "entered", "tapped", "damage", "bonus", "pump", "dead", "touched", "locked", "prepared",
-                 "tpump", "extra", "lifted")
+                 "tpump", "extra", "lifted", "owner")
 
     def __init__(self, card, entered=0):
         self.card = card
@@ -48,6 +49,7 @@ class Creature:
         self.tpump = 0        # Toughness-Pump bis Rundenende (Faehigkeiten)
         self.extra = set()    # verliehene Schluesselwoerter bis Rundenende
         self.lifted = False   # Defender gilt in diesem Zug nicht (Surveillance Phantasm nach einem Surveil)
+        self.owner = None     # Besitzer, wenn nicht der Kontrolleur (aus dem Exil gewirkt, Null Summoner)
 
     @property
     def power(self):
@@ -66,6 +68,7 @@ class Creature:
                      "lifted"):
             setattr(c, attr, getattr(self, attr))
         c.extra = set(self.extra)
+        c.owner = self.owner
         return c
 
     def label(self):
@@ -281,6 +284,10 @@ class Player:
         self.jace.graveyard = self.graveyard
         self.jace_perms = []  # Permanents mit wiederkehrendem Empower: (Karte, Schritt des Eintritts)
         self.surveilled = False  # in diesem Zug gesurveilt (Surveillance Phantasm)
+        self.gained = 0       # in diesem Zug gewonnenes Leben (Enlightened Confidant)
+        self.exiled = []      # vom Gegner exilierte Karten, die wir ab Threshold wirken duerfen (Null Summoner)
+        self.exiled_from = None  # Besitzer dieser Karten (der Gegner)
+        self.turn_start = 0   # Schritt, in dem unser letzter Zug begann (Token mit {T} erst danach nutzbar)
 
     def board(self):
         return [(c.card, c.entered) for c in self.creatures], [c.bonus for c in self.creatures], \
@@ -329,17 +336,39 @@ def _alts(p, card):
     return _discounted(card, discount(p)).alts
 
 
+def _sculptures(p):
+    """Token mit "{T}, Sacrifice: Add one mana of any color", die schon seit Beginn unseres Zugs da sind."""
+    return [c for c in p.creatures if c.card.sac_mana and not c.dead and not c.tapped and c.entered < p.turn_start]
+
+
+def treasure_count(p):
+    return p.treasures + len(_sculptures(p))
+
+
+def _spend_treasures(p, k, remove=True):
+    """k Mana aus Treasure: erst Treasure-Token, dann Sculpture-Token (geopfert; remove=False: nur als tot markiert,
+    damit Indizes der Kreaturen in der Main Phase gueltig bleiben)."""
+    use = min(k, p.treasures)
+    p.treasures -= use
+    for c in _sculptures(p)[:k - use]:
+        if remove:
+            p.creatures.remove(c)
+        else:
+            c.dead = True
+
+
 def _payable(p, alts):
     if pay(p.open, alts) is not None:
         return True
-    return p.treasures > 0 and pay(list(p.open) + [ANY_COLOR] * p.treasures, alts) is not None
+    n = treasure_count(p)
+    return n > 0 and pay(list(p.open) + [ANY_COLOR] * n, alts) is not None
 
 
 def _pay_open(p, alts, treasure=True):
     """Bezahlt alts aus p.open; Treasure nur, wenn es ohne nicht reicht (so wenige wie moeglich)."""
     rest = pay(p.open, alts)
     k = 0
-    while rest is None and treasure and k < p.treasures:
+    while rest is None and treasure and k < treasure_count(p):
         k += 1
         rest = pay(list(p.open) + [ANY_COLOR] * k, alts)
     if rest is None:
@@ -347,7 +376,7 @@ def _pay_open(p, alts, treasure=True):
     if k:  # nicht genutzte Treasure bleiben Token
         unused = sum(1 for u in rest if u == ANY_COLOR)
         rest = [u for u in rest if u != ANY_COLOR]
-        p.treasures -= k - unused
+        _spend_treasures(p, k - unused)
     p.open = rest
     return True
 
@@ -456,6 +485,12 @@ def jace_turn_start(p, step, e=None):
     _jace_activate(p, step, e if e is not None else {"events": []}, False)
 
 
+def gain_life(p, n):
+    if n > 0:
+        p.life += n
+        p.gained += n
+
+
 def mark_surveil(p):
     p.surveilled = True
     for c in p.creatures:
@@ -466,6 +501,13 @@ def mark_surveil(p):
 def on_cast(p, card, step, e):
     """Ein Zauber wurde gewirkt: Jace-Ausloeser, Marken fuer Zauber mit Ziel beim Gegner (Danitha)."""
     _jace_on_cast(p, card, step, e)
+    if not card.is_creature:
+        for c in list(p.creatures):
+            if c.card.cast_token is not None and not c.dead:
+                token = Creature(c.card.cast_token, step)
+                p.creatures.append(token)
+                e["events"].append(f"{p.name}: {c.card.name} – Token {token.card.name}")
+                creature_enters(p, token, step, e, cast=False)
     if card.targets_opp:
         for c in p.creatures:
             if c.card.target_cast_counter and not c.dead:
@@ -474,14 +516,64 @@ def on_cast(p, card, step, e):
                                    f"{c.card.target_cast_counter}")
 
 
-def creature_enters(p, new, step, e):
+def _tapped_lands(p):
+    """Laender einer Art (gleiche Farben), die getappt sind: mehr Laender dieser Art als offenes Mana davon."""
+    lands = Counter(land.land_colors for land in p.lands)
+    units = Counter(p.open)
+    return {cols: n - min(n, units[cols]) for cols, n in lands.items()}
+
+
+def _redundant_land(p):
+    """Land, das am wenigsten fehlt: farblos zuerst, sonst das Land, dessen Farben am haeufigsten vorkommen; bei
+    Gleichstand ein getapptes Land, dann ein Basic Land."""
+    count = Counter(col for land in p.lands for col in set(land.land_colors))
+    tapped = _tapped_lands(p)
+    return max(p.lands, key=lambda land: (min((count[c] for c in land.land_colors), default=99),
+                                          tapped[land.land_colors] > 0, land.is_basic))
+
+
+def creature_enters(p, new, step, e, opp=None, cast=True):
     """Eine Kreatur kam ins Spiel (schon in p.creatures): Leben (Greenhouse Propagator), Marken auf eine Kreatur, die
-    in diesem Zug kam (Mabel), Team-Pump nach Artefakten (Craterclaw Colossus)."""
+    in diesem Zug kam (Mabel), Team-Pump nach Artefakten (Craterclaw Colossus), Land gegen Token (Tenured
+    Tethermage), Mill und Land zurueck (Primal Witchstalker), Exil aus der Hand des Gegners (Null Summoner, nur wenn
+    gewirkt)."""
+    card = new.card
+    if card.land_to_tokens and p.lands:
+        n, token = card.land_to_tokens
+        sac = _redundant_land(p)
+        if not _tapped_lands(p)[sac.land_colors] and sac.land_colors in p.open:
+            p.open.remove(sac.land_colors)  # ungetapptes Land: sein Mana fehlt jetzt
+        p.lands.remove(sac)
+        p.graveyard.append(sac)
+        p.perms += [token] * n
+        e["events"].append(f"{p.name}: {card.name} opfert {sac.name}, {n} {token.name}-Token")
+    if card.mill_land:
+        milled = p.library[:card.mill_land]
+        del p.library[:card.mill_land]
+        p.graveyard.extend(milled)
+        lands = [c for c in p.graveyard if c.is_land]
+        if lands:
+            have = set().union(*(land.land_colors for land in p.lands)) if p.lands else set()
+            pick = max(lands, key=lambda land: (len(set(land.land_colors) - have), -lands.index(land)))
+            p.graveyard.remove(pick)
+            p.lands.append(pick)
+            e["events"].append(f"{p.name}: {card.name} – Mill {len(milled)}, {pick.name} aus dem Friedhof")
+            if opp is not None:
+                on_land(p, opp, pick, step, e, with_mana=False)
+    if card.null_summoner and cast and opp is not None:
+        pool = [c for c in opp.hand if not c.is_land]
+        if pool:
+            removal = [c for c in pool if c.removal or c.hand_removal]
+            pick = max(removal or pool, key=lambda c: (c.mv, c.name))
+            opp.hand.remove(pick)
+            p.exiled.append(pick)
+            p.exiled_from = opp
+            e["events"].append(f"{p.name}: {card.name} exiliert {pick.name} aus der Hand von {opp.name}")
     new.lifted = p.surveilled and new.card.surveil_attack
     alive = [c for c in p.creatures if not c.dead]
     for c in alive:
         if c is not new and c.card.ally_enter_life:
-            p.life += c.card.ally_enter_life
+            gain_life(p, c.card.ally_enter_life)
     for c in alive:
         if c.card.enter_counter:
             fresh = [x for x in alive if x.entered == step]
@@ -581,7 +673,8 @@ def bury(players, e):
             if c.dead or c.toughness <= 0 or c.damage >= c.toughness or (c.touched and c.damage > 0):
                 p.deaths += 1
                 p.creatures.remove(c)
-                p.graveyard.append(c.card)
+                if not c.card.is_token:
+                    (c.owner or p).graveyard.append(c.card)
                 _leave(p, c.card)
                 e["deaths"].append(f"{c.card.name} ({p.name})")
 
@@ -670,7 +763,8 @@ def cast_removal(card, caster, victim, e, step, target=None):
         label += f" (Fight mit {ours.card.name})"
     elif kind == "bounce":
         victim.creatures.remove(target)
-        victim.hand.append(target.card)
+        if not target.card.is_token:
+            (target.owner or victim).hand.append(target.card)
         _leave(victim, target.card)
         e["events"].append(f"{caster.name}: {card.name} – {label} zurück auf die Hand")
         return
@@ -682,7 +776,7 @@ def cast_removal(card, caster, victim, e, step, target=None):
     bury((caster, victim), e)
 
 
-def _resolve(me, opp, card, step, entry):
+def _resolve(me, opp, card, step, entry, owner=None):
     """Eine gewirkte Karte kommt ins Spiel bzw. wirkt: Kreatur aufs Feld, Permanents, Instants/Sorceries in den
     Friedhof; Removal, Abwerfen und Effekte (Schaden an den Gegner, Marken, Pumps) wie im Goldfish."""
     if card.is_copy:  # Prepared-Kopie: eine passende Kreatur ist nicht mehr prepared, kein Friedhof
@@ -691,15 +785,16 @@ def _resolve(me, opp, card, step, entry):
             src.prepared = False
     elif card.is_creature:
         me.creatures.append(Creature(card, step))
+        me.creatures[-1].owner = owner
     elif card.is_instant_sorcery:
-        me.graveyard.append(card)
+        (owner or me).graveyard.append(card)
     else:
         me.perms.append(card)
     if card.treasure:
         me.treasures += card.treasure
     on_cast(me, card, step, entry)
     if card.is_creature and not card.is_copy:
-        creature_enters(me, me.creatures[-1], step, entry)
+        creature_enters(me, me.creatures[-1], step, entry, opp)
     if card.self_damage:  # "damage to each player" trifft auch uns
         me.life -= card.self_damage
     effects = card
@@ -825,7 +920,7 @@ def combat_tricks(p, pairs, opp, e, step, attacking):
         _apply_trick(best[1], own[best[2]], own, best[3])
         if card.is_creature:
             p.creatures.append(Creature(card, step))
-            creature_enters(p, p.creatures[-1], step, e)
+            creature_enters(p, p.creatures[-1], step, e, opp)
         elif card.is_instant_sorcery:
             p.graveyard.append(card)
         on_cast(p, card, step, e)
@@ -833,23 +928,38 @@ def combat_tricks(p, pairs, opp, e, step, attacking):
 
 
 def instant_removals(p):
-    """Removal, das p jederzeit einsetzen kann: [(Handkarte, Kosten, Karte mit Removal-Spec, ist Zauber)].
-    Instants mit Removal und Faehigkeiten "Kosten, Discard this card: Removal" (Sureshot Sower, kein Zauber)."""
+    """Removal, das p jederzeit einsetzen kann: [(Karte, Kosten, Karte mit Removal-Spec, ist Zauber, Zone)].
+    Instants mit Removal, Faehigkeiten "Kosten, Discard this card: Removal" (Sureshot Sower, kein Zauber) und ab
+    Threshold exilierte Removal-Instants (Null Summoner, Mana jeder Art)."""
     out = []
     for card in p.hand:
         if card.is_instant and card.removal and card.removal[4] == "spell":
-            out.append((card, _alts(p, card), card, True))
+            out.append((card, _alts(p, card), card, True, "hand"))
         elif card.hand_removal:
-            out.append((card, card.hand_removal[0], card._replace(removal=card.hand_removal[1]), False))
+            out.append((card, card.hand_removal[0], card._replace(removal=card.hand_removal[1]), False, "hand"))
+    if threshold(p):
+        for card in p.exiled:
+            if card.is_instant and card.removal and card.removal[4] == "spell":
+                out.append((card, _any_mana(card).alts, card, True, "exile"))
     return out
 
 
-def _use_removal(p, card, alts, is_spell, step, e):
-    """Bezahlt und legt die Karte in den Friedhof (gewirkt oder abgeworfen)."""
+def threshold(p):
+    return len(p.graveyard) >= 7
+
+
+def _any_mana(card):
+    """Kosten mit Mana jeder Art (nur noch der Manawert zaehlt)."""
+    return card._replace(alts=((card.mv, ()),)) if card.alts else card
+
+
+def _use_removal(p, card, alts, is_spell, step, e, zone="hand", other=None):
+    """Bezahlt und legt die Karte in den Friedhof (gewirkt oder abgeworfen); aus dem Exil in den Friedhof des
+    Besitzers (other: der Gegner, falls der Besitzer nicht gespeichert ist)."""
     if not _pay_open(p, alts):
         return False
-    p.hand.remove(card)
-    p.graveyard.append(card)
+    (p.exiled if zone == "exile" else p.hand).remove(card)
+    ((p.exiled_from or other or p) if zone == "exile" else p).graveyard.append(card)
     if is_spell:
         on_cast(p, card, step, e)
     else:
@@ -863,7 +973,7 @@ def respond_to_attack(dfn, att, attackers, e, step):
     while True:
         alive = [a for a in attackers if a in att.creatures and not a.dead and not a.locked]
         options = []
-        for card, alts, rc, is_spell in instant_removals(dfn):
+        for card, alts, rc, is_spell, zone in instant_removals(dfn):
             if not _payable(dfn, alts):
                 continue
             spec = rc.removal
@@ -871,11 +981,12 @@ def respond_to_attack(dfn, att, attackers, e, step):
                 continue
             targets = [a for a in valid_targets(spec, dfn, att) if a in alive]
             if targets:
-                options.append((danger(max(targets, key=danger)), card, max(targets, key=danger), alts, rc, is_spell))
+                options.append((danger(max(targets, key=danger)), card, max(targets, key=danger), alts, rc, is_spell,
+                                zone))
         if not options:
             break
-        _d, card, target, alts, rc, is_spell = max(options, key=lambda o: (o[0], -o[1].mv))
-        _use_removal(dfn, card, alts, is_spell, step, e)
+        _d, card, target, alts, rc, is_spell, zone = max(options, key=lambda o: (o[0], -o[1].mv))
+        _use_removal(dfn, card, alts, is_spell, step, e, zone, att)
         cast_removal(rc, dfn, att, e, step, target=target)
     alive = [a for a in attackers if a in att.creatures and not a.dead and not a.locked]
     for card in sorted([c for c in dfn.hand if c.flash and c.is_creature], key=lambda c: -c.mv):
@@ -892,19 +1003,20 @@ def respond_to_attack(dfn, att, attackers, e, step):
             if card.treasure:
                 dfn.treasures += card.treasure
             on_cast(dfn, card, step, e)
-            creature_enters(dfn, new, step, e)
+            creature_enters(dfn, new, step, e, att)
     return alive
 
 
 def end_step_instants(dfn, act, e, step):
     """Am Ende des Zugs von act nutzt dfn sein offenes Mana: Removal auf die gefaehrlichste Kreatur, Flash-Kreaturen,
     sonstige Instants (z. B. Ziehen), danach Landcycling mit dem Rest. Kampftricks bleiben auf der Hand."""
-    for card, alts, rc, is_spell in sorted(instant_removals(dfn), key=lambda o: o[0].mv):
-        if card not in dfn.hand or not _payable(dfn, alts) or not has_target(rc, dfn, act):
+    for card, alts, rc, is_spell, zone in sorted(instant_removals(dfn), key=lambda o: o[0].mv):
+        if card not in (dfn.exiled if zone == "exile" else dfn.hand) or not _payable(dfn, alts) \
+                or not has_target(rc, dfn, act):
             continue
         if rc.removal[3] and choose_target(rc.removal, dfn, act) is None and act.life > _amount(rc.removal, dfn):
             continue  # "any target" am Endstep nur gegen eine Kreatur oder als Lethal
-        _use_removal(dfn, card, alts, is_spell, step, e)
+        _use_removal(dfn, card, alts, is_spell, step, e, zone, act)
         cast_removal(rc, dfn, act, e, step)
     for card in sorted([c for c in dfn.hand if c.flash], key=lambda c: -c.mv):
         if card in dfn.hand and _cast_from_open(dfn, card):
@@ -919,6 +1031,46 @@ def end_step_instants(dfn, act, e, step):
             _resolve(dfn, act, card, step, e)
     end_step_cycling(dfn, e)
     lasting_abilities(dfn, act, step, e, own_turn=False, mode="rest")
+    tap_artifact_abilities(dfn, e)
+
+
+def confidant_end_step(p, e):
+    """Enlightened Confidant: nach Lebensgewinn in diesem Zug Surveil 1; eine abgelegte Karte mit Manawert hoechstens
+    dem gewonnenen Leben kommt auf die Hand."""
+    for c in p.creatures:
+        if not c.card.confidant or c.dead or p.gained <= 0 or not p.library:
+            continue
+        mark_surveil(p)
+        for card in surveil(p.library, 1, p.hand, p.lands):
+            if card.mv <= p.gained:
+                p.hand.append(card)
+                e["events"].append(f"{p.name}: {c.card.name} – Surveil 1, {card.name} auf die Hand")
+            else:
+                p.graveyard.append(card)
+
+
+def tap_artifact_abilities(p, e):
+    """Am Ende des gegnerischen Zugs: "Tap N untapped artifacts you control" (Tenured Tethermage) mit Artefakten, die
+    nicht mehr gebraucht werden: offenes Mana von Artefakt-Token und ungetappte Artefaktkreaturen."""
+    artifact_units = [u for card in p.perms if card.is_artifact for u in card.mana_src]
+    for c in list(p.creatures):
+        if not c.card.tap_artifacts or c.dead:
+            continue
+        n, atoms = c.card.tap_artifacts
+        for _round in range(10):
+            units = [u for u in p.open if u in artifact_units]
+            free_units = min(len(units), len(artifact_units))
+            creatures = [x for x in p.creatures if x.card.is_artifact and not x.tapped and not x.dead]
+            if free_units + len(creatures) < n:
+                break
+            take = min(free_units, n)
+            for u in units[:take]:
+                p.open.remove(u)
+                artifact_units.remove(u)
+            for x in creatures[:n - take]:
+                x.tapped = True
+            apply_ability(p, c, ((), 0, False, "instant", atoms), None, e)
+            e["events"].append(f"{p.name}: {c.card.name} tappt {n} Artefakte")
 
 
 def end_step_cycling(p, e):
@@ -1264,6 +1416,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     e = {"player": me.name, "round": rnd, "drew": None, "land": None, "main1": [], "main2": [], "attacks": [],
          "damage": 0, "face": 0, "deaths": [], "events": [], "note": ""}
     me.cast_count = 0
+    me.turn_start = step
     for c in me.creatures:  # Untap (gesperrte Kreaturen bleiben gesperrt)
         c.tapped = False
     upkeep(me)
@@ -1283,6 +1436,12 @@ def take_turn(me, opp, step, rnd, skip_draw):
             if cheap != c:
                 orig[cheap] = c
                 me.hand[i] = cheap
+    ex_map = {}  # ab Threshold: exilierte Karten (Null Summoner) mit Mana jeder Art, voruebergehend auf der Hand
+    if me.exiled and threshold(me):
+        for c in me.exiled:
+            if not c.is_instant and not c.flash and not c.is_land:
+                ex_map[_any_mana(c)] = c
+                me.hand.append(_any_mana(c))
     # Main 1: Landcycling, wenn ein Land fuer den Landdrop fehlt
     pool, creature_units = _mana(me, step)
     spells = main_phase_spells(me, opp)
@@ -1312,10 +1471,10 @@ def take_turn(me, opp, step, rnd, skip_draw):
             pool_all = pool_all + [land.land_colors]
         pool_all = pool_all + on_land(me, opp, land, step, e)
     _score_, chosen = best_cast(spells, land_key(pool_all), has_creature, True, must=forced)
-    if me.treasures and forced is None:  # Treasure nur, wenn er diese Runde mehr ermoeglicht
-        k_t, _ch = use_treasures(spells, pool_all, me.treasures, has_creature, True)
+    if treasure_count(me) and forced is None:  # Treasure nur, wenn er diese Runde mehr ermoeglicht
+        k_t, _ch = use_treasures(spells, pool_all, treasure_count(me), has_creature, True)
         if k_t:
-            me.treasures -= k_t
+            _spend_treasures(me, k_t, remove=False)
             pool_all = pool_all + [ANY_COLOR] * k_t
             e["events"].append(f"{me.name}: {k_t} Treasure geopfert")
             _score_, chosen = best_cast(spells, land_key(pool_all), has_creature, True)
@@ -1348,6 +1507,22 @@ def take_turn(me, opp, step, rnd, skip_draw):
     if orig:  # wieder die Originalkarten
         me.hand[:] = [orig.get(c, c) for c in me.hand]
         chosen = [orig.get(c, c) for c in chosen]
+    from_exile = Counter()  # aus dem Exil gewirkt: Besitzer ist der Gegner
+    if ex_map:  # gewirkte exilierte Karten verlassen das Exil, die anderen bleiben dort
+        for c in chosen:
+            if c in ex_map:
+                me.exiled.remove(ex_map[c])
+                from_exile[ex_map[c]] += 1
+        me.hand[:] = [c for c in me.hand if c not in ex_map]
+        chosen = [ex_map.get(c, c) for c in chosen]
+    owner_of = me.exiled_from or opp
+
+    def resolve(c):
+        owner = None
+        if from_exile[c]:
+            from_exile[c] -= 1
+            owner = owner_of
+        _resolve(me, opp, c, step, e, owner)
     me.cast_count += len(chosen)
     main1 = [c for c in chosen if not (c.is_creature and not c.haste)]
     main2 = [c for c in chosen if c.is_creature and not c.haste]
@@ -1356,7 +1531,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
         if c.is_copy and not any(x.prepared and x.card.prepared[1] == c for x in me.creatures):
             main2.append(c)  # Kopie einer Kreatur, die erst in Main 2 ins Spiel kommt
             continue
-        _resolve(me, opp, c, step, e)
+        resolve(c)
         done1.append(c)
     main1 = done1
     e["main1"] = [c.name for c in main1]
@@ -1364,20 +1539,21 @@ def take_turn(me, opp, step, rnd, skip_draw):
         return e
     # Removal-Instants vor dem Angriff: Blocker entfernen, die einen unserer Angreifer fressen wuerden
     candidates = [c for c in me.creatures if can_attack(c, step)]
-    for card, alts, rc, is_spell in sorted(instant_removals(me), key=lambda o: o[0].mv):
-        if card not in me.hand or not _payable(me, alts):
+    for card, alts, rc, is_spell, zone in sorted(instant_removals(me), key=lambda o: o[0].mv):
+        if card not in (me.exiled if zone == "exile" else me.hand) or not _payable(me, alts):
             continue
         eaters = [t for t in valid_targets(rc.removal, me, opp) if any(_eats(t, a) for a in candidates)]
         if eaters:
-            _use_removal(me, card, alts, is_spell, step, e)
+            _use_removal(me, card, alts, is_spell, step, e, zone, opp)
             me.cast_count += 1 if is_spell else 0
             cast_removal(rc, me, opp, e, step, target=max(eaters, key=danger))
     # Faehigkeiten vor dem Angriff: Marken und Empower mit freiem Mana, Flying/Menace fuer den Angriff
     pre_attack_abilities(me, opp, step, e)
     # Kampf
     attackers = choose_attackers(me.creatures, opp.creatures, opp.life, me.life, step)
+    art_vigilance = any(c.card.artifact_vigilance for c in me.creatures if not c.dead)
     for a in attackers:
-        if not a.has("vigilance"):
+        if not (a.has("vigilance") or (art_vigilance and a.card.is_artifact)):
             a.tapped = True
         for ef in recurring_effects(a.card):  # Angriffs-Ausloeser (Empower)
             if ef[1] == "trigger" and ef[3] == "attack" and any(pc == a.card for pc, _t in me.jace_perms):
@@ -1396,8 +1572,8 @@ def take_turn(me, opp, step, rnd, skip_draw):
     res = resolve_combat(blocks)
     opp.life -= res["player"]
     me.dealt_combat += res["player"]
-    me.life += res["lifelink_attacker"]
-    opp.life += res["lifelink_defender"]
+    gain_life(me, res["lifelink_attacker"])
+    gain_life(opp, res["lifelink_defender"])
     e["damage"] = res["player"]
     for a, _bs in blocks:  # "deals combat damage to a player, draw ..." (Frostbite Pyromental)
         if a.card.combat_draw and res["to_player"].get(id(a)):
@@ -1412,7 +1588,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
         return e
     # Main 2
     for c in main2:
-        _resolve(me, opp, c, step, e)
+        resolve(c)
     e["main2"] = [c.name for c in main2]
     _jace_activate(me, step, e, True)
     # End Phase: Edgar ("if you didn't cast a spell this turn"), danach Instants und Flash des Gegners
@@ -1420,6 +1596,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
         for c in me.creatures:
             if c.card.endstep_counters:
                 c.bonus += c.card.endstep_counters
+    confidant_end_step(me, e)
     for p_ in (me, opp):  # "At the beginning of the end step, sacrifice this creature"
         for c in p_.creatures:
             if c.card.end_sacrifice:
@@ -1438,6 +1615,7 @@ def cleanup(players):
             c.damage, c.pump, c.tpump, c.touched, c.lifted = 0, 0, 0, False, False
             c.extra = set()
         p.surveilled = False
+        p.gained = 0
 
 
 def _finish(entry, me, opp):
