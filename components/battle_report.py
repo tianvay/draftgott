@@ -95,6 +95,9 @@ RULES = [
     "Lifelink lösen zweimal aus, eine einmal; die Marken gibt es nach dem Kampfschaden nur für Engel, die noch leben. "
     "Thalia, the Survivor: Nichtkreatur-Zauber des anderen Spielers kosten {1} mehr (auch Prepared-Kopien und "
     "exilierte Karten).",
+    "Weitere Effekte: Schaden je Angreifer beim Angriff (Ingris Stingerquill), Leben beim Betreten, Sterben und Wirken "
+    "(Apex Witchstalker, Extended Absence; Schaden und Leben von Instants auch im Zug des Gegners), Prowess. "
+    "Zusatzkosten „sacrifice … or pay {N}“ zahlen wir immer mit Mana (Silence the Echo: {3} mehr).",
     "Noch nicht im Kampf: Fähigkeiten mit Opfern als Kosten (z. B. Edgar, Ancient Bloodlord) und weitere Auslöser. "
     "Solche Karten werden gewirkt, wirken aber nur mit den schon modellierten Effekten.",
 ]

@@ -78,6 +78,12 @@ class Card(NamedTuple):
     lifegain_counter: tuple = ()  # bei jedem Lebensgewinn Marken auf jede eigene Kreatur eines Typs: (n, Typ) (Lyra)
     opp_spell_tax: int = 0     # Nichtkreatur-Zauber der Gegner kosten {N} mehr (Thalia, the Survivor)
     landfall_life: int = 0     # Landfall: N Leben (Koth of the Homestead)
+    attack_ping: int = 0       # jede eigene angreifende Kreatur macht N Schaden an jedem Gegner (Ingris Stingerquill)
+    etb_life: int = 0          # N Leben beim Betreten
+    death_life: int = 0        # N Leben, wenn die Kreatur stirbt
+    spell_life: int = 0        # N Leben beim Wirken (Instant/Sorcery)
+    extra_cost: int = 0        # Zusatzkosten {N} ("sacrifice ... or pay {N}": wir zahlen immer)
+    prowess: bool = False      # +1/+1 bis Rundenende bei jedem eigenen Nichtkreatur-Zauber
 
 
 LANDCYCLE_RE = re.compile(
@@ -679,6 +685,41 @@ def battle_triggers(card):
     return out
 
 
+_ATTACK_PING_RE = re.compile(r"^whenever a creature you control attacks, that creature deals (\d+) damage to each "
+                             r"opponent")
+_ETB_DEATH_LIFE_RE = re.compile(r"^when (?:~|this creature) (enters or dies|enters|dies), you gain (a|one|two|three|\d+) "
+                                r"life\.?$")
+_SPELL_LIFE_RE = re.compile(r"\byou gain (a|one|two|three|\d+) life\b")
+_EXTRA_COST_RE = re.compile(r"^as an additional cost to cast this spell, [^.]*\bpay \{(\d+)\}")
+
+
+def life_and_costs(card, type_line, keywords):
+    """Ingris-Schaden beim Angriff, Leben beim Betreten/Sterben/Wirken, Zusatzkosten und Prowess."""
+    spell_face = "Instant" in type_line or "Sorcery" in type_line
+    out = {}
+    if "Prowess" in keywords:
+        out["prowess"] = True
+    for _raw, low in _clean_lines(card):
+        m = _ATTACK_PING_RE.match(low)
+        if m:
+            out["attack_ping"] = int(m.group(1))
+        m = _ETB_DEATH_LIFE_RE.match(low)
+        if m:
+            n = _EFFECT_NUM.get(m.group(2)) or int(m.group(2))
+            if "enters" in m.group(1):
+                out["etb_life"] = n
+            if "dies" in m.group(1):
+                out["death_life"] = n
+        if spell_face and not re.match(r"^(when|whenever|at the beginning)\b", low):
+            gain = sum(_EFFECT_NUM.get(m.group(1)) or int(m.group(1)) for m in _SPELL_LIFE_RE.finditer(low))
+            if gain:
+                out["spell_life"] = out.get("spell_life", 0) + gain
+        m = _EXTRA_COST_RE.match(low)
+        if m:
+            out["extra_cost"] = int(m.group(1))
+    return out
+
+
 def targets_opponent(card, type_line, spec):
     """Zauber (Instant, Sorcery, Aura) mit Ziel beim Gegner: Removal auf eine Kreatur oder "target opponent/player"."""
     if not ("Instant" in type_line or "Sorcery" in type_line or "Aura" in type_line):
@@ -912,6 +953,7 @@ def card_info(card):
                 pump_tough=pump_toughness(card, type_line), legendary="Legendary" in type_line,
                 is_artifact="Artifact" in type_line,
                 targets_opp=targets_opponent(card, type_line, removal_spec(card)), **battle_triggers(card),
-                **token_triggers(card), creates_tokens=creates_tokens(card, type_line),
+                **token_triggers(card), **life_and_costs(card, type_line, keywords),
+                creates_tokens=creates_tokens(card, type_line),
                 creature_types=(tuple(t.lower() for t in type_line.split("—", 1)[1].split())
                                 if is_creature and "—" in type_line else ())), shown

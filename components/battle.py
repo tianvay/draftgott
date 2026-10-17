@@ -361,9 +361,13 @@ def discount(p):
 
 
 def _discounted(card, d):
-    if not d or card.is_creature or card.is_land or not card.alts:
+    """Kosten mit Kostensenkung bzw. Steuer d (nur Nichtkreatur-Zauber) und Zusatzkosten (Silence the Echo)."""
+    if card.is_land or not card.alts:
         return card
-    return card._replace(alts=tuple(sorted({(max(0, g - d), cols) for g, cols in card.alts})))
+    change = (0 if card.is_creature else d) - card.extra_cost
+    if not change:
+        return card
+    return card._replace(alts=tuple(sorted({(max(0, g - change), cols) for g, cols in card.alts})))
 
 
 def _alts(p, card):
@@ -552,6 +556,10 @@ def on_cast(p, card, step, e):
     """Ein Zauber wurde gewirkt: Jace-Ausloeser, Marken fuer Zauber mit Ziel beim Gegner (Danitha)."""
     _jace_on_cast(p, card, step, e)
     if not card.is_creature:
+        for c in p.creatures:
+            if c.card.prowess and not c.dead:
+                c.pump += 1
+                c.tpump += 1
         for c in list(p.creatures):
             if c.card.cast_token is not None and not c.dead:
                 token = Creature(c.card.cast_token, step)
@@ -588,6 +596,7 @@ def creature_enters(p, new, step, e, opp=None, cast=True):
     Tethermage), Mill und Land zurueck (Primal Witchstalker), Exil aus der Hand des Gegners (Null Summoner, nur wenn
     gewirkt)."""
     card = new.card
+    gain_life(p, card.etb_life)
     if card.land_to_tokens and p.lands:
         n, token = card.land_to_tokens
         sac = _redundant_land(p)
@@ -729,6 +738,7 @@ def bury(players, e):
                 if not c.card.is_token:
                     (c.owner or p).graveyard.append(c.card)
                 _leave(p, c.card)
+                gain_life(p, c.card.death_life)
                 e["deaths"].append(f"{c.card.name} ({p.name})")
 
 
@@ -876,6 +886,7 @@ def _resolve(me, opp, card, step, entry, owner=None):
                 me.hand.append(me.library.pop(0))
     if card.surveil:
         surveil_cards(me, [card.surveil], entry, card.name)
+    gain_life(me, card.spell_life)
     make_tokens(me, card.creates_tokens, step, entry, opp, card.name)
     bury((me, opp), entry)
 
@@ -1026,6 +1037,12 @@ def _use_removal(p, card, alts, is_spell, step, e, zone="hand", other=None):
     ((p.exiled_from or other or p) if zone == "exile" else p).graveyard.append(card)
     if is_spell:
         on_cast(p, card, step, e)
+        face = sum(a[1] for a in card.modes[0] if a[0] == "face") if card.modes and not card.removal[3] else 0
+        if face and other is not None:  # z. B. Extended Absence: "deals 1 damage to each opponent"
+            other.life -= face
+            p.dealt_direct += face
+            e["face"] = e.get("face", 0) + face
+        gain_life(p, card.spell_life)
     else:
         e["events"].append(f"{p.name}: wirft {card.name} ab (Fähigkeit)")
     return True
@@ -1529,13 +1546,12 @@ def take_turn(me, opp, step, rnd, skip_draw):
         me.hand.append(card)
         e["drew"] = card.name
     jace_turn_start(me, step, e)
-    disc, orig = discount(me), {}  # Kostensenkung: verbilligte Handkarten fuer die Main Phase
-    if disc:
-        for i, c in enumerate(me.hand):
-            cheap = _discounted(c, disc)
-            if cheap != c:
-                orig[cheap] = c
-                me.hand[i] = cheap
+    disc, orig = discount(me), {}  # Kostensenkung, Steuer, Zusatzkosten: angepasste Handkarten fuer die Main Phase
+    for i, c in enumerate(me.hand):
+        cheap = _discounted(c, disc)
+        if cheap != c:
+            orig[cheap] = c
+            me.hand[i] = cheap
     ex_map = {}  # ab Threshold: exilierte Karten (Null Summoner) mit Mana jeder Art, voruebergehend auf der Hand
     if me.exiled and threshold(me):
         for c in me.exiled:
@@ -1545,7 +1561,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
                 me.hand.append(cheap)
 
     def cost(c):  # Prepared-Kopien mit Kostensenkung bzw. Steuer (Handkarten sind schon angepasst)
-        if c.is_copy and disc:
+        if c.is_copy:
             cheap = _discounted(c, disc)
             if cheap != c:
                 orig[cheap] = c
@@ -1674,6 +1690,12 @@ def take_turn(me, opp, step, rnd, skip_draw):
                 _jace_add(me, n, e)
     for a in choose_jace_attackers(attackers, opp, [b for b in opp.creatures if not b.tapped and not b.dead]):
         a.at_jace = True
+    ping = sum(c.card.attack_ping for c in me.creatures if not c.dead) * len(attackers)
+    if ping:  # "Whenever a creature you control attacks, that creature deals 1 damage to each opponent"
+        opp.life -= ping
+        me.dealt_direct += ping
+        e["face"] += ping
+        e["events"].append(f"{me.name}: {ping} Schaden durch Angriffs-Auslöser")
     attackers = respond_to_attack(opp, me, attackers, e, step)
     pre_block_abilities(opp, me, attackers, e, step)
     blocks = choose_blocks(attackers, opp.creatures, opp.life)
