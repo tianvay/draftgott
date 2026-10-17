@@ -3,6 +3,7 @@ import re
 from typing import NamedTuple
 
 from components.mana import cost_alternatives, mana_value
+from components.removal import discard_count, has_flash, removal_spec
 
 
 class Card(NamedTuple):
@@ -44,6 +45,10 @@ class Card(NamedTuple):
     gy_x: bool = False         # Wert haengt vom hoechsten Manawert im Friedhof ab (Hapatra)
     kw: tuple = ()             # Kampf-Schluesselwoerter der Karte selbst (flying, reach, first strike, ...)
     self_damage: int = 0       # Schaden an uns selbst beim Wirken/Betreten ("damage to each player"), nur im Kampf
+    is_instant: bool = False   # Instant (im Kampf ausserhalb der eigenen Main Phase spielbar)
+    flash: bool = False        # bleibende Karte mit Flash
+    removal: tuple = ()        # Removal im Kampf (removal.removal_spec)
+    discard: int = 0           # der Gegner wirft beim Wirken/Betreten Karten ab
 
 
 LANDCYCLE_RE = re.compile(
@@ -610,4 +615,6 @@ def card_info(card):
                 is_jace=("Planeswalker" in type_line and "Jace" in type_line.split("—")[-1].split()),
                 draws=draws, surveil=surveil, prepared=prepared, mana_src=mana_src, treasure=treasure,
                 modes=modes, landfall=landfall, endstep_counters=endstep, loyalty_counter=loyalty, gy_x=gy_x,
-                kw=combat_keywords(card) if is_creature else (), self_damage=self_damage(card, type_line)), shown
+                kw=combat_keywords(card) if is_creature else (), self_damage=self_damage(card, type_line),
+                is_instant="Instant" in type_line, flash="Instant" not in type_line and has_flash(card),
+                removal=removal_spec(card), discard=discard_count(card)), shown

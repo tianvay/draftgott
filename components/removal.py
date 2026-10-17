@@ -159,6 +159,142 @@ def removal_info(card):
     return best
 
 
+_COLOR_WORD = {"white": "W", "blue": "U", "black": "B", "red": "R", "green": "G"}
+_DISCARD = re.compile(r"\b(?:each opponent|target opponent) discards (a|an|one|two|three|\d+) cards?\b")
+_NUM = {"a": 1, "an": 1, "one": 1, "two": 2, "three": 3}
+
+
+def _conditions(phrase):
+    """Bedingungen am Ziel: Flying, Manawert, Toughness, Power, Farben."""
+    out = []
+    if re.search(r"\bwith flying\b", phrase):
+        out.append(("flying",))
+    m = re.search(r"mana value (\d+) or less", phrase)
+    if m:
+        out.append(("mv_le", int(m.group(1))))
+    m = re.search(r"toughness (\d+) or greater", phrase)
+    if m:
+        out.append(("tough_ge", int(m.group(1))))
+    m = re.search(r"power (\d+) or greater", phrase)
+    if m:
+        out.append(("pow_ge", int(m.group(1))))
+    colors = [_COLOR_WORD[w] for w in re.findall(r"\b(white|blue|black|red|green)\b", phrase)]
+    if colors:
+        out.append(("color",) + tuple(dict.fromkeys(colors)))
+    return tuple(out)
+
+
+def _amount_of(word):
+    return int(word) if word.isdigit() else -1
+
+
+def _spec_from(low, label):
+    """(Art, Menge, Bedingungen, any_target) fuer die Simulation im Kampf; Menge -1 = X, -2 = Power unserer
+    Kreatur, -3 = hoechster Manawert im eigenen Friedhof."""
+    target = low
+    m = re.search(r"target ([^.]*)", low)
+    if m:
+        target = m.group(1)
+    if label == "Massenremoval":
+        m = _DAMAGE_EACH.search(low)
+        if m:
+            cond = (("opponents",),) if "opponents control" in low or "don't control" in low else ()
+            return "sweep_damage", int(m.group(1)), cond, False
+        return "sweep", 0, ((("chosen_type",),) if "chosen type" in low else ()), False
+    if label in ("Hart", "Exil bis verlassen", "Toughness 0"):
+        return "destroy", 0, _conditions(target), False
+    if label == "Edikt" or (label == "Bedingt" and _EDICT.search(low)):
+        return "edict", 0, ((("greatest",),) if "greatest mana value" in low else ()), False
+    if label == "Fight":
+        return "fight", 0, (), False
+    if label == "Bounce":
+        return "bounce", 0, (), False
+    if label == "Lock":
+        return "lock", 0, (), False
+    if label == "−X/−X":
+        m = _MINUS.search(low)
+        return "minus", (_amount_of(m.group(2)) if m else -1), _conditions(target), False
+    if label == "−1/−1-Marken":
+        m = _MINUS_COUNTERS.search(low)
+        amount = -3 if "graveyard" in low else (_amount_of(m.group(1)) if m else -1)
+        return "counters", amount, (), False
+    m = _DAMAGE.search(low)
+    if m:
+        word = m.group(1).split()[0]
+        amount = -2 if word == "damage" else _amount_of(word)
+        return "damage", amount, _conditions(m.group(2)), "any target" in m.group(2)
+    if _DESTROY.search(low):
+        return "destroy", 0, _conditions(target), False
+    return None
+
+
+def removal_spec(card):
+    """Wirkung des Removals im Kampf: (Art, Menge, Bedingungen, any_target, Zeitpunkt, eigenes Abwerfen) oder ().
+    Zeitpunkt: "spell" (Instant/Sorcery), "etb" (beim Betreten), "aura" (Lock-Aura beim Wirken). Faehigkeiten und
+    andere Ausloeser werden im Kampf (noch) nicht genutzt."""
+    front = _faces(card)[0]
+    type_line = (front.get("type_line") or card.get("type_line") or "").split(" // ")[0]
+    spell = "Instant" in type_line or "Sorcery" in type_line
+    aura = "Aura" in type_line
+    text = front.get("oracle_text") if card.get("card_faces") else card.get("oracle_text")
+    name = (front.get("name") or card.get("name") or "").lower()
+    best = None
+    for raw in (text or "").split("\n"):
+        low = _strip(raw).strip().lower().lstrip("•").strip()
+        if not low or '"' in low or "“" in low or _ACTIVATED.match(low) or _LOYALTY.match(low):
+            continue
+        for nm in {name, name.split(",")[0]} - {""}:
+            low = low.replace(nm, "~")
+        if spell:
+            if _TRIGGER.match(low):
+                continue
+            when = "spell"
+        elif aura and low.startswith("enchanted creature"):
+            when = "aura"
+        else:
+            head, _, body = low.partition(",")
+            if not (_TRIGGER.match(low) and "enters" in head):
+                continue
+            when, low = "etb", body.strip()
+        res = _classify(low)
+        if not res:
+            continue
+        spec = _spec_from(low, res[1])
+        if spec and (best is None or res[0] > best[0]):
+            best = (res[0], spec + (when, "you may discard a card" in low))
+    return best[1] if best else ()
+
+
+def discard_count(card):
+    """Karten, die der Gegner beim Wirken bzw. Betreten abwirft ("each opponent discards a card")."""
+    front = _faces(card)[0]
+    text = front.get("oracle_text") if card.get("card_faces") else card.get("oracle_text")
+    total = 0
+    for raw in (text or "").split("\n"):
+        low = _strip(raw).lower()
+        if re.match(r"\s*(whenever|at the beginning)\b", low):
+            continue
+        for m in _DISCARD.finditer(low):
+            total += _NUM.get(m.group(1)) or int(m.group(1))
+    return total
+
+
+def has_flash(card):
+    """Flash als eigene Schluesselwort-Zeile (bei Instants ohne Bedeutung)."""
+    return "flash" in _own_keywords(card)
+
+
+def _own_keywords(card):
+    front = _faces(card)[0]
+    text = front.get("oracle_text") if card.get("card_faces") else card.get("oracle_text")
+    found = set()
+    for raw in _strip(text).split("\n"):
+        tokens = [t.strip().lower() for t in raw.split(",") if t.strip()]
+        if tokens and all(re.fullmatch(r"[a-z ]{2,20}", t) for t in tokens):
+            found |= set(tokens)
+    return found
+
+
 def removal_level(points, cards):
     """Ampel fuer die Summe der Removal-Punkte: gruen ab 4, gelb ab 2,5 bei 40 Karten (anteilig)."""
     scale = (cards or 40) / 40

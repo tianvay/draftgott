@@ -15,8 +15,23 @@ RULES = [
     "allerersten Zug), Main 1, Kampf, Main 2, End Phase. Bei „On the Play“ beginnen wir, bei „On the Draw“ der Gegner.",
     "Mulligan wie im Goldfish. Fällt unsere Hand unter die Mindestzahl, geben wir auf (Niederlage durch Mulligan). Der "
     "Gegner gibt nie auf: Er behält dann seine Hand mit der Mindestzahl an Karten.",
-    "Gespielt wird mit derselben Auswahl wie im Goldfish. Main 1: das Land und alle Zauber außer Kreaturen ohne Haste; "
-    "Main 2: Kreaturen ohne Haste.",
+    "Gespielt wird mit derselben Auswahl wie im Goldfish, in den Main Phases aber nur Sorcery-Speed (Permanents, "
+    "Sorceries, Sorcery-Removal mit gültigem Ziel). Main 1: das Land und alle Zauber außer Kreaturen ohne Haste; Main 2: "
+    "Kreaturen ohne Haste. Übriges Mana bleibt offen für Instants und Flash, auch im Zug des Gegners.",
+    "<b>Removal</b> trifft die gefährlichste passende Kreatur (höchste Power, dann Flying/Trample/Deathtouch, dann "
+    "Manawert): Destroy/Exile, Schaden und −X/−X nur, wenn sie tötet, Edikt (der Gegner opfert seine schwächste "
+    "Kreatur, bei „greatest mana value“ die teuerste), Fight, Bounce (zurück auf die Hand), Lock-Aura (greift nicht an, "
+    "blockt nicht), Massenremoval (alle Kreaturen). Removal-Instants: vor dem eigenen Angriff gegen einen Blocker, der "
+    "einen Angreifer fressen würde; im Zug des Gegners gegen den gefährlichsten Angreifer; sonst am Ende des "
+    "gegnerischen Zugs.",
+    "<b>„Any target“-Schaden</b> trifft die gefährlichste Kreatur, die er tötet (nur Kreaturen mit Power über 0); ist "
+    "Schaden am Gegner tödlich oder gibt es keine solche Kreatur, geht er an den Gegner.",
+    "<b>Kampftricks</b> (Instants und Flash-Karten mit Pump oder Marken) nach den Blockern, wenn danach eine eigene "
+    "Kreatur überlebt, eine gegnerische stirbt oder es Lethal ist. <b>Flash-Kreaturen</b> blocken, wenn das einen "
+    "guten Block ergibt oder Lethal verhindert, sonst kommen sie am Ende des gegnerischen Zugs. <b>Sonstige "
+    "Instants</b> (z. B. Ziehen) am Ende des gegnerischen Zugs.",
+    "<b>Abwerfen</b> (z. B. Rank Rat): ein überzähliges Land (Feld + Hand reichen für die teuerste Handkarte), sonst "
+    "die günstigste Karte.",
     "<b>Angriff:</b> Alles greift an, wenn selbst bei bestem Blocken genug Schaden für Lethal durchkommt. Sonst greift "
     "eine Kreatur an, solange kein ungetappter Blocker sie tötet und dabei überlebt (ein Tausch ist in Ordnung). Wäre "
     "sonst der Gegenangriff im nächsten Zug Lethal, bleiben die schwächsten Angreifer zu Hause.",
@@ -30,8 +45,9 @@ RULES = [
     "in den Friedhof; „damage to each player“ trifft auch den Spieler selbst.",
     "Spielende: 0 Lebenspunkte, Ziehen aus leerer Bibliothek oder Aufgabe durch Mulligan. Nach der Rundengrenze "
     "(<code>--kampf-runden</code>, Standard 20 eigene Züge) ist es unentschieden.",
-    "Noch nicht im Kampf: Removal auf Kreaturen, Kampftricks, Flash und Instants im Zug des Gegners, Jace, Prepared, "
-    "Landcycling, Surveil und Treasure. Solche Karten werden gewirkt, wirken aber nur mit den schon modellierten Effekten.",
+    "Noch nicht im Kampf: Jace, Prepared, Landcycling, Surveil, Treasure, Fähigkeiten mit Kosten (z. B. Sureshot "
+    "Sower) und Auslöser außer beim Betreten. Solche Karten werden gewirkt, wirken aber nur mit den schon modellierten "
+    "Effekten.",
 ]
 
 CSS = """
@@ -89,15 +105,16 @@ def _protocol(game, mode, title):
                  f'<td class="l">{esc(", ".join(e["main1"]) or "–")}</td>',
                  f'<td class="l">{_attacks_html(e["attacks"])}</td>',
                  f'<td class="l">{esc(", ".join(e["main2"]) or "–")}</td>',
+                 f'<td class="l small">{"<br>".join(esc(x) for x in e.get("events", [])) or "–"}</td>',
                  f'<td>{dmg}</td>',
                  f'<td>{life.get("Wir", "–")} / {life.get("Gegner", "–")}</td>',
                  f'<td class="l small">Wir: {esc(", ".join(board.get("Wir", [])) or "–")}<br>'
                  f'Gegner: {esc(", ".join(board.get("Gegner", [])) or "–")}'
                  + (f'<br><b>{esc(e["note"])}</b>' if e.get("note") else "") + '</td>']
         rows.append(f'<tr class="{cls}">' + "".join(cells) + "</tr>")
-    head = "".join(f'<th class="{"l" if i in (1, 2, 3, 4, 5, 6, 9) else ""}">{h}</th>' for i, h in enumerate(
-        ["Runde", "Spieler", "Zieht", "Land", "Main 1", "Kampf († = stirbt)", "Main 2", "Schaden", "Leben Wir / Gegner",
-         "Feld danach"]))
+    head = "".join(f'<th class="{"l" if i in (1, 2, 3, 4, 5, 6, 7, 10) else ""}">{h}</th>' for i, h in enumerate(
+        ["Runde", "Spieler", "Zieht", "Land", "Main 1", "Kampf († = stirbt)", "Main 2",
+         "Removal, Instants, Flash", "Schaden", "Leben Wir / Gegner", "Feld danach"]))
     return (f'<div class="note" style="margin:0 0 6px"><b>{esc(title)}</b> in Runde {game["round"]} '
             f'({esc(mode)})</div><div class="hands">{hands}</div>'
             f'<div class="panel"><div class="tw"><table class="proto"><thead><tr>{head}</tr></thead>'
