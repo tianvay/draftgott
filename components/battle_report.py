@@ -84,6 +84,12 @@ RULES = [
     "nach Lebensgewinn Surveil 1; ein abgelegtes Land kommt auf die Hand. Null Summoner: exiliert aus der Hand des "
     "Gegners zuerst das teuerste Removal, sonst die teuerste Nichtland-Karte; ab 7 Karten im eigenen Friedhof wirkt er "
     "sie selbst mit Mana jeder Art. Sie geht danach in den Friedhof bzw. auf die Hand ihres Besitzers.",
+    "Kreatur-Token aus Zaubern, Prepared-Kopien, Betreten und Fähigkeiten (z. B. Cadet, Ingris mit Haste) liegen als "
+    "Kreaturen auf dem Feld; sterben sie oder gehen sie auf die Hand, verschwinden sie.",
+    "Leben: Landfall-Lebensgewinn (Koth of the Homestead). Lyra zählt Lebensgewinne, nicht Leben: zwei Kreaturen mit "
+    "Lifelink lösen zweimal aus, eine einmal; die Marken gibt es nach dem Kampfschaden nur für Engel, die noch leben. "
+    "Thalia, the Survivor: Nichtkreatur-Zauber des anderen Spielers kosten {1} mehr (auch Prepared-Kopien und "
+    "exilierte Karten).",
     "Noch nicht im Kampf: Fähigkeiten mit Opfern als Kosten (z. B. Edgar, Ancient Bloodlord) und weitere Auslöser. "
     "Solche Karten werden gewirkt, wirken aber nur mit den schon modellierten Effekten.",
 ]

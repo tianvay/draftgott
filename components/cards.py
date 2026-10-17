@@ -73,6 +73,11 @@ class Card(NamedTuple):
     mill_land: int = 0         # beim Betreten Mill N, dann ein Land aus dem Friedhof getappt ins Spiel
     confidant: bool = False    # Endsegment: nach Lebensgewinn Surveil 1, abgelegte Karte mit MW <= Gewinn auf die Hand
     null_summoner: bool = False  # beim Wirken: Nichtland-Karte aus der Hand des Gegners exilen, ab Threshold wirken
+    creature_types: tuple = ()  # Kreaturtypen (klein geschrieben, z. B. ("angel", "knight"))
+    creates_tokens: tuple = ()  # Kreatur-Token beim Wirken bzw. Betreten: ((Anzahl, Token-Card), ...)
+    lifegain_counter: tuple = ()  # bei jedem Lebensgewinn Marken auf jede eigene Kreatur eines Typs: (n, Typ) (Lyra)
+    opp_spell_tax: int = 0     # Nichtkreatur-Zauber der Gegner kosten {N} mehr (Thalia, the Survivor)
+    landfall_life: int = 0     # Landfall: N Leben (Koth of the Homestead)
 
 
 LANDCYCLE_RE = re.compile(
@@ -268,6 +273,8 @@ _ETB_EFFECT_RE = re.compile(r"^when (?:this [a-z]+|~) enters,\s*(.*)$")
 _LANDFALL_FACE_RE = re.compile(r"^(?:landfall — )?whenever a land you control enters, ~ deals (\d+) damage to each "
                                r"opponent\.")
 _LANDFALL_MANA_RE = re.compile(r"\bif that land is a mountain, add \{r\}\.")
+_LANDFALL_LIFE_RE = re.compile(r"^(?:landfall — )?whenever a land you control enters, you gain (a|one|two|three|\d+) "
+                               r"life")
 _TYPE_COUNTER_RE = re.compile(r"^whenever an? (plains|island|swamp|mountain|forest) you control enters, put a \+1/\+1 "
                               r"counter on target creature\.$")
 _ENDSTEP_RE = re.compile(r"^at the beginning of your end step, if you didn't cast a spell this turn, put "
@@ -377,6 +384,7 @@ def board_triggers(card):
         m = _TYPE_COUNTER_RE.match(low)
         if m:
             landfall.append(("type_counter", m.group(1), 1))
+
         m = _ENDSTEP_RE.match(low)
         if m:
             endstep += _count(m.group(1))
@@ -453,6 +461,18 @@ def _ability_atoms(body):
     m = _ABILITY_SURVEIL_RE.match(body)
     if m:
         return (("surveil", int(m.group(1))),)
+    if body.startswith("create "):
+        first, _, rest = body.partition(". ")
+        tokens = _tokens_in(first if first.endswith(".") else first + ".")
+        if len(tokens) != 1:
+            return None
+        atoms = [("token",) + tokens[0]]
+        rest = rest.strip()
+        if rest == "then creatures you control gain haste until end of turn.":
+            atoms.append(("grant", ("haste",), "all"))
+        elif rest:
+            return None
+        return tuple(atoms)
     m = _ABILITY_COUNTER_RE.match(body)
     if m:
         scope = _ABILITY_COUNTER_SCOPE.get(m.group(2), "countered")
@@ -530,13 +550,51 @@ _MILL_LAND_RE = re.compile(r"^when (?:~|this creature) enters, mill (a|one|two|t
 _CONFIDANT_RE = re.compile(r"^at the beginning of your end step, if you gained life this turn, surveil 1\. if you put "
                            r"a card with mana value less than or equal to the amount of life you gained this turn into "
                            r"your graveyard this way, put that card into your hand")
+_LIFEGAIN_COUNTER_RE = re.compile(r"^whenever you gain life, put (a|an|one|two|\d+) \+1/\+1 counters? on each ([a-z]+) "
+                                  r"you control")
+_OPP_TAX_RE = re.compile(r"^noncreature spells your opponents cast cost \{(\d+)\} more to cast")
 _NULL_SUMMONER_RE = re.compile(r"^when (?:~|this creature) enters, if you cast it, target opponent reveals their hand\. "
                                r"you choose a nonland card from it\. exile that card")
 
 
-def token_card(name, creature=False, power=0, toughness=0, artifact=True, mana_src=(), sac_mana=False):
+def token_card(name, creature=False, power=0, toughness=0, artifact=True, mana_src=(), sac_mana=False, kw=(), types=()):
     return Card(False, 0, (), (), creature, False, power, toughness, name=name, is_artifact=artifact, is_token=True,
-                mana_src=mana_src, sac_mana=sac_mana)
+                mana_src=mana_src, sac_mana=sac_mana, kw=kw, creature_types=types)
+
+
+_COLOR_WORDS = r"(?:colorless|white|blue|black|red|green)(?: and (?:white|blue|black|red|green))?"
+_CREATE_TOKEN_RE = re.compile(r"\bcreate (a|an|one|two|three) (\d+)/(\d+) (?:" + _COLOR_WORDS + r" )?([a-z ]+?) "
+                              r"creature tokens?(?: named ([a-z]+))?(?: with ([a-z ,]+?))?\.")
+
+
+def _tokens_in(text):
+    """Kreatur-Token in einem Text: [(Anzahl, Token-Card)]."""
+    out = []
+    for m in _CREATE_TOKEN_RE.finditer(text):
+        types = m.group(4).split()
+        artifact = "artifact" in types
+        types = tuple(t for t in types if t != "artifact")
+        kws = tuple(k.strip() for k in re.split(r",\s*(?:and\s+)?|\s+and\s+", m.group(6) or "")
+                    if k.strip() in COMBAT_KEYWORDS)
+        name = m.group(5).capitalize() if m.group(5) else " ".join(t.capitalize() for t in types)
+        out.append((_count(m.group(1)), token_card(name, True, int(m.group(2)), int(m.group(3)), artifact,
+                                                   kw=kws, types=types)))
+    return out
+
+
+def creates_tokens(card, type_line):
+    """Kreatur-Token beim Wirken (Instant/Sorcery) bzw. beim Betreten ("When this ... enters, create ...")."""
+    spell_face = "Instant" in type_line or "Sorcery" in type_line
+    out = []
+    for _raw, low in _clean_lines(card):
+        if spell_face:
+            if not re.match(r"^(when|whenever|at the beginning)\b", low):
+                out += _tokens_in(low)
+        else:
+            m = _ETB_EFFECT_RE.match(low)
+            if m:
+                out += _tokens_in(m.group(1))
+    return tuple(out)
 
 
 def token_triggers(card):
@@ -565,6 +623,15 @@ def token_triggers(card):
             out["confidant"] = True
         if _NULL_SUMMONER_RE.match(low):
             out["null_summoner"] = True
+        m = _LANDFALL_LIFE_RE.match(low)
+        if m:
+            out["landfall_life"] = _EFFECT_NUM.get(m.group(1)) or int(m.group(1))
+        m = _LIFEGAIN_COUNTER_RE.match(low)
+        if m:
+            out["lifegain_counter"] = (_count(m.group(1)), m.group(2))
+        m = _OPP_TAX_RE.match(low)
+        if m:
+            out["opp_spell_tax"] = int(m.group(1))
     return out
 
 
@@ -845,4 +912,6 @@ def card_info(card):
                 pump_tough=pump_toughness(card, type_line), legendary="Legendary" in type_line,
                 is_artifact="Artifact" in type_line,
                 targets_opp=targets_opponent(card, type_line, removal_spec(card)), **battle_triggers(card),
-                **token_triggers(card)), shown
+                **token_triggers(card), creates_tokens=creates_tokens(card, type_line),
+                creature_types=(tuple(t.lower() for t in type_line.split("—", 1)[1].split())
+                                if is_creature and "—" in type_line else ())), shown

@@ -77,7 +77,7 @@ class Creature:
 
 def can_attack(c, step):
     return (not c.tapped and not c.dead and not c.locked and (not c.card.defender or c.lifted) and c.power > 0
-            and (c.entered < step or c.card.haste))
+            and (c.entered < step or c.card.haste or "haste" in c.extra))
 
 
 def can_block(blocker, attacker):
@@ -103,7 +103,8 @@ def _lethal_need(blocker, deathtouch):
 def resolve_combat(pairs):
     """Kampfschaden fuer [(Angreifer, [Blocker])]. Veraendert Schaden und dead der Kreaturen.
     Gibt {"player": Schaden am Verteidiger, "lifelink_attacker", "lifelink_defender"} zurueck."""
-    out = {"player": 0, "lifelink_attacker": 0, "lifelink_defender": 0, "to_player": {}}
+    out = {"player": 0, "lifelink_attacker": 0, "lifelink_defender": 0, "to_player": {},
+           "lifelink_events_attacker": 0, "lifelink_events_defender": 0}
     for first_step in (True, False):
         hits = []  # (Ziel-Kreatur, Schaden, Deathtouch)
         for att, blockers in pairs:
@@ -129,11 +130,13 @@ def resolve_combat(pairs):
                             hits.append((alive[-1], rest, dt))
                 if att.has("lifelink"):
                     out["lifelink_attacker"] += power
+                    out["lifelink_events_attacker"] += 1
             for b in blockers:
                 if not b.dead and not att.dead and _deals_in(b, first_step) and b.power > 0:
                     hits.append((att, b.power, b.has("deathtouch")))
                     if b.has("lifelink"):
                         out["lifelink_defender"] += b.power
+                        out["lifelink_events_defender"] += 1
         for target, amount, dt in hits:
             target.damage += amount
             target.touched = target.touched or dt
@@ -287,6 +290,8 @@ class Player:
         self.gained = 0       # in diesem Zug gewonnenes Leben (Enlightened Confidant)
         self.exiled = []      # vom Gegner exilierte Karten, die wir ab Threshold wirken duerfen (Null Summoner)
         self.exiled_from = None  # Besitzer dieser Karten (der Gegner)
+        self.opponent = None  # der andere Spieler (Thalia: Steuer auf unsere Zauber)
+        self.now = 0          # aktueller Schritt (fuer Token aus Faehigkeiten)
         self.turn_start = 0   # Schritt, in dem unser letzter Zug begann (Token mit {T} erst danach nutzbar)
 
     def board(self):
@@ -322,8 +327,13 @@ def pay(pool, alts):
 
 
 def discount(p):
-    """Nichtkreatur-Zauber kosten so viel generisches Mana weniger (Geist of Saint Thalia)."""
-    return sum(c.card.spell_discount for c in p.creatures if not c.dead) + sum(c.spell_discount for c in p.perms)
+    """Nichtkreatur-Zauber kosten so viel generisches Mana weniger (Geist of Saint Thalia, eigene Karten) bzw. mehr
+    (negativ: Thalia, the Survivor beim Gegner)."""
+    own = sum(c.card.spell_discount for c in p.creatures if not c.dead) + sum(c.spell_discount for c in p.perms)
+    opp = p.opponent
+    tax = 0 if opp is None else (sum(c.card.opp_spell_tax for c in opp.creatures if not c.dead)
+                                  + sum(c.opp_spell_tax for c in opp.perms))
+    return own - tax
 
 
 def _discounted(card, d):
@@ -485,10 +495,26 @@ def jace_turn_start(p, step, e=None):
     _jace_activate(p, step, e if e is not None else {"events": []}, False)
 
 
-def gain_life(p, n):
-    if n > 0:
-        p.life += n
-        p.gained += n
+def gain_life(p, n, events=1):
+    """Lebensgewinn; events: Zahl der einzelnen Lebensgewinne (Lyra: jeder loest einmal aus, die Menge zaehlt nicht).
+    Marken nur fuer Kreaturen, die noch leben (nach dem Kampfschaden); die Quelle selbst darf dabei gestorben sein."""
+    if n <= 0:
+        return
+    p.life += n
+    p.gained += n
+    for _ in range(events):
+        for c in p.creatures:  # auch eine im selben Kampf gestorbene Lyra loest aus (gleichzeitig mit dem Schaden)
+            if c.card.lifegain_counter:
+                k, typ = c.card.lifegain_counter
+                for x in p.creatures:
+                    if not x.dead and typ in x.card.creature_types:
+                        x.bonus += k
+
+
+def combat_life(att, dfn, res):
+    """Lifelink nach dem Kampfschaden (vor dem Aufraeumen der gestorbenen Kreaturen)."""
+    gain_life(att, res["lifelink_attacker"], res["lifelink_events_attacker"])
+    gain_life(dfn, res["lifelink_defender"], res["lifelink_events_defender"])
 
 
 def mark_surveil(p):
@@ -643,6 +669,9 @@ def on_land(me, opp, land, step, e, with_mana=True):
         board, bonus, pump = me.board()
         face, mana, _cnt = landfall_effects(land, board, bonus, step, with_mana=with_mana)
         me.write_back(bonus, pump)
+        for c in list(me.creatures):
+            if c.card.landfall_life and not c.dead:
+                gain_life(me, c.card.landfall_life)
         opp.life -= face
         me.dealt_direct += face
         e["face"] += face
@@ -823,7 +852,18 @@ def _resolve(me, opp, card, step, entry, owner=None):
                 me.hand.append(me.library.pop(0))
     if card.surveil:
         surveil_cards(me, [card.surveil], entry, card.name)
+    make_tokens(me, card.creates_tokens, step, entry, opp, card.name)
     bury((me, opp), entry)
+
+
+def make_tokens(p, tokens, step, e, opp=None, source=""):
+    """Kreatur-Token ins Spiel (kommen nicht in den Friedhof, verschwinden beim Bounce)."""
+    for n, token in tokens:
+        for _ in range(n):
+            c = Creature(token, step)
+            p.creatures.append(c)
+            creature_enters(p, c, step, e, opp, cast=False)
+        e["events"].append(f"{p.name}: {source} – {n} {token.name}-Token")
 
 
 def _tough_ratio(card):
@@ -940,7 +980,7 @@ def instant_removals(p):
     if threshold(p):
         for card in p.exiled:
             if card.is_instant and card.removal and card.removal[4] == "spell":
-                out.append((card, _any_mana(card).alts, card, True, "exile"))
+                out.append((card, _discounted(_any_mana(card), discount(p)).alts, card, True, "exile"))
     return out
 
 
@@ -1176,6 +1216,11 @@ def apply_ability(p, src, ab, target, e=None):
                 surveil_cards(p, [atom[1]], e, "Fähigkeit")
             did = True
             continue
+        if kind == "token":
+            if e is not None:
+                make_tokens(p, [atom[1:]], p.now, e, p.opponent, src.card.name if src is not None else "Fähigkeit")
+            did = True
+            continue
         scope = atom[-1]
         if scope == "all":
             hit = [c for c in p.creatures if not c.dead]
@@ -1295,7 +1340,7 @@ def _attack_value(me, opp, step):
 def lasting_abilities(p, opp, step, e, own_turn, mode):
     """Marken, Empower und Surveil (nur am Ende des gegnerischen Zugs): Marken zuerst (auf die gefaehrlichste passende
     Kreatur), dann Empower, dann Surveil. Dazu Faehigkeiten aus dem Friedhof (Campus Crier)."""
-    rank = {"counter": 0, "empower": 1, "surveil": 2}
+    rank = {"counter": 0, "token": 1, "empower": 2, "surveil": 3}
     for _round in range(10):
         sources = [(src, ab, None) for src, ab in ability_sources(p, step, own_turn, main=own_turn)]
         sources += [(None, (card.gy_ability[0], 0, False, "instant", card.gy_ability[1]), card)
@@ -1303,6 +1348,8 @@ def lasting_abilities(p, opp, step, e, own_turn, mode):
         options = []
         for src, ab, gy in sources:
             kinds = _kinds(ab)
+            if "grant" in kinds and "token" in kinds:  # Token und danach Haste fuer alle (Ingris)
+                kinds = kinds - {"grant"}
             if not kinds or not kinds <= set(rank):
                 continue
             if "surveil" in kinds and (own_turn or not p.library):
@@ -1417,6 +1464,8 @@ def take_turn(me, opp, step, rnd, skip_draw):
          "damage": 0, "face": 0, "deaths": [], "events": [], "note": ""}
     me.cast_count = 0
     me.turn_start = step
+    me.opponent, opp.opponent = opp, me
+    me.now = opp.now = step
     for c in me.creatures:  # Untap (gesperrte Kreaturen bleiben gesperrt)
         c.tapped = False
     upkeep(me)
@@ -1440,11 +1489,23 @@ def take_turn(me, opp, step, rnd, skip_draw):
     if me.exiled and threshold(me):
         for c in me.exiled:
             if not c.is_instant and not c.flash and not c.is_land:
-                ex_map[_any_mana(c)] = c
-                me.hand.append(_any_mana(c))
+                cheap = _discounted(_any_mana(c), disc)
+                ex_map[cheap] = c
+                me.hand.append(cheap)
+
+    def cost(c):  # Prepared-Kopien mit Kostensenkung bzw. Steuer (Handkarten sind schon angepasst)
+        if c.is_copy and disc:
+            cheap = _discounted(c, disc)
+            if cheap != c:
+                orig[cheap] = c
+                return cheap
+        return c
+
+    def phase_spells():
+        return [cost(c) for c in main_phase_spells(me, opp)]
     # Main 1: Landcycling, wenn ein Land fuer den Landdrop fehlt
     pool, creature_units = _mana(me, step)
-    spells = main_phase_spells(me, opp)
+    spells = phase_spells()
     has_creature = bool(me.creatures)
     if rnd <= CYCLE_TURNS and not any(c.is_land for c in me.hand):
         for cycler in sorted({c for c in spells if c.cycle_alts}, key=lambda c: (c.cycle_mv, c.name)):
@@ -1457,7 +1518,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
                 _cycle_event(me, cycler, cand, e, "Land fehlt")
                 me.cast_count += 1
                 pool = rem
-                spells = main_phase_spells(me, opp)
+                spells = phase_spells()
                 break
     pool_all = pool + [u for u, _i in creature_units]
     # Land
@@ -1481,7 +1542,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     if any(c.draws for c in chosen) or enters_prepared(chosen) or any(usable_now(c) for c in chosen):
         walker_bf, jace_bf = walker_flags(me)
         rd = resolve_draws(me.hand, me.library, chosen, pool_all, me.lands, land, has_creature, True, walker_bf,
-                           jace_bf, copies=copies(me))
+                           jace_bf, copies=[cost(c) for c in copies(me)])
         chosen = [c for c in rd["chosen"] if not c.is_instant and not c.flash]
         pool_all = rd["pool"]
         if rd["land"] is not None:
@@ -1572,8 +1633,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     res = resolve_combat(blocks)
     opp.life -= res["player"]
     me.dealt_combat += res["player"]
-    gain_life(me, res["lifelink_attacker"])
-    gain_life(opp, res["lifelink_defender"])
+    combat_life(me, opp, res)
     e["damage"] = res["player"]
     for a, _bs in blocks:  # "deals combat damage to a player, draw ..." (Frostbite Pyromental)
         if a.card.combat_draw and res["to_player"].get(id(a)):
