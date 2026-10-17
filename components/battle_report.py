@@ -101,6 +101,18 @@ RULES = [
     "Legend-Regel: je Spieler nur ein legendäres Permanent gleichen Namens (die stärkere Kreatur bleibt); ein zweites "
     "Exemplar wird nicht gewirkt. Handlimit: am Ende des eigenen Zugs auf 7 Karten abwerfen. Winter: wir opfern "
     "unsere schwächste andere Kreatur, nur wenn der Gegner eine Kreatur hat; er opfert seine schwächste.",
+    "Hexproof: Kreaturen mit Hexproof sind kein Ziel für Zauber und Fähigkeiten des Gegners (Ruric Thar, bis er "
+    "Kampfschaden zugefügt hat); Effekte ohne Ziel wie Schaden an allen Kreaturen oder Edikte treffen sie trotzdem. "
+    "Flashback: Sorceries aus dem Friedhof in der Main Phase wie Handkarten, Instants auch im Zug des Gegners (mit "
+    "„Discard a card“ wird die Karte abgeworfen, die wir sonst auch abwerfen würden); danach ins Exil. Karten, die erst "
+    "in diesem Zug in den Friedhof kamen, gehen erst im nächsten Zug.",
+    "Aus dem Friedhof zurück: Zauber holen die stärkste passende Karte (höchster Manawert, dann Power; Länder mit den "
+    "meisten neuen Farben) bzw. alle passenden; ohne passende Karte werden sie nicht gewirkt. Fähigkeiten aus dem "
+    "Friedhof (Blessed Ghoul, Theoretical Necromancer, Gallia, Grim Repriser) wie Marken: mit freiem Mana im eigenen Zug, "
+    "sonst mit dem Rest am Ende des gegnerischen Zugs. Darklight Phoenix kehrt zu Beginn des eigenen Kampfs zurück, "
+    "wenn in diesem Zug zwei oder mehr Kreaturen gestorben sind. Finality: stirbt die Kreatur, wird sie exiliert.",
+    "Betreten-Effekte („When this creature enters“, 603.6a) wirken bei jedem Weg ins Spiel: gewirkt, mit Flash, als "
+    "Token oder aus dem Friedhof. Auslöser beim Wirken („whenever you cast“, „if you cast it“, Prowess) nur beim Wirken.",
     "Noch nicht im Kampf: Fähigkeiten mit Opfern als Kosten (z. B. Edgar, Ancient Bloodlord) und weitere Auslöser. "
     "Solche Karten werden gewirkt, wirken aber nur mit den schon modellierten Effekten.",
 ]

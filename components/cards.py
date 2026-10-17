@@ -86,6 +86,16 @@ class Card(NamedTuple):
     prowess: bool = False      # +1/+1 bis Rundenende bei jedem eigenen Nichtkreatur-Zauber
     edict_cost: bool = False   # Edikt nur, wenn wir selbst eine Kreatur opfern (Winter, Tormented Loner)
     gy_power: tuple = ()       # +1/+0 je Karte dieser Typen im eigenen Friedhof, z. B. ("creature", "planeswalker")
+    hexproof_until_damage: bool = False  # Hexproof, solange die Kreatur keinen Kampfschaden zugefuegt hat (Ruric Thar)
+    flashback: tuple = ()      # Flashback-Kosten (Mana) als Zahlungswege
+    flashback_discard: bool = False  # Flashback verlangt zusaetzlich, eine Karte abzuwerfen (Twinned Vision)
+    alt_draws: int = 0         # zieht so viele statt draws, wenn nicht aus der Hand gewirkt
+    reanimate: tuple = ()      # Zauber holt aus dem Friedhof: (target/all, creature/permanent/land, max. MW, Ziel, Marken)
+    gy_return: tuple = ()      # "Kosten: Return this card from your graveyard to ...": (Zahlungswege, Ziel, getappt,
+    #                            Marken, Zusatzkosten "exile_creature", Bedingung "noncombat")
+    finality: bool = False     # kommt mit Finality-Marke zurueck: stirbt sie, wird sie exiliert
+    phoenix: bool = False      # zu Beginn des eigenen Kampfs zurueck, wenn in diesem Zug 2+ Kreaturen starben
+    combat_land_return: bool = False  # Kampfschaden am Spieler: Land aus dem Friedhof auf die Hand
 
 
 LANDCYCLE_RE = re.compile(
@@ -430,7 +440,7 @@ def modelled_effect_rest(line, spell_face, name=""):
 
 
 COMBAT_KEYWORDS = ("flying", "reach", "first strike", "double strike", "deathtouch", "trample", "menace",
-                   "lifelink", "vigilance")
+                   "lifelink", "vigilance", "hexproof")
 
 
 def combat_keywords(card):
@@ -457,6 +467,8 @@ _ABILITY_COUNTER_SCOPE = {"~": "self", "this creature": "self", "target creature
                           "target creature you control": "target", "target nonlegendary creature": "nonlegendary"}
 _ABILITY_EMPOWER_RE = re.compile(r"^empower jace (\d+)\.?$")
 _ABILITY_SURVEIL_RE = re.compile(r"^surveil (\d+)\.?$")
+_ABILITY_RETURN_RE = re.compile(r"^return (another )?target (creature|land|permanent) card from your graveyard to your "
+                                r"hand\.?$")
 
 
 def _ability_atoms(body):
@@ -469,6 +481,9 @@ def _ability_atoms(body):
     m = _ABILITY_SURVEIL_RE.match(body)
     if m:
         return (("surveil", int(m.group(1))),)
+    m = _ABILITY_RETURN_RE.match(body)
+    if m:
+        return (("return", m.group(2), "hand", bool(m.group(1))),)
     if body.startswith("create "):
         first, _, rest = body.partition(". ")
         tokens = _tokens_in(first if first.endswith(".") else first + ".")
@@ -697,6 +712,21 @@ _EDICT_COST_RE = re.compile(r"^when (?:~|this creature) enters, you may sacrific
 _GY_POWER_RE = re.compile(r"^(?:~|this creature) gets \+1/\+0 for each ((?:creature|planeswalker|artifact|land|instant|"
                           r"sorcery)(?: and (?:creature|planeswalker|artifact|land|instant|sorcery))*) cards? in your "
                           r"graveyard")
+_HEXPROOF_UNTIL_RE = re.compile(r"^(?:~|this creature) has hexproof as long as (?:it|they) (?:hasn't|haven't) dealt "
+                                r"combat damage yet")
+_FLASHBACK_RE = re.compile(r"^flashback(?: |—)((?:\{[^}]+\})+)(, discard a card)?\.?$")
+_ALT_DRAWS_RE = re.compile(r"if this spell wasn't cast from your hand, draw (a|one|two|three) cards? instead")
+_REANIMATE_RE = re.compile(r"\breturn (target|all) (creature|permanent|land) cards?(?: with mana value (\d+) or less)? "
+                           r"from your graveyard to (the battlefield|your hand)( tapped)?( with an additional \+1/\+1 "
+                           r"counter on (?:it|them))?")
+_GY_RETURN_RE = re.compile(r"^((?:\{[^}]+\})+)(, exile another creature card from your graveyard)?: return this card "
+                           r"from your graveyard to (the battlefield|your hand)( tapped)?(?: with (?:a|an) "
+                           r"(\+1/\+1|finality) counter on (?:it|her|him|them))?\.( activate only if an opponent has "
+                           r"been dealt noncombat damage this turn\.)?$")
+_PHOENIX_RE = re.compile(r"^at the beginning of combat on your turn, if two or more creatures died this turn, return "
+                         r"this card from your graveyard to the battlefield")
+_COMBAT_LAND_RE = re.compile(r"^whenever (?:~|this creature) deals combat damage to a player, return target land card "
+                             r"from your graveyard to your hand")
 _EXTRA_COST_RE = re.compile(r"^as an additional cost to cast this spell, [^.]*\bpay \{(\d+)\}")
 
 
@@ -726,6 +756,36 @@ def life_and_costs(card, type_line, keywords):
             out["extra_cost"] = int(m.group(1))
         if _EDICT_COST_RE.match(low):
             out["edict_cost"] = True
+        if _HEXPROOF_UNTIL_RE.match(low):
+            out["hexproof_until_damage"] = True
+        m = _FLASHBACK_RE.match(low)
+        if m and spell_face:
+            out["flashback"] = cost_alternatives(m.group(1).upper())
+            if m.group(2):
+                out["flashback_discard"] = True
+        m = _ALT_DRAWS_RE.search(low)
+        if m:
+            out["alt_draws"] = _count(m.group(1))
+        if ((spell_face and not re.match(r"^(when|whenever|at the beginning)\b", low)) or
+                (not spell_face and _ETB_EFFECT_RE.match(low))) and not _MILL_LAND_RE.match(low):
+            m = _REANIMATE_RE.search(low)  # Primal Witchstalker (Mill + Land) ist eigene Logik
+            if m:
+                out["reanimate"] = (m.group(1), m.group(2), int(m.group(3)) if m.group(3) else 99,
+                                    "battlefield" if m.group(4) == "the battlefield" else "hand",
+                                    1 if m.group(6) else 0)
+        m = _GY_RETURN_RE.match(low)
+        if m:
+            head = _raw.split(":", 1)[0]
+            mana = "".join(re.findall(r"\{[^}]+\}", head))
+            out["gy_return"] = (cost_alternatives(mana), "battlefield" if m.group(3) == "the battlefield" else "hand",
+                                bool(m.group(4)), 1 if m.group(5) == "+1/+1" else 0,
+                                "exile_creature" if m.group(2) else "", "noncombat" if m.group(6) else "")
+            if m.group(5) == "finality":
+                out["finality"] = True
+        if _PHOENIX_RE.match(low):
+            out["phoenix"] = True
+        if _COMBAT_LAND_RE.match(low):
+            out["combat_land_return"] = True
         m = _GY_POWER_RE.match(low)
         if m:
             out["gy_power"] = tuple(m.group(1).split(" and "))

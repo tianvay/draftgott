@@ -37,7 +37,7 @@ _GY_TYPES = {"creature": "is_creature", "planeswalker": "is_planeswalker", "arti
 class Creature:
     """Eine Kreatur auf dem Feld (Karte, Schritt des Eintritts, getappt, Schaden, Marken, Pump)."""
     __slots__ = ("card", "entered", "tapped", "damage", "bonus", "pump", "dead", "touched", "locked", "prepared",
-                 "tpump", "extra", "lifted", "owner", "at_jace", "gy")
+                 "tpump", "extra", "lifted", "owner", "at_jace", "gy", "dealt", "finality")
 
     def __init__(self, card, entered=0):
         self.card = card
@@ -56,6 +56,8 @@ class Creature:
         self.owner = None     # Besitzer, wenn nicht der Kontrolleur (aus dem Exil gewirkt, Null Summoner)
         self.at_jace = False  # greift in diesem Kampf den Jace-Token an statt den Spieler
         self.gy = None        # Friedhof des Kontrolleurs (Power nach Karten im Friedhof, Winter)
+        self.dealt = False    # hat schon Kampfschaden zugefuegt (Ruric Thar verliert dann Hexproof)
+        self.finality = False  # Finality-Marke: stirbt sie, wird sie exiliert
 
     @property
     def power(self):
@@ -79,6 +81,7 @@ class Creature:
         c.extra = set(self.extra)
         c.owner = self.owner
         c.gy = self.gy
+        c.dealt = self.dealt
         return c
 
     def label(self):
@@ -120,6 +123,8 @@ def resolve_combat(pairs):
         hits = []  # (Ziel-Kreatur, Schaden, Deathtouch)
         for att, blockers in pairs:
             if not att.dead and _deals_in(att, first_step) and att.power > 0:
+                if not blockers or any(not b.dead for b in blockers) or att.has("trample"):
+                    att.dealt = True
                 power, dt = att.power, att.has("deathtouch")
                 if not blockers:
                     _hit_player(out, att, power)
@@ -142,6 +147,7 @@ def resolve_combat(pairs):
                     out["lifelink_events_attacker"] += 1
             for b in blockers:
                 if not b.dead and not att.dead and _deals_in(b, first_step) and b.power > 0:
+                    b.dealt = True
                     hits.append((att, b.power, b.has("deathtouch")))
                     if b.has("lifelink"):
                         out["lifelink_defender"] += b.power
@@ -326,6 +332,8 @@ class Player:
         self.opponent = None  # der andere Spieler (Thalia: Steuer auf unsere Zauber)
         self.now = 0          # aktueller Schritt (fuer Token aus Faehigkeiten)
         self.turn_start = 0   # Schritt, in dem unser letzter Zug begann (Token mit {T} erst danach nutzbar)
+        self.direct_mark = 0  # dealt_direct zu Beginn des aktuellen Zugs ("noncombat damage this turn")
+        self.deaths_mark = 0  # deaths zu Beginn des aktuellen Zugs ("creatures died this turn")
 
     def board(self):
         return [(c.card, c.entered) for c in self.creatures], [c.bonus for c in self.creatures], \
@@ -465,9 +473,16 @@ def _matches(cond, c):
     return True
 
 
+def hexproof(c):
+    """702.11b: kann nicht Ziel von Zaubern und Faehigkeiten der Gegner sein (Ruric Thar: bis zum ersten
+    Kampfschaden). Effekte ohne Ziel (Schaden an allen, Edikt) treffen die Kreatur trotzdem."""
+    return c.has("hexproof") or (c.card.hexproof_until_damage and not c.dealt)
+
+
 def valid_targets(spec, caster, victim):
     kind = spec[0]
-    out = [c for c in victim.creatures if not c.dead and (kind != "lock" or not c.locked) and _matches(spec[2], c)]
+    out = [c for c in victim.creatures if not c.dead and (kind != "lock" or not c.locked) and _matches(spec[2], c)
+           and not hexproof(c)]
     if kind in ("damage", "minus", "counters"):
         amount = _amount(spec, caster)
         out = [c for c in out if c.toughness - c.damage <= amount or (c.touched and amount > 0)]
@@ -638,6 +653,8 @@ def creature_enters(p, new, step, e, opp=None, cast=True):
             p.exiled.append(pick)
             p.exiled_from = opp
             e["events"].append(f"{p.name}: {card.name} exiliert {pick.name} aus der Hand von {opp.name}")
+    _jace_etb(p, card, step, e)
+    card_effects(p, opp, card, step, e)
     new.lifted = p.surveilled and new.card.surveil_attack
     alive = [c for c in p.creatures if not c.dead]
     for c in alive:
@@ -666,9 +683,16 @@ def _jace_on_cast(p, card, step, e):
             if ef[1] == "trigger" and ef[3].startswith("cast:") and cast_filter_matches(ef[3][5:], card):
                 _jace_add(p, ef[2], e)
     for ef in once_effects(card):
-        _jace_add(p, ef[2], e)
-    if not card.is_instant_sorcery:
-        _jace_on_enter(p, card, step, e)
+        if ef[1] == "spell":
+            _jace_add(p, ef[2], e)
+
+
+def _jace_etb(p, card, step, e):
+    """Betreten: Empower beim Betreten, Ausloeser "whenever ... enters" anderer Permanents, eigene Ausloeser merken."""
+    for ef in once_effects(card):
+        if ef[1] == "etb":
+            _jace_add(p, ef[2], e)
+    _jace_on_enter(p, card, step, e)
 
 
 def _jace_on_enter(p, card, step, e):
@@ -780,7 +804,7 @@ def bury(players, e):
             if c.dead or c.toughness <= 0 or c.damage >= c.toughness or (c.touched and c.damage > 0):
                 p.deaths += 1
                 p.creatures.remove(c)
-                if not c.card.is_token:
+                if not c.card.is_token and not c.finality:
                     (c.owner or p).graveyard.append(c.card)
                 _leave(p, c.card)
                 gain_life(p, c.card.death_life)
@@ -884,9 +908,10 @@ def cast_removal(card, caster, victim, e, step, target=None):
     bury((caster, victim), e)
 
 
-def _resolve(me, opp, card, step, entry, owner=None):
+def _resolve(me, opp, card, step, entry, owner=None, to_exile=False):
     """Eine gewirkte Karte kommt ins Spiel bzw. wirkt: Kreatur aufs Feld, Permanents, Instants/Sorceries in den
-    Friedhof; Removal, Abwerfen und Effekte (Schaden an den Gegner, Marken, Pumps) wie im Goldfish."""
+    Friedhof. Erst die Ausloeser beim Wirken (on_cast), dann bei Permanents die Betreten-Effekte (wie bei jedem
+    anderen Weg ins Spiel), bei Instants/Sorceries und Prepared-Kopien ihre Effekte (card_effects)."""
     if card.is_copy:  # Prepared-Kopie: eine passende Kreatur ist nicht mehr prepared, kein Friedhof
         src = next((c for c in me.creatures if c.prepared and c.card.prepared[1] == card), None)
         if src is not None:
@@ -895,22 +920,42 @@ def _resolve(me, opp, card, step, entry, owner=None):
         me.creatures.append(Creature(card, step))
         me.creatures[-1].owner = owner
     elif card.is_instant_sorcery:
-        (owner or me).graveyard.append(card)
+        if not to_exile:  # Flashback: danach ins Exil
+            (owner or me).graveyard.append(card)
     else:
         me.perms.append(card)
-    if card.treasure:
-        me.treasures += card.treasure
     on_cast(me, card, step, entry)
     if card.is_creature and not card.is_copy:
         creature_enters(me, me.creatures[-1], step, entry, opp)
+    elif card.is_instant_sorcery or card.is_copy:
+        card_effects(me, opp, card, step, entry)
+    else:
+        permanent_enters(me, opp, card, step, entry)
+    bury((me, opp), entry)
+
+
+def permanent_enters(p, opp, card, step, e):
+    """Ein Nichtkreatur-Permanent kam ins Spiel: Jace-Ausloeser und Betreten-Effekte."""
+    _jace_etb(p, card, step, e)
+    card_effects(p, opp, card, step, e)
+
+
+def card_effects(me, opp, card, step, entry):
+    """Effekte einer Karte: bei Instants/Sorceries beim Auflösen, bei Permanents beim Betreten (603.6a, egal wie sie
+    ins Spiel kommen). Treasure, Schaden an uns, Removal, Abwerfen, Schaden/Marken/Pumps, Ziehen, Surveil, Leben,
+    Zurueckholen aus dem Friedhof, Token."""
+    if card.treasure:
+        me.treasures += card.treasure
     if card.self_damage:  # "damage to each player" trifft auch uns
         me.life -= card.self_damage
+    if opp is None:
+        opp = me.opponent
     effects = card
-    if card.removal and _edict_paid(me, opp, card, entry):
+    if card.removal and opp is not None and _edict_paid(me, opp, card, entry):
         cast_removal(card, me, opp, entry, step)
         if card.removal[3]:  # any target: der Schaden ist schon verteilt
             effects = card._replace(modes=tuple(tuple(a for a in m if a[0] != "face") for m in card.modes))
-    if card.discard:
+    if card.discard and opp is not None:
         discard(opp, card.discard, entry)
     if effects.modes:
         board, bonus, pump = me.board()
@@ -921,7 +966,7 @@ def _resolve(me, opp, card, step, entry, owner=None):
         for c, old in zip(me.creatures, before):  # Pumps +P/+T: Toughness im Verhaeltnis T/P
             if c.pump > old:
                 c.tpump += round((c.pump - old) * ratio)
-        if gain["face"]:
+        if gain["face"] and opp is not None:
             opp.life -= gain["face"]
             me.dealt_direct += gain["face"]
             entry["face"] += gain["face"]
@@ -932,8 +977,9 @@ def _resolve(me, opp, card, step, entry, owner=None):
     if card.surveil:
         surveil_cards(me, [card.surveil], entry, card.name)
     gain_life(me, card.spell_life)
+    if card.reanimate:
+        reanimate(me, opp, card.reanimate, step, entry)
     make_tokens(me, card.creates_tokens, step, entry, opp, card.name)
-    bury((me, opp), entry)
 
 
 def make_tokens(p, tokens, step, e, opp=None, source=""):
@@ -971,11 +1017,73 @@ def _edict_paid(me, opp, card, e):
     return True
 
 
+def _gy_matches(card, filt, mv_max):
+    if filt == "creature":
+        ok = card.is_creature
+    elif filt == "land":
+        ok = card.is_land
+    else:
+        ok = not card.is_instant_sorcery
+    return ok and card.mv <= mv_max
+
+
+def gy_candidates(p, filt, mv_max=99, exclude=None):
+    out = [c for c in p.graveyard if _gy_matches(c, filt, mv_max)]
+    if exclude is not None and exclude in out:
+        out.remove(exclude)
+    return out
+
+
+def _best_from_gy(p, cands):
+    """Staerkste Karte: Laender mit den meisten neuen Farben, sonst hoechster Manawert, dann Power."""
+    if all(c.is_land for c in cands):
+        have = set().union(*(land.land_colors for land in p.lands)) if p.lands else set()
+        return max(cands, key=lambda land: (len(set(land.land_colors) - have), -cands.index(land)))
+    return max(cands, key=lambda c: (not c.is_land, c.mv, c.power, c.name))
+
+
+def put_back(p, card, dest, step, e, opp=None, tapped=False, counters=0, finality=False):
+    """Eine Karte aus dem Friedhof (schon entfernt) aufs Feld bzw. auf die Hand."""
+    if dest == "hand":
+        p.hand.append(card)
+        e["events"].append(f"{p.name}: {card.name} aus dem Friedhof auf die Hand")
+        return
+    if card.is_creature:
+        c = Creature(card, step)
+        c.tapped, c.bonus, c.finality = tapped, counters, finality
+        p.creatures.append(c)
+        creature_enters(p, c, step, e, opp, cast=False)
+    elif card.is_land:
+        p.lands.append(card)
+        if opp is not None:
+            on_land(p, opp, card, step, e, with_mana=False)
+    else:
+        p.perms.append(card)
+        permanent_enters(p, opp, card, step, e)
+    e["events"].append(f"{p.name}: {card.name} aus dem Friedhof ins Spiel")
+
+
+def reanimate(p, opp, spec, step, e):
+    """Zauber "Return target/all ... from your graveyard to the battlefield/your hand" (Card.reanimate)."""
+    count, filt, mv_max, dest, counters = spec
+    cands = gy_candidates(p, filt, mv_max)
+    if not cands:
+        return
+    picks = cands if count == "all" else [_best_from_gy(p, cands)]
+    for card in picks:
+        p.graveyard.remove(card)
+        put_back(p, card, dest, step, e, opp, counters=counters)
+
+
+def reanimate_ok(p, card):
+    return not card.reanimate or bool(gy_candidates(p, card.reanimate[1], card.reanimate[2]))
+
+
 def main_phase_spells(me, opp):
     """Karten fuer die Main Phases: keine Instants, keine Flash-Karten, Removal nur mit gueltigem Ziel; dazu die
     Kopien der Prepared-Kreaturen."""
     cards = [c for c in me.hand if not c.is_land] + copies(me)
-    return [c for c in cards if not c.is_instant and not c.flash and legend_ok(me, c)
+    return [c for c in cards if not c.is_instant and not c.flash and legend_ok(me, c) and reanimate_ok(me, c)
             and (not c.removal or c.removal[4] == "etb" or has_target(c, me, opp))]
 
 
@@ -1077,7 +1185,15 @@ def instant_removals(p):
         for card in p.exiled:
             if card.is_instant and card.removal and card.removal[4] == "spell":
                 out.append((card, _discounted(_any_mana(card), discount(p)).alts, card, True, "exile"))
+    for card in p.graveyard:
+        if card.flashback and card.is_instant and card.removal and card.removal[4] == "spell":
+            out.append((card, _flashback_version(p, card).alts, card, True, "flashback"))
     return out
+
+
+def _flashback_version(p, card):
+    """Die Karte mit ihren Flashback-Kosten (inkl. Kostensenkung bzw. Steuer)."""
+    return _discounted(card._replace(alts=card.flashback), discount(p))
 
 
 def threshold(p):
@@ -1089,13 +1205,20 @@ def _any_mana(card):
     return card._replace(alts=((card.mv, ()),)) if card.alts else card
 
 
+def _zone(p, zone):
+    return {"exile": p.exiled, "flashback": p.graveyard}.get(zone, p.hand)
+
+
 def _use_removal(p, card, alts, is_spell, step, e, zone="hand", other=None):
     """Bezahlt und legt die Karte in den Friedhof (gewirkt oder abgeworfen); aus dem Exil in den Friedhof des
     Besitzers (other: der Gegner, falls der Besitzer nicht gespeichert ist)."""
     if not _pay_open(p, alts):
         return False
-    (p.exiled if zone == "exile" else p.hand).remove(card)
-    ((p.exiled_from or other or p) if zone == "exile" else p).graveyard.append(card)
+    if zone == "flashback":  # aus dem Friedhof, danach ins Exil
+        p.graveyard.remove(card)
+    else:
+        (p.exiled if zone == "exile" else p.hand).remove(card)
+        ((p.exiled_from or other or p) if zone == "exile" else p).graveyard.append(card)
     if is_spell:
         on_cast(p, card, step, e)
         face = sum(a[1] for a in card.modes[0] if a[0] == "face") if card.modes and not card.removal[3] else 0
@@ -1153,7 +1276,7 @@ def end_step_instants(dfn, act, e, step):
     """Am Ende des Zugs von act nutzt dfn sein offenes Mana: Removal auf die gefaehrlichste Kreatur, Flash-Kreaturen,
     sonstige Instants (z. B. Ziehen), danach Landcycling mit dem Rest. Kampftricks bleiben auf der Hand."""
     for card, alts, rc, is_spell, zone in sorted(instant_removals(dfn), key=lambda o: o[0].mv):
-        if card not in (dfn.exiled if zone == "exile" else dfn.hand) or not _payable(dfn, alts) \
+        if card not in _zone(dfn, zone) or not _payable(dfn, alts) \
                 or not has_target(rc, dfn, act):
             continue
         if rc.removal[3] and choose_target(rc.removal, dfn, act) is None and act.life > _amount(rc.removal, dfn):
@@ -1166,11 +1289,27 @@ def end_step_instants(dfn, act, e, step):
             _resolve(dfn, act, card, step, e)
             if card in dfn.graveyard and not card.is_instant_sorcery:
                 dfn.graveyard.remove(card)
+    flashbacks = [c for c in dfn.graveyard if c.flashback and c.is_instant and not c.removal and not _trick_atoms(c)]
     for card in sorted([c for c in dfn.hand if c.is_instant and not c.removal and not _trick_atoms(c)],
                        key=lambda c: -c.mv):
-        if card in dfn.hand and _cast_from_open(dfn, card):
+        if card in dfn.hand and reanimate_ok(dfn, card) and _cast_from_open(dfn, card):
             e["events"].append(f"{dfn.name}: {card.name} am Ende des Zugs")
             _resolve(dfn, act, card, step, e)
+    for card in sorted(flashbacks, key=lambda c: -c.mv):  # nur Karten, die schon vorher im Friedhof lagen
+        if card not in dfn.graveyard or not reanimate_ok(dfn, card):
+            continue
+        if card.flashback_discard and not [c for c in dfn.hand]:
+            continue  # Zusatzkosten: eine Karte abwerfen
+        if not _pay_open(dfn, _flashback_version(dfn, card).alts):
+            continue
+        dfn.graveyard.remove(card)
+        if card.flashback_discard:
+            gone = choose_discard(dfn)
+            dfn.hand.remove(gone)
+            dfn.graveyard.append(gone)
+            e["events"].append(f"{dfn.name}: wirft {gone.name} ab (Flashback)")
+        e["events"].append(f"{dfn.name}: {card.name} per Flashback am Ende des Zugs")
+        _resolve(dfn, act, card._replace(draws=card.alt_draws) if card.alt_draws else card, step, e, to_exile=True)
     end_step_cycling(dfn, e)
     lasting_abilities(dfn, act, step, e, own_turn=False, mode="rest")
     tap_artifact_abilities(dfn, e)
@@ -1301,11 +1440,31 @@ def _restore(snap):
         c.pump, c.tpump, c.bonus, c.extra = pu, tp, bo, ex
 
 
-def apply_ability(p, src, ab, target, e=None):
-    """Wirkung einer Faehigkeit (src: Quelle, target: gewaehltes Ziel). Gibt False zurueck, wenn sie nichts bewirkt."""
+def apply_ability(p, src, ab, target, e=None, gy=None):
+    """Wirkung einer Faehigkeit (src: Quelle, target: gewaehltes Ziel, gy: Karte aus dem Friedhof). Gibt False zurueck,
+    wenn sie nichts bewirkt."""
     did = False
     for atom in ab[4]:
         kind = atom[0]
+        if kind == "return":  # Karte aus dem Friedhof auf die Hand (Marwyn, Theoretical Necromancer)
+            cands = gy_candidates(p, atom[1], exclude=gy if atom[3] else None)
+            if not cands:
+                continue
+            if e is not None:
+                pick = _best_from_gy(p, cands)
+                p.graveyard.remove(pick)
+                put_back(p, pick, atom[2], p.now, e, p.opponent)
+            did = True
+            continue
+        if kind == "return_self":  # die Karte selbst aus dem Friedhof (Blessed Ghoul, Gallia, Grim Repriser)
+            if e is not None and gy is not None:
+                if atom[4] == "exile_creature":
+                    others = gy_candidates(p, "creature")
+                    p.graveyard.remove(min(others, key=lambda c: (c.mv, c.power, c.name)))
+                put_back(p, gy, atom[1], p.now, e, p.opponent, tapped=atom[2], counters=atom[3],
+                         finality=gy.finality)
+            did = True
+            continue
         if kind == "empower":
             if e is not None:
                 _jace_add(p, atom[1], e)
@@ -1379,7 +1538,7 @@ def _activate(p, src, ab, target, e, mode, gy=None):
         p.graveyard.remove(gy)
     who = src.card.name if src is not None else (f"{gy.name} (aus dem Friedhof)" if gy is not None else "Permanent")
     e["events"].append(f"{p.name}: Fähigkeit von {who}" + (f" auf {target.card.name}" if target is not None else ""))
-    apply_ability(p, src, ab, target, e)
+    apply_ability(p, src, ab, target, e, gy)
     return True
 
 
@@ -1442,11 +1601,15 @@ def _attack_value(me, opp, step):
 def lasting_abilities(p, opp, step, e, own_turn, mode):
     """Marken, Empower und Surveil (nur am Ende des gegnerischen Zugs): Marken zuerst (auf die gefaehrlichste passende
     Kreatur), dann Empower, dann Surveil. Dazu Faehigkeiten aus dem Friedhof (Campus Crier)."""
-    rank = {"counter": 0, "token": 1, "empower": 2, "surveil": 3}
+    rank = {"counter": 0, "return_self": 1, "return": 1, "token": 1, "empower": 2, "surveil": 3}
     for _round in range(10):
         sources = [(src, ab, None) for src, ab in ability_sources(p, step, own_turn, main=own_turn)]
         sources += [(None, (card.gy_ability[0], 0, False, "instant", card.gy_ability[1]), card)
                     for card in dict.fromkeys(p.graveyard) if card.gy_ability]
+        for card in dict.fromkeys(p.graveyard):
+            if card.gy_return and _gy_return_ok(p, card):
+                ret = card.gy_return
+                sources.append((None, (ret[0], 0, False, "instant", (("return_self",) + ret[1:],)), card))
         options = []
         for src, ab, gy in sources:
             kinds = _kinds(ab)
@@ -1456,6 +1619,11 @@ def lasting_abilities(p, opp, step, e, own_turn, mode):
                 continue
             if "surveil" in kinds and (own_turn or not p.library):
                 continue
+            if "return" in kinds and not apply_ability(p, src, ab, None, None, gy):
+                continue  # nichts Passendes im Friedhof
+            if "return" in kinds and any(a[1] == "land" for a in ab[4] if a[0] == "return") \
+                    and len(p.lands) + sum(c.is_land for c in p.hand) >= CYCLE_CAP:
+                continue  # Laender nur zurueck, solange welche fehlen
             for target in _targets(p, src, ab):
                 if "counter" in kinds:
                     snap = _snapshot(p)
@@ -1472,6 +1640,27 @@ def lasting_abilities(p, opp, step, e, own_turn, mode):
                 break
         if not done:
             return
+
+
+def _gy_return_ok(p, card):
+    """Bedingungen und Zusatzkosten einer Faehigkeit "Return this card from your graveyard"."""
+    _alts, _dest, _tapped, _counters, extra, cond = card.gy_return
+    if cond == "noncombat" and not p.dealt_direct > p.direct_mark:
+        return False
+    if extra == "exile_creature" and not gy_candidates(p, "creature", exclude=card):
+        return False
+    return legend_ok(p, card) if _dest == "battlefield" else True
+
+
+def phoenix_check(me, opp, step, e):
+    """Zu Beginn des eigenen Kampfs: sind in diesem Zug zwei oder mehr Kreaturen gestorben, kommen Karten wie
+    Darklight Phoenix aus dem Friedhof ins Spiel."""
+    died = (me.deaths - me.deaths_mark) + (opp.deaths - opp.deaths_mark)
+    if died < 2:
+        return
+    for card in [c for c in me.graveyard if c.phoenix]:
+        me.graveyard.remove(card)
+        put_back(me, card, "battlefield", step, e, opp)
 
 
 def pre_attack_abilities(me, opp, step, e):
@@ -1593,6 +1782,8 @@ def take_turn(me, opp, step, rnd, skip_draw):
          "damage": 0, "face": 0, "deaths": [], "events": [], "note": ""}
     me.cast_count = 0
     me.turn_start = step
+    for p_ in (me, opp):
+        p_.direct_mark, p_.deaths_mark = p_.dealt_direct, p_.deaths
     me.opponent, opp.opponent = opp, me
     me.now = opp.now = step
     for c in me.creatures:  # Untap (gesperrte Kreaturen bleiben gesperrt)
@@ -1620,6 +1811,13 @@ def take_turn(me, opp, step, rnd, skip_draw):
                 cheap = _discounted(_any_mana(c), disc)
                 ex_map[cheap] = c
                 me.hand.append(cheap)
+
+    fb_map = {}  # Flashback: Sorceries aus dem Friedhof mit Flashback-Kosten, voruebergehend auf der Hand
+    for c in me.graveyard:
+        if c.flashback and not c.is_instant and not c.flashback_discard:
+            cheap = _flashback_version(me, c)
+            fb_map[cheap] = c
+            me.hand.append(cheap)
 
     def cost(c):  # Prepared-Kopien mit Kostensenkung bzw. Steuer (Handkarten sind schon angepasst)
         if c.is_copy:
@@ -1705,13 +1903,24 @@ def take_turn(me, opp, step, rnd, skip_draw):
         me.hand[:] = [c for c in me.hand if c not in ex_map]
         chosen = [ex_map.get(c, c) for c in chosen]
     owner_of = me.exiled_from or opp
+    from_graveyard = Counter()  # per Flashback gewirkt: danach ins Exil
+    if fb_map:
+        for c in chosen:
+            if c in fb_map:
+                me.graveyard.remove(fb_map[c])
+                from_graveyard[fb_map[c]] += 1
+        me.hand[:] = [c for c in me.hand if c not in fb_map]
+        chosen = [fb_map.get(c, c) for c in chosen]
 
     def resolve(c):
-        owner = None
+        owner, exile = None, False
         if from_exile[c]:
             from_exile[c] -= 1
             owner = owner_of
-        _resolve(me, opp, c, step, e, owner)
+        elif from_graveyard[c]:
+            from_graveyard[c] -= 1
+            exile = True
+        _resolve(me, opp, c, step, e, owner, exile)
     me.cast_count += len(chosen)
     early = [c for c in chosen if c.is_creature and not c.haste and combat_etb(me, opp, c, step, chosen)]
     main1 = [c for c in chosen if not (c.is_creature and not c.haste) or c in early]
@@ -1730,7 +1939,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     # Removal-Instants vor dem Angriff: Blocker entfernen, die einen unserer Angreifer fressen wuerden
     candidates = [c for c in me.creatures if can_attack(c, step)]
     for card, alts, rc, is_spell, zone in sorted(instant_removals(me), key=lambda o: o[0].mv):
-        if card not in (me.exiled if zone == "exile" else me.hand) or not _payable(me, alts):
+        if card not in _zone(me, zone) or not _payable(me, alts):
             continue
         eaters = [t for t in valid_targets(rc.removal, me, opp) if any(_eats(t, a) for a in candidates)]
         if eaters:
@@ -1739,7 +1948,8 @@ def take_turn(me, opp, step, rnd, skip_draw):
             cast_removal(rc, me, opp, e, step, target=max(eaters, key=danger))
     # Faehigkeiten vor dem Angriff: Marken und Empower mit freiem Mana, Flying/Menace fuer den Angriff
     pre_attack_abilities(me, opp, step, e)
-    # Kampf
+    # Kampf: zu Beginn Darklight Phoenix
+    phoenix_check(me, opp, step, e)
     attackers = choose_attackers(me.creatures, opp.creatures, opp.life, me.life, step)
     art_vigilance = any(c.card.artifact_vigilance for c in me.creatures if not c.dead)
     for a in attackers:
@@ -1781,6 +1991,12 @@ def take_turn(me, opp, step, rnd, skip_draw):
                 if me.library:
                     me.hand.append(me.library.pop(0))
             e["events"].append(f"{me.name}: {a.card.name} zieht {a.card.combat_draw}")
+        if a.card.combat_land_return and res["to_player"].get(id(a)):  # Carnivorous Cultivator
+            lands = gy_candidates(me, "land")
+            if lands:
+                pick = _best_from_gy(me, lands)
+                me.graveyard.remove(pick)
+                put_back(me, pick, "hand", step, e)
     e["attacks"] = [{"attacker": lab, "blockers": blabs, "attacker_dies": a.dead, "blockers_die": [b.dead for b in bs],
                      "jace": a.at_jace} for (lab, blabs), (a, bs) in zip(before, blocks)]
     bury((me, opp), e)
@@ -1790,6 +2006,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     for c in main2:
         resolve(c)
     e["main2"] = [c.name for c in main2]
+    lasting_abilities(me, opp, step, e, own_turn=True, mode="free")  # z. B. Grim Repriser nach dem Angriffs-Schaden
     _jace_activate(me, step, e, True)
     # End Phase: Edgar ("if you didn't cast a spell this turn"), danach Instants und Flash des Gegners
     if not me.cast_count:
