@@ -24,7 +24,7 @@ from collections import Counter
 from components.cards import card_info
 from components.cardkinds import (FLOW_ORDER, empower_points, flow_kinds,  # noqa: F401 (auch von Tests benutzt)
                                   type_kinds)
-from components.battle_server import enemy_decks as _enemy_decks, start_battle
+from components.battle_server import enemy_decks as _enemy_decks, game_fragment, start_battle
 from components.deckfile import parse_pool
 from components.howitworks import render_help_page
 from components.landadvice import color_overview, recommend
@@ -252,6 +252,8 @@ def make_handler(app):
                 self._send(render_help_page())
             elif path == "/api/status":
                 self._json(app["job"].status())
+            elif path == "/game":
+                self._send(game_fragment(app, self.path.partition("?")[2]))
             elif path == "/report":
                 rep = app.get("report_html") or app["job"].report
                 self._send(rep if rep else "<p>Noch kein Bericht vorhanden.</p>")

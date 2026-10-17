@@ -9,7 +9,7 @@ import sys
 import threading
 import webbrowser
 
-from components.battle_server import enemy_decks, start_battle
+from components.battle_server import enemy_decks, game_fragment, start_battle
 from components.drafthelper import Job, LocalServer
 
 PORT = 8766
@@ -48,6 +48,8 @@ def make_handler(app):
                 self._json({"enemies": enemy_decks(app["folder"]), "quit": True})
             elif path == "/api/status":
                 self._json(app["job"].status())
+            elif path == "/game":
+                self._send(game_fragment(app, self.path.partition("?")[2]))
             else:
                 self._send("Nicht gefunden", "text/plain; charset=utf-8", 404)
 

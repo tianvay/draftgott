@@ -3,8 +3,10 @@
 enemy_decks(folder)               -> [{"file", "name"}] fuer alle _enemydeck*.txt im Ordner
 start_battle(app, body, folder)   -> (HTTP-Status, Antwort): startet den Kampf der Varianten des letzten Berichts
                                      (app["last_entries"], app["last_args"]) als Hintergrund-Job (app["job"]);
-                                     das Ergebnis steht danach in app["battle_html"].
+                                     das Ergebnis steht danach in app["battle_html"], alle Spiele in app["battle_games"].
+game_fragment(app, query)         -> Protokoll eines einzelnen Spiels (Spieleliste im Kampfbericht)
 """
+from urllib.parse import parse_qs
 from components.deckfile import parse_deck_name
 
 
@@ -36,8 +38,9 @@ def start_battle(app, body, folder):
     entries, run_args = app["last_entries"], app["last_args"]
 
     def work(progress):
-        html = app["battle"](entries, str(folder / enemy), run_args, progress)
-        app["battle_html"] = html
+        result = app["battle"](entries, str(folder / enemy), run_args, progress)
+        html, games = result if isinstance(result, tuple) else (result, {})
+        app["battle_html"], app["battle_games"] = html, games
         if app.get("save_battle"):
             app["save_battle"](html, run_args)
         return html
@@ -45,3 +48,20 @@ def start_battle(app, body, folder):
     if not app["job"].start(work):
         return 409, {"ok": False, "error": "Es laeuft bereits eine Simulation"}
     return 200, {"ok": True}
+
+
+def game_fragment(app, query):
+    """Protokoll eines Spiels: Parameter d (Deck), e (Gegner), m (play/draw), n (Nummer)."""
+    from components.battle_report import protocol_html
+    q = parse_qs(query or "")
+    try:
+        d, e, n = int(q["d"][0]), int(q["e"][0]), int(q["n"][0])
+        mode = q["m"][0]
+        game = (app.get("battle_games") or {})[(d, e, mode)][n]
+    except (KeyError, IndexError, ValueError):
+        return "<p class=\"muted\">Spiel nicht gefunden (Kampfbericht neu erstellen).</p>"
+    label = "Sieg" if game["winner"] == "a" else "Niederlage" if game["winner"] == "b" else "Unentschieden"
+    if game.get("note"):
+        return f"<p class=\"muted\">Spiel {n + 1}: {game['note']} (keine Züge).</p>"
+    mode_label = "On the Play" if mode == "play" else "On the Draw"
+    return protocol_html(game, mode_label, f"Spiel {n + 1}: {label}")

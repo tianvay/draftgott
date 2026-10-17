@@ -160,6 +160,12 @@ def load_enemy(path):
 def battle_entries(entries, enemy_paths, args, progress=_stderr):
     """Kampf der Decks (entries, z. B. Splash und NoSplash) gegen ein oder mehrere Gegnerdecks. Gibt den Kampfbericht
     (HTML) zurueck. Der Goldfish wird dafuer nicht simuliert."""
+    return battle_entries_games(entries, enemy_paths, args, progress)[0]
+
+
+def battle_entries_games(entries, enemy_paths, args, progress=_stderr):
+    """Wie battle_entries, gibt aber (HTML, Spiele) zurueck; Spiele: {(Deck, Gegner, "play"/"draw"): [Spiel mit
+    Protokoll, ...]} fuer die Spieleliste im Kampfbericht (nur solange draftgott laeuft)."""
     if isinstance(enemy_paths, (str, pathlib.Path)):
         enemy_paths = [enemy_paths]
     enemies = [load_enemy(p) for p in enemy_paths]
@@ -171,7 +177,12 @@ def battle_entries(entries, enemy_paths, args, progress=_stderr):
         sys.exit(f"Scryfall nicht erreichbar: {e}")
     decks = [build_deck(e, data, args) for e in entries]
     simulate_battles(decks, enemies, data, args, progress)
-    return render_battle_html(decks, args)
+    games = {}
+    for d_idx, dd in enumerate(decks):
+        for e_idx, b in enumerate(dd.get("battles") or []):
+            for label, key in (("On the Play", "play"), ("On the Draw", "draw")):
+                games[(d_idx, e_idx, key)] = b["results"][label].pop("results_all", [])
+    return render_battle_html(decks, args), games
 
 
 def save_battle_report(html, args):
@@ -227,14 +238,15 @@ def run(args):
     fetch_symbols(args.neu_laden)  # Original-Manasymbole (einmalig von Scryfall, danach aus dem Cache)
     if args.drafthelper is not None:
         from components.drafthelper import serve
-        serve(args, simulate_entries, save_report, battle=battle_entries, save_battle=save_battle_report)
+        serve(args, simulate_entries, save_report, battle=battle_entries_games, save_battle=save_battle_report)
         return
     entries = entries_from_files(args)
     html = simulate_entries(entries, args)
     if args.bericht_server:  # Bericht ueber den lokalen Server: "Kampf simulieren" im Bericht
         from components.report_server import serve_report
         save_report(html, args)
-        serve_report(html, entries, args, battle_entries, save_battle_report, open_browser=not args.nicht_oeffnen)
+        serve_report(html, entries, args, battle_entries_games, save_battle_report,
+                     open_browser=not args.nicht_oeffnen)
         return
     paths = [save_report(html, args)]
     if args.gegner:  # Kampf in einen eigenen Bericht

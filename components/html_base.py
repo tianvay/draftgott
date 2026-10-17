@@ -211,7 +211,10 @@ def h_table(headers, rows, extra="", left=(0,)):
     return f'<div class="tw"><table {extra}><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>'
 
 
-def svg_lines(xs, series, ymax=1.0, w=640, h=250):
+def svg_lines(xs, series, ymax=1.0, w=640, h=250, fmt=None, classes=None):
+    """Liniendiagramm. fmt: Beschriftung der Werte (Standard Prozent); classes: {Reihe: CSS-Klasse} (Standard
+    LABEL_CLASS fuer On the Play / On the Draw)."""
+    fmt = fmt or (lambda v: f"{v:.0%}")
     ml, mr, mt, mb = 46, 16, 14, 30
     pw, ph = w - ml - mr, h - mt - mb
 
@@ -225,16 +228,16 @@ def svg_lines(xs, series, ymax=1.0, w=640, h=250):
     for g in (0, .25, .5, .75, 1):
         y = Y(g * ymax)
         out.append(f'<line x1="{ml}" x2="{w - mr}" y1="{y:.1f}" y2="{y:.1f}" class="grid"/>')
-        out.append(f'<text x="{ml - 7}" y="{y + 4:.1f}" class="axis" text-anchor="end">{g:.0%}</text>')
+        out.append(f'<text x="{ml - 7}" y="{y + 4:.1f}" class="axis" text-anchor="end">{fmt(g * ymax)}</text>')
     for i, x in enumerate(xs):
         out.append(f'<text x="{X(i):.1f}" y="{h - 9}" class="axis" text-anchor="middle">{esc(x)}</text>')
     for name, vals in series.items():
-        cls = LABEL_CLASS.get(name, "play")
+        cls = (classes or LABEL_CLASS).get(name, "play")
         pts = " ".join(f"{X(i):.1f},{Y(v):.1f}" for i, v in enumerate(vals))
         out.append(f'<polyline points="{pts}" class="ln {cls}"/>')
         for i, v in enumerate(vals):
             out.append(f'<circle cx="{X(i):.1f}" cy="{Y(v):.1f}" r="3.3" class="pt {cls}">'
-                       f'<title>{esc(name)}, Runde {esc(xs[i])}: {v:.0%}</title></circle>')
+                       f'<title>{esc(name)}, Runde {esc(xs[i])}: {fmt(v)}</title></circle>')
     out.append("</svg>")
     return "".join(out)
 

@@ -258,6 +258,9 @@ class Player:
         self.lands, self.creatures, self.perms, self.graveyard = [], [], [], []
         self.life = LIFE
         self.open = []        # ungetapptes Mana nach dem eigenen Zug (fuer Instants und Flash im Zug des Gegners)
+        self.dealt_combat = 0  # Kampfschaden am Gegner
+        self.dealt_direct = 0  # direkter Schaden am Gegner (Burn, Landfall, "any target")
+        self.deaths = 0        # gestorbene eigene Kreaturen
         self.cast_count = 0   # im eigenen Zug gewirkte Zauber (fuer Edgar)
 
     def board(self):
@@ -359,6 +362,7 @@ def bury(players, e):
     for p in players:
         for c in list(p.creatures):
             if c.dead or c.toughness <= 0 or c.damage >= c.toughness or (c.touched and c.damage > 0):
+                p.deaths += 1
                 p.creatures.remove(c)
                 p.graveyard.append(c.card)
                 e["deaths"].append(f"{c.card.name} ({p.name})")
@@ -425,6 +429,7 @@ def cast_removal(card, caster, victim, e, step, target=None):
         target = choose_target(spec, caster, victim)
     if kind == "damage" and any_target and (target is None or victim.life <= amount):
         victim.life -= amount
+        caster.dealt_direct += amount
         e["face"] += amount
         e["events"].append(f"{caster.name}: {card.name} – {amount} Schaden an {victim.name}")
         return
@@ -482,6 +487,7 @@ def _resolve(me, opp, card, step, entry):
         me.write_back(bonus, pump)
         if gain["face"]:
             opp.life -= gain["face"]
+            me.dealt_direct += gain["face"]
             entry["face"] += gain["face"]
     if card.draws:
         for _ in range(card.draws):
@@ -663,6 +669,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
             face, mana, _cnt = landfall_effects(land, board, bonus, step)
             me.write_back(bonus, pump)
             opp.life -= face
+            me.dealt_direct += face
             e["face"] += face
             pool_all = pool_all + mana
     _score_, chosen = best_cast(spells, land_key(pool_all), has_creature, True, must=forced)
@@ -722,6 +729,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     before = [(a.label(), [b.label() for b in bs]) for a, bs in blocks]
     res = resolve_combat(blocks)
     opp.life -= res["player"]
+    me.dealt_combat += res["player"]
     me.life += res["lifelink_attacker"]
     opp.life += res["lifelink_defender"]
     e["damage"] = res["player"]
@@ -776,37 +784,92 @@ def play_game(cards_a, cards_b, a_starts, max_turns=20, mulligan=True, min_hand=
             if me.lost or opp.life <= 0 or me.life <= 0:
                 loser = me if (me.lost or me.life <= 0) else opp
                 result["winner"] = "b" if loser is a else "a"
-                return result
+                break
+        else:
+            continue
+        break
+    result["stats"] = {key: {"Wir": getattr(a, attr), "Gegner": getattr(b, attr)}
+                       for key, attr in (("combat", "dealt_combat"), ("direct", "dealt_direct"), ("deaths", "deaths"))}
     return result
 
 
+def _end_life(game, who):
+    log = game.get("log") or []
+    return log[-1]["life"][who] if log and log[-1].get("life") else 20
+
+
+def _max_gap(game, behind):
+    """Groesster Rueckstand von 'behind' waehrend des Spiels (Leben des anderen minus eigene Leben)."""
+    other = "Gegner" if behind == "Wir" else "Wir"
+    return max((e["life"][other] - e["life"][behind] for e in game.get("log") or [] if e.get("life")), default=0)
+
+
+def special_games(results):
+    """Besondere Spiele: knappster Sieg (wenigste eigene Leben am Ende), knappste Niederlage (Gegner mit den wenigsten
+    Leben am Ende), gedrehter Sieg (groesster Rueckstand zwischendurch), gedrehte Niederlage (groesster Vorsprung)."""
+    wins = [r for r in results if r["winner"] == "a"]
+    losses = [r for r in results if r["winner"] == "b"]
+    return {
+        "closest_win": min(wins, key=lambda r: (_end_life(r, "Wir"), r["round"])) if wins else None,
+        "closest_loss": min(losses, key=lambda r: (_end_life(r, "Gegner"), -r["round"])) if losses else None,
+        "comeback_win": max(wins, key=lambda r: (_max_gap(r, "Wir"), -r["round"])) if wins else None,
+        "comeback_loss": max(losses, key=lambda r: (_max_gap(r, "Gegner"), -r["round"])) if losses else None,
+    }
+
+
 def battle(cards_a, cards_b, games, on_draw, max_turns=20, mulligan=True, min_hand=5):
-    """Spielt games Spiele; on_draw: der Gegner beginnt. Gibt Siege, Niederlagen, Unentschieden, Runden und die
-    schnellsten Siege bzw. Niederlagen (mit Protokoll) zurueck."""
+    """Spielt games Spiele; on_draw: der Gegner beginnt. Gibt Siege, Niederlagen, Unentschieden, Kennzahlen, besondere
+    Spiele (mit Protokoll), eine Liste aller Spiele und alle Spiele mit Protokoll (results_all) zurueck."""
+    from collections import Counter
     out = {"games": games, "wins": 0, "losses": 0, "draws": 0, "win_rounds": [], "loss_rounds": [],
-           "fastest_win": None, "fastest_loss": None, "mull_wins": 0, "mull_losses": 0}
-    for _ in range(games):
+           "fastest_win": None, "fastest_loss": None, "mull_wins": 0, "mull_losses": 0, "win_by_round": Counter(),
+           "end_life_win": [], "end_life_loss": [], "games_list": [], "results_all": []}
+    played = []
+    for n in range(games):
         r = play_game(cards_a, cards_b, not on_draw, max_turns, mulligan, min_hand)
-        if r.get("note") == "Spiel durch Mulligan verloren":  # zaehlt, aber nicht fuer Runden und schnellste Spiele
-            if r["winner"] == "a":
-                out["wins"] += 1
-                out["mull_wins"] += 1
-            elif r["winner"] == "b":
-                out["losses"] += 1
-                out["mull_losses"] += 1
-            else:
-                out["draws"] += 1
-            continue
+        out["results_all"].append(r)
+        mull = r.get("note") == "Spiel durch Mulligan verloren"
+        out["games_list"].append({"n": n, "winner": r["winner"], "round": r["round"], "mulligans": r["mulligans"],
+                                  "mulligan_loss": mull,
+                                  "life": {"Wir": _end_life(r, "Wir"), "Gegner": _end_life(r, "Gegner")}})
         if r["winner"] == "a":
             out["wins"] += 1
+        elif r["winner"] == "b":
+            out["losses"] += 1
+        else:
+            out["draws"] += 1
+        if mull:  # zaehlt, aber nicht fuer Runden, Kennzahlen und besondere Spiele
+            out["mull_wins" if r["winner"] == "a" else "mull_losses"] += 1 if r["winner"] else 0
+            continue
+        played.append(r)
+        if r["winner"] == "a":
             out["win_rounds"].append(r["round"])
+            out["win_by_round"][r["round"]] += 1
+            out["end_life_win"].append(_end_life(r, "Wir"))
             if out["fastest_win"] is None or r["round"] < out["fastest_win"]["round"]:
                 out["fastest_win"] = r
         elif r["winner"] == "b":
-            out["losses"] += 1
             out["loss_rounds"].append(r["round"])
+            out["end_life_loss"].append(_end_life(r, "Gegner"))
             if out["fastest_loss"] is None or r["round"] < out["fastest_loss"]["round"]:
                 out["fastest_loss"] = r
-        else:
-            out["draws"] += 1
+    out.update(special_games(played))
+    # Lebenspunkte nach jeder Runde (nach Spielende gilt der letzte Stand)
+    rounds = max((r["round"] for r in played), default=0)
+    curve = {"Wir": [0.0] * rounds, "Gegner": [0.0] * rounds}
+    for r in played:
+        last = {"Wir": 20, "Gegner": 20}
+        by_round = {}
+        for e in r["log"]:
+            if e.get("life"):
+                by_round[e["round"]] = dict(e["life"])
+        for i in range(rounds):
+            last = by_round.get(i + 1, last)
+            for who in curve:
+                curve[who][i] += last[who]
+    n_played = len(played) or 1
+    out["life_curve"] = {who: [v / n_played for v in vals] for who, vals in curve.items()}
+    for key in ("combat", "direct", "deaths"):
+        name = {"combat": "combat_damage", "direct": "direct_damage", "deaths": "deaths"}[key]
+        out[name] = {who: sum(r["stats"][key][who] for r in played) / n_played for who in ("Wir", "Gegner")}
     return out
