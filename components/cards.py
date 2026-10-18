@@ -418,15 +418,32 @@ def _effect_atoms(text, full=False):
     return [a for _pos, a in sorted(found, key=lambda f: f[0])]
 
 
+_NOT_SHORT_NAMES = {"the", "way", "a", "an", "of"}
+
+
+def _short_name(name, type_line, text):
+    """201.5c: verkuerzter Name einer legendaeren Karte im eigenen Text ("When Kiora enters" bei Kiora of Fire and
+    Ashes): das erste Wort des Namens, wenn es im Text grossgeschrieben vorkommt (keine Artikel)."""
+    if "Legendary" not in type_line:
+        return ""
+    first = name.split(",")[0].split(" // ")[0].split(" ")[0]
+    if not first or first.lower() in _NOT_SHORT_NAMES or first == name.split(",")[0]:
+        return ""
+    return first if re.search(r"(?<![A-Za-z])" + re.escape(first) + r"(?![A-Za-z])", text) else ""
+
+
 def _clean_lines(card):
     """(Rohzeile, kleingeschrieben mit ~ fuer den Namen) der Vorderseite, ohne Erinnerungstext."""
     front = (card.get("card_faces") or [card])[0]
     text = front.get("oracle_text") or card.get("oracle_text") or ""
     name = front.get("name") or card.get("name") or ""
+    short = _short_name(name, front.get("type_line") or card.get("type_line") or "", text)
     for raw in text.split("\n"):
         low = re.sub(r"\([^)]*\)", "", raw).strip().lower()
         for nm in (name, name.split(",")[0], name.split(" // ")[0]):
             low = _name_to_tilde(low, nm)
+        if short:  # nicht in "Ajani's Pridemate" (ein anderes Objekt)
+            low = re.sub(r"(?<![a-z])" + re.escape(short.lower()) + r"(?![a-z'’])", "~", low)
         yield raw, low
 
 
@@ -544,6 +561,7 @@ def combat_keywords(card):
     for raw, _low in _clean_lines(card):
         line = re.sub(r"\([^)]*\)", "", raw).strip()
         tokens = [t.strip().lower() for t in line.split(",") if t.strip()]
+        tokens = [t for t in tokens if not re.fullmatch(r"ward(?: \{\d+\}|—.+)", t)]  # "ward {2}" in der Zeile
         if tokens and all(re.fullmatch(r"[a-z ]{2,20}", t) for t in tokens):
             found |= set(tokens) & set(COMBAT_KEYWORDS)
     return tuple(k for k in COMBAT_KEYWORDS if k in found)
@@ -1482,7 +1500,8 @@ def package_m2_traits(card):
         m = res["opp_loyalty_ping"].match(low)
         if m:
             out["opp_loyalty_ping"] = int(m.group(1))
-        m = res["ward"].match(low)
+        m = res["ward"].match(low) or next((res["ward"].match(t.strip()) for t in low.split(",")[1:]
+                                             if res["ward"].match(t.strip())), None)  # Schluesselwortzeile
         if m:
             out["ward"] = ("mana", int(m.group(1))) if m.group(1) else ("discard",)
         if res["toughness_damage"].match(low):

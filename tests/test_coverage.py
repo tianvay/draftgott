@@ -1,7 +1,7 @@
 import unittest
 
-from components.coverage import (M_FLOW, M_LETHAL, M_MANA, M_NONE, M_UNKNOWN, STATUS_TEXT, analyze_card,
-                                 metrics_of, summarize)
+from components.coverage import (M_FLOW, M_LETHAL, M_MANA, M_NONE, M_UNKNOWN, STATUS_TEXT, _classify, analyze_card,
+                                 line_modelled, metrics_of, summarize)
 
 DASH = "—"
 
@@ -72,17 +72,22 @@ class CategoryTests(unittest.TestCase):
         self.assertIn((category, metric), {(c, m) for c, m, _l in found}, found)
 
     def test_tokens(self):
-        self.check("When this creature enters, create a 2/2 colorless Wizard Soldier creature token named Cadet.",
-                   "Tokens erzeugen", M_LETHAL)
+        self.check("At the beginning of each player's upkeep, you create a 3/3 green Forest Tentacle land creature "
+                   "token.", "Tokens erzeugen", M_LETHAL)
+        self.assertEqual(analyze_card(sc(text="When this creature enters, create a 2/2 colorless Wizard Soldier "
+                                               "creature token named Cadet.")), [])  # modelliert
 
     def test_direct_damage(self):
         self.check("At the beginning of your upkeep, Test Spell deals 1 damage to each opponent.", "Direkter Schaden",
                    M_LETHAL)
-        self.check("Whenever this creature attacks, it deals 1 damage to each opponent and you gain 1 life.",
-                   "Direkter Schaden", M_LETHAL)
+        self.check("Whenever an opponent casts a spell with mana value 2 or less, Test deals 1 damage to each "
+                   "opponent.", "Direkter Schaden", M_LETHAL)
+        self.assertEqual(analyze_card(sc(text="Whenever this creature attacks, it deals 1 damage to each opponent and "
+                                               "you gain 1 life.")), [])  # modelliert (Screeching Soulbreaker)
 
     def test_haste_for_others(self):
-        self.check("Creatures you control have haste.", "Haste verleihen", M_LETHAL)
+        self.check("Creature tokens you control have haste.", "Haste verleihen", M_LETHAL)
+        self.assertEqual(analyze_card(sc(text="Creatures you control have haste.")), [])  # modelliert (Samut)
 
     def test_mana_outside_lands(self):
         self.check("{1}, {T}: Add {R}{G}.", "Mana außer Ländern", M_MANA)
@@ -110,20 +115,26 @@ class CategoryTests(unittest.TestCase):
                    type_line=f"Artifact {DASH} Equipment")
 
     def test_interaction_with_the_opponent_has_no_metric(self):
-        self.check("Destroy target creature.", "Interaktion mit dem Gegner", M_NONE, type_line="Sorcery")
-        self.check("Exile target creature or planeswalker.", "Interaktion mit dem Gegner", M_NONE, type_line="Instant")
+        self.check("Exile target card from an opponent's graveyard.", "Interaktion mit dem Gegner", M_NONE,
+                   type_line="Sorcery")
+        self.check("Tap target creature an opponent controls. It doesn't untap during its controller's next untap "
+                   "step.", "Interaktion mit dem Gegner", M_NONE, type_line="Sorcery")
+        for text in ("Destroy target creature.", "Exile target creature or planeswalker."):  # Removal ist modelliert
+            self.assertEqual(analyze_card(sc(text=text, type_line="Instant")), [], text)
 
     def test_life_gain_has_no_metric(self):
-        self.check("You gain 3 life.", "Lebensgewinn", M_NONE, type_line="Instant")
+        self.check("Whenever an opponent casts a spell with mana value 2 or less, you gain 2 life.", "Lebensgewinn",
+                   M_NONE)
+        self.assertEqual(analyze_card(sc(text="You gain 3 life.", type_line="Instant")), [])  # modelliert
 
     def test_flashback_keyword_and_line(self):
-        self.check("Flashback {4}{W}", "Zweitverwertung (Friedhof)", M_MANA, type_line="Sorcery", keywords=["Flashback"])
+        self.check("Flashback—{2}, Sacrifice a creature.", "Zweitverwertung (Friedhof)", M_MANA, type_line="Sorcery",
+                   keywords=["Flashback"])
+        self.assertEqual(analyze_card(sc(text="Flashback {4}{W}", type_line="Sorcery", keywords=["Flashback"])), [])
 
-    def test_prowess_keyword_is_a_bonus(self):
-        self.check("Prowess", "Zählmarken / Stärkebonus", M_LETHAL, keywords=["Prowess"])
-
-    def test_flash_keyword_is_timing(self):
-        self.check("Flash", "Timing (Flash)", M_MANA, keywords=["Flash"])
+    def test_prowess_and_flash_keywords_are_modelled(self):
+        self.assertEqual(analyze_card(sc(text="Prowess", keywords=["Prowess"])), [])
+        self.assertEqual(analyze_card(sc(text="Flash", keywords=["Flash"])), [])
 
     def test_plain_cycling_is_card_flow(self):
         self.check("Cycling {2}", "Kartenfluss", M_FLOW, type_line="Instant", keywords=["Cycling"])
@@ -133,9 +144,10 @@ class CategoryTests(unittest.TestCase):
         self.assertEqual({(c, m) for c, m, _l in found}, {("Unbekannter Effekt", M_UNKNOWN)})
 
     def test_one_card_can_have_several_categories_and_keeps_the_line(self):
-        card = sc("Mixed", text=("Flying\nWhenever a creature you control attacks, that creature deals 1 damage to each "
-                                 "opponent.\n{4}: Create a 2/2 colorless Wizard Soldier creature token named Cadet. "
-                                 "Then creatures you control gain haste until end of turn."), keywords=["Flying"])
+        card = sc("Mixed", text=("Flying\nWhenever an opponent casts a spell with mana value 2 or less, Mixed deals 1 "
+                                 "damage to each opponent.\nAt the beginning of each player's upkeep, you create a 3/3 "
+                                 "green Forest Tentacle land creature token.\nCreature tokens you control have haste."),
+                  keywords=["Flying"])
         found = analyze_card(card)
         self.assertEqual(cats(card), {"Direkter Schaden", "Tokens erzeugen", "Haste verleihen"})
         self.assertTrue(all(isinstance(line, str) and line for _c, _m, line in found))
@@ -158,7 +170,7 @@ class SpecialCardTests(unittest.TestCase):
             {"name": "Foreseer", "type_line": f"Creature {DASH} Wizard", "mana_cost": "{3}{U}",
              "oracle_text": "This creature enters prepared. (While it's prepared, you may cast a copy of its spell.)"},
             {"name": "Peer Review", "type_line": "Sorcery", "mana_cost": "{2}{U}",
-             "oracle_text": "Create a 2/2 colorless Wizard Soldier creature token named Cadet. Surveil 1."}]
+             "oracle_text": "Create a 1/1 black Rat creature token for each creature that died this turn. Surveil 1."}]
         card = sc("Foreseer // Peer Review", f"Creature {DASH} Wizard // Sorcery", layout="prepare", faces=faces,
                   keywords=["Prepared"])
         self.assertEqual(cats(card), {"Tokens erzeugen"})  # Kopie modelliert (Mana, Surveil 1), Token nicht
@@ -171,7 +183,8 @@ class SpecialCardTests(unittest.TestCase):
 
     def test_planeswalker_ability_with_a_known_effect_uses_that_category(self):
         card = sc("Walker", f"Legendary Planeswalker {DASH} Ajani",
-                  "+1: Create a 1/1 blue Illusion creature token.", cost="{2}{U}", power=None, toughness=None)
+                  "+1: Create a 1/1 blue Illusion creature token for each opponent.", cost="{2}{U}", power=None,
+                  toughness=None)
         self.assertIn("Tokens erzeugen", cats(card))
 
     def test_aura_bonus_is_flagged(self):
@@ -185,7 +198,7 @@ class FoundByReviewTests(unittest.TestCase):
 
     def test_token_creation_next_to_empower_on_one_line_is_not_swallowed(self):
         card = sc(type_line="Sorcery", keywords=["Empower Jace"],
-                  text="Create three 2/2 colorless Wizard Soldier creature tokens named Cadet. Empower Jace 2. "
+                  text="Create a 1/1 black Rat creature token for each creature that died this turn. Empower Jace 2. "
                        "(Put two loyalty counters on a Jace token you control.)")
         self.assertEqual(cats(card), {"Tokens erzeugen"})
 
@@ -193,7 +206,7 @@ class FoundByReviewTests(unittest.TestCase):
         self.assertEqual(analyze_card(sc(text="When this creature enters, choose one —")), [])
 
     def test_granting_combat_keywords_has_no_metric(self):
-        found = analyze_card(sc(type_line="Enchantment", text="Creatures you control have trample."))
+        found = analyze_card(sc(type_line="Enchantment", text="Creature tokens you control have vigilance."))
         self.assertEqual({(c, m) for c, m, _l in found}, {("Schlüsselwort verleihen", M_NONE)})
 
     def test_tapping_the_enchanted_creature_is_interaction(self):
@@ -207,7 +220,7 @@ class FoundByReviewTests(unittest.TestCase):
 
     def test_additional_cost_is_flagged_as_cost_condition(self):
         found = analyze_card(sc(type_line="Instant",
-                                text="As an additional cost to cast this spell, sacrifice a creature or pay {3}."))
+                                text="As an additional cost to cast this spell, exile two cards from your graveyard."))
         self.assertIn(("Zusatzkosten", M_MANA), {(c, m) for c, m, _l in found})
 
     def test_deckbuilding_rule_text_is_ignored(self):
@@ -215,27 +228,30 @@ class FoundByReviewTests(unittest.TestCase):
                                          text="A deck can have any number of cards named Test Spell.")), [])
 
     def test_ability_word_line_is_classified_by_its_text_not_as_a_keyword(self):
-        card = sc(text="Threshold — This creature gets +1/+1 as long as there are seven or more cards in your "
-                       "graveyard.", keywords=["Threshold"])
-        self.assertEqual(cats(card), {"Zählmarken / Stärkebonus"})
+        card = sc(text="Threshold — This creature gets +1/+0 and has flying as long as there are seven or more cards "
+                       "in your graveyard.", keywords=["Threshold"])
+        self.assertIn("Zählmarken / Stärkebonus", cats(card))
+        self.assertNotIn("Unbekannter Effekt", cats(card))
 
     def test_defender_exception_is_its_own_category(self):
-        card = sc(text="As long as you've scried or surveilled this turn, this creature can attack as though it "
-                       "didn't have defender.", keywords=["Defender"])
-        found = analyze_card(card)
-        self.assertIn(("Defender-Ausnahme", M_LETHAL), {(c, m) for c, m, _l in found})
+        line = "as long as you've scried or surveilled this turn, this creature can attack as though it didn't have " \
+            "defender."
+        self.assertIn(("Defender-Ausnahme", M_LETHAL), set(_classify(line, False)))  # Einordnung, wenn offen
+        self.assertEqual(analyze_card(sc(text=line, keywords=["Defender"])), [])  # Surveillance Phantasm: modelliert
 
 
 class MoreInteractionPatternsTests(unittest.TestCase):
     def test_damage_to_creatures_in_all_phrasings_is_interaction(self):
-        for text in ("Test Spell deals 5 damage to target black or green creature or planeswalker.",
-                     "Test Spell deals 1 damage to each creature and planeswalker your opponents control.",
-                     "Target creature you control deals damage equal to its power to target creature.",
-                     "Destroy all creatures that aren't of the chosen type.",
-                     "Target opponent reveals their hand. You choose a nonland card from it.",
-                     "When this creature attacks, exile up to one target card from a graveyard."):
-            found = {(c, m) for c, m, _l in analyze_card(sc(type_line="Sorcery", text=text))}
-            self.assertIn(("Interaktion mit dem Gegner", M_NONE), found, text)
+        for text in ("test spell deals 5 damage to target black or green creature or planeswalker.",
+                     "test spell deals 1 damage to each creature and planeswalker your opponents control.",
+                     "target creature you control deals damage equal to its power to target creature.",
+                     "destroy all creatures that aren't of the chosen type.",
+                     "target opponent reveals their hand. you choose a nonland card from it.",
+                     "when this creature attacks, exile up to one target card from a graveyard."):
+            self.assertIn(("Interaktion mit dem Gegner", M_NONE), set(_classify(text, False)), text)
+        found = {(c, m) for c, m, _l in analyze_card(sc(
+            type_line="Sorcery", text="When this creature attacks, exile up to one target card from a graveyard."))}
+        self.assertIn(("Interaktion mit dem Gegner", M_NONE), found)  # weiterhin offen
 
     def test_unblockable_is_a_granted_combat_property(self):
         found = {(c, m) for c, m, _l in analyze_card(sc(
@@ -243,18 +259,38 @@ class MoreInteractionPatternsTests(unittest.TestCase):
         self.assertIn(("Schlüsselwort verleihen", M_NONE), found)
 
     def test_damage_to_the_opponent_stays_direct_damage_not_interaction(self):
-        found = {c for c, _m, _l in analyze_card(sc(type_line="Sorcery",
-                                                    text="Whenever you cast a spell, Test Spell deals 2 damage to "
-                                                         "target opponent."))}
+        found = {c for c, _m, _l in analyze_card(sc(text="Whenever an opponent casts a spell with mana value 2 or "
+                                                         "less, Test Spell deals 2 damage to target opponent."))}
         self.assertEqual(found, {"Direkter Schaden"})
+
+
+class ModelFilterTests(unittest.TestCase):
+    """Zeilen, die das Kartenmodell erkennt (Goldfish und/oder Kampfmodell), stehen nicht mehr in der Abdeckung;
+    teilweise erkannte Zeilen behalten ihren offenen Rest."""
+
+    def test_line_modelled(self):
+        card = sc(type_line="Sorcery")
+        self.assertTrue(line_modelled(card, card, "Destroy target creature."))
+        self.assertFalse(line_modelled(card, card, "Exile target card from an opponent's graveyard."))
+
+    def test_recognised_line_is_not_flagged_but_the_open_rest_stays(self):
+        self.assertEqual(analyze_card(sc(type_line="Sorcery", text="Destroy target creature.")), [])
+        self.assertEqual(analyze_card(sc(type_line="Sorcery", text="Draw a card. Destroy target creature.")), [])
+        found = cats(sc(type_line="Sorcery", text="Draw a card. Exile target card from an opponent's graveyard."))
+        self.assertEqual(found, {"Interaktion mit dem Gegner"})
+        found = cats(sc(type_line="Sorcery", keywords=["Empower Jace"],
+                        text="Create a 1/1 black Rat creature token for each creature that died this turn. Empower "
+                             "Jace 2."))
+        self.assertEqual(found, {"Tokens erzeugen"})
 
 
 class SummaryTests(unittest.TestCase):
     def test_summary_counts_cards_not_copies_per_metric(self):
         data = {
-            "Token": analyze_card(sc(text="When this creature enters, create a 2/2 Cadet creature token.")),
+            "Token": analyze_card(sc(text="At the beginning of each player's upkeep, you create a 3/3 green Forest "
+                                          "Tentacle land creature token.")),
             "Burn": analyze_card(sc(text="At the beginning of your upkeep, Burn deals 1 damage to each opponent.")),
-            "Removal": analyze_card(sc(type_line="Sorcery", text="Destroy target creature.")),
+            "Removal": analyze_card(sc(type_line="Sorcery", text="Exile target card from an opponent's graveyard.")),
             "Odd": analyze_card(sc(text="Whenever you sacrifice a permanent, put a bounty counter on it.")),
             "Vanilla": analyze_card(sc()),
         }

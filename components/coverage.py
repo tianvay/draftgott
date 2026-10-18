@@ -139,6 +139,33 @@ def _classify(low, is_planeswalker):
     return found
 
 
+# Felder, die nur der Bericht nutzt (setzen sie sich, ist die Zeile nicht simuliert)
+_REPORT_ONLY = {"name", "removal_points", "pw_tags", "empower_text", "is_jace", "legendary"}
+
+
+def _model_fields(card, face, text):
+    from components.cards import card_info  # spaet importiert: cards.py ist gross, coverage nur fuer den Bericht
+    trial = dict(card)
+    trial.pop("card_faces", None)
+    for key in ("type_line", "mana_cost", "power", "toughness", "loyalty", "colors", "name"):
+        if face.get(key) is not None:
+            trial[key] = face[key]
+    trial["oracle_text"] = text
+    trial["keywords"] = card.get("keywords") or [] if text else []
+    return {k: v for k, v in card_info(trial)[0]._asdict().items() if k not in _REPORT_ONLY}
+
+
+def line_modelled(card, face, text):
+    """Erkennt das Kartenmodell die Zeile (bzw. den Block aus Kopf und Aufzaehlungspunkt)? Die Karte wird nur mit
+    dieser Zeile geparst; setzt das ein Modellfeld, wirkt die Zeile in Goldfish und/oder Kampfmodell."""
+    try:
+        empty = _model_fields(card, face, "")
+        got = _model_fields(card, face, text)
+    except Exception:  # unvollstaendige Testkarten: lieber offen lassen
+        return False
+    return any(got[k] != empty.get(k) for k in got)
+
+
 def analyze_card(card):
     """Gibt alle (Kategorie, Kennzahl, Textzeile) zurueck, die die Simulation noch nicht abbildet."""
     faces = card.get("card_faces") or [card]
@@ -151,10 +178,14 @@ def analyze_card(card):
         is_land = "Land" in type_line.split("—")[0]
         is_walker = "Planeswalker" in type_line
         face_items = []
+        header = ""
         for raw in (face.get("oracle_text") or "").split("\n"):
             line = _strip(raw)
             if not line:
                 continue
+            original = line
+            if not raw.strip().startswith("•"):
+                header = raw
             low = line.lower()
             if MODAL_HEADER.search(low) or DECK_RULE.search(low) or COST_REDUCTION_MODELLED.match(low):
                 continue
@@ -195,7 +226,7 @@ def analyze_card(card):
             if modelled_face and not is_land and not raw.strip().startswith("•"):  # Modi bleiben offen
                 n, rest = draw_line(line, "Instant" in type_line or "Sorcery" in type_line, card.get("name", ""))
                 if n:  # Ziehen mit fester Zahl ist modelliert; der Rest der Zeile wird weiter geprueft
-                    if re.sub(r"[^a-z]", "", rest):
+                    if re.sub(r"[^a-z]", "", rest) and not (modelled_face and line_modelled(card, face, rest)):
                         face_items += [(c, m, line) for c, m in (_classify(rest, False) or [(C_UNKNOWN, M_UNKNOWN)])]
                     continue
             if EMPOWER_RE.search(line):
@@ -206,9 +237,13 @@ def analyze_card(card):
                     face_items.append((C_EMPOWER_X if variable else "Empower Jace (Auslöser nicht modelliert)",
                                        M_FLOW, line))
                 rest = EMPOWER_RE.sub(" ", low)
-                if len(re.sub(r"[^a-z]", "", rest)) > 12:
+                if len(re.sub(r"[^a-z]", "", rest)) > 12 and not (
+                        modelled_face and line_modelled(card, face, EMPOWER_RE.sub(" ", raw))):  # Rest ohne Empower
                     face_items += [(c, m, line) for c, m in _classify(rest, False)]
                 continue
+            if modelled_face and line_modelled(card, face, (header + "\n" + raw if raw.strip().startswith("•") else raw)
+                                         if line == original else line):
+                continue  # vom Kartenmodell erkannt (Goldfish und/oder Kampfmodell)
             tokens = _keyword_tokens(low, known)
             if tokens is not None:
                 for token in tokens:

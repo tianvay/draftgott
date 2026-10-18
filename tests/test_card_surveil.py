@@ -93,14 +93,14 @@ class SurveilCoverageTests(unittest.TestCase):
                                    ["W"]), set())
 
     def test_the_rest_of_the_line_is_still_checked(self):
-        self.assertEqual(self.cats("Exile target creature or planeswalker that's green or blue. Surveil 1."),
+        self.assertEqual(self.cats("Exile target card from an opponent's graveyard. Surveil 1."),
                          {("Interaktion mit dem Gegner", M_NONE)})
 
     def test_unmodelled_surveil_stays_flagged(self):
-        for text in ("Whenever another creature you control with power 2 or less enters, surveil 1.",
-                     "{3}{U}: Surveil 1."):
+        for text in ("Whenever another creature you control with power 2 or less enters, surveil 1.",):
             with self.subTest(text=text):
                 self.assertIn(("Kartenfluss", M_FLOW), self.cats(text, CREATURE))
+        self.assertEqual(self.cats("{3}{U}: Surveil 1.", CREATURE), set())  # Faehigkeit inzwischen modelliert
 
 
 class ApplySurveilTests(unittest.TestCase):

@@ -129,7 +129,9 @@ def _sections():
             "und Treasure, Schaden an den Gegner beim Wirken oder Betreten, +1/+1-Marken und Pumps bis Rundenende beim "
             "Wirken oder Betreten, Landfall-Schaden und -Marken, Marken am Rundenende ohne Zauber (Edgar) und bei "
             "Loyalty (Tethermage), Kostensenkung (Geist of Saint Thalia, Ghalta, Wrath of the Bloodmane, Traxos) sowie "
-            "Kampf-Schlüsselwörter ohne Gegner.",
+            "Kampf-Schlüsselwörter ohne Gegner. Außerdem jede Zeile, die das Kartenmodell erkennt (Goldfish und/oder "
+            "Kampfmodell, z. B. Removal, Token, Lebensgewinn, Planeswalker): Dafür wird die Karte nur mit dieser Zeile "
+            "geparst; bei teilweise erkannten Zeilen bleibt der offene Rest stehen.",
             "Kategorien: Tokens erzeugen, Direkter Schaden, Zählmarken / Stärkebonus, Haste verleihen, Mana außer "
             "Ländern, Kartenfluss, Kostensenkung / Convoke, Zweitverwertung (Friedhof), Timing (Flash), Zusatzkosten, "
             "Prepared-Zauberhälfte, Planeswalker-Fähigkeit, Defender-Ausnahme, Interaktion mit dem Gegner, "

@@ -29,7 +29,7 @@ P_DATA = {c["name"]: c for c in [
     prep("Test Scholar", "{1}{W}", 2, ENTERS, "Test Study", "{W}", "Draw a card."),
     prep("Test Lurker", "{W}", 1, UPKEEP, "Test Jab", "{W}", "Test Jab deals 1 damage to target opponent."),
     prep("Test Reviewer", "{3}{W}", 4, ENTERS, "Test Review", "{2}{W}",
-         "Create a 2/2 colorless Wizard Soldier creature token named Cadet. Surveil 1."),
+         "Create a 1/1 black Rat creature token for each creature that died this turn. Surveil 1."),
 ]}
 P = {name: card_info(c)[0] for name, c in P_DATA.items()}
 PLAINS, BEAR = W_CARDS["Plains"], W_CARDS["Test Bear"]

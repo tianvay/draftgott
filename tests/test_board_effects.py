@@ -6,7 +6,7 @@ from unittest import mock
 import mtg_sim
 from components import simulation as sim
 from components.cards import card_info, effect_modes
-from components.coverage import analyze_card
+from components.coverage import _classify, analyze_card
 from components.removal import removal_info
 from tests.fixtures import args_for
 from tests.fixtures_walkers import _card
@@ -117,22 +117,26 @@ class CoverageTests(unittest.TestCase):
                                    CREATURE), set())
 
     def test_rest_of_the_line_stays(self):
-        self.assertEqual(self.cats("Destroy target nonland permanent. Put a +1/+1 counter on each creature target "
-                                   "player controls."), {"Interaktion mit dem Gegner"})
+        self.assertEqual(self.cats("Put a +1/+1 counter on each creature you control. Exile target card from an "
+                                   "opponent's graveyard."), {"Interaktion mit dem Gegner"})
 
     def test_landfall_endstep_loyalty_lines_are_modelled(self):
         self.assertEqual(analyze_card(RAW["Test Koth"]), [])
         self.assertEqual(analyze_card(RAW["Test Tethermage"]), [])
-        self.assertEqual({c for c, _m, _l in analyze_card(RAW["Test Edgar"])}, {"Timing (Flash)"})
+        self.assertEqual(analyze_card(RAW["Test Edgar"]), [])  # Flash ist inzwischen modelliert
 
     def test_negative_counters_and_minus_are_interaction_not_bonus(self):
         for text, type_line in ((RAW["Test Hapatra"]["oracle_text"], RAW["Test Hapatra"]["type_line"]),
                                 ("Target creature gets -3/-3 until end of turn.", "Instant"),
                                 ("Put two -1/-1 counters on target creature an opponent controls.", "Sorcery")):
-            with self.subTest(text=text):
-                found = {(c, m) for c, m, _l in analyze_card(_card("Test Hapatra", type_line, "{W}", 1, "W", text,
-                                                                   (), "3", "3"))}
-                self.assertEqual(found, {("Interaktion mit dem Gegner", "keine (Gegner ist nicht Teil des Modells)")})
+            with self.subTest(text=text):  # Einordnung, wenn offen: Interaktion, kein Staerkebonus
+                low = text.lower().replace("test hapatra", "~")
+                self.assertEqual(set(_classify(low, False)),
+                                 {("Interaktion mit dem Gegner", "keine (Gegner ist nicht Teil des Modells)")})
+        for text, type_line in ((RAW["Test Hapatra"]["oracle_text"], RAW["Test Hapatra"]["type_line"]),
+                                ("Target creature gets -3/-3 until end of turn.", "Instant")):
+            self.assertEqual(analyze_card(_card("Test Hapatra", type_line, "{W}", 1, "W", text, (), "3", "3")), [],
+                             text)  # beide inzwischen als Removal modelliert
 
     def test_negative_on_own_creature_stays_a_bonus_case(self):
         self.assertIn("Zählmarken / Stärkebonus", self.cats("Put a -1/-1 counter on target creature you control.",

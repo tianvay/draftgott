@@ -93,21 +93,21 @@ class DrawCoverageTests(unittest.TestCase):
         self.assertEqual(self.cats("When this creature enters, draw a card.", f"Creature {DASH} Test"), set())
 
     def test_the_rest_of_the_line_is_still_checked(self):
-        self.assertEqual(self.cats("Draw two cards. Test Draw deals 2 damage to target creature."),
+        self.assertEqual(self.cats("Draw two cards. Exile target card from an opponent's graveyard."),
                          {("Interaktion mit dem Gegner", "keine (Gegner ist nicht Teil des Modells)")})
 
     def test_twinned_vision_only_flashback_remains(self):
         found = self.cats("Draw a card. If this spell wasn't cast from your hand, draw two cards instead.\n"
                           "Flashback—{1}{U}, Discard a card.")
-        self.assertNotIn(("Kartenfluss", M_FLOW), found)
-        self.assertIn(("Zweitverwertung (Friedhof)", "Mana und Zauber pro Runde"), found)
+        self.assertEqual(found, set())  # Ziehen, alternative Zahl und Flashback mit Abwerfen sind modelliert
 
     def test_unmodelled_draws_stay_flagged(self):
         for text, type_line in (("Whenever you gain life, draw a card.", f"Creature {DASH} Test"),
-                                ("Choose one —\n• Destroy target creature.\n• Draw a card.", "Sorcery"),
-                                ("Draw a card, then discard a card.", "Sorcery")):
+                                ("Whenever an opponent draws a card, draw a card.", f"Creature {DASH} Test")):
             with self.subTest(text=text):
                 self.assertIn(("Kartenfluss", M_FLOW), self.cats(text, type_line))
+        for text in ("Choose one —\n• Destroy target creature.\n• Draw a card.", "Draw a card, then discard a card."):
+            self.assertEqual(self.cats(text, "Sorcery"), set(), text)  # modaler Zauber und Loot sind modelliert
 
 
 class ResolveDrawsTests(unittest.TestCase):

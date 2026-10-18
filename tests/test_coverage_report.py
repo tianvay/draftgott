@@ -14,10 +14,10 @@ CARDS.update({
     "Test Token Maker": {"name": "Test Token Maker", "type_line": f"Creature {DASH} Test", "mana_cost": "{2}{W}",
                          "cmc": 3.0, "colors": ["W"], "keywords": [], "layout": "normal", "power": "2",
                          "toughness": "2",
-                         "oracle_text": "When this creature enters, create a 2/2 colorless Wizard Soldier creature "
-                                        "token named Cadet.\nFlying"},
+                         "oracle_text": "At the beginning of each player's upkeep, you create a 3/3 green Forest Tentacle land creature token.\nFlying"},
     "Test Removal": {"name": "Test Removal", "type_line": "Instant", "mana_cost": "{1}{W}", "cmc": 2.0,
-                     "colors": ["W"], "keywords": [], "layout": "normal", "oracle_text": "Exile target creature."},
+                     "colors": ["W"], "keywords": [], "layout": "normal",
+                     "oracle_text": "Exile target card from an opponent's graveyard."},
 })
 
 

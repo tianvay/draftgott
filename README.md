@@ -449,7 +449,9 @@ Diese Werte stehen im Skript und lassen sich nur dort ändern.
   Kostensenkung, Zweitverwertung, Prepared, Interaktion mit dem Gegner, Lebensgewinn, …) und der betroffenen
   Kennzahl (Lethal, Mana und Zauber pro Runde, Kartenfluss, keine, unklar). Oben steht, wie viele Karten welche
   Kennzahl betreffen. Die Erkennung arbeitet nur über den Kartentext und ist grob; was nicht einzuordnen ist, heißt
-  „Unbekannter Effekt“ (Kennzahl „unklar“). Die Zahlen im Bericht ändern sich dadurch nicht.
+  „Unbekannter Effekt“ (Kennzahl „unklar“). Nicht gemeldet wird jede Zeile, die das Kartenmodell erkennt (Goldfish
+  und/oder Kampfmodell): Die Karte wird dafür nur mit dieser Zeile geparst. Bei teilweise erkannten Zeilen bleibt der
+  offene Rest stehen. Die Zahlen im Bericht ändern sich dadurch nicht.
 - **Einschränkung:** In einer Runde, in der ein Zauber vor dem Land gewirkt wird, entfällt das Landcycling nach dem
   Land (die Bezahlung wäre sonst nicht gesichert). Für die Planung der Folgerunde (Landcycling-Vorausschau) werden
   Planeswalker-Länder weiterhin als getappt behandelt.
