@@ -2866,6 +2866,9 @@ def put_back(p, card, dest, step, e, opp=None, tapped=False, counters=0, finalit
         p.lands.append(card)
         if opp is not None:
             on_land(p, opp, card, step, e, with_mana=False)
+    elif card.is_planeswalker and card.loyalty_start > 0:  # neues Objekt mit voller Loyalty (400.7, 306.5b)
+        p.walkers.append(Walker(card, step))
+        permanent_enters(p, opp, card, step, e)
     else:
         p.perms.append(card)
         permanent_enters(p, opp, card, step, e)

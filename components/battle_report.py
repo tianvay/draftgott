@@ -227,7 +227,8 @@ RULES = [
     "Entrust und Loyal Tutor genauso.",
     "Echte Planeswalker (L2): kommen mit ihrer aufgedruckten Loyalty (306.5b), eine Loyalty-Fähigkeit pro Zug "
     "(606.3), Minus-Kosten nur mit genug Loyalty (606.6), −X so groß wie möglich ohne zu sterben, Tod bei 0 "
-    "(704.5i, mit Sanctum Lurker nicht). Wahl: Lethal > Ultimate (−6 oder mehr) oder Emblem > Removal > großes Token "
+    "(704.5i, mit Sanctum Lurker nicht); aus dem Friedhof aufs Feld zurück als neues Objekt mit voller Loyalty "
+    "(400.7). Wahl: Lethal > Ultimate (−6 oder mehr) oder Emblem > Removal > großes Token "
     "(ab 4/4) > Ziehen > kleines Token > Plus mit Wert > Plus ohne Wert; eine Minus-Fähigkeit, die auf 0 bringt, nur "
     "für Lethal, Ultimate oder Removal. Ein Emblem „whenever you cast a spell“ nur mit einem Zauber auf der Hand. "
     "Zeitpunkt: vorhandene Planeswalker in Main 1 vor dem Zaubern (Team-Pump und Angriffs-Buff erst direkt vor dem "
