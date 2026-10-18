@@ -70,6 +70,99 @@ def best_cast(spells, key, has_creature, auras_need_creature, must=None, fixed=(
     return best[0], best[1][len(fixed):]
 
 
+_REDUCED = {}  # verbilligte Karte -> (Originalkarte, Senkung)
+
+
+def cost_reduction(card, powers=(), toughs=(), legendary=False, noncreature=False, spell_discount=0):
+    """Generisches Mana, um das die Karte billiger ist (601.2f): eigene Senkung (Ghalta: hoechste Power bzw. Toughness
+    eigener Kreaturen; Wrath of the Bloodmane mit legendaerer Kreatur; Traxos nach einem Nichtkreatur-Zauber in diesem
+    Zug) plus spell_discount fuer Nichtkreatur-Zauber (Geist of Saint Thalia). Der Manawert bleibt gleich."""
+    n = 0 if card.is_creature or card.is_land else spell_discount
+    sd = card.self_discount
+    if sd:
+        if sd[0] == "power":
+            n += max(powers, default=0)
+        elif sd[0] == "toughness":
+            n += max(toughs, default=0)
+        elif sd[0] == "legendary" and legendary:
+            n += sd[1]
+        elif sd[0] == "noncreature" and noncreature:
+            n += sd[1]
+    return max(0, n)
+
+
+def reduced(card, n):
+    """Die Karte mit um n gesenktem generischem Mana (n <= 0: die Karte selbst)."""
+    if n <= 0 or not card.alts:
+        return card
+    base, before = _REDUCED[card][:2] if card in _REDUCED else (card, 0)
+    cheap = card._replace(alts=tuple(sorted({(max(0, g - n), cols) for g, cols in card.alts})))
+    if cheap != card:
+        _REDUCED[cheap] = (base, before + n, card)
+    return cheap
+
+
+def original(card):
+    """Originalkarte zu einer verbilligten Karte."""
+    return _REDUCED.get(card, (card,))[0]
+
+
+def paid_mv(card):
+    """Tatsaechlich bezahltes Mana: Manawert minus Kostensenkung."""
+    return max(0, card.mv - (_REDUCED[card][1] if card in _REDUCED else 0))
+
+
+def hand_form(card, cards):
+    """Die Fassung von card (verbilligt oder weniger verbilligt), die in cards liegt."""
+    while card not in cards and card in _REDUCED:
+        card = _REDUCED[card][2]
+    return card
+
+
+def take_from(cards, card):
+    """Entfernt card aus cards; liegt dort eine weniger verbilligte Fassung, wird diese entfernt. Gibt sie zurueck."""
+    card = hand_form(card, cards)
+    cards.remove(card)
+    return card
+
+
+def discounted_hand(hand, board, bonus):
+    """Goldfish: Handkarten mit Kostensenkung nach den Kreaturen auf dem Feld (board: (Karte, Runde), bonus: Marken).
+    Gibt (neue Hand, {verbilligte Karte: Original}) zurueck."""
+    powers = [c.power + bonus[i] for i, (c, _t) in enumerate(board)]
+    toughs = [c.toughness + bonus[i] for i, (c, _t) in enumerate(board)]
+    legendary = any(c.legendary for c, _t in board)
+    spell_discount = sum(c.spell_discount for c, _t in board)
+    out, back = [], {}
+    for c in hand:
+        cheap = reduced(c, cost_reduction(c, powers, toughs, legendary, False, spell_discount)) if not c.is_land else c
+        if cheap is not c:
+            back[cheap] = c
+        out.append(cheap)
+    return out, back
+
+
+def best_cast_reduced(spells, key, has_creature, auras_need_creature, must=None):
+    """best_cast, dazu Traxos-Senkung "if you've cast a noncreature spell this turn": eine Kombination, in der ein
+    Nichtkreatur-Zauber zuerst gewirkt wird, darf die Karte verbilligt enthalten."""
+    best = best_cast(spells, key, has_creature, auras_need_creature, must=must)
+    waiting = [c for c in spells if c.self_discount and c.self_discount[0] == "noncreature"]
+    if not waiting:
+        return best
+    firsts = [c for c in spells if not c.is_creature and not c.self_discount]
+    for w in set(waiting):
+        cheap = reduced(w, w.self_discount[1])
+        trial = list(spells)
+        trial[trial.index(w)] = cheap
+        for f in sorted(set(firsts)):
+            if must is not None and must != f:
+                continue
+            res = best_cast(trial, key, has_creature, auras_need_creature, must=f)
+            if res[0] > best[0]:
+                best = res
+    return best
+
+
 ANY_COLOR = ("B", "G", "R", "U", "W")
 
 
@@ -149,7 +242,7 @@ def resolve_draws(hand, library, chosen, pool, battlefield, land_played, has_cre
             hand.append(library.pop(0))
             drawn += 1
         left = Counter(c for c in hand if not c.is_land)
-        left.subtract(Counter(c for c in cast if not c.is_copy))
+        left.subtract(Counter(hand_form(c, left) for c in cast if not c.is_copy))
         avail = Counter(copies) + Counter(enters_prepared(cast))
         avail.subtract(Counter(c for c in cast if c.is_copy))
         spells_left = sorted((+left + +avail).elements())
@@ -589,8 +682,14 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
             extra_now = len(units)
             cycle_spent = 0
             cycled_log = []
+            # Kostensenkung nach den Kreaturen auf dem Feld (Geist, Ghalta, Wrath of the Bloodmane)
+            hand[:] = discounted_hand([original(c) for c in hand], board, bonus)[0]
+
+            def copies_now():
+                return discounted_hand([p_[0].prepared[1] for p_ in prep if p_[1]], board, bonus)[0]
+
             def castable():  # Handkarten und verfuegbare Prepared-Kopien
-                return [c for c in hand if not c.is_land] + [p_[0].prepared[1] for p_ in prep if p_[1]]
+                return [c for c in hand if not c.is_land] + copies_now()
 
             spells = castable()
             has_creature = bool(board)
@@ -650,7 +749,7 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                         top_done = True
                         break
 
-            s_chosen, chosen = best_cast(spells, key, has_creature, auras_need_creature, must=forced)
+            s_chosen, chosen = best_cast_reduced(spells, key, has_creature, auras_need_creature, must=forced)
             if treasures and forced is None:  # Treasure nur, wenn er diese Runde mehr ermoeglicht
                 k_t, ch_t = use_treasures(spells, pool, treasures, has_creature, auras_need_creature)
                 if k_t:
@@ -660,7 +759,7 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                     avail_total += k_t
                     extra_now += k_t
                     key = land_key(pool)
-                    s_chosen, chosen = best_cast(spells, key, has_creature, auras_need_creature)
+                    s_chosen, chosen = best_cast_reduced(spells, key, has_creature, auras_need_creature)
 
             # Landcycling Regel 1: Karte ist diesmal nicht spielbar -> mit uebrigem Mana cyceln.
             # Entfaellt in Runden, in denen ein Zauber vor dem Land gewirkt wurde (Bezahlung sonst nicht gesichert).
@@ -702,7 +801,7 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                         spells = castable()
                         key = land_key(pool)
                         full_key = land_key([c.land_colors for c in battlefield])
-                        s_chosen, chosen = best_cast(spells, key, has_creature, auras_need_creature)
+                        s_chosen, chosen = best_cast_reduced(spells, key, has_creature, auras_need_creature)
                         done = True
                         break
                     if not done:
@@ -714,7 +813,7 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                 rd = resolve_draws(hand, library, chosen, pool, battlefield, land_played, has_creature,
                                    auras_need_creature, jst.loyalty > 0 or bool(walkers),
                                    jst.loyalty > 0 or any(c.is_jace for c in walkers),
-                                   copies=[p_[0].prepared[1] for p_ in prep if p_[1]])
+                                   copies=copies_now())
                 chosen, pool, drawn_now = rd["chosen"], rd["pool"], rd["drawn"]
                 avail_total += rd["mana_added"]
                 extra_now += rd["mana_added"]
@@ -741,7 +840,7 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
             for c in chosen:
                 if c.is_copy:
                     continue
-                hand.remove(c)
+                take_from(hand, c)
                 if c.is_creature:
                     board.append((c, turn))
                     bonus.append(0)
@@ -760,11 +859,11 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                     rp["made"] += c.treasure
             for c in chosen:
                 if c.is_copy:  # Kopie gewirkt: eine passende Kreatur ist nicht mehr prepared
-                    p_ = next(p_ for p_ in prep if p_[1] and p_[0].prepared[1] == c)
+                    p_ = next(p_ for p_ in prep if p_[1] and p_[0].prepared[1] == original(c))
                     p_[1] = False
                     g_copies += 1
                     pr["copies"] += 1
-                    pr["mana"] += c.mv
+                    pr["mana"] += paid_mv(c)
             for c in chosen:
                 if c.name in track and not c.is_copy:
                     t_hand.setdefault(c.name, turn)
@@ -809,7 +908,7 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                 if turn <= curve_turns:
                     rp["extra"][turn] += extra_now
             if turn <= curve_turns:
-                spent = min(sum(c.mv for c in chosen) + cycle_spent, avail_total)
+                spent = min(sum(paid_mv(c) for c in chosen) + cycle_spent, avail_total)
                 curve_avail[turn] += avail_total
                 curve_spent[turn] += spent
                 g_avail += avail_total

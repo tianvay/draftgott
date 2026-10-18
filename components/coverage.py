@@ -90,6 +90,11 @@ NEGATIVE_ON_OTHERS = re.compile(r"(?:-\d+/-\d+|-x/-x)(?![^.]*\byou control\b)|-1
                                 r"creature(?! you control)")
 LOYALTY_LINE = re.compile(r"^[+−\-]?(\d+|x):|^\[[^\]]+\]:")
 MODAL_HEADER = re.compile(r"\bchoose (one|two|any number)( or (both|more))?\s*(—|-)?\s*$")
+# Kostensenkung, die Goldfish und Kampf rechnen (simulation.cost_reduction)
+COST_REDUCTION_MODELLED = re.compile(
+    r"^this spell costs \{\d+\} less to cast if you(?: control a legendary creature|'ve cast a noncreature spell this "
+    r"turn)|^this spell costs \{x\} less to cast, where x is the greatest (?:power|toughness) among creatures you "
+    r"control|^noncreature spells you cast cost \{\d+\} less to cast")
 DECK_RULE = re.compile(r"^a deck can have|\bany number of cards named\b")
 KEYWORD_SPLIT = re.compile(r"[,;]")
 
@@ -151,7 +156,7 @@ def analyze_card(card):
             if not line:
                 continue
             low = line.lower()
-            if MODAL_HEADER.search(low) or DECK_RULE.search(low):
+            if MODAL_HEADER.search(low) or DECK_RULE.search(low) or COST_REDUCTION_MODELLED.match(low):
                 continue
             if prepare and "prepared" in low:
                 continue

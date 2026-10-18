@@ -85,7 +85,7 @@ def _sections():
              "(„until … leaves the battlefield“) 0,9 · <b>Edikt</b> (Gegner opfert) 0,7, mit „greatest mana value“ "
              "0,9 · <b>Toughness 0</b> (z. B. „has base power and toughness 0/0“; die Kreatur stirbt mit 0 "
              "Toughness) 0,7 · <b>Lock</b>-Aura (enttappt nicht, kann nicht angreifen) 0,7 · <b>Fight</b> 0,5 · "
-             "<b>Bounce</b> 0,3.",
+             "<b>Bounce</b> 0,3 · zurück in die <b>Bibliothek</b> (der Besitzer wählt oben oder unten) 0,3.",
              "<b>Schaden und −X/−X</b> nach Höhe: 1 → 0,2 · 2 → 0,4 · 3 → 0,6 · 4 → 0,8 · ab 5 → 0,9; X oder "
              "„damage equal to …“ 0,5. −X/−0 zählt nicht.",
              "<b>Bedingt</b> (Bedingung am Ziel wie Manawert, Toughness, Flying, Farbe, oder eigenes Opfer): höchstens "
@@ -128,7 +128,8 @@ def _sections():
             "Prepared-Zauberhälften als Kopie (deren übrige Effekte stehen mit ihrer eigenen Kategorie da), Manaquellen "
             "und Treasure, Schaden an den Gegner beim Wirken oder Betreten, +1/+1-Marken und Pumps bis Rundenende beim "
             "Wirken oder Betreten, Landfall-Schaden und -Marken, Marken am Rundenende ohne Zauber (Edgar) und bei "
-            "Loyalty (Tethermage) sowie Kampf-Schlüsselwörter ohne Gegner.",
+            "Loyalty (Tethermage), Kostensenkung (Geist of Saint Thalia, Ghalta, Wrath of the Bloodmane, Traxos) sowie "
+            "Kampf-Schlüsselwörter ohne Gegner.",
             "Kategorien: Tokens erzeugen, Direkter Schaden, Zählmarken / Stärkebonus, Haste verleihen, Mana außer "
             "Ländern, Kartenfluss, Kostensenkung / Convoke, Zweitverwertung (Friedhof), Timing (Flash), Zusatzkosten, "
             "Prepared-Zauberhälfte, Planeswalker-Fähigkeit, Defender-Ausnahme, Interaktion mit dem Gegner, "
@@ -204,7 +205,10 @@ def _sections():
         ("curve", "Curve-Auslastung", _panel("Bedeutung", _p(
             "Ausgegebenes geteilt durch verfügbares Mana je Runde (bis <code>--curve-runden</code>, Standard "
             f"{_D.curve_runden}). Verfügbar ist das Mana aus Ländern und aus Manaquellen außer Ländern (Manakreaturen, "
-            "Artefakte, genutzte Treasure, siehe Ramp). Ein "
+            "Artefakte, genutzte Treasure, siehe Ramp). Ausgegeben zählt das tatsächlich bezahlte Mana: Kostensenkung "
+            "nach den Kreaturen, die zu Rundenbeginn auf dem Feld liegen (Geist of Saint Thalia, Ghalta nach höchster "
+            "Power bzw. Toughness, Wrath of the Bloodmane mit legendärer Kreatur; Traxos, wenn in derselben Runde ein "
+            "Nichtkreatur-Zauber gewirkt wird), macht Karten billiger, ihr Manawert bleibt gleich. Ein "
             "Rechenbeispiel steht unter Spiellogik."))),
         ("schaden", "Schaden durch Kreaturen", _panel("Bedeutung", _p(
             "Erste Runde, in der der Gesamtschaden das Ziel erreicht (<code>--schaden</code>, Standard "

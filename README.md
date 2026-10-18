@@ -3,6 +3,16 @@
 Liest eine Deckliste, holt die Kartendaten von [Scryfall](https://scryfall.com) und simuliert viele Spiele
 (On the Play und On the Draw). Das Ergebnis ist ein HTML-Bericht, der sich im Browser öffnet.
 
+Es gibt drei Teile:
+
+- **Goldfish-Simulation und Bericht:** Das Deck spielt allein (ohne Gegner) und wird nach Mana, Tempo, Schaden,
+  Mulligans und vielem mehr ausgewertet (siehe „Was im Bericht steht“).
+- **Kampfmodell und Kampfbericht:** Das Deck spielt gegen Gegnerdecks (`_enemydeck*.txt`) mit Leben, Angriff,
+  Blocks, Removal, Instants und vielen Kartenmechaniken. Ergebnis ist die Siegquote mit Protokollen einzelner
+  Spiele (siehe „Kampf gegen Gegnerdecks“).
+- **Drafthelper:** Eine Kartenseite für den Draft-Pool, auf der Varianten zusammengestellt, simuliert und gegen
+  Gegnerdecks getestet werden (siehe „Draft-Helper“).
+
 ## Voraussetzungen
 
 - Python 3.8 oder neuer, keine zusätzlichen Pakete
@@ -18,14 +28,17 @@ python -m unittest
 ```
 
 im Projektordner. Es werden keine zusätzlichen Pakete und kein Netzwerk gebraucht (die Testkarten stehen in
-`tests/fixtures.py`); ein Lauf dauert wenige Sekunden. Die Tests decken Parser, Kartenmodell, Mana, Mulligan,
-Schadens- und Einsatzverzögerungs-Regeln der Simulation (inklusive Referenzlauf mit festem Seed), den Variantenbau
-und Server des Drafthelpers sowie den Bericht ab. Die Oberfläche im Browser (Sortierung, Suche, Export) ist nicht
-automatisch getestet.
+`tests/fixtures.py`, `tests/fixtures_walkers.py` und in den Testdateien selbst); ein Lauf dauert etwa eine halbe
+Minute. Die Tests decken Parser, Kartenmodell, Mana, Mulligan, Schadens- und Einsatzverzögerungs-Regeln der
+Simulation (inklusive Referenzlauf mit festem Seed), das Kampfmodell (`tests/test_battle*.py`, je Ausbaustufe bzw.
+Kartenpaket eine Datei), den Variantenbau und Server des Drafthelpers sowie Bericht und Kampfbericht ab. Die
+Oberfläche im Browser (Sortierung, Suche, Export) ist nicht automatisch getestet.
 
-**Arbeitsregel:** Neue Funktionen bekommen zuerst Tests, dann den Code. Bestehende Tests werden nicht verändert,
+**Arbeitsregel:** Neue Funktionen bekommen zuerst Tests, dann den Code. Neue Tests werden gegengeprüft, indem der
+Code absichtlich kaputt gemacht wird (der Test muss dann fehlschlagen). Bestehende Tests werden nicht verändert,
 damit sie grün werden; sollen sie wegen bewusst geändertem Verhalten angepasst werden, passiert das nur nach
-ausdrücklicher Freigabe.
+ausdrücklicher Freigabe. Regelfragen werden mit dem Regelwerk `MagicCompRules.txt` (Comprehensive Rules) im
+Projektordner geklärt; Abweichungen davon stehen mit Regelnummer im Code bzw. in den Regeln des Kampfberichts.
 
 ## Aufbau des Codes
 
@@ -36,15 +49,29 @@ ausdrücklicher Freigabe.
 | `components/deckfile.py` | Deckdateien und Datei-Angaben (`datei=Label`) einlesen |
 | `components/scryfall.py` | Kartendaten von Scryfall holen und zwischenspeichern |
 | `components/mana.py` | Kosten, Hybrid/Phyrexian, Bezahlbarkeit durch Länder |
-| `components/cards.py` | Kartenmodell `Card`, Länder, Landcycling, Empower Jace, Planeswalker-Tags |
+| `components/cards.py` | Kartenmodell `Card` und alle Parser aus dem Kartentext (Länder, Landcycling, Empower Jace, Draw, Surveil, Prepared, Mana, Kampf-Schlüsselwörter, Fähigkeiten, Auslöser, Token, modale Karten, Kostensenkung …) |
+| `components/removal.py` | Removal-Erkennung und Removal-Score, Flash/Deathtouch, Abwerfen |
+| `components/graveyard.py` | Friedhof-Score (Zweitverwertung, Zurückholen, Ressource) |
+| `components/cardkinds.py` | Kartentypen und Kartenfluss für Seitenleiste und Bericht |
 | `components/coverage.py` | Modell-Abdeckung: erkennt aus dem Kartentext, welche Effekte noch nicht simuliert werden |
 | `components/jace.py` | Jace-Zustand in der Simulation, Effekt-Filter, Deck-Analyse |
 | `components/mulligan.py` | Mulligan-Regeln und Starthand |
-| `components/simulation.py` | Spielablauf, Zauber-/Landauswahl, Landcycling, Messwerte |
+| `components/simulation.py` | Goldfish: Spielablauf, Zauber-/Landauswahl, Kostensenkung, Landcycling, Draw, Surveil, Prepared, Ramp, Messwerte |
+| `components/battle.py` | Kampfmodell: zwei Spieler, Angriff, Block, Schaden, Removal, Instants, Fähigkeiten, Auslöser |
+| `components/battle_report.py` | Kampfbericht (Siegquoten, Kennzahlen, Spieleliste mit Protokollen, Regeln) |
+| `components/battle_server.py` | Gemeinsame Kampf-Schnittstelle für Drafthelper und Berichts-Server |
+| `components/report_server.py` | Lokaler Server für den Bericht (`--bericht-server`, „Kampf simulieren“ im Bericht) |
+| `components/landadvice.py` | Land-Empfehlung und „Farben und Quellen“ |
+| `components/mana.py` | Kosten, Hybrid/Phyrexian, Bezahlbarkeit, Farbprüfungen (`pip_checks`) |
+| `components/suggest.py` | Deckvorschlag und Zuordnung nach Kategorien im Drafthelper |
+| `components/symbols.py` | Original-Manasymbole von Scryfall (Cache `scryfall_symbols.json`) |
 | `components/stats.py` | Ampel-Schwellen, Zeitkennzahlen, Signifikanz-Rechnung |
-| `components/html_base.py` | CSS, Mana-Symbole, Tabellen, SVG-Diagramme |
+| `components/html_base.py` | Gemeinsames Design (CSS im Stil des Drafthelpers), Seitenlayout, Tabellen, SVG-Diagramme |
 | `components/report_sections.py` | Berichtsabschnitte Spiellogik, Deck-Vergleich, Jace |
+| `components/report_cards.py` | Kartentabellen im Bericht |
+| `components/howitworks.py` | Erklärseite „So funktioniert es“ |
 | `components/report.py` | Bericht zusammensetzen |
+| `components/drafthelper.py` | Drafthelper-Seite und -Server |
 
 ## Draft-Helper (`--drafthelper`)
 
@@ -104,6 +131,15 @@ Eine andere Datei geht so: `python mtg_sim.py --drafthelper meinpool.txt`.
   „each player mills“ zählen in beiden Zeilen, weil sie auch dich treffen können). Eine Karte zählt einmal gesamt und je Art. Es erscheinen nur
   Arten, die im Pool vorkommen. Auslöser, die nur auf Ziehen oder Scry/Surveil reagieren („whenever you draw …“),
   und Ziehen des Gegners zählen nicht; Empower Jace hat eine eigene Zeile.
+  In „Kartentypen“ stehen außerdem Flash, Deathtouch, Removal (Score mit Ampel: grün ab 4, gelb ab 2,5 Punkten je
+  40 Karten), Manaquellen und Prepared-Karten.
+- **Farben und Quellen (links):** je Farbe die verlangten Symbole und die Quellen (Länder und Manaquellen) der
+  Varianten, mit den Original-Manasymbolen von Scryfall.
+- **Länder empfehlen:** setzt die Standardländer je Gruppe und ordnet passende Nicht-Standardländer zu. Ein
+  Nicht-Standardland passt nur, wenn alle seine Farben im Deck sind; mindestens 3 Quellen je verlangter Farbe, der Rest
+  nach Hypergeometrie; Länder = Zielgröße minus Zauber, begrenzt auf 15 bis 17.
+- **Kampf simulieren:** Nach dem Simulieren lassen sich die Varianten gegen ein Gegnerdeck aus dem Projektordner
+  (`_enemydeck*.txt`) antreten lassen; der Kampfbericht erscheint auf der Seite (siehe „Kampf gegen Gegnerdecks“).
 - **Deckliste exportieren:** Der Button in der Kopfleiste zeigt beide Varianten im Arena/MTGO-Importformat
   (`Deck` und `Sideboard`, mit Set und Nummer), zum Kopieren oder Speichern als `draftgott_splash.txt` bzw.
   `draftgott_nosplash.txt`. Deck = Core + Gruppe der Variante + Standardländer, Sideboard = alle übrigen Karten.
@@ -115,11 +151,11 @@ Eine andere Datei geht so: `python mtg_sim.py --drafthelper meinpool.txt`.
   Datei als Core. Länder, die nicht im Pool sind (z. B. Swamp für einen anderen Splash), lassen sich ebenfalls
   hinzufügen.
 - **Start per Doppelklick (Windows):** `draftgott.bat` im Projektordner doppelklicken. Ein Menü fragt nach der
-  Betriebsart: **1 = Analyse** (simuliert `_normaldeck.txt` mit 10 000 Spielen und schreibt `meinbericht.html`)
-  oder **2 = Drafthelper** (Kartenseite mit `_draftedcardpool.txt`). Das Skript sucht Python selbst (`py` oder
-  `python`). Beim Drafthelper das schwarze Fenster offen lassen und zum Beenden den Button „Beenden“ auf der
-  Seite benutzen oder das Fenster schließen. Weitere Parameter werden an den gewählten Aufruf angehängt
-  (`draftgott.bat --sims 1000`).
+  Betriebsart: **1 = Analyse** (simuliert `_normaldeck.txt` mit 10 000 Spielen, schreibt `meinbericht.html` und
+  zeigt ihn über den Berichts-Server, damit „Kampf simulieren“ im Bericht funktioniert) oder **2 = Drafthelper**
+  (Kartenseite mit `_draftedcardpool.txt`). Das Skript sucht Python selbst (`py` oder `python`). In beiden Fällen
+  das schwarze Fenster offen lassen und zum Beenden den Button „Beenden“ auf der Seite benutzen oder das Fenster
+  schließen. Weitere Parameter werden an den gewählten Aufruf angehängt (`draftgott.bat --sims 1000`).
 - **Simulieren** baut die Varianten *Core + Splash* und *Core + NoSplash*, simuliert beide und zeigt den
   Vergleichsbericht direkt auf der Seite (zusätzlich als Datei, siehe `--ausgabe`). Danach geht es mit
   „Zurück zu den Karten“ weiter.
@@ -254,6 +290,16 @@ Aktivierung pro Runde sind fest im Skript (siehe „Feste Annahmen“).
 |---|---|---|
 | `--auras-ohne-kreatur` | aus | Standard: Auras werden nur gespielt, wenn eine Kreatur auf dem Feld liegt oder in derselben Runde ausgespielt wird. Mit dem Parameter dürfen Auras auch ohne eigene Kreatur gespielt werden. |
 
+### Kampf gegen Gegnerdecks
+
+| Parameter | Standard | Wirkung |
+|---|---|---|
+| `--gegner DATEI` | keiner | Kampf gegen dieses Gegnerdeck simulieren (z. B. `_enemydeck_bad_creatures.txt`), mehrfach angeben möglich. Der Goldfish-Bericht bleibt unverändert, der Kampf kommt in einen eigenen Bericht. |
+| `--bericht-server` | aus | Zeigt den Bericht über einen lokalen Server statt nur als Datei, damit „Kampf simulieren“ im Bericht funktioniert. Das Programm läuft, bis es im Bericht beendet wird. |
+| `--kampf-ausgabe DATEI` | `mtg_kampf.html` | Name des Kampfberichts. |
+| `--kaempfe N` | `500` | Kämpfe je Deck und Modus (On the Play / On the Draw) gegen jedes Gegnerdeck. |
+| `--kampf-runden N` | `20` | Rundengrenze im Kampf; danach ist das Spiel unentschieden. |
+
 ### Ausgabe
 
 | Parameter | Standard | Wirkung |
@@ -285,6 +331,9 @@ python mtg_sim.py deck.txt --schaden 15 --flood 10
 # Frühes Spiel genauer: Auswertung bis Runde 4, Curve bis Runde 8
 python mtg_sim.py deck.txt --turns 4 --curve-runden 8
 
+# Kampf gegen zwei Gegnerdecks mit je 1000 Kämpfen pro Modus
+python mtg_sim.py deck.txt --gegner _enemydeck_bad_creatures.txt --gegner _enemydeck_whiteblue_creatures.txt --kaempfe 1000
+
 # Was bringt Jace? Zwei Berichte vergleichen
 python mtg_sim.py deck.txt --sims 5000 --ausgabe mit_jace.html
 python mtg_sim.py deck.txt --sims 5000 --ohne-jace --ausgabe ohne_jace.html
@@ -315,8 +364,22 @@ Diese Werte stehen im Skript und lassen sich nur dort ändern.
   Es gibt keine Vorausschau auf spätere Runden, außer beim Landcycling.
 - **Kreaturen und Schaden:** aufgedruckte Power und Toughness, Einsatzverzögerung außer bei aufgedrucktem Haste, Kreaturen mit Defender
   greifen nie an, alle anderen Kreaturen greifen jede Runde an. Jace und andere Planeswalker haben keine
-  Einsatzverzögerung (Aktivierung höchstens 1x pro Runde), keine Blocker, kein Removal. Boni durch Auras oder andere Effekte werden nicht gezählt.
-- **Mana:** Nur Mana aus Ländern. Manakreaturen, Artefakte und Rituale sind nicht modelliert.
+  Einsatzverzögerung (Aktivierung höchstens 1x pro Runde), keine Blocker, kein Removal. Gezählt werden +1/+1-Marken
+  und Pumps beim Wirken oder Betreten (auf die stärkste angreifende Kreatur), Landfall-Schaden und -Marken, Marken
+  am Rundenende ohne Zauber (Edgar) und bei Loyalty (Inspired Tethermage) sowie Schaden an den Gegner aus Zaubern und
+  beim Betreten. Boni durch Auras und andere statische Effekte werden nicht gezählt.
+- **Mana:** Länder, Manaquellen außer Ländern („{T}: Add …“ ohne Zusatzkosten; Kreaturen ab der Folgerunde,
+  Artefakte sofort; für Mana getappte Kreaturen greifen nicht an) und Treasure (nur, wenn er in der Runde mehr
+  ermöglicht). Rituale sind nicht modelliert.
+- **Kostensenkung:** Nach den Kreaturen, die zu Rundenbeginn auf dem Feld liegen: Geist of Saint Thalia
+  (Nichtkreatur-Zauber {1} billiger), Ghalta (um die höchste Power bzw. Toughness), Wrath of the Bloodmane (mit
+  legendärer Kreatur); Traxos wird billiger, wenn in derselben Runde ein Nichtkreatur-Zauber gewirkt wird. Gesenkt wird
+  nur generisches Mana, der Manawert bleibt gleich (601.2f); die Curve-Auslastung zählt das tatsächlich bezahlte Mana.
+  Im Kampfmodell gilt dieselbe Rechnung.
+- **Draw, Surveil, Prepared:** Draw-Zauber mit fester Zahl ziehen sofort (Landdrop nachholen, mit übrigem Mana
+  weiterzaubern). Surveil durch Karten nach dem Zaubern, Land zuerst. Prepared-Kreaturen: die Kopie der Zauberhälfte
+  ist ein zusätzlicher Zauber ohne Handkarte, auch in der Runde des Betretens; Upkeep-Karten werden jede Runde wieder
+  prepared.
 - **Getappte Länder:** Werden aus dem Kartentext erkannt (immer getappt, Check-, Fast- und Slow-Länder). Shock-Länder
   zahlen die 2 Leben. Andere Bedingungen (zum Beispiel Reveal-Länder) werden als „immer getappt“ gezählt und im Bericht
   aufgelistet.
@@ -347,8 +410,11 @@ Diese Werte stehen im Skript und lassen sich nur dort ändern.
   zu seiner Erklärung, von dort führt „← Zurück zum Bericht“ wieder an dieselbe Stelle. Beides steckt in derselben
   HTML-Datei. Die Erklärseite beschreibt die Regeln allgemein mit Parametern und Standardwerten; die Werte des Laufs
   stehen oben im Bericht. Im Drafthelper gibt es die Erklärseite zusätzlich unter „So funktioniert es“ im Hilfekasten.
-- **Navigation im Bericht:** Die Sprungmarken zu den Abschnitten stehen links neben dem Inhalt und bleiben beim
-  Scrollen sichtbar. Auf schmalen Bildschirmen (unter 900 Pixel) stehen sie wie bisher als Leiste oben.
+- **Design und Navigation:** Bericht und Kampfbericht haben das helle Design des Drafthelpers (Splash rot,
+  NoSplash gold). Die Kopfleiste bleibt oben stehen. Links steht eine Seitenleiste mit **Kernzahlen** (Mulligan,
+  Zauber in der Auswertungsrunde, schnellster Lethal, Ø Runde für den Schaden; im Kampfbericht die Siegquoten),
+  den Sprungmarken zu den Abschnitten (der aktuelle Abschnitt ist markiert) und den Einstellungen des Laufs. Auf
+  schmalen Bildschirmen (unter 900 Pixel) steht die Seitenleiste oben.
 - **Farbverfügbarkeit (Bericht):** Eigener Abschnitt und eine Zeile in „Auf einen Blick“: Wie oft liegen nach dem
   Landdrop von Runde 3 **alle Farben** des Decks (mindestens eine Quelle je Farbe) und je Farbe einzeln? Für Farben, die
   eine Karte doppelt verlangt (z. B. RR, mit Kartennamen), zusätzlich: Wie oft liegen bis Runde 4 **zwei Quellen**?
@@ -388,15 +454,53 @@ Diese Werte stehen im Skript und lassen sich nur dort ändern.
   Spiele gespielt, bricht das Skript mit einer Fehlermeldung ab.
 
 Eine ausführliche Beschreibung der Auswahllogik mit einem durchgerechneten Beispiel steht im Abschnitt „Spiellogik“
-des Berichts.
+der Erklärseite „So funktioniert es“.
 
 ## Was im Bericht steht
 
-Deck-Vergleich (nur mit `--deckalt`), Auf einen Blick, Deck (Mana-Kurve, Farbverteilung, Kartentabelle), Mulligan, Jace & Planeswalker (nur bei passenden
-Karten), Zauber pro Runde, Kreaturen, Mana Screw
-und Flood, Curve-Auslastung, Spiellogik, Schaden durch Kreaturen, schnellster Lethal (mit Spielverlauf), Landcycling
-(nur bei passenden Karten), Tempo und Modellannahmen. Die Modellannahmen im Bericht zeigen immer die Einstellungen,
-mit denen er erzeugt wurde.
+Deck-Vergleich (nur mit `--deckalt` bzw. mehreren Varianten), Great in this deck! (nur aus dem Drafthelper), Auf
+einen Blick, Deck (Mana-Kurve nach Farben, Farbverteilung, Kartentypen, Kartentabelle), Removal, Friedhof,
+Modell-Abdeckung, Mulligan, Jace & Planeswalker, Zauber pro Runde, Kreaturen, Mana Screw und Flood,
+Farbverfügbarkeit, Splash-Karten (nur Splash-Variante aus dem Drafthelper), Curve-Auslastung, Schaden durch
+Kreaturen, schnellster Lethal (mit Spielverlauf), Landcycling, Draw-Zauber, Surveil durch Karten, Prepared, Ramp
+und Tempo. Abschnitte zu Mechaniken erscheinen nur, wenn das Deck passende Karten hat. Spiellogik, Modellannahmen
+und die Erklärung jedes Abschnitts stehen auf der Erklärseite „So funktioniert es“; die Einstellungen des Laufs
+stehen oben im Bericht und in der Seitenleiste.
+
+Mit `--bericht-server` (bzw. Analyse über `draftgott.bat`) hat der Bericht oben die Leiste **Kampf simulieren**:
+Gegnerdeck wählen, Kämpfe starten, der Kampfbericht öffnet sich danach.
+
+## Kampf gegen Gegnerdecks
+
+Gegnerdecks sind Deckdateien im Projektordner, deren Name mit `_enemydeck` beginnt (z. B.
+`_enemydeck_bad_creatures.txt`, `_enemydeck_whiteblue_creatures.txt`). Angezeigt wird die Zeile `Name` aus der
+Datei, sonst der Dateiname ohne `_enemydeck_`. Gestartet wird der Kampf mit `--gegner`, über „Kampf simulieren“ im
+Bericht (mit `--bericht-server`) oder im Drafthelper.
+
+**Kampfbericht:** Siegquote je Gegner und Variante (Play / Draw) als Kacheln und in der Seitenleiste, eine Übersicht
+(Siege, Niederlagen, davon durch Mulligan, Unentschieden), je Gegner Kennzahlen (Ø Runde, Kampfschaden und direkter
+Schaden, gestorbene Kreaturen, Lebensverlauf), besondere Spiele und eine Spieleliste, in der jedes Spiel mit seinem
+vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführlich am Ende des Kampfberichts.
+
+**Kampfmodell (Kurzfassung):**
+
+- Beide Spieler starten mit 20 Leben und spielen nach denselben Regeln, ohne die Hand des anderen zu kennen.
+  Mulligan wie in MTG Arena (wie im Goldfish); fällt unsere Hand unter die Mindestzahl, geben wir auf.
+- Ein Zug: Untap, Draw, Main 1 (Land und alle Zauber außer Kreaturen ohne Haste; Kreaturen, deren Betreten den
+  Kampf verbessert, schon hier), Kampf, Main 2, End Phase. Übriges Mana bleibt offen für Instants, Flash,
+  Kampftricks und Fähigkeiten, auch im Zug des Gegners.
+- Angriff: alles bei sicherem Lethal, sonst nur Kreaturen, die kein Blocker tötet und dabei überlebt. Block:
+  Blocker tötet und überlebt, Tausch bei mindestens gleichem Manawert, Doppel-Block, Chump nur gegen Lethal.
+- Kampf-Schlüsselwörter: Flying, Reach, First Strike, Double Strike, Deathtouch, Trample, Lifelink, Menace,
+  Vigilance, Haste, Defender, Hexproof (auch bedingt, z. B. nur im eigenen Zug).
+- Removal (Destroy/Exile, Schaden, −X/−X, Edikt, Fight, Biss, Bounce, Lock, zurück in die Bibliothek,
+  Massenremoval) trifft die gefährlichste passende Kreatur; Removal-Instants vor dem Angriff, gegen Angreifer oder am
+  Ende des gegnerischen Zugs.
+- Modelliert sind u. a. Jace (Empower) mit Angriffen auf Jace, aktivierte Fähigkeiten, Token, Prowess,
+  Auslöser beim Wirken, Betreten, Angriff, Tod, Lebensgewinn und Landfall, Friedhof (Flashback, Zurückholen,
+  Phoenix, Finality), modale Karten, Legend-Regel, Handlimit, Kostensenkung und Zusatzkosten.
+- Nicht modelliert sind u. a. Counterspells, Planeswalker außer dem Jace-Token, Ward, Convoke, Opfern als Kosten
+  und Ausrüstung; solche Karten werden gespielt, wirken aber nur mit ihren modellierten Effekten.
 
 ## Details pro Variante
 

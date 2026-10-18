@@ -7,7 +7,7 @@ removal_info(card) -> {"points", "kind", "text"} oder None: bester Removal-Effek
         Hart (destroy/exile target creature) 1,0 · Massenremoval 1,0 · Exil bis verlassen (O-Ring) 0,9
         Edikt 0,7 (mit "greatest mana value" 0,9) · Toughness 0 (z. B. "base power and toughness 0/0") 0,7
         · Schaden und -X/-X nach Hoehe (1: 0,2 · 2: 0,4 · 3: 0,6 · 4: 0,8
-        · 5+: 0,9, X: 0,5) · Lock-Aura 0,7 · Fight 0,5 · Bounce 0,3
+        · 5+: 0,9, X: 0,5) · Lock-Aura 0,7 · Fight 0,5 · Bounce 0,3 · Bibliothek (Besitzer waehlt oben/unten) 0,3
         Bedingung am Ziel (Manawert, Toughness, Flying, Farbe ...) oder eigenes Opfer ("you may sacrifice"): hoechstens
         0,5 · bezahlbare Faehigkeiten und Planeswalker-Faehigkeiten ("Faehigkeit") sowie andere Ausloeser als das
         Betreten ("Ausloeser"): halber Wert.
@@ -26,8 +26,16 @@ _CONDITION = re.compile(
 _DESTROY = re.compile(r"\b(destroy|exile)s? " + _TARGET + r" ([^.]*)")
 _ALL = re.compile(r"\b(destroy|exile)s? all (creatures|nonland permanents|other creatures)")
 _EDICT = re.compile(r"\b(target|each) opponents? (sacrifices|exiles) (a|an|one) (creature|nonland permanent)")
+_COLORS = r"(?:(?:white|blue|black|red|green)(?: or (?:white|blue|black|red|green))? )?"
 _DAMAGE = re.compile(r"\bdeals? (\d+|x|damage equal to[^.]*?)(?: damage)? to (" + _TARGET +
-                     r" (creature|planeswalker|creature or planeswalker)[^.]*|any target[^.]*)")
+                     r" " + _COLORS + r"(creature|planeswalker|creature or planeswalker)[^.]*|any target[^.]*)")
+# Biss nur in eine Richtung mit Bedingung im ersten Satz (Flourishing Grapple): "Target creature ... an opponent controls
+# that's red or white ... Target creature you control deals damage equal to its power to that permanent."
+_BITE_THAT = re.compile(r"\btarget creature(?: or planeswalker)? an opponent controls (that's [a-z ]+?) (?:loses|gets|gains)[^.]*\. target "
+                        r"creature you control deals damage equal to its power to that (?:permanent|creature)")
+# Zurueck in die Bibliothek, der Besitzer waehlt oben oder unten (Plan for All Outcomes)
+_TUCK = re.compile(r"\bthe owner of (?:up to one )?(?:other )?target (nonland permanent|creature|permanent)[^.]* puts "
+                   r"it on (?:their choice of )?the top or bottom of their library")
 _DAMAGE_EACH = re.compile(r"\bdeals? (\d+) damage to each (creature|other creature)")
 _MINUS = re.compile(r"\b" + _TARGET + r" creature[^.]*? gets? -(\d+|x)/-(\d+|x)")
 _FIGHT = re.compile(r"\bfights? (" + _TARGET + r" creature[^.]*|another target creature[^.]*)")
@@ -89,6 +97,10 @@ def _classify(low):
         if _CONDITION.search(phrase.split(" until ")[0]):
             value, label = 0.5, "Bedingt"
         found.append((value, label))
+    if _BITE_THAT.search(low):
+        found.append((0.5, "Bedingt"))
+    if _TUCK.search(low):
+        found.append((0.3, "Bibliothek"))
     m = _EDICT.search(low)
     if m:
         found.append((0.9 if "greatest mana value" in low else 0.7, "Edikt"))
@@ -211,6 +223,11 @@ def _spec_from(low, label):
         return "bounce", 0, (), False
     if label == "Lock":
         return "lock", 0, (), False
+    if label == "Bibliothek":
+        return "tuck", 0, (), False
+    m = _BITE_THAT.search(low)
+    if m:
+        return "damage", -2, _conditions(m.group(1)), False
     if label == "−X/−X":
         m = _MINUS.search(low)
         return "minus", (_amount_of(m.group(2)) if m else -1), _conditions(target), False

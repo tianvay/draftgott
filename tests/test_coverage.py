@@ -95,8 +95,13 @@ class CategoryTests(unittest.TestCase):
                    M_FLOW, type_line="Sorcery")
 
     def test_cost_reduction(self):
-        self.check("This spell costs {2} less to cast if you've cast a noncreature spell this turn.",
-                   "Kostensenkung / Convoke", M_MANA)
+        # Kostensenkung wie bei Traxos, Ghalta, Wrath of the Bloodmane und Geist ist modelliert, Convoke nicht
+        for text in ("This spell costs {2} less to cast if you've cast a noncreature spell this turn.",
+                     "This spell costs {X} less to cast, where X is the greatest power among creatures you control.",
+                     "This spell costs {1} less to cast if you control a legendary creature.",
+                     "Noncreature spells you cast cost {1} less to cast."):
+            self.assertEqual(analyze_card(sc(text=text)), [], text)
+        self.check("Convoke", "Kostensenkung / Convoke", M_MANA, keywords=("Convoke",))
 
     def test_counters_and_bonuses(self):
         self.check("Whenever this creature attacks, put a +1/+1 counter on target creature.", "Zählmarken / Stärkebonus",

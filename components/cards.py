@@ -3,7 +3,7 @@ import re
 from typing import NamedTuple
 
 from components.mana import cost_alternatives, mana_value
-from components.removal import _classify, _spec_from, discard_count, has_flash, removal_spec
+from components.removal import _classify, _spec_from, discard_count, has_flash, removal_info, removal_spec
 
 
 class Card(NamedTuple):
@@ -103,6 +103,26 @@ class Card(NamedTuple):
     choices: tuple = ()        # modale Karte ("Choose one/two —"): (Anzahl, (Modus als Card, ...)) - nur im Kampf
     is_mode: bool = False      # diese Card ist ein Modus einer modalen Karte
     grant_kw: tuple = ()       # Zauber: "target creature ... gains <Schluesselwoerter> until end of turn" (Kampftrick)
+    removal_exile: bool = False  # Removal: stirbt das Ziel in diesem Zug, wird es exiliert (Essence Burn)
+    removal_points: float = 0.0  # Removal-Score der Karte (removal.removal_info), z. B. fuer die Auswahl beim Abwerfen
+    hand_pick: str = ""        # wir waehlen eine Karte aus der Hand des Gegners, er wirft sie ab: "permanent"/"nonland"
+    cast_counter: int = 0      # Nichtkreatur-Zauber: +1/+1-Marken auf sich (Chandra's Emberling)
+    cast_team_pump: int = 0    # Nichtkreatur-Zauber: eigene Kreaturen +N/+0 bis Rundenende (Winter, Team Player)
+    type_haste: str = ""       # eigene Kreaturen dieses Typs haben Haste (Saheeli: "thopter")
+    lifegain_draw: int = 0     # Lebensgewinn: N Karten ziehen, einmal pro Zug (Bloombrute)
+    lifegain_loyalty: int = 0  # Lebensgewinn: Loyalty auf jeden eigenen Planeswalker (Way of the Mentor)
+    attack_drain: tuple = ()   # greift sie an: (Schaden an jedem Gegner, Leben) (Screeching Soulbreaker)
+    attack_exile_gy: bool = False  # greift sie an: bis zu eine Karte aus einem Friedhof exilen (Afterthought Sentry)
+    own_turn_kw: tuple = ()    # Schluesselwoerter nur im eigenen Zug (Skilled Battlecarver)
+    threshold_bonus: int = 0   # +N/+N ab 7 Karten im eigenen Friedhof (Void Extrapolator)
+    noncombat_kw: tuple = ()   # Schluesselwoerter, solange ein Gegner in diesem Zug Schaden ausserhalb des Kampfs bekam
+    counter_vigilance: bool = False  # eigene Kreaturen mit +1/+1-Marke haben Vigilance (Vigorbloom Vanguard)
+    enters_counters: int = 0   # kommt mit N +1/+1-Marken ins Spiel (Graft Surgeon)
+    death_counters_move: bool = False  # stirbt sie, gehen ihre Marken auf eine eigene Kreatur (Graft Surgeon)
+    targeted_draw: int = 0     # wird sie Ziel eines gegnerischen Zaubers: N Karten ziehen (Ruric Thar, Biomagus)
+    self_discount: tuple = ()  # eigene Kostensenkung: ("legendary", n), ("noncreature", n), ("power",), ("toughness",)
+    team_kw: tuple = ()        # andere eigene Kreaturen haben diese Schluesselwoerter (Ghalta the Unstoppable)
+    defender_attack: bool = False  # eigene Kreaturen greifen trotz Defender an (Ghalta the Immovable)
 
 
 LANDCYCLE_RE = re.compile(
@@ -645,7 +665,9 @@ def token_triggers(card):
         m = _CAST_TOKEN_RE.match(low)
         if m:
             out["cast_token"] = token_card(m.group(3).capitalize(), True, int(m.group(1)), int(m.group(2)),
-                                           sac_mana=bool(m.group(4)) and "sacrifice this token: add one mana" in low)
+                                           sac_mana=bool(m.group(4)) and "sacrifice this token: add one mana" in low,
+                                           types=(m.group(3),),
+                                           kw=("flying",) if "creature token with flying" in low else ())
         if _ARTIFACT_VIGILANCE_RE.match(low):
             out["artifact_vigilance"] = True
         m = _MILL_LAND_RE.match(low)
@@ -805,8 +827,9 @@ def life_and_costs(card, type_line, keywords):
     """Ingris-Schaden beim Angriff, Leben beim Betreten/Sterben/Wirken, Zusatzkosten und Prowess."""
     spell_face = "Instant" in type_line or "Sorcery" in type_line
     out = {}
-    if "Prowess" in keywords:
-        out["prowess"] = True
+    if "Prowess" in keywords:  # "Prowess, prowess" loest zweimal aus (702.108b)
+        out["prowess"] = max([1] + [low.count("prowess") for _raw, low in _clean_lines(card)
+                                    if re.fullmatch(r"prowess(?:, prowess)*", low)])
     for _raw, low in _clean_lines(card):
         m = _ATTACK_PING_RE.match(low)
         if m:
@@ -870,6 +893,119 @@ def life_and_costs(card, type_line, keywords):
         m = _GY_POWER_RE.match(low)
         if m:
             out["gy_power"] = tuple(m.group(1).split(" and "))
+    return out
+
+
+_KW_LIST = r"([a-z ,]+?)\.?$"
+_PACKAGE_S_RES = {
+    "cast_counter": re.compile(r"^whenever you cast a noncreature spell, put (a|an|one|two|\d+) \+1/\+1 counters? on "
+                               r"(?:~|this creature)"),
+    "cast_team_pump": re.compile(r"^whenever you cast a noncreature spell, creatures you control get \+(\d+)/\+0 until "
+                                 r"end of turn"),
+    "type_haste": re.compile(r"^([a-z]+?)s you control have haste\.?$"),
+    "lifegain_self": re.compile(r"^whenever you gain life, put (a|an|one|two|\d+) \+1/\+1 counters? on "
+                                r"(?:~|this creature)"),
+    "lifegain_draw": re.compile(r"^whenever you gain life, draw (a|one|two) cards?\. this ability triggers only once "
+                                r"each turn"),
+    "lifegain_loyalty": re.compile(r"^whenever you gain life, put (a|one|two) loyalty counters? on each planeswalker you "
+                                   r"control"),
+    "attack_drain": re.compile(r"^whenever (?:~|this creature) attacks, (?:it|~|this creature) deals (\d+) damage to "
+                               r"each opponent and you gain (\d+) life"),
+    "attack_exile_gy": re.compile(r"^whenever (?:~|this creature) attacks, exile up to one target card from a "
+                                  r"graveyard"),
+    "own_turn_kw": re.compile(r"^during your turn, (?:~|this creature) has " + _KW_LIST),
+    "threshold_bonus": re.compile(r"^threshold — (?:~|this creature) gets \+(\d+)/\+\d+ as long as there are seven or "
+                                  r"more cards in your graveyard"),
+    "noncombat_kw": re.compile(r"^as long as an opponent was dealt noncombat damage this turn, (?:~|this creature) has "
+                               + _KW_LIST),
+    "counter_vigilance": re.compile(r"^each creature you control with a \+1/\+1 counter on it has vigilance"),
+    "enters_counters": re.compile(r"^(?:~|this creature) enters with (a|an|one|two|three|\d+) \+1/\+1 counters? on "
+                                  r"it"),
+    "death_counters_move": re.compile(r"^when (?:~|this creature) dies, put its counters on (?:up to one )?target "
+                                      r"creature you control"),
+    "targeted_draw": re.compile(r"^whenever (?:~|this creature) becomes the target of a spell or ability an opponent "
+                                r"controls, draw (a|one|two) cards?"),
+    "discount_fixed": re.compile(r"^this spell costs \{(\d+)\} less to cast if you( control a legendary creature|"
+                                 r"'ve cast a noncreature spell this turn)"),
+    "discount_x": re.compile(r"^this spell costs \{x\} less to cast, where x is the greatest (power|toughness) among "
+                             r"creatures you control"),
+    "team_kw": re.compile(r"^other creatures you control have " + _KW_LIST),
+    "defender_attack": re.compile(r"^creatures you control can attack as though they didn't have defender"),
+    "hand_pick": re.compile(r"\btarget opponent reveals their hand\. you choose an? (nonland permanent|nonland) card "
+                            r"from it\. that player discards that card"),
+    "removal_exile": re.compile(r"\bif that (?:permanent|creature) would die this turn, exile it instead"),
+}
+
+
+def _keyword_list(text):
+    kws = tuple(k.strip() for k in re.split(r",\s*(?:and\s+)?|\s+and\s+", text) if k.strip())
+    return kws if kws and all(k in COMBAT_KEYWORDS or k == "haste" for k in kws) else ()
+
+
+def package_s_traits(card):
+    """Paket S: Ausloeser bei Nichtkreatur-Zaubern, Lebensgewinn und Angriff, kleine statische Effekte,
+    Kostensenkung, Abwerfen nach Wahl, Exil statt Sterben (als dict mit den Card-Feldern)."""
+    out = {}
+    res = _PACKAGE_S_RES
+    for _raw, low in _clean_lines(card):
+        m = res["cast_counter"].match(low)
+        if m:
+            out["cast_counter"] = _count(m.group(1))
+        m = res["cast_team_pump"].match(low)
+        if m:
+            out["cast_team_pump"] = int(m.group(1))
+        m = res["type_haste"].match(low)
+        if m and m.group(1) not in ("creature", "other creature"):
+            out["type_haste"] = m.group(1)
+        m = res["lifegain_self"].match(low)
+        if m:
+            out["lifegain_counter"] = (_count(m.group(1)), "self")
+        m = res["lifegain_draw"].match(low)
+        if m:
+            out["lifegain_draw"] = _count(m.group(1))
+        m = res["lifegain_loyalty"].match(low)
+        if m:
+            out["lifegain_loyalty"] = _count(m.group(1))
+        m = res["attack_drain"].match(low)
+        if m:
+            out["attack_drain"] = (int(m.group(1)), int(m.group(2)))
+        if res["attack_exile_gy"].match(low):
+            out["attack_exile_gy"] = True
+        m = res["own_turn_kw"].match(low)
+        if m and _keyword_list(m.group(1)):
+            out["own_turn_kw"] = _keyword_list(m.group(1))
+        m = res["threshold_bonus"].match(low)
+        if m:
+            out["threshold_bonus"] = int(m.group(1))
+        m = res["noncombat_kw"].match(low)
+        if m and _keyword_list(m.group(1)):
+            out["noncombat_kw"] = _keyword_list(m.group(1))
+        if res["counter_vigilance"].match(low):
+            out["counter_vigilance"] = True
+        m = res["enters_counters"].match(low)
+        if m:
+            out["enters_counters"] = _count(m.group(1))
+        if res["death_counters_move"].match(low):
+            out["death_counters_move"] = True
+        m = res["targeted_draw"].match(low)
+        if m:
+            out["targeted_draw"] = _count(m.group(1))
+        m = res["discount_fixed"].match(low)
+        if m:
+            out["self_discount"] = ("legendary" if "legendary" in m.group(2) else "noncreature", int(m.group(1)))
+        m = res["discount_x"].match(low)
+        if m:
+            out["self_discount"] = (m.group(1),)
+        m = res["team_kw"].match(low)
+        if m and _keyword_list(m.group(1)):
+            out["team_kw"] = _keyword_list(m.group(1))
+        if res["defender_attack"].match(low):
+            out["defender_attack"] = True
+        m = res["hand_pick"].search(low)
+        if m:
+            out["hand_pick"] = "permanent" if "permanent" in m.group(1) else "nonland"
+        if res["removal_exile"].search(low):
+            out["removal_exile"] = True
     return out
 
 
@@ -1108,6 +1244,7 @@ def card_info(card):
                 targets_opp=targets_opponent(card, type_line, removal_spec(card)), **battle_triggers(card),
                 **token_triggers(card), **life_and_costs(card, type_line, keywords),
                 creates_tokens=creates_tokens(card, type_line), choices=modal_choices(card, type_line),
-                grant_kw=grant_keywords(card, type_line),
+                grant_kw=grant_keywords(card, type_line), **package_s_traits(card),
+                removal_points=(removal_info(card) or {}).get("points", 0.0),
                 creature_types=(tuple(t.lower() for t in type_line.split("—", 1)[1].split())
                                 if is_creature and "—" in type_line else ())), shown

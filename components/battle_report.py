@@ -122,6 +122,24 @@ RULES = [
     "Lethal, Removal (tötet), Karte ziehen, Token, Marken/Pumps, Schaden, Leben. Modale Instants: Removal-Modi wie "
     "Removal-Instants, Pumps und Schlüsselwörter als Kampftrick, sonst am Ende des gegnerischen Zugs ein Wert-Modus "
     "(z. B. Cadet, Karte ziehen). Counterspells und Mana-Modi werden nicht genutzt.",
+    "Removal mit Bedingungen: nur passende Farben (Essence Burn: schwarz oder grün, stirbt das Ziel, wird es "
+    "exiliert; Flourishing Grapple: rot oder weiß, unsere stärkste Kreatur beißt, ohne Rückschlag). Zurück in die "
+    "Bibliothek (Plan for All Outcomes): der Besitzer legt die Karte oben hin, wenn er sie im nächsten Zug wieder "
+    "wirken kann (Manawert höchstens seine Länder + 1), sonst unten; Token verschwinden (111.7). Abwerfen nach Wahl "
+    "(Solve for Disappointment): wir nehmen die bleibende Karte, die er nächste Runde wirken könnte, mit dem "
+    "höchsten Manawert (Gleichstand: höchster Removal-Score), sonst die teuerste.",
+    "Nichtkreatur-Zauber: Marke (Chandra's Emberling), alle +1/+0 (Winter, Team Player), Prowess zählt jedes "
+    "Exemplar (702.108b, Ruric Thar). Lebensgewinn: Marke auf sich (Unflinching Hortimancer), einmal pro Zug eine "
+    "Karte (Bloombrute), Loyalty auf einen vorhandenen Jace (Way of the Mentor). Angriff: Schaden und Leben "
+    "(Screeching Soulbreaker); Afterthought Sentry exiliert aus dem Friedhof des Gegners zuerst eine Karte, die sich "
+    "selbst nutzt (zurückholen, Phoenix, Flashback, Fähigkeit), sonst seine teuerste Kreatur.",
+    "Statische Effekte: First Strike im eigenen Zug (Skilled Battlecarver), Threshold +1/+1 (Void Extrapolator), "
+    "Flying und Haste nach Schaden außerhalb des Kampfs am Gegner (Whiplash Wordsmith; kommt dann schon in Main 1, "
+    "auch zusammen mit seiner Vicious-Verse-Kopie), Haste für Thopter (Saheeli), Vigilance mit Marke (Vigorbloom "
+    "Vanguard), Trample für andere (Ghalta the Unstoppable), Defender greift an (Ghalta the Immovable), Marken beim "
+    "Betreten und beim Tod weitergeben (Graft Surgeon), Karte ziehen, wenn ein gegnerischer Zauber sie zum Ziel hat "
+    "(Ruric Thar). Kostensenkung (601.2f, auch im Goldfish): Ghalta um die höchste Power bzw. Toughness, Wrath of the "
+    "Bloodmane mit legendärer Kreatur, Traxos, wenn in diesem Zug zuerst ein Nichtkreatur-Zauber gewirkt wird.",
     "Noch nicht im Kampf: Fähigkeiten mit Opfern als Kosten (z. B. Edgar, Ancient Bloodlord) und weitere Auslöser. "
     "Solche Karten werden gewirkt, wirken aber nur mit den schon modellierten Effekten.",
 ]
