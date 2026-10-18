@@ -278,6 +278,9 @@ def choose_jace_attackers(attackers, defender, blockers):
     if loyalty <= 0 or not attackers or max_through(attackers, blockers) >= defender.life:
         return []
     need = loyalty if loyalty < 3 else loyalty - 2
+    if tomik(defender):  # hoechstens ein Angreifer: der schwaechste, der reicht, sonst keiner
+        single = [a for a in attackers if max_through([a], blockers) >= need]
+        return [min(single, key=lambda a: (a.dmg, a.toughness, a.card.mv))] if single else []
     picked = []
     for a in sorted(attackers, key=lambda a: (a.dmg, a.toughness, a.card.mv)):
         picked.append(a)
@@ -302,6 +305,8 @@ def choose_walker_attackers(attackers, defender, blockers):
         single = next((a for a in order if max_through([a], blockers) >= w.loyalty), None)
         if single is not None:
             picked = [single]
+        elif tomik(defender):  # Tomik: nur einer, dann der staerkste
+            picked = [order[-1]]
         else:
             picked = []
             for a in order:
@@ -312,6 +317,11 @@ def choose_walker_attackers(attackers, defender, blockers):
             free.remove(a)
             out.append((a, w))
     return out
+
+
+def tomik(p):
+    """Tomik, Orzhov Lawmage: hoechstens eine Kreatur greift jeden Planeswalker von p an."""
+    return any(c.card.tomik_guard and not c.dead for c in p.creatures) or any(c.tomik_guard for c in p.perms)
 
 
 def max_through(attackers, blockers):
@@ -1365,6 +1375,55 @@ def pw_target(card, caster, victim, creature_target):
     if creature_target is None and jace_present(victim) and victim.jace.loyalty >= 5:
         return "jace"
     return None
+
+
+def entrust_pick(p):
+    """Entrust the Spark: Planeswalker-Karte aus der Bibliothek mit dem hoechsten Manawert, die nicht an der
+    Legend-Regel scheitert; None, wenn es keine gibt oder kein Jace-Token zum Opfern da ist."""
+    if not jace_present(p):
+        return None
+    cands = [c for c in p.library if c.is_planeswalker and legend_ok(p, c)]
+    return max(cands, key=lambda c: (c.mv, c.loyalty_start, c.name)) if cands else None
+
+
+def tutor_pick(p):
+    """Loyal Tutor: ohne Planeswalker auf der Hand der teuerste Planeswalker der Bibliothek, den wir naechste Runde
+    bezahlen koennen (Manawert hoechstens Laender + 1), sonst der billigste; None ohne Planeswalker in der Bibliothek."""
+    if any(c.is_planeswalker for c in p.hand):
+        return None
+    cands = [c for c in p.library if c.is_planeswalker]
+    if not cands:
+        return None
+    ok = [c for c in cands if c.mv <= len(p.lands) + 1]
+    return max(ok, key=lambda c: (c.mv, c.name)) if ok else min(cands, key=lambda c: (c.mv, c.name))
+
+
+def entrust_spark(p, opp, step, e):
+    """Opfert den Jace-Token (er stirbt, 700.4) und bringt den gewaehlten Planeswalker aufs Feld, dann mischen."""
+    pick = entrust_pick(p)
+    if pick is None:
+        return
+    p.jace.loyalty, p.jace.zero_alive = 0, False
+    e["events"].append(f"{p.name}: opfert den Jace-Token")
+    jace_died(p, e)
+    p.library.remove(pick)
+    random.shuffle(p.library)
+    e["events"].append(f"{p.name}: Entrust the Spark – {pick.name} aufs Feld")
+    if pick.loyalty_start > 0:
+        p.walkers.append(Walker(pick, step))
+    else:
+        p.perms.append(pick)
+    permanent_enters(p, opp, pick, step, e)
+
+
+def loyal_tutor(p, e):
+    pick = tutor_pick(p)
+    if pick is None:
+        return
+    p.library.remove(pick)
+    random.shuffle(p.library)
+    p.library.insert(0, pick)
+    e["events"].append(f"{p.name}: Loyal Tutor – {pick.name} oben auf die Bibliothek")
 
 
 def hit_walker(caster, victim, card, target, e):
@@ -2677,6 +2736,10 @@ def card_effects(me, opp, card, step, entry, modes=None):
         opp.treasures += card.victim_treasure  # Vraska, the Cutting Glare
         if card.removal[3]:  # any target: der Schaden ist schon verteilt
             effects = card._replace(modes=tuple(tuple(a for a in m if a[0] != "face") for m in card.modes))
+    if card.entrust:  # Entrust the Spark (nur mit Jace-Token)
+        entrust_spark(me, opp, step, entry)
+    if card.pw_tutor:  # Loyal Tutor
+        loyal_tutor(me, entry)
     if card.perm_destroy and opp is not None:  # Archive Arbiter
         targets = [t for t in noncreature_targets(me, opp, card.perm_destroy) if t[0] <= 4]
         if targets:
@@ -2832,6 +2895,7 @@ def main_phase_spells(me, opp):
             and (not c.rummage_spell or surplus_land(me) is not None)
             and (not c.twin or twin_host(me, opp) is not None)
             and (not c.cast_threshold or threshold(me))
+            and (not c.entrust or entrust_pick(me) is not None)
             and (any(mode_value(me, opp, s, 0) > (0,) for s in c.choices[1]) if c.choices and not c.is_creature
                  else not c.removal or c.removal[4] == "etb" or has_target(c, me, opp))]
 
@@ -3118,6 +3182,8 @@ def end_step_instants(dfn, act, e, step):
             _resolve(dfn, act, card, step, e, modes=[card.choices[1][best[1]]])
     for card in sorted([c for c in dfn.hand if c.is_instant and not c.removal and not _trick_atoms(c)
                         and not c.choices and not c.counter], key=lambda c: -c.mv):
+        if card.pw_tutor and tutor_pick(dfn) is None:
+            continue
         if card in dfn.hand and reanimate_ok(dfn, card) and _cast_from_open(dfn, card):
             e["events"].append(f"{dfn.name}: {card.name} am Ende des Zugs")
             _resolve(dfn, act, card, step, e)

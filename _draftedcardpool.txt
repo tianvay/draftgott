@@ -1,45 +1,44 @@
 Deck
-1 Null Summoner (FRA) 142
-1 Countersculpt (FRA) 25
-1 Flickering Hound (FRA) 7
-1 Arni, Humble Scribe (FRA) 211
+1 Sphinx of False Conclusions (FRA) 40
+1 Warrior's Blades (FRA) 163
 1 Memory Trap (FRA) 15
-1 Vigorbloom Vanguard (FRA) 161
-1 Rewrite Regrets (FRA) 62
-1 Ghalta the Immovable (FRA) 197
-1 Fateshaper Aspirant (FRA) 6
-1 Theorix Metamage (FRA) 156
-1 Infinite Coursework (FRA) 31
-1 Guiding Hydra (FRA) 11
-1 Room of Refuge (FRA) 188
-2 Hexhaven Battalion (FRA) 12
-1 Emrakul, the Exigent Doom (FRA) 1
 2 Mindseeker Oculus (FRA) 33
-1 Shatterwing Pegasus (FRA) 21
+1 Surveillance Phantasm (FRA) 42
+1 No Admittance (FRA) 89
+1 Campus Crier (FRA) 4
+1 Fblthp, Impossibly Lost (FRA) 213
+1 Tam's Resistance (FRA) 153
+1 Tetsuko Umezawa, Fugitive (FRA) 221
+1 Proctor of Potential (FRA) 145
+2 Prophesied End (FRA) 17
+1 Hexhaven Battalion (FRA) 12
+1 Diviner of Victory (FRA) 28
+2 Unsummon (FRA) 46
+1 Way of the Warlord (FRA) 255
+1 Surgical Precision (FRA) 22
+1 Undulating Witness (FRA) 45
 1 Way of the Cryomancer (FRA) 223
-1 Charge the Sanctum (FRA) 125
-1 Tomik, Orzhov Lawmage (FRA) 206
-7 Plains (SPM) 194
-7 Island (SPM) 195
-2 Swamp (SPM) 196
-1 Murmuring Volume (FRA) 174
-1 Twinned Vision (FRA) 157
+1 Theorist's Proxy (FRA) 44
+1 Fatehold Annex (FRA) 177
+4 Mountain (SPM) 197
+6 Island (SPM) 195
+6 Plains (SPM) 194
 
 Sideboard
-1 Proft, Sinister Mastermind (FRA) 235
-1 Tomik, Orzhov Lawmage (FRA) 206
-1 Danitha, Sword of Hope (FRA) 196
-1 Arni, Renowned Champion (FRA) 243
-1 Overgrown Farmland (FRA) 185
-1 Yoshimaru, Beloved Companion (FRA) 209
-1 Way of the Warlord (FRA) 255
-1 Emergency Phytomedic (FRA) 130
-1 Inspired Tethermage (FRA) 109
-1 Blazing Crescendo (FRA) 75
-1 Primal Witchstalker (FRA) 144
-1 Formidable Commons (FRA) 178
-1 Silence the Echo (FRA) 66
-1 Omnipresence (FRA) 110
-1 Pia, Aether Ascetic (FRA) 264
+1 Emrakul, the Exigent Doom (FRA) 1
+1 Divining Duelist (FRA) 29
+1 Blessed Ghoul (FRA) 123
+1 Tethermage's Advantage (FRA) 117
+1 Jiang Yanggu, Alone (FRA) 246
+1 Skilled Battlecarver (FRA) 92
 1 Grim Repriser (FRA) 136
-1 Tomik, Izzet Sparkmage (FRA) 253
+1 Blazing Crescendo (FRA) 75
+1 Arcane Amphisbaena (FRA) 97
+1 Flourishing Grapple (FRA) 102
+1 Konstrari Improviser (FRA) 139
+1 Vigorbloom Annex (FRA) 194
+1 Icy Reception (FRA) 30
+1 Artifist Acumen (FRA) 73
+1 Formidable Commons (FRA) 178
+1 Compel Brutality (FRA) 101
+1 Primal Witchstalker (FRA) 144

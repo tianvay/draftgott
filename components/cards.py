@@ -183,6 +183,9 @@ class Card(NamedTuple):
     hits_walkers: bool = False  # Removal darf auch einen Planeswalker treffen ("creature or planeswalker", any target)
     copy_grant: int = 0        # Way of the Cryomancer: Kosten der verliehenen Faehigkeit "copy the next instant/sorcery"
     jace_instant: bool = False  # Jace's Machinations: Jace-Loyalty-Faehigkeiten auch im Zug des Gegners
+    tomik_guard: bool = False  # Tomik: hoechstens eine Kreatur greift jeden eigenen Planeswalker an
+    entrust: bool = False      # Entrust the Spark: Planeswalker opfern, einen aus der Bibliothek aufs Feld
+    pw_tutor: bool = False     # Loyal Tutor: Planeswalker-Karte oben auf die Bibliothek
 
 
 LANDCYCLE_RE = re.compile(
@@ -1167,6 +1170,14 @@ def walker_traits(card):
         if low.startswith("until end of turn, you may activate loyalty abilities of jace planeswalkers you control on "
                           "any player's turn"):
             out["jace_instant"] = True
+        if low.startswith('planeswalkers you control have "no more than one creature can attack this planeswalker'):
+            out["tomik_guard"] = True
+        if low.startswith("you may sacrifice a planeswalker. if you do, search your library for a planeswalker card, "
+                          "put it onto the battlefield"):
+            out["entrust"] = True
+        if low.startswith("search your library for a planeswalker card, reveal it, then shuffle and put that card on "
+                          "top"):
+            out["pw_tutor"] = True
         if low.startswith("planeswalkers you control aren't put into their owners' graveyards for having 0 loyalty"):
             out["walker_no_death"] = True
         if low.startswith("whenever you activate a loyalty ability, if you removed two or more loyalty counters to "

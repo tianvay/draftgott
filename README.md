@@ -527,6 +527,8 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
   Ultimate oder Removal. Planeswalker des Gegners werden immer angegriffen, mit so wenig Schaden wie nötig (Lethal
   auf den Spieler geht vor). Removal „creature or planeswalker“ trifft einen Planeswalker, wenn es ihn tötet und der
   Gegner keine Kreatur mit Power 4+ hat, den Jace-Token nur ab 5 Loyalty ohne Kreatur als Ziel.
+- Tomik: höchstens ein Angreifer je Planeswalker. Entrust the Spark opfert nur einen Jace-Token und holt den
+  teuersten Planeswalker; Loyal Tutor legt einen Planeswalker oben auf die Bibliothek (auch im Goldfish).
 - Way of the Cryomancer: die Kopie des ersten Instants/Sorcery wird in Main 1 eingeplant (Lethal, Removal mit
   zweitem Ziel, Ziehen; echte Planeswalker nur für Lethal oder Removal). Jace's Machinations am Ende des gegnerischen
   Zugs mit einer weiteren Aktivierung aller Jaces.

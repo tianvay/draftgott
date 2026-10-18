@@ -490,6 +490,26 @@ def pw_choice(card, loyalty, lands=0, creatures=0, hand=0, face_need=99, helps_m
     return best[1] if best else None
 
 
+def goldfish_entrust_pick(library, walkers, jst):
+    """Wie battle.entrust_pick: nur mit Jace-Token; Planeswalker mit dem hoechsten Manawert, ohne Legend-Konflikt."""
+    if not (jst.loyalty > 0 or jst.zero_alive):
+        return None
+    names = {w.name for w in walkers}
+    cands = [c for c in library if c.is_planeswalker and not (c.legendary and c.name in names)]
+    return max(cands, key=lambda c: (c.mv, c.loyalty_start, c.name)) if cands else None
+
+
+def goldfish_tutor_pick(library, hand, battlefield):
+    """Wie battle.tutor_pick (Laender + 1 fuer die naechste Runde)."""
+    if any(c.is_planeswalker for c in hand):
+        return None
+    cands = [c for c in library if c.is_planeswalker]
+    if not cands:
+        return None
+    ok = [c for c in cands if c.mv <= len(battlefield) + 1]
+    return max(ok, key=lambda c: (c.mv, c.name)) if ok else min(cands, key=lambda c: (c.mv, c.name))
+
+
 def enter_value(card):
     """Bringt das Betreten der Karte etwas (fuer eine Kopie durch Splinter Twin)? Removal, Token, Ziehen, Surveil,
     Treasure, Leben, Mill und Land, Abwerfen, modale Effekte, Schaden/Marken/Pumps, Empower."""
@@ -967,7 +987,9 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
 
             def castable():  # Handkarten und verfuegbare Prepared-Kopien (Splinter Twin nur mit passender Kreatur)
                 return [c for c in hand if not c.is_land and cast_allowed(c, len(gy))
-                        and (not c.twin or twin_host_index(board, bonus, dmg_target - dmg_total) is not None)] \
+                        and (not c.twin or twin_host_index(board, bonus, dmg_target - dmg_total) is not None)
+                        and (not c.entrust or goldfish_entrust_pick(library, walkers, jst) is not None)
+                        and (not c.pw_tutor or goldfish_tutor_pick(library, hand, battlefield) is not None)] \
                     + copies_now()
 
             spells = castable()
@@ -1170,6 +1192,21 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                         pws.append([c, c.loyalty_start, 0])  # [Karte, Loyalty, Runde der letzten Aktivierung]
                 if c.jace_instant:
                     mach_now = True
+                if c.entrust:  # Entrust the Spark: Jace-Token opfern, Planeswalker aus der Bibliothek aufs Feld
+                    pick = goldfish_entrust_pick(library, walkers, jst)
+                    if pick is not None:
+                        jst.loyalty, jst.zero_alive = 0, False
+                        library.remove(pick)
+                        random.shuffle(library)
+                        walkers.append(pick)
+                        if pick.loyalty_start > 0:
+                            pws.append([pick, pick.loyalty_start, 0])
+                if c.pw_tutor:  # Loyal Tutor: Planeswalker oben auf die Bibliothek
+                    pick = goldfish_tutor_pick(library, hand, battlefield)
+                    if pick is not None:
+                        library.remove(pick)
+                        random.shuffle(library)
+                        library.insert(0, pick)
                 for em in emblems:  # Embleme beim Wirken
                     if em[0] == "cast_draw" and library:
                         hand.append(library.pop(0))

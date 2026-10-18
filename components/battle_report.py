@@ -218,6 +218,13 @@ RULES = [
     "Beginn des Zugs. Jace's Machinations: am Ende des gegnerischen Zugs (Empower 8), danach je eine weitere "
     "Aktivierung des Jace-Tokens und jedes echten Jace-Planeswalkers (606.3 zählt je Zug), andere Planeswalker nicht. "
     "Im Goldfish genauso, die Kopie aber nur für Schaden.",
+    "Tomik, Orzhov Lawmage: höchstens ein Angreifer je Planeswalker seines Spielers, der schwächste, der ihn tötet, "
+    "sonst der stärkste; auf den Jace-Token nur ein einzelner Angreifer, der reicht. Entrust the Spark: nur mit "
+    "Jace-Token, der geopfert wird (stirbt, 700.4), nie ein echter Planeswalker; geholt wird der Planeswalker mit dem "
+    "höchsten Manawert ohne Legend-Konflikt, er darf im selben Zug aktivieren. Loyal Tutor: am Ende des gegnerischen "
+    "Zugs, wenn kein Planeswalker auf der Hand ist; oben auf die Bibliothek kommt der teuerste, den wir nächste Runde "
+    "bezahlen können (Länder + 1), sonst der billigste. Teyo legt seine Marke nie auf einen Planeswalker. Im Goldfish "
+    "Entrust und Loyal Tutor genauso.",
     "Echte Planeswalker (L2): kommen mit ihrer aufgedruckten Loyalty (306.5b), eine Loyalty-Fähigkeit pro Zug "
     "(606.3), Minus-Kosten nur mit genug Loyalty (606.6), −X so groß wie möglich ohne zu sterben, Tod bei 0 "
     "(704.5i, mit Sanctum Lurker nicht). Wahl: Lethal > Ultimate (−6 oder mehr) oder Emblem > Removal > großes Token "
