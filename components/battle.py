@@ -21,6 +21,7 @@ from components.mana import land_key
 from components.mulligan import deal_opening
 from components.jace import (JaceState, cast_filter_matches, enter_filter_matches, once_effects,
                              recurring_effects, surveil)
+from components.simulation import walker_rank
 from components.simulation import (ANY_COLOR, apply_effects, apply_surveils, best_cast_reduced, choose_land,
                                    cost_reduction, do_cycle, enter_value, enters_prepared, hand_form,
                                    landfall_effects, pay_subsets,
@@ -403,6 +404,7 @@ class Player:
         self.own_turns = 0    # Zahl der eigenen Zuege bisher
         self.drawn = 0        # gezogene Karten insgesamt (Lyra, Tolarian Archangel)
         self.drawn_mark = 0   # drawn zu Beginn des aktuellen Zugs
+        self.extra_lands = 0  # zusaetzliche Landdrops in diesem Zug (Way of the Paradox)
         self.predrawn = Counter()  # Main Phase: Karten, deren "draw N" die Planung (resolve_draws) schon gezogen hat
 
     def board(self):
@@ -478,7 +480,7 @@ def has_jace(p):
     """Behold a Jace: ein Jace unter unserer Kontrolle (auch der Jace-Token) oder eine Jace-Karte auf der Hand."""
     if p is None:
         return False
-    return p.jace.loyalty > 0 or any(c.is_jace for c in p.hand) or any(c.is_jace for c in p.perms)
+    return jace_present(p) or any(c.is_jace for c in p.hand) or any(c.is_jace for c in p.perms)
 
 
 def _alts(p, card):
@@ -692,6 +694,180 @@ def jace_died(p, e):
             gain_life(p, life)
 
 
+def jace_present(p):
+    """Liegt ein Jace-Token? Mit Sanctum Lurker auch mit 0 Loyalty."""
+    return p.jace.loyalty > 0 or p.jace.zero_alive
+
+
+def grant_sources(p):
+    """Karten, die Planeswalkern Faehigkeiten geben oder bei Aktivierungen ausloesen (Permanents und Kreaturen)."""
+    return list(p.perms) + [c.card for c in p.creatures if not c.dead]
+
+
+def walker_engine(p):
+    """Gibt es Karten fuer den erweiterten Jace (L2a)? Sonst bleibt alles wie bisher."""
+    return p.jace.zero_alive or any(c.walker_grants or c.walker_no_death or c.loyalty_draw or c.loyalty_paradox
+                                    or c.kiora_attack for c in grant_sources(p))
+
+
+def _jace_zero(p, before, e):
+    """Jace ist auf 0 gefallen: mit Sanctum Lurker bleibt er liegen, sonst stirbt er (704.5i)."""
+    if p.jace.loyalty > 0:
+        return
+    p.jace.loyalty = 0  # nie negativ
+    if any(c.walker_no_death for c in grant_sources(p)):
+        p.jace.zero_alive = True
+        return
+    if before > 0 or p.jace.zero_alive:
+        p.jace.zero_alive = False
+        jace_died(p, e)
+
+
+def walker_abilities(p):
+    """Loyalty-Faehigkeiten des Jace-Tokens: eigene (-1 Surveil, -3 Ziehen) und verliehene."""
+    out = [(-1, (("surveil", 1),), "Jace"), (-3, (("draw", 1),), "Jace")]
+    for card in grant_sources(p):
+        out += [(cost, atoms, card.name) for cost, atoms in card.walker_grants]
+    return out
+
+
+def walker_options(p, opp, step, phase, pool=None, spells=None):
+    """Bewertete Faehigkeiten, beste zuerst: (Rang, Gleichstand, Kosten, Effekte, Quelle, Ziel). Rang wie
+    simulation.walker_rank; Warlord als Removal nur gegen die gefaehrlichste Kreatur, die 2 Schaden toeten; Mana nur in
+    Main 1, wenn es einen weiteren Zauber ermoeglicht (606.6: Minus-Kosten nur mit genug Loyalty)."""
+    if not jace_present(p) or p.jace.used:
+        return []
+    sources = grant_sources(p)
+    sculptor = any(c.loyalty_draw for c in sources)
+    alive_opp = [c for c in opp.creatures if not c.dead] if opp is not None else []
+    best_threat = max(alive_opp, key=danger) if alive_opp else None
+    opts = []
+    for cost, atoms, src in walker_abilities(p):
+        if cost < 0 and p.jace.loyalty < -cost:
+            continue
+        kinds = {a[0] for a in atoms}
+        target = None
+        rank, tie = walker_rank(atoms, opp.life if opp is not None else 99, len(p.lands),
+                                any(not c.dead for c in p.creatures), tokens=True)
+        if "bolt" in kinds and opp is not None:
+            cdmg, fdmg = next(a[1:] for a in atoms if a[0] == "bolt")
+            kill = [c for c in alive_opp if not hexproof(c) and ward_ok(p, c) and c.toughness - c.damage <= cdmg]
+            if rank < 7 and phase in ("start", "main1"):  # vor dem Kampf (Feld wie in Main 1)
+                for t in kill:  # tötet den Blocker, der Lethal verhindert
+                    t.dead = True
+                    v = _attack_value(p, opp, step)
+                    t.dead = False
+                    if v + fdmg >= opp.life:
+                        rank, target = 7, t
+                        break
+            if rank < 7 and best_threat is not None and best_threat in kill:
+                rank, target = 6, best_threat
+            if rank == 7 and target is None and kill:
+                target = max(kill, key=danger)
+        if "sac_token" in kinds:
+            small = [c for c in p.creatures if not c.dead and c.power + c.toughness < 8]
+            if not small:
+                continue
+            target = min(small, key=lambda c: (not c.card.is_token, c.power + c.toughness, c.card.mv))
+            rank, tie = 5, 8
+        if "mana" in kinds:
+            if phase != "main1" or pool is None or spells is None:
+                continue
+            extra = [a[1] for a in atoms if a[0] == "mana"]
+            if not best_cast_reduced(spells, land_key(pool + extra), True, True)[0] > \
+                    best_cast_reduced(spells, land_key(pool), True, True)[0]:
+                continue
+            rank, tie = 2, 0
+        if kinds == {"surveil"} and not p.library:
+            continue
+        if rank <= 0:
+            continue
+        opts.append((rank, (1 if sculptor and cost <= -2 else 0, tie), cost, atoms, src, target))
+    return sorted(opts, key=lambda o: (o[0], o[1]), reverse=True)
+
+
+def activate_walker(p, opp, step, e, opt):
+    """Fuehrt eine Loyalty-Faehigkeit des Jace-Tokens aus. Gibt Mana zurueck (Way of the Pyromancer)."""
+    _rank, _tie, cost, atoms, src, target = opt
+    before = p.jace.loyalty
+    if cost < 0:
+        p.jace.loyalty = max(0, p.jace.loyalty + cost)
+    elif cost > 0:
+        _jace_add(p, cost, e)
+    p.jace.used = True
+    e["events"].append(f"{p.name}: Jace {'+' if cost > 0 else ''}{cost} ({src}) (Loyalty {p.jace.loyalty})")
+    mana = []
+    for a in atoms:
+        kind = a[0]
+        if kind == "surveil":
+            binned = surveil(p.library, a[1], p.hand, p.lands)
+            p.graveyard.extend(binned)
+            p.jace.surveils += 1
+            p.jace.surveil_lands += len(binned)
+            mark_surveil(p, e)
+        elif kind == "draw":
+            _draw(p, a[1])
+            p.jace.acts += 1
+            if p.jace.first is None:
+                p.jace.first = step
+        elif kind == "token":
+            make_tokens(p, [(a[1], a[2])], step, e, opp, "Jace")
+        elif kind == "sac_token":
+            if target is not None and target in p.creatures:
+                target.dead = True
+                e["events"].append(f"{p.name}: opfert {target.card.name}")
+                bury((p,), e)
+            make_tokens(p, [(1, a[1])], step, e, opp, "Jace")
+        elif kind == "bolt":
+            if target is not None and target in (opp.creatures if opp is not None else []):
+                pay_ward(p, target, e)
+                target.damage += a[1]
+            deal_noncombat(p, opp, a[2], e)
+            bury((p, opp), e)
+        elif kind == "face":
+            deal_noncombat(p, opp, a[1], e)
+        elif kind == "life":
+            gain_life(p, a[1])
+        elif kind == "counter_lands":
+            alive = [c for c in p.creatures if not c.dead]
+            if alive:
+                pick = max(alive, key=lambda c: (can_attack(c, step), danger(c)))
+                pick.bonus += len(p.lands)
+        elif kind == "mana":
+            mana.append(a[1])
+    if p.opponent is not None:  # Gideon the Oathless
+        for g in p.opponent.creatures:
+            if g.card.opp_loyalty_ping and not g.dead:
+                deal_noncombat(p.opponent, p, g.card.opp_loyalty_ping, e)
+    for card in grant_sources(p):
+        if card.loyalty_draw and cost <= -2:  # Way of the Mind Sculptor
+            _draw(p, card.loyalty_draw)
+        if card.loyalty_paradox:  # Way of the Paradox
+            gain_life(p, 1)
+            p.extra_lands += 1
+    _jace_zero(p, before, e)
+    return mana
+
+
+def walker_phase(p, opp, step, e, phase, pool=None, spells=None):
+    """Entscheidung zu einem Zeitpunkt: "start" (vor dem Landdrop: nur Ziehen, mit Way of the Paradox alles ausser
+    Mana), "main1" (zeitkritisch: Lethal, Removal, Mana, Marken nach Laendern; mit Kiora jede Faehigkeit), "after"
+    (nach Main 2: die beste). Gibt Mana zurueck."""
+    opts = walker_options(p, opp, step, phase, pool, spells)
+    if not opts:
+        return []
+    best = opts[0]
+    kinds = {a[0] for a in best[3]}
+    sources = grant_sources(p)
+    if phase == "start":
+        go = kinds == {"draw"} or (any(c.loyalty_paradox for c in sources) and "mana" not in kinds)
+    elif phase == "main1":
+        go = best[0] >= 6 or bool(kinds & {"mana", "counter_lands"}) or any(c.kiora_attack for c in sources)
+    else:
+        go = True
+    return activate_walker(p, opp, step, e, best) if go else []
+
+
 def _jace_activate(p, step, e, allow_surveil):
     loyalty, lands = p.jace.loyalty, p.jace.surveil_lands
     if p.jace.try_activate(p.hand, p.library, step, battlefield=p.lands, allow_surveil=allow_surveil):
@@ -700,7 +876,7 @@ def _jace_activate(p, step, e, allow_surveil):
                 if g.card.opp_loyalty_ping and not g.dead:
                     deal_noncombat(p.opponent, p, g.card.opp_loyalty_ping, e)
         if loyalty > 0 and p.jace.loyalty <= 0:
-            jace_died(p, e)
+            _jace_zero(p, loyalty, e)
         if p.jace.loyalty == loyalty - 3:
             p.drawn += 1
             e["events"].append(f"{p.name}: Jace −3, zieht eine Karte (Loyalty {p.jace.loyalty})")
@@ -719,7 +895,11 @@ def jace_turn_start(p, step, e=None):
             for ef in recurring_effects(pc):
                 if ef[1] == "trigger" and ef[3] == "turn":
                     _jace_add(p, ef[2], e)
-    _jace_activate(p, step, e if e is not None else {"events": []}, False)
+    e = e if e is not None else {"events": []}
+    if walker_engine(p):
+        walker_phase(p, p.opponent, step, e, "start")
+    else:
+        _jace_activate(p, step, e, False)
 
 
 def deal_noncombat(src, victim, amount, e):
@@ -757,7 +937,7 @@ def gain_life(p, n, events=1):
                 c.once["lifegain"] = p.now
                 _draw(p, c.card.lifegain_draw)
         loyalty = sum(c.lifegain_loyalty for c in p.perms) + sum(c.card.lifegain_loyalty for c in p.creatures)
-        if loyalty and p.jace.loyalty > 0:  # Way of the Mentor: nur auf einen vorhandenen Jace
+        if loyalty and jace_present(p):  # Way of the Mentor: nur auf einen vorhandenen Jace
             _jace_add(p, loyalty)
 
 
@@ -1008,7 +1188,7 @@ def _leave(p, card):
 def walker_flags(p):
     """(Planeswalker auf dem Feld, Jace auf dem Feld) fuer Laender wie im Goldfish."""
     walkers = [c for c in p.perms if c.is_planeswalker]
-    return p.jace.loyalty > 0 or bool(walkers), p.jace.loyalty > 0 or any(c.is_jace for c in walkers)
+    return jace_present(p) or bool(walkers), jace_present(p) or any(c.is_jace for c in walkers)
 
 
 def surveil_cards(p, amounts, e, source):
@@ -1116,7 +1296,7 @@ def bury(players, e):
                 e["deaths"].append(f"{c.card.name} ({p.name})")
     for p, ping, extra in triggers:  # Massacre Girl, Edgar, Way of the Necromancer
         if ping == "loyalty":
-            if p.jace.loyalty > 0:
+            if jace_present(p):
                 _jace_add(p, extra, e)
             continue
         dmg, life = ping
@@ -1124,6 +1304,9 @@ def bury(players, e):
         gain_life(p, life + extra)
     for p in players:
         check_auras(p, e)
+        if p.jace.zero_alive and p.jace.loyalty <= 0 and not any(c.walker_no_death for c in grant_sources(p)):
+            p.jace.zero_alive = False
+            jace_died(p, e)
     for p, n, name in moves:
         alive = [c for c in p.creatures if not c.dead]
         if alive:
@@ -2831,6 +3014,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     me.cast_count = 0
     me.noncreature_cast = opp.noncreature_cast = False
     me.ward_budget, me.ward_pool = 0, None
+    me.extra_lands = 0
     me.turn_start = step
     me.own_turns += 1
     me.drawn_mark, opp.drawn_mark = me.drawn, opp.drawn
@@ -2922,6 +3106,24 @@ def take_turn(me, opp, step, rnd, skip_draw):
         if not tapped:
             pool_all = pool_all + [land.land_colors]
         pool_all = pool_all + on_land(me, opp, land, step, e)
+    while me.extra_lands > 0 and any(c.is_land for c in me.hand):  # Way of the Paradox: weiterer Landdrop
+        me.extra_lands -= 1
+        land2, tapped2, _f = choose_land(me.hand, spells, pool_all, me.lands, *walker_flags(me), has_creature, True)
+        if land2 is None:
+            break
+        me.hand.remove(land2)
+        me.lands.append(land2)
+        e["land"] = (e["land"] + ", " if e["land"] else "") + land2.name
+        if not tapped2:
+            pool_all = pool_all + [land2.land_colors]
+        pool_all = pool_all + on_land(me, opp, land2, step, e)
+    if walker_engine(me) and not me.jace.used:  # L2a: zeitkritische Loyalty-Faehigkeiten vor dem Zaubern
+        mana = walker_phase(me, opp, step, e, "main1", pool_all, spells)
+        if mana:
+            pool_all = pool_all + mana
+            spells = phase_spells()
+        if opp.life <= 0:
+            return e
     ward_of = {}  # Ward-Kosten wie Zusatzkosten einplanen (702.21)
     me.ward_pool = pool_all
     for i, c in enumerate(me.hand):
@@ -3077,8 +3279,8 @@ def take_turn(me, opp, step, rnd, skip_draw):
                 cast_removal(rc, me, opp, e, step, target=max(eaters, key=danger))
     # Jace surveilt schon vor dem Kampf, wenn das in diesem Kampf etwas bringt (Prudent Fateseer, Futurescribe)
     alive = [c for c in me.creatures if not c.dead]
-    if 0 < me.jace.loyalty < 3 and not me.surveilled and any(c.card.surveil_team_pump or c.card.combat_buff
-                                                              for c in alive):
+    if 0 < me.jace.loyalty < 3 and not me.surveilled and not walker_engine(me) and any(
+            c.card.surveil_team_pump or c.card.combat_buff for c in alive):
         _jace_activate(me, step, e, True)
     stun_from_graveyard(me, opp, step, e)
     equip_gear(me, step, e)
@@ -3101,6 +3303,11 @@ def take_turn(me, opp, step, rnd, skip_draw):
                 _jace_add(me, n, e)
     for a in choose_jace_attackers(attackers, opp, [b for b in opp.creatures if not b.tapped and not b.dead]):
         a.at_jace = True
+    if attackers and me.jace.used and any(c.card.kiora_attack and not c.dead for c in me.creatures):
+        pick = max(attackers, key=danger)  # Kiora: enttappt und unblockbar
+        pick.tapped = False
+        pick.extra.add("unblockable")
+        e["events"].append(f"{me.name}: Kiora – {pick.card.name} enttappt und unblockbar")
     for a in attackers:  # Angriffs-Ausloeser der Kreatur selbst
         if a.card.attack_drain:  # Screeching Soulbreaker
             dmg, life = a.card.attack_drain
@@ -3137,7 +3344,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
         opp.jace.loyalty = max(0, opp.jace.loyalty - res["jace"])
         e["events"].append(f"{me.name}: {res['jace']} Schaden an Jace von {opp.name} (Loyalty {opp.jace.loyalty})")
         if alive_before and opp.jace.loyalty == 0:
-            jace_died(opp, e)
+            _jace_zero(opp, 1, e)
     opp.life -= res["player"]
     me.dealt_combat += res["player"]
     combat_life(me, opp, res)
@@ -3162,7 +3369,10 @@ def take_turn(me, opp, step, rnd, skip_draw):
         resolve(c)
     e["main2"] = [c.name for c in main2]
     lasting_abilities(me, opp, step, e, own_turn=True, mode="free")  # z. B. Grim Repriser nach dem Angriffs-Schaden
-    _jace_activate(me, step, e, True)
+    if walker_engine(me):
+        walker_phase(me, opp, step, e, "after")
+    else:
+        _jace_activate(me, step, e, True)
     me.predrawn = Counter()
     # End Phase: Edgar ("if you didn't cast a spell this turn"), danach Instants und Flash des Gegners
     if not me.cast_count:

@@ -148,6 +148,11 @@ class Card(NamedTuple):
     behold_jace: bool = False  # Zusatzkosten "behold a Jace or pay {N}": mit Jace entfallen sie (Countersculpt)
     uncounterable: bool = False  # "This spell can't be countered."
     twin: bool = False         # Aura: verzauberte Kreatur kopiert sich mit Haste bis zum naechsten Endsegment (Splinter Twin)
+    walker_grants: tuple = ()  # "Planeswalkers you control have [Kosten]: Effekt": ((Kosten, Effekte), ...)
+    walker_no_death: bool = False  # Planeswalker sterben nicht bei 0 Loyalty (Sanctum Lurker)
+    loyalty_draw: int = 0      # Loyalty-Aktivierung mit 2+ entfernten Marken: N Karten (Way of the Mind Sculptor)
+    loyalty_paradox: bool = False  # Loyalty-Aktivierung: 1 Leben und ein zusaetzlicher Landdrop (Way of the Paradox)
+    kiora_attack: bool = False  # Angriff nach einer Loyalty-Aktivierung: ein Angreifer enttappt und unblockbar (Kiora)
 
 
 LANDCYCLE_RE = re.compile(
@@ -1067,6 +1072,72 @@ _TWIN_RE = re.compile(r"^enchanted creature has \"\{t\}: create a token that's a
                       r"haste\. exile that token at the beginning of the next end step\.\"")
 
 
+_GRANT_RE = re.compile(r'^planeswalkers you control have "\[([+−-]?\d+)\]: (.+?)"\.?$')
+_GRANT_BOLT_RE = re.compile(r"^this planeswalker deals (\d+) damage to up to one target creature or planeswalker and "
+                            r"(\d+) damage to target player\.$")
+_GRANT_FACE_RE = re.compile(r"^this planeswalker deals (\d+) damage to each opponent and you gain (\d+) life\.$")
+_GRANT_MANA_RE = re.compile(r"^add \{([wubrg])\}\.$")
+_GRANT_LANDS_RE = re.compile(r"^put a \+1/\+1 counter on target creature for each land you control\.$")
+_GRANT_SAC_RE = re.compile(r"^you may sacrifice a creature\. if you do, (create [^.]*\.)$")
+
+
+def _grant_atoms(body):
+    """Effekte einer verliehenen Loyalty-Faehigkeit, None wenn nicht modelliert (z. B. Way of the Cryomancer)."""
+    m = _GRANT_BOLT_RE.match(body)
+    if m:
+        return (("bolt", int(m.group(1)), int(m.group(2))),)
+    m = _GRANT_FACE_RE.match(body)
+    if m:
+        return (("face", int(m.group(1))), ("life", int(m.group(2))))
+    m = _GRANT_MANA_RE.match(body)
+    if m:
+        return (("mana", (m.group(1).upper(),)),)
+    if _GRANT_LANDS_RE.match(body):
+        return (("counter_lands",),)
+    m = _GRANT_SAC_RE.match(body)
+    if m and len(_tokens_in(m.group(1))) == 1:
+        return (("sac_token", _tokens_in(m.group(1))[0][1]),)
+    if body.startswith("create "):
+        first, _, rest = body.partition(". ")
+        tokens = _tokens_in(first if first.endswith(".") else first + ".")
+        if len(tokens) != 1:
+            return None
+        atoms = [("token",) + tokens[0]]
+        rest = rest.strip()
+        m = re.fullmatch(r"surveil (\d+)\.", rest)
+        if m:
+            atoms.append(("surveil", int(m.group(1))))
+        elif rest:
+            return None
+        return tuple(atoms)
+    return None
+
+
+def walker_traits(card):
+    """L2a: verliehene Loyalty-Faehigkeiten und Ausloeser bei Loyalty-Aktivierungen."""
+    out, grants = {}, []
+    for _raw, low in _clean_lines(card):
+        m = _GRANT_RE.match(low)
+        if m:
+            atoms = _grant_atoms(m.group(2).strip())
+            if atoms:
+                grants.append((int(m.group(1).replace("−", "-")), atoms))
+        if low.startswith("planeswalkers you control aren't put into their owners' graveyards for having 0 loyalty"):
+            out["walker_no_death"] = True
+        if low.startswith("whenever you activate a loyalty ability, if you removed two or more loyalty counters to "
+                          "activate it, draw a card"):
+            out["loyalty_draw"] = 1
+        if low.startswith("whenever you activate a loyalty ability, you gain 1 life. you may play an additional land "
+                          "this turn"):
+            out["loyalty_paradox"] = True
+        if low.startswith("whenever you attack, if you've activated a loyalty ability this turn, untap target "
+                          "attacking creature. it can't be blocked this turn"):
+            out["kiora_attack"] = True
+    if grants:
+        out["walker_grants"] = tuple(grants)
+    return out
+
+
 def counter_traits(card):
     """Counterspells (L1): Art, Farbbedingung, "unless its controller pays {N}"; Behold a Jace; nicht konterbar."""
     out = {}
@@ -1459,7 +1530,7 @@ def card_info(card):
                 creates_tokens=creates_tokens(card, type_line), choices=modal_choices(card, type_line),
                 grant_kw=grant_keywords(card, type_line), **package_s_traits(card), **package_m_traits(card),
                 **package_m2_traits(card), **package_m3_traits(card, type_line),
-                **counter_traits(card),
+                **counter_traits(card), **walker_traits(card),
                 removal_points=(removal_info(card) or {}).get("points", 0.0),
                 creature_types=(tuple(t.lower() for t in type_line.split("—", 1)[1].split())
                                 if is_creature and "—" in type_line else ())), shown

@@ -31,7 +31,8 @@ class JaceState:
     """Jace-Planeswalker-Token: nur eine Zahl (Loyalty). Bei 0 Loyalty gibt es keinen Token mehr,
     ein weiterer Empower erstellt einen neuen. Hoechstens eine Aktivierung pro Runde:
     ab 3 Loyalty -3 (Karte ziehen), sonst -1 (Surveil 1, nur wenn erlaubt; auch bis 0)."""
-    __slots__ = ("loyalty", "used", "acts", "gained", "first", "surveils", "surveil_lands", "events", "graveyard")
+    __slots__ = ("loyalty", "used", "acts", "gained", "first", "surveils", "surveil_lands", "events", "graveyard",
+                 "zero_alive")
 
     def __init__(self):
         self.loyalty = 0
@@ -43,6 +44,7 @@ class JaceState:
         self.surveil_lands = 0
         self.events = 0          # wie oft Loyalty dazukam (fuer "whenever you put loyalty counters", Tethermage)
         self.graveyard = None    # Friedhof der Simulation (abgelegte Laender beim Surveil)
+        self.zero_alive = False  # liegt mit 0 Loyalty weiter (Sanctum Lurker)
 
     def add(self, n):
         if n > 0:

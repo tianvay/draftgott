@@ -1,0 +1,25 @@
+Deck
+1 Kiora of Fire and Ashes (FRA) 247
+1 Ruric Thar, Magecrusher (FRA) 265
+1 Restore with Empathy (FRA) 112
+1 Jiang Yanggu, Never Alone (FRA) 261
+1 Something Worth Saving (FRA) 114
+1 Hexhaven Invigorator (FRA) 106
+2 Heartstring Puller (FRA) 86
+2 Inspired Tethermage (FRA) 109
+1 Room of Refuge (FRA) 188
+1 Emergency Phytomedic (FRA) 130
+1 Konstrari Improviser (FRA) 139
+1 Jiang Yanggu, Alone (FRA) 246
+1 Woodwork Prodigy (FRA) 165
+1 Wrath of the Bloodmane (FRA) 96
+1 Way of the Warlord (FRA) 255
+1 Pyre Rhymer (FRA) 91
+1 Samut, Hazoret's Champion (FRA) 251
+1 Compel Brutality (FRA) 101
+1 Violent Echoes (FRA) 95
+1 Loot, the Nexus (FRA) 262
+1 Budding Insurgent (FRA) 99
+1 Skilled Battlecarver (FRA) 92
+8 Mountain (SPM) 197
+8 Forest (SPM) 198

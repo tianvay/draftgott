@@ -332,7 +332,7 @@ python mtg_sim.py deck.txt --schaden 15 --flood 10
 python mtg_sim.py deck.txt --turns 4 --curve-runden 8
 
 # Kampf gegen zwei Gegnerdecks mit je 1000 Kämpfen pro Modus
-python mtg_sim.py deck.txt --gegner _enemydeck_bad_creatures.txt --gegner _enemydeck_whiteblue_creatures.txt --kaempfe 1000
+python mtg_sim.py deck.txt --gegner _enemydeck_bad_creatures.txt --gegner _enemydeck_hard_whiteblue_creatures.txt --kaempfe 1000
 
 # Was bringt Jace? Zwei Berichte vergleichen
 python mtg_sim.py deck.txt --sims 5000 --ausgabe mit_jace.html
@@ -377,6 +377,9 @@ Diese Werte stehen im Skript und lassen sich nur dort ändern.
   legendärer Kreatur); Traxos wird billiger, wenn in derselben Runde ein Nichtkreatur-Zauber gewirkt wird. Gesenkt wird
   nur generisches Mana, der Manawert bleibt gleich (601.2f); die Curve-Auslastung zählt das tatsächlich bezahlte Mana.
   Im Kampfmodell gilt dieselbe Rechnung.
+- **Verliehene Loyalty-Fähigkeiten:** Way of the …, Sanctum Lurker, Kiora und Avatar geben dem Jace-Token
+  weitere Fähigkeiten; gewählt wird wie im Kampfmodell, im Goldfish ohne Token (Schaden, Ziehen, Surveil,
+  Mana, Marken, weiterer Landdrop).
 - **Splinter Twin:** Die verzauberte Kreatur kopiert sich am Ende jedes gegnerischen Zugs (Haste, nur aufgedruckte
   Werte); die Kopie wiederholt ihre Betreten-Effekte und greift neben dem Original an. Gleiche Regeln wie im
   Kampfmodell (Wahl der Kreatur, 302.6, nur wenn die Kreatur schon liegt).
@@ -477,7 +480,7 @@ Gegnerdeck wählen, Kämpfe starten, der Kampfbericht öffnet sich danach.
 ## Kampf gegen Gegnerdecks
 
 Gegnerdecks sind Deckdateien im Projektordner, deren Name mit `_enemydeck` beginnt (z. B.
-`_enemydeck_bad_creatures.txt`, `_enemydeck_whiteblue_creatures.txt`). Angezeigt wird die Zeile `Name` aus der
+`_enemydeck_bad_creatures.txt`, `_enemydeck_hard_whiteblue_creatures.txt`). Angezeigt wird die Zeile `Name` aus der
 Datei, sonst der Dateiname ohne `_enemydeck_`. Gestartet wird der Kampf mit `--gegner`, über „Kampf simulieren“ im
 Bericht (mit `--bericht-server`) oder im Drafthelper.
 

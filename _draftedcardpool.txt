@@ -1,40 +1,42 @@
 Deck
-2 Edgar, Moonlit Sovereign (FRA) 257
-2 Wrecking Gecko (FRA) 120
-2 Afterthought Sentry (FRA) 166
-1 Marwyn, the Preserver (FRA) 263
-8 Swamp (SPM) 196
-1 Greenhouse Propagator (FRA) 104
-1 Tam's Resistance (FRA) 153
-1 Inspired Tethermage (FRA) 109
-1 Hapatra, the Desert Fang (FRA) 271
-1 Garruk, Curse Breaker (FRA) 259
-1 Primal Witchstalker (FRA) 144
-1 Last Gasp (FRA) 56
-1 Compel Brutality (FRA) 101
-9 Forest (SPM) 198
-1 Ghalta the Unstoppable (FRA) 260
-1 Sureshot Sower (FRA) 115
-1 Cast Away Doubt (FRA) 51
-1 Way of the Necromancer (FRA) 239
-1 Blessed Ghoul (FRA) 123
-1 Break Under Pressure (FRA) 50
-1 Apex Witchstalker (FRA) 48
-1 Arcane Amphisbaena (FRA) 97
+1 Denzilore Fatehold (FRA) 128
+2 Infinite Coursework (FRA) 31
+1 Hexhaven Battalion (FRA) 12
+1 Protege's Awakening (FRA) 37
+1 Sphinx's Approach (FRA) 41
+1 Yoshimaru, Beloved Companion (FRA) 209
+1 Cryotheory Adept (FRA) 27
+1 Traxos, Scourge Eternal (FRA) 280
+1 Vigorbloom Vanguard (FRA) 161
+2 Twinned Vision (FRA) 157
+2 Icy Reception (FRA) 30
+1 Traxos, Academy Guardian (FRA) 222
+1 Prudent Fateseer (FRA) 146
+1 Arni, Humble Scribe (FRA) 211
+1 Plan for All Outcomes (FRA) 35
+1 Tetsuko Umezawa, Fugitive (FRA) 221
+1 Paradox Shaper (FRA) 143
+1 Unflinching Hortimancer (FRA) 23
+1 Eye of Jace (FRA) 170
+1 Predictive Preparations (FRA) 16
+8 Plains (SPM) 194
+9 Island (SPM) 195
 
 Sideboard
-1 Bloombrute (FRA) 124
-1 Koth of the Homestead (FRA) 199
-1 Prudent Fateseer (FRA) 146
-2 Twisted Fates (FRA) 158
-2 Edgar, Ancient Bloodlord (FRA) 270
-1 Vigorbloom Charm (FRA) 160
-1 Charge the Sanctum (FRA) 125
-1 Ghalta the Immovable (FRA) 197
+1 Yoshimaru, Beloved Companion (FRA) 209
+1 Traxos, Scourge Eternal (FRA) 280
+2 Theorix Annex (FRA) 192
+1 Danitha, Spear of Agony (FRA) 227
+1 Danitha, Sword of Hope (FRA) 196
+1 Loot, the Anomaly (FRA) 232
+1 Artifist Acumen (FRA) 73
+1 Codie, Ravenous Codex (FRA) 168
+1 Eardrum Rattler (FRA) 81
 1 Rank Rat (FRA) 61
-1 Koth, the Geomancer (FRA) 248
-1 Rampart Hunter (FRA) 60
-2 Precise Redaction (FRA) 36
-1 Essence Burn (FRA) 82
-1 Shatterwing Pegasus (FRA) 21
-1 Predictive Preparations (FRA) 16
+1 Hallway Heckler (FRA) 85
+1 Gallia, the Merrymaker (FRA) 245
+1 Recursive Recruitment (FRA) 147
+1 Screeching Soulbreaker (FRA) 65
+1 Hall of Echoes (FRA) 179
+1 Cast Away Doubt (FRA) 51
+1 Skilled Battlecarver (FRA) 92

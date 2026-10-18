@@ -303,6 +303,107 @@ def _power(board, bonus, pump, i):
     return board[i][0].power + bonus[i] + pump.get(i, 0)
 
 
+def walker_rank(atoms, opp_life, lands, have_creature, tokens=True):
+    """(Rang, Gleichstand) einer Loyalty-Faehigkeit (L2a): 7 Lethal (Schaden am Gegner reicht), 5 grosses Token
+    (mindestens 4/4) oder Marken je Land (ab 4 Laendern), 4 Ziehen, 3 kleines Token mit Surveil (Way of the Healer),
+    2 Plus-Faehigkeit mit Schaden (Sanctum Lurker), 1 Surveil; 0 = nicht nutzen. Removal (Warlord), Opfern und Mana
+    bewertet der Aufrufer. tokens=False: Goldfish (kennt keine Token)."""
+    kinds = {a[0] for a in atoms}
+    face = sum(a[1] for a in atoms if a[0] == "face") + sum(a[2] for a in atoms if a[0] == "bolt")
+    if face and face >= opp_life:
+        return 7, face
+    if "token" in kinds:
+        if not tokens:
+            return 0, 0
+        tok = next(a for a in atoms if a[0] == "token")
+        stats = tok[1] * (tok[2].power + tok[2].toughness)
+        return (5, stats) if stats >= 8 and "surveil" not in kinds else (3, stats)
+    if "counter_lands" in kinds:
+        return (5, 2 * lands) if lands >= 4 and have_creature else (0, 0)
+    if "draw" in kinds:
+        return 4, 0
+    if "face" in kinds:
+        return 2, face
+    if kinds == {"surveil"}:
+        return 1, 0
+    return 0, 0
+
+
+def walker_choice(loyalty, sources, face_need, lands, creatures=True, alive=False, helps_mana=False):
+    """Goldfish: beste Loyalty-Faehigkeit des Jace-Tokens (Kosten, Effekte) oder None. Wie im Kampf, aber ohne Token,
+    Opfern und Removal (kein Gegner); Mana nur, wenn es einen weiteren Zauber ermoeglicht (helps_mana)."""
+    if not (loyalty > 0 or alive):
+        return None
+    sculptor = any(c.loyalty_draw for c in sources)
+    abilities = [(-1, (("surveil", 1),)), (-3, (("draw", 1),))] + [g for c in sources for g in c.walker_grants]
+    best = None
+    for cost, atoms in abilities:
+        if cost < 0 and loyalty < -cost:
+            continue  # 606.6
+        rank, tie = walker_rank(atoms, face_need, lands, creatures, tokens=False)
+        if any(a[0] == "mana" for a in atoms):
+            rank, tie = (2, 0) if helps_mana else (0, 0)
+        if rank <= 0:
+            continue
+        key = (rank, 1 if sculptor and cost <= -2 else 0, tie)
+        if best is None or key > best[0]:
+            best = (key, (cost, atoms))
+    return best[1] if best else None
+
+
+def goldfish_walker(jst, phase, sources, hand, library, battlefield, board, bonus, pump, turn, face_need,
+                    helps_mana=False):
+    """Goldfish-Aktivierung (L2a) zu einem Zeitpunkt wie im Kampf: "start" (nur Ziehen; mit Way of the Paradox alles
+    ausser Mana), "main1" (Mana, Marken je Land), "after" (die beste). Gibt {"face", "mana", "lands"} zurueck."""
+    out = {"face": 0, "mana": [], "lands": 0}
+    if jst.used:
+        return out
+    choice = walker_choice(jst.loyalty, sources, face_need, len(battlefield), bool(board), jst.zero_alive, helps_mana)
+    if choice is None:
+        return out
+    cost, atoms = choice
+    kinds = {a[0] for a in atoms}
+    paradox = any(c.loyalty_paradox for c in sources)
+    if phase == "start" and not (kinds == {"draw"} or (paradox and "mana" not in kinds)):
+        return out
+    if phase == "main1" and not kinds & {"mana", "counter_lands"}:
+        return out
+    if cost < 0:
+        jst.loyalty = max(0, jst.loyalty + cost)
+    else:
+        jst.add(cost)
+    jst.used = True
+    for a in atoms:
+        if a[0] == "surveil":
+            binned = surveil(library, a[1], hand, battlefield)
+            jst.surveils += 1
+            jst.surveil_lands += len(binned)
+            if jst.graveyard is not None:
+                jst.graveyard.extend(binned)
+        elif a[0] == "draw" and library:
+            hand.append(library.pop(0))
+            jst.acts += 1
+            if jst.first is None:
+                jst.first = turn
+        elif a[0] == "face":
+            out["face"] += a[1]
+        elif a[0] == "bolt":
+            out["face"] += a[2]
+        elif a[0] == "counter_lands" and board:
+            order = _ranked(board, bonus, pump, turn, False)
+            bonus[order[0]] += len(battlefield)
+        elif a[0] == "mana":
+            out["mana"].append(a[1])
+    for c in sources:
+        if c.loyalty_draw and cost <= -2 and library:  # Way of the Mind Sculptor
+            hand.append(library.pop(0))
+    if paradox:
+        out["lands"] += 1
+    if jst.loyalty <= 0:
+        jst.zero_alive = any(c.walker_no_death for c in sources)
+    return out
+
+
 def enter_value(card):
     """Bringt das Betreten der Karte etwas (fuer eine Kopie durch Splinter Twin)? Removal, Token, Ziehen, Surveil,
     Treasure, Leben, Mill und Land, Abwerfen, modale Effekte, Schaden/Marken/Pumps, Empower."""
@@ -512,10 +613,18 @@ def fits_target(land, target):
     return target in land.land_types
 
 
+def cards_left(spells, chosen):
+    """Zaehlung der Zauber, die nach chosen noch auf der Hand sind (verbilligte Fassungen zaehlen fuer ihre Karte)."""
+    left = Counter(spells)
+    left.subtract(Counter(hand_form(c, left) for c in chosen))
+    return left
+
+
 def without_many(items, remove):
+    """items ohne die Karten aus remove; eine verbilligte Fassung (Kostensenkung) entfernt ihre Handkarte."""
     out = list(items)
     for r_ in remove:
-        out.remove(r_)
+        out.remove(hand_form(r_, out))
     return out
 
 
@@ -697,6 +806,7 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
         prep = []  # Prepared-Kreaturen auf dem Feld: [Karte, prepared?]
         bonus = []  # dauerhafte +1/+1-Marken je Kreatur auf dem Feld (gleiche Reihenfolge wie board)
         twins = []  # Splinter Twin: [Index in board, Runde des Wirkens]
+        nperms = []  # Nichtkreatur-Permanents (Way of the ... fuer Loyalty-Faehigkeiten)
         gy = []     # Friedhof: gewirkte Instants/Sorceries, gelandcycelte Karten, durch Surveil abgelegte Karten
         jst.graveyard = gy
         t_hand, t_ok, t_cast = {}, {}, set()  # Splash-Karten: erste Runde auf der Hand / bezahlbar, gewirkt
@@ -710,6 +820,7 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                 hand.append(drew)
             jst.used = False
             events0 = jst.events
+            extra_lands = 0
             pump, face_now, landfall_done = {}, 0, False
             for p_ in prep:  # Upkeep: "if this creature isn't prepared, it becomes prepared"
                 if p_[0].prepared[0] in ("upkeep", "both"):
@@ -741,7 +852,15 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                         for e in recurring_effects(pc):
                             if e[1] == "trigger" and e[3] == "turn":
                                 jst.add(e[2])
-                jst.try_activate(hand, library, turn)  # Loyalty aus frueheren Runden: Karte vor dem Landdrop ziehen
+                sources = nperms + [c for c, _t in board]
+                if jst.zero_alive or any(c.walker_grants or c.walker_no_death or c.loyalty_draw or c.loyalty_paradox
+                                         for c in sources):
+                    wo = goldfish_walker(jst, "start", sources, hand, library, battlefield, board, bonus, pump, turn,
+                                         dmg_target - dmg_total)
+                    face_now += wo["face"]
+                    extra_lands = wo["lands"]
+                else:
+                    jst.try_activate(hand, library, turn)  # Loyalty aus frueheren Runden: Karte vor dem Landdrop ziehen
             pool = [c.land_colors for c in battlefield]      # zu Rundenbeginn sind alle Laender untapped
             avail_total = sum(1 for lc in pool if lc)         # Mana dieser Runde (inkl. neu gelegter Laender)
             units = mana_units(mana_perms, turn) if has_ramp else []
@@ -802,6 +921,31 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                     pool = pool + mana_
                     avail_total += len(mana_)
                 landfall_done = True
+            while extra_lands > 0 and any(c.is_land for c in hand):  # Way of the Paradox: weiterer Landdrop
+                extra_lands -= 1
+                land2, tapped2, _f = choose_land(hand, spells, pool, battlefield, walker_bf, jace_bf, has_creature,
+                                                 auras_need_creature)
+                if land2 is None:
+                    break
+                hand.remove(land2)
+                battlefield.append(land2)
+                if not tapped2:
+                    pool = pool + [land2.land_colors]
+                    if land2.land_colors:
+                        avail_total += 1
+            sources = nperms + [c for c, _t in board]
+            if has_jace and any(c.walker_grants for c in sources):  # Mana und Marken je Land vor dem Zaubern
+                spells = castable()
+                plus_r = [a[1] for c in sources for cost, atoms in c.walker_grants for a in atoms if a[0] == "mana"]
+                helps = bool(plus_r) and best_cast_reduced(spells, land_key(pool + plus_r[:1]), has_creature,
+                                                           auras_need_creature)[0] > best_cast_reduced(
+                    spells, land_key(pool), has_creature, auras_need_creature)[0]
+                wo = goldfish_walker(jst, "main1", sources, hand, library, battlefield, board, bonus, pump, turn,
+                                     dmg_target - dmg_total, helps)
+                face_now += wo["face"]
+                pool = pool + wo["mana"]
+                avail_total += len(wo["mana"])
+                spells = castable()
             key = land_key(pool)
             full_key = land_key([c.land_colors for c in battlefield])
 
@@ -838,8 +982,7 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                 for _round in range(3):
                     if len(battlefield) + sum(c.is_land for c in hand) >= cycle_cap:
                         break
-                    left = Counter(spells)
-                    left.subtract(Counter(chosen))
+                    left = cards_left(spells, chosen)
                     cands = sorted((c for c, k in left.items() if k > 0 and c.cycle_alts),
                                    key=lambda c: (c.cycle_mv, c))
                     done = False
@@ -925,6 +1068,8 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                     prep.append([c, c.prepared[0] in ("enters", "both")])
                 if c.mana_src:
                     mana_perms.append((c, turn))
+                if not c.is_creature and not c.is_instant_sorcery and not c.is_land and not c.is_copy:
+                    nperms.append(c)
                 if c.treasure:
                     treasures += c.treasure
                     rp["made"] += c.treasure
@@ -1010,8 +1155,14 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                                 break
                             paid.append(e[4])
                             jst.add(e[2])
-                # Loyalty aus dieser Runde: ab 3 ziehen, sonst Surveil 1 (auch bis 0)
-                jst.try_activate(hand, library, turn, battlefield=battlefield, allow_surveil=True)
+                # Loyalty aus dieser Runde: ab 3 ziehen, sonst Surveil 1 (auch bis 0); mit Way of the ... (L2a)
+                sources = nperms + [c for c, _t in board]
+                if jst.zero_alive or any(c.walker_grants or c.walker_no_death or c.loyalty_draw or c.loyalty_paradox
+                                         for c in sources):
+                    face_now += goldfish_walker(jst, "after", sources, hand, library, battlefield, board, bonus, pump,
+                                                turn, dmg_target - dmg_total)["face"]
+                else:
+                    jst.try_activate(hand, library, turn, battlefield=battlefield, allow_surveil=True)
 
             # Angriff: Kreaturen vom Vorzug greifen an, neue nur mit Haste, Defender nie (keine Blocker, kein Removal)
             held = Counter()  # Kreaturen, die fuer Mana getappt wurden, greifen nicht an

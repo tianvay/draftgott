@@ -200,6 +200,17 @@ RULES = [
     "eigenen Zug nur, wenn sie Lethal bringt. Betreten-Effekte der Kopie wirken (603.6a), „if you cast it“ nicht; "
     "eine legendäre Kopie stirbt nach ihrem Effekt an der Legend-Regel. Twin geht mit der Kreatur in den Friedhof "
     "(704.5m). Im Goldfish genauso, gegen einen Gegner, der nichts tut.",
+    "Verliehene Loyalty-Fähigkeiten (Way of the …, Sanctum Lurker, Kiora, Avatar) für den Jace-Token: eine "
+    "Aktivierung pro Zug (606.3), Minus-Kosten nur mit genug Loyalty (606.6). Wahl: Lethal (Schaden am Gegner, oder "
+    "Warlord tötet den Blocker, der Lethal verhindert) > Removal (Warlord tötet die gefährlichste Kreatur) > großes "
+    "Token (Leviathan vor Beast; Deathbringer opfert eine Kreatur unter 4/4, Token zuerst; Avatar ab 4 Ländern) > "
+    "Ziehen > Cadet und Surveil > Plus-Fähigkeit (Lurker; Pyromancer nur, wenn das {R} einen Zauber ermöglicht) > "
+    "Surveil. Ziehen zu Beginn des Zugs, Lethal/Removal/Mana/Marken in Main 1 vor dem Zaubern (mit Kiora jede "
+    "Fähigkeit), sonst nach Main 2. Way of the Mind Sculptor: Karte bei −2 oder mehr; Way of the Paradox: 1 Leben "
+    "und ein weiterer Landdrop (dann wird schon zu Beginn des Zugs aktiviert); Kiora: nach einer Aktivierung wird "
+    "der stärkste Angreifer enttappt und unblockbar. Sanctum Lurker: Jace bleibt mit 0 Loyalty liegen (nie "
+    "negativ), stirbt aber, wenn Lurker geht. Im Goldfish dieselbe Wahl ohne Token. Way of the Cryomancer und Jace's "
+    "Machinations folgen.",
     "Noch nicht im Kampf: weitere Auslöser und Fähigkeiten (siehe Modell-Abdeckung). Solche Karten werden gewirkt, "
     "wirken aber nur mit den schon modellierten Effekten.",
 ]
