@@ -211,6 +211,21 @@ RULES = [
     "der stärkste Angreifer enttappt und unblockbar. Sanctum Lurker: Jace bleibt mit 0 Loyalty liegen (nie "
     "negativ), stirbt aber, wenn Lurker geht. Im Goldfish dieselbe Wahl ohne Token. Way of the Cryomancer und Jace's "
     "Machinations folgen.",
+    "Echte Planeswalker (L2): kommen mit ihrer aufgedruckten Loyalty (306.5b), eine Loyalty-Fähigkeit pro Zug "
+    "(606.3), Minus-Kosten nur mit genug Loyalty (606.6), −X so groß wie möglich ohne zu sterben, Tod bei 0 "
+    "(704.5i, mit Sanctum Lurker nicht). Wahl: Lethal > Ultimate (−6 oder mehr) oder Emblem > Removal > großes Token "
+    "(ab 4/4) > Ziehen > kleines Token > Plus mit Wert > Plus ohne Wert; eine Minus-Fähigkeit, die auf 0 bringt, nur "
+    "für Lethal, Ultimate oder Removal. Ein Emblem „whenever you cast a spell“ nur mit einem Zauber auf der Hand. "
+    "Zeitpunkt: vorhandene Planeswalker in Main 1 vor dem Zaubern (Team-Pump und Angriffs-Buff erst direkt vor dem "
+    "Kampf), frisch gewirkte nach den Zaubern aus Main 1, sonst nach Main 2. Verliehene Fähigkeiten (Way of the …) "
+    "und Auslöser bei Aktivierungen (Ajani Unrelenting: Cadet auch für den Jace-Token, Mind Sculptor, Paradox, "
+    "Gideon, Tethermage, Mentor, Necromancer) gelten auch für sie. Angriff: echte Planeswalker des Gegners immer, mit "
+    "so wenig Schaden wie nötig (der kleinste Angreifer, der reicht, sonst die schwächsten bis es reicht; reicht "
+    "alles nicht, greift alles Übrige ihn an); Lethal auf den Spieler geht vor; Schaden nimmt Loyalty (120.3c). "
+    "Removal „creature or planeswalker“: ein echter Planeswalker, wenn es ihn tötet und der Gegner keine Kreatur mit "
+    "Power 4+ hat; der Jace-Token nur ab 5 Loyalty und ohne Kreatur als Ziel. Nicht modelliert: das Wirken der von "
+    "Chandra exilierten Karte, Jace, Reality Sculptors Sieg-Fähigkeit, Garruk, Veiled Butchers Exil statt Sterben. "
+    "Im Goldfish ohne Token und Removal (Schaden, Ziehen, Mana, Marken, Embleme, Empower).",
     "Heartwood-Token (111.10x, Artefakt mit {T}: {R} oder {G}) aus Soul Tether, Aerid Konstrari, Hungering "
     "Puppetbeast: Mana ab dem nächsten Zug. Statische Team-Effekte, auch von Verzauberungen: Samut (alle haben "
     "Haste), Ajani's Anguish (Trample), Tetsuko Umezawa, Fugitive (Power oder Toughness höchstens 1: unblockbar), "
@@ -276,6 +291,8 @@ def _attacks_html(attacks):
         att = esc(at["attacker"]) + (' <span class="dead">†</span>' if at["attacker_dies"] else "")
         if at.get("jace"):
             att += " (auf Jace)"
+        if at.get("walker"):
+            att += f" (auf {esc(at['walker'])})"
         if not at["blockers"]:
             out.append(f"{att} → ungeblockt")
         else:

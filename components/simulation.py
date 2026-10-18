@@ -412,6 +412,54 @@ def goldfish_walker(jst, phase, sources, hand, library, battlefield, board, bonu
     return out
 
 
+def pw_choice(card, loyalty, lands=0, creatures=0, hand=0, face_need=99, helps_mana=False, sources=(), spells=None):
+    """Goldfish (L2): beste Loyalty-Faehigkeit eines echten Planeswalkers (Kosten, Effekte) oder None. Rangfolge wie im
+    Kampf, aber ohne Token und Removal (kein Gegner): 8 Lethal, 7 Ultimate/Emblem, 4 Ziehen, 2 Plus mit Wert (Schaden,
+    Surveil, Empower, Mana nur wenn es einen weiteren Zauber ermoeglicht, Team-Pump mit Kreaturen), 1 Plus ohne Wert.
+    Eine Minus-Faehigkeit, die auf 0 bringt, nur fuer Lethal oder Ultimate. Ein Emblem "whenever you cast a spell" nur
+    mit mindestens einem Zauber auf der Hand (spells: Zahl der Nichtland-Karten, None = unbekannt)."""
+    best = None
+    grants = [g for c in sources for g in c.walker_grants]
+    for cost, atoms in list(card.pw_abilities) + grants:
+        if cost == "X" or (cost < 0 and loyalty < -cost):
+            continue  # 606.6; -X (Stun) ohne Gegner wertlos
+        kinds = {a[0] for a in atoms}
+        face = sum(a[1] for a in atoms if a[0] == "face")
+        if (cost, atoms) in grants:
+            rank, tie = walker_rank(atoms, face_need, lands, creatures > 0, tokens=False)
+            if rank == 7:
+                rank = 8
+            if "mana" in kinds:
+                rank, tie = (2, 3) if helps_mana else (0, 0)
+        elif face and face >= face_need:
+            rank, tie = 8, face
+        elif "emblem" in kinds or cost <= -6:
+            cast_only = all(a[1] in ("cast_draw", "cast_damage") for a in atoms if a[0] == "emblem")                 and "emblem" in kinds
+            rank, tie = (0, 0) if cast_only and spells == 0 else (7, 0)
+        elif "draw" in kinds:
+            rank, tie = 4, 0
+        elif "wheel_creatures" in kinds:
+            rank, tie = (4, 0) if creatures > hand else (0, 0)
+        elif "mana" in kinds:
+            rank, tie = (2, 3) if helps_mana else (0, 0)
+        elif "face" in kinds:
+            rank, tie = 2, face
+        elif kinds & {"surveil", "empower_islands"}:
+            rank, tie = 2, 0
+        elif "team_pump" in kinds:
+            rank, tie = (2, 0) if creatures else (0, 0)
+        else:
+            rank, tie = 0, 0
+        if rank <= 0 and cost >= 0:
+            rank, tie = 1, 0
+        if rank <= 0 or (loyalty + cost <= 0 and rank < 6):
+            continue
+        key = (rank, tie, cost)
+        if best is None or key > best[0]:
+            best = (key, (cost, atoms))
+    return best[1] if best else None
+
+
 def enter_value(card):
     """Bringt das Betreten der Karte etwas (fuer eine Kopie durch Splinter Twin)? Removal, Token, Ziehen, Surveil,
     Treasure, Leben, Mill und Land, Abwerfen, modale Effekte, Schaden/Marken/Pumps, Empower."""
@@ -806,6 +854,8 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
         jst = JaceState()
         perms = []  # Permanents mit wiederkehrendem Empower: (Karte, Runde des Eintritts)
         walkers = []  # gewirkte Planeswalker-Karten (liegen auf dem Tisch)
+        pws = []      # echte Planeswalker mit Loyalty-Faehigkeiten: [Karte, Loyalty] (L2)
+        emblems = []  # Embleme: ("team", P, T), ("cast_draw",), ("cast_damage", N)
         acts_empty = gained_empty = None
         snap = (0, 0, 0)
         g_avail = g_spent = 0
@@ -1072,6 +1122,13 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                     gys["x"].append(max((g.mv for g in gy), default=0))
                 if c.is_planeswalker:
                     walkers.append(c)
+                    if c.loyalty_start > 0:
+                        pws.append([c, c.loyalty_start])
+                for em in emblems:  # Embleme beim Wirken
+                    if em[0] == "cast_draw" and library:
+                        hand.append(library.pop(0))
+                    elif em[0] == "cast_damage":
+                        face_now += em[1]
                 if c.prepared:
                     prep.append([c, c.prepared[0] in ("enters", "both")])
                 if c.mana_src:
@@ -1174,6 +1231,52 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                 else:
                     jst.try_activate(hand, library, turn, battlefield=battlefield, allow_surveil=True)
 
+            for slot in list(pws):  # L2: echte Planeswalker, eine Faehigkeit pro Runde (606.3)
+                pwc, loy = slot
+                choice = pw_choice(pwc, loy, len(battlefield), len(board), len(hand), dmg_target - dmg_total - face_now,
+                                   sources=nperms + [c for c, _t in board], spells=sum(not h.is_land for h in hand))
+                if choice is None:
+                    continue
+                cost, atoms = choice
+                slot[1] = loy + cost
+                for a in atoms:
+                    kind = a[0]
+                    if kind == "face":
+                        face_now += a[1]
+                    elif kind == "bolt":
+                        face_now += a[2]
+                    elif kind == "draw":
+                        for _k in range(a[1]):
+                            if library:
+                                hand.append(library.pop(0))
+                    elif kind == "counters_hand":
+                        for i in range(len(board)):
+                            bonus[i] += len(hand)
+                            ef["counters"] += len(hand)
+                    elif kind == "emblem":
+                        emblems.append(a[1:])
+                    elif kind == "team_pump":
+                        for i in range(len(board)):
+                            pump[i] = pump.get(i, 0) + a[1]
+                    elif kind == "wheel_creatures":
+                        gy.extend(hand)
+                        hand.clear()
+                        for _k in range(len(board)):
+                            if library:
+                                hand.append(library.pop(0))
+                    elif kind == "surveil":
+                        apply_surveils([a[1]], library, hand, battlefield, graveyard=gy)
+                    elif kind == "mill_top" and library:
+                        library.pop(0)
+                    elif kind == "empower_islands":
+                        jst.add(sum("island" in land.land_types for land in battlefield))
+                if slot[1] <= 0:  # 704.5i
+                    pws.remove(slot)
+                    if pwc in walkers:
+                        walkers.remove(pwc)
+            team = sum(em[1] for em in emblems if em[0] == "team")
+            for i in range(len(board)) if team else ():  # Emblem "Creatures you control get +N/+N"
+                pump[i] = pump.get(i, 0) + team
             # Angriff: Kreaturen vom Vorzug greifen an, neue nur mit Haste, Defender nie (keine Blocker, kein Removal)
             held = Counter()  # Kreaturen, die fuer Mana getappt wurden, greifen nicht an
             if creature_units and chosen:

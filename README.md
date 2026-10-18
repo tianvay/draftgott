@@ -383,6 +383,9 @@ Diese Werte stehen im Skript und lassen sich nur dort ändern.
 - **Verliehene Loyalty-Fähigkeiten:** Way of the …, Sanctum Lurker, Kiora und Avatar geben dem Jace-Token
   weitere Fähigkeiten; gewählt wird wie im Kampfmodell, im Goldfish ohne Token (Schaden, Ziehen, Surveil,
   Mana, Marken, weiterer Landdrop).
+- **Echte Planeswalker:** Planeswalker-Karten kommen mit ihrer Loyalty und nutzen jede Runde eine Fähigkeit,
+  gewählt wie im Kampfmodell, aber ohne Token und Removal (Schaden, Ziehen, Marken, Embleme, Empower; Mana nur,
+  wenn es einen weiteren Zauber ermöglicht). Bei 0 Loyalty sind sie weg.
 - **Splinter Twin:** Die verzauberte Kreatur kopiert sich am Ende jedes gegnerischen Zugs (Haste, nur aufgedruckte
   Werte); die Kopie wiederholt ihre Betreten-Effekte und greift neben dem Original an. Gleiche Regeln wie im
   Kampfmodell (Wahl der Kreatur, 302.6, nur wenn die Kreatur schon liegt).
@@ -445,7 +448,8 @@ Diese Werte stehen im Skript und lassen sich nur dort ändern.
   („whenever“ und „at the beginning“-Auslöser, bezahlbare Fähigkeiten mit Kosten). Eine Karte kann in mehreren Gruppen
   stehen. Die Summe der Empower-Werte wird getrennt für einmalig und wiederkehrend ausgewiesen, bei wiederkehrenden als
   Wert je Auslösung. Zusätzlich gezählt werden Karten, die Jace oder Planeswalker erwähnen (helfend), Karten gegen
-  Planeswalker (zerstören, Schaden) und Planeswalker-Karten selbst. Diese Bezüge werden nur gezählt, nicht simuliert.
+  Planeswalker (zerstören, Schaden) und Planeswalker-Karten selbst. In diesem Abschnitt werden sie nur gezählt;
+  Planeswalker-Karten und Removal gegen Planeswalker simulieren Goldfish und Kampfmodell (siehe unten).
   Neben jeder Karte steht im Bericht der erkannte Text, damit du die Einordnung prüfen kannst.
 - **Empower Jace (Simulation):** Der Jace-Token startet mit 0 Loyalty und hat −3: eine Karte ziehen. Er wird aktiviert,
   sobald er mindestens 3 Loyalty hat und die Bibliothek nicht leer ist, **höchstens einmal pro Runde**: zu Rundenbeginn mit
@@ -515,7 +519,13 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
   Zusatzkosten.
 - Counterspells: gekontert wird, was Lethal bringt, Removal auf die gefährlichste eigene Kreatur und Kreaturen
   ab Manawert 3; ab Runde 5 bleibt Mana dafür frei. Festgelegt: keine Gegenkonter.
-- Nicht modelliert sind u. a. Planeswalker außer dem Jace-Token, Convoke, Opfern als Kosten (außer Edgar, Ancient Bloodlord); solche Karten werden gespielt, wirken aber nur mit ihren modellierten Effekten.
+- Echte Planeswalker: eine Loyalty-Fähigkeit pro Zug, Wahl Lethal > Ultimate/Emblem > Removal > großes Token >
+  Ziehen > kleines Token > Plus mit Wert > Plus ohne Wert; eine Minus-Fähigkeit, die auf 0 bringt, nur für Lethal,
+  Ultimate oder Removal. Planeswalker des Gegners werden immer angegriffen, mit so wenig Schaden wie nötig (Lethal
+  auf den Spieler geht vor). Removal „creature or planeswalker“ trifft einen Planeswalker, wenn es ihn tötet und der
+  Gegner keine Kreatur mit Power 4+ hat, den Jace-Token nur ab 5 Loyalty ohne Kreatur als Ziel.
+- Nicht modelliert sind u. a. das Wirken der von Chandra, Torch of Defiance exilierten Karte, die Sieg-Fähigkeit von
+  Jace, Reality Sculptor, Convoke, Opfern als Kosten (außer Edgar, Ancient Bloodlord); solche Karten werden gespielt, wirken aber nur mit ihren modellierten Effekten.
 
 ## Details pro Variante
 

@@ -176,6 +176,11 @@ class Card(NamedTuple):
     victim_treasure: int = 0   # der Gegner bekommt Treasure-Token (Vraska, the Cutting Glare)
     sac_removal: tuple = ()    # "{N}, Sacrifice this creature: Removal" (Living Library): (Kosten, Removal-Spec)
     sweep_ability: tuple = ()  # "{N}, {T}, Exile this: Destroy all creatures" (Echoverse Fulcrum): Kosten
+    loyalty_start: int = 0     # Planeswalker: aufgedruckte Loyalty (306.5b)
+    pw_abilities: tuple = ()   # Planeswalker: ((Kosten oder "X", Effekte), ...)
+    pw_static: tuple = ()      # Planeswalker-Ausloeser: opp_draw, big_enter_draw, lifegain_loyalty
+    activation_tokens: tuple = ()  # "Whenever you activate a loyalty ability, create ..." (Ajani Unrelenting)
+    hits_walkers: bool = False  # Removal darf auch einen Planeswalker treffen ("creature or planeswalker", any target)
 
 
 LANDCYCLE_RE = re.compile(
@@ -1291,6 +1296,104 @@ def b1_traits(card, type_line):
     return out
 
 
+_PW_LINE_RE = re.compile(r"^([+−-]?)(\d+|x): (.+)$")
+_PRIDEMATE_RE = re.compile(r"create a 2/2 white cat soldier creature token named ajani's pridemate with \"whenever you "
+                           r"gain life, put a \+1/\+1 counter on this token\.\"")
+_PW_ATOMS = [
+    (re.compile(r"^for each opponent, return up to one target artifact or creature that player controls to its "
+                r"owner's hand\.$"), lambda m: (("bounce",),)),
+    (re.compile(r"^draw three cards\. then put x \+1/\+1 counters on each creature you control, where x is the number "
+                r"of cards in your hand\.$"), lambda m: (("draw", 3), ("counters_hand",))),
+    (re.compile(r"^untap up to two target lands\.$"), lambda m: (("untap_lands", 2),)),
+    (re.compile(r"^until your next turn, whenever one or more creatures attack one of your opponents, those creatures "
+                r"get \+(\d+)/\+(\d+) and gain trample until end of turn\.$"),
+     lambda m: (("attack_buff", int(m.group(1)), int(m.group(2))),)),
+    (re.compile(r"^up to one target creature gets -(\d+)/-(\d+) until your next turn\.$"),
+     lambda m: (("lasting_debuff", int(m.group(1)), int(m.group(2))),)),
+    (re.compile(r"^each player sacrifices a creature of their choice\. if you sacrificed a creature this way, (create "
+                r"[^.]*\.)$"), lambda m: (("edict_both", _tokens_in(m.group(1))[0][1]),)),
+    (re.compile(r"^each opponent discards two cards\. for each opponent who didn't discard two nonland cards this way, "
+                r"you draw a card\.$"), lambda m: (("opp_discard", 2),)),
+    (re.compile(r"^you gain (\d+) life\.$"), lambda m: (("life", int(m.group(1))),)),
+    (re.compile(r'^you get an emblem with "creatures you control get \+(\d+)/\+(\d+)\."$'),
+     lambda m: (("emblem", "team", int(m.group(1)), int(m.group(2))),)),
+    (re.compile(r'^you get an emblem with "whenever you cast a spell, draw a card\."$'),
+     lambda m: (("emblem", "cast_draw"),)),
+    (re.compile(r'^you get an emblem with "whenever you cast a spell, this emblem deals (\d+) damage to any target\."$'),
+     lambda m: (("emblem", "cast_damage", int(m.group(1))),)),
+    (re.compile(r"^creatures you control get \+(\d+)/\+(\d+) and gain haste until end of turn\.$"),
+     lambda m: (("team_pump", int(m.group(1)), int(m.group(2)), ("haste",)),)),
+    (re.compile(r"^discard your hand, then draw a card for each creature you control\.$"),
+     lambda m: (("wheel_creatures",),)),
+    (re.compile(r"^(?:~|[a-z]+) deals (\d+) damage to each creature except for tokens you control\.$"),
+     lambda m: (("sweep_except_tokens", int(m.group(1))),)),
+    (re.compile(r"^surveil (\d+)\.(?: if you put a noncreature, nonland card into your graveyard this way, put that "
+                r"card into your hand\.)?$"), lambda m: (("surveil", int(m.group(1))),)),
+    (re.compile(r"^add ((?:\{[wubrg]\})+)\.(?: spend this mana only to cast a noncreature spell\.)?$"),
+     lambda m: tuple(("mana", (c.upper(),)) for c in re.findall(r"\{([wubrg])\}", m.group(1)))),
+    (re.compile(r"^tap target artifact or creature\. put x stun counters on it\.$"), lambda m: (("stun_x",),)),
+    (re.compile(r"^exile the top card of your library\. you may cast that card\. if you don't, (?:~|[a-z]+) deals "
+                r"(\d+) damage to each opponent\.$"), lambda m: (("mill_top",), ("face", int(m.group(1))))),
+    (re.compile(r"^(?:~|[a-z]+) deals (\d+) damage to target creature\.$"), lambda m: (("bolt_creature", int(m.group(1))),)),
+    (re.compile(r"^empower (?:jace|~) x, where x is the number of islands you control\.$"), lambda m: (("empower_islands",),)),
+    (re.compile(r"^until your next turn, whenever a creature attacks you or a planeswalker you control, it gets "
+                r"-(\d+)/-0 until end of turn\.$"), lambda m: (("shield", int(m.group(1))),)),
+]
+
+
+def _pw_atoms(body):
+    """Effekte einer Loyalty-Faehigkeit eines echten Planeswalkers, None wenn nicht modelliert."""
+    if _PRIDEMATE_RE.match(body):
+        token = token_card("Ajani's Pridemate", True, 2, 2, False, types=("cat", "soldier"))
+        return (("token", 1, token._replace(lifegain_counter=(1, "self"))),)
+    for rx, build in _PW_ATOMS:
+        m = rx.match(body)
+        if m:
+            return build(m)
+    if body.startswith("create "):
+        tokens = _tokens_in(body)
+        if len(tokens) == 1 and body.endswith("."):
+            return (("token",) + tokens[0],)
+    return None
+
+
+def walker_card_traits(card, type_line, spec):
+    """L2: Start-Loyalty, Loyalty-Faehigkeiten und Ausloeser echter Planeswalker; Removal gegen Planeswalker."""
+    out, abilities, static = {}, [], []
+    front = (card.get("card_faces") or [card])[0]
+    if "Planeswalker" in type_line:
+        raw = front.get("loyalty") or card.get("loyalty") or ""
+        if str(raw).isdigit():
+            out["loyalty_start"] = int(raw)
+        for _raw, low in _clean_lines(card):
+            m = _PW_LINE_RE.match(low)
+            if m:
+                atoms = _pw_atoms(m.group(3).strip())
+                if atoms:
+                    cost = "X" if m.group(2) == "x" else (-1 if m.group(1) in "−-" and m.group(1) else 1) * int(m.group(2))
+                    abilities.append((cost, atoms))
+                continue
+            if low.startswith("at the beginning of each opponent's draw step, you draw a card"):
+                static.append("opp_draw")
+            if re.match(r"^whenever you gain life, put a loyalty counter on (?:~|[a-z]+)\.?$", low):
+                static.append("lifegain_loyalty")
+            m = re.match(r"^whenever you activate a loyalty ability, (create [^.]*\.)", low)
+            if m and _tokens_in(m.group(1)):
+                out["activation_tokens"] = tuple(_tokens_in(m.group(1)))
+    for _raw, low in _clean_lines(card):
+        if low.startswith("whenever a creature you control with power 4 or greater enters, draw a card"):
+            static.append("big_enter_draw")
+    if abilities:
+        out["pw_abilities"] = tuple(abilities)
+    if static:
+        out["pw_static"] = tuple(static)
+    if spec and spec[0] in ("destroy", "damage"):
+        text = " ".join(low for _raw, low in _clean_lines(card))
+        if "or planeswalker" in text or spec[3]:
+            out["hits_walkers"] = True
+    return out
+
+
 def counter_traits(card):
     """Counterspells (L1): Art, Farbbedingung, "unless its controller pays {N}"; Behold a Jace; nicht konterbar."""
     out = {}
@@ -1685,7 +1788,7 @@ def card_info(card):
                 grant_kw=grant_keywords(card, type_line), **package_s_traits(card), **package_m_traits(card),
                 **package_m2_traits(card), **package_m3_traits(card, type_line),
                 **counter_traits(card), **walker_traits(card), **package_a_traits(card, type_line),
-                **b1_traits(card, type_line),
+                **b1_traits(card, type_line), **walker_card_traits(card, type_line, removal_spec(card)),
                 removal_points=(removal_info(card) or {}).get("points", 0.0),
                 creature_types=(tuple(t.lower() for t in type_line.split("—", 1)[1].split())
                                 if is_creature and "—" in type_line else ())), shown

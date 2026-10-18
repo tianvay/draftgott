@@ -43,7 +43,7 @@ class Creature:
     """Eine Kreatur auf dem Feld (Karte, Schritt des Eintritts, getappt, Schaden, Marken, Pump)."""
     __slots__ = ("card", "entered", "tapped", "damage", "bonus", "pump", "dead", "touched", "locked", "prepared",
                  "tpump", "extra", "lifted", "owner", "at_jace", "gy", "dealt", "finality", "ctl", "once", "stun", "gear",
-                 "tdraw", "auras", "exile_step")
+                 "tdraw", "auras", "exile_step", "at_pw", "lasting")
 
     def __init__(self, card, entered=0):
         self.card = card
@@ -71,6 +71,8 @@ class Creature:
         self.tdraw = 0        # bis Rundenende: zieht so viele Karten bei Kampfschaden am Spieler (Lyra, Tolarian)
         self.auras = []       # eigene Auras auf dieser Kreatur (Splinter Twin; Karten aus p.perms)
         self.exile_step = None  # Token-Kopie von Splinter Twin: wird im Endsegment dieses Schritts exiliert
+        self.at_pw = None     # greift in diesem Kampf diesen echten Planeswalker (Walker) an
+        self.lasting = []     # -P/-T bis zum naechsten Zug des Verursachers: (P, T, Verursacher, Schritt)
 
     @property
     def power(self):
@@ -79,11 +81,19 @@ class Creature:
             base += sum(1 for g in self.gy if any(getattr(g, _GY_TYPES[t], False) for t in self.card.gy_power))
         if self.card.domain_power and self.ctl is not None:
             base += len({t for land in self.ctl.lands for t in land.land_types} & BASIC_TYPES)
-        return base + self._threshold() + sum(g.equip[1] for g in self.gear)
+        return base + self._threshold() + sum(g.equip[1] for g in self.gear) + self._emblem(1) \
+            - sum(d[0] for d in self.lasting)
 
     @property
     def toughness(self):
-        return self.card.toughness + self.bonus + self.tpump + self._threshold() + sum(g.equip[2] for g in self.gear)
+        return self.card.toughness + self.bonus + self.tpump + self._threshold() + sum(g.equip[2] for g in self.gear) \
+            + self._emblem(2) - sum(d[1] for d in self.lasting)
+
+    def _emblem(self, i):
+        """Emblem "Creatures you control get +N/+N" (Ajani Resolute, 114.4)."""
+        if self.ctl is None:
+            return 0
+        return sum(em[i] for em in self.ctl.emblems if em[0] == "team")
 
     @property
     def dmg(self):
@@ -148,6 +158,7 @@ class Creature:
         c.once = dict(self.once)
         c.stun, c.gear, c.tdraw = self.stun, list(self.gear), self.tdraw
         c.auras, c.exile_step = list(self.auras), self.exile_step
+        c.at_pw, c.lasting = self.at_pw, list(self.lasting)
         return c
 
     def label(self):
@@ -189,7 +200,7 @@ def resolve_combat(pairs):
     Gibt {"player": Schaden am Verteidiger, "jace": Schaden am Jace-Token (Angreifer mit at_jace), "lifelink_attacker",
     "lifelink_defender", ...} zurueck."""
     out = {"player": 0, "jace": 0, "lifelink_attacker": 0, "lifelink_defender": 0, "to_player": {},
-           "lifelink_events_attacker": 0, "lifelink_events_defender": 0}
+           "lifelink_events_attacker": 0, "lifelink_events_defender": 0, "pw": {}}
     for first_step in (True, False):
         hits = []  # (Ziel-Kreatur, Schaden, Deathtouch)
         for att, blockers in pairs:
@@ -234,7 +245,10 @@ def resolve_combat(pairs):
 
 
 def _hit_player(out, att, amount):
-    if att.at_jace:
+    if att.at_pw is not None:  # 120.3c: Schaden an einem Planeswalker nimmt Loyalty
+        slot = out["pw"].setdefault(id(att.at_pw), [att.at_pw, 0])
+        slot[1] += amount
+    elif att.at_jace:
         out["jace"] += amount
     else:
         out["player"] += amount
@@ -270,6 +284,34 @@ def choose_jace_attackers(attackers, defender, blockers):
         if max_through(picked, blockers) >= need:
             return picked
     return []
+
+
+def choose_walker_attackers(attackers, defender, blockers):
+    """Echte Planeswalker des Verteidigers greifen wir immer an, mit so wenig Schaden wie noetig: je Planeswalker
+    (hoechster Manawert zuerst) der kleinste einzelne Angreifer, der ihn sicher toetet, sonst die schwaechsten, bis es
+    reicht; toetet ihn nicht einmal alles Uebrige, greift alles Uebrige ihn an. Nicht bei Lethal auf den Spieler.
+    Gibt [(Angreifer, Walker)] zurueck."""
+    walkers = [w for w in defender.walkers if w.loyalty > 0]
+    if not walkers or not attackers or max_through(attackers, blockers) >= defender.life:
+        return []
+    free, out = list(attackers), []
+    for w in sorted(walkers, key=lambda w: (-w.card.mv, -w.loyalty)):
+        if not free:
+            break
+        order = sorted(free, key=lambda a: (a.dmg, a.toughness, a.card.mv))
+        single = next((a for a in order if max_through([a], blockers) >= w.loyalty), None)
+        if single is not None:
+            picked = [single]
+        else:
+            picked = []
+            for a in order:
+                picked.append(a)
+                if max_through(picked, blockers) >= w.loyalty:
+                    break
+        for a in picked:
+            free.remove(a)
+            out.append((a, w))
+    return out
 
 
 def max_through(attackers, blockers):
@@ -377,6 +419,21 @@ def choose_blocks(attackers, defenders, life):
 # Spieler und Spiel
 # ---------------------------------------------------------------------------------------------------------------------
 
+class Walker:
+    """Ein echter Planeswalker auf dem Feld: kommt mit seiner aufgedruckten Loyalty (306.5b), eine Loyalty-Faehigkeit
+    pro Zug (606.3)."""
+    __slots__ = ("card", "entered", "loyalty", "used")
+
+    def __init__(self, card, entered=0):
+        self.card = card
+        self.entered = entered
+        self.loyalty = card.loyalty_start
+        self.used = False
+
+    def label(self):
+        return f"{self.card.name} (Loyalty {self.loyalty})"
+
+
 class Player:
     def __init__(self, name, cards, mulligan=True, min_hand=5, never_concede=False):
         self.name = name
@@ -417,6 +474,10 @@ class Player:
         self.trap_links = []  # Exil bis zum Verlassen (610.3): {"trap", "card", "owner", "creature"}
         self.lock_links = []  # Lock-Auras dieses Spielers: {"aura", "creature"}
         self.predrawn = Counter()  # Main Phase: Karten, deren "draw N" die Planung (resolve_draws) schon gezogen hat
+        self.walkers = []     # echte Planeswalker (Walker) auf dem Feld
+        self.emblems = []     # Embleme (114): ("team", P, T), ("cast_draw",), ("cast_damage", N)
+        self.attack_buff = None  # bis zum naechsten Zug: (P, T, Schritt) fuer Angriffe auf den Gegner (Garruk)
+        self.shield = None    # bis zum naechsten Zug: (-N, Schritt) fuer Angreifer auf uns (Jace, Reality Sculptor)
 
     def board(self):
         return [(c.card, c.entered) for c in self.creatures], [c.bonus for c in self.creatures], \
@@ -675,7 +736,8 @@ def has_target(card, caster, victim):
         return True
     if spec[0] in ("sweep", "sweep_damage", "edict"):
         return any(not c.dead for c in victim.creatures)
-    return choose_target(spec, caster, victim) is not None
+    target = choose_target(spec, caster, victim)
+    return target is not None or pw_target(card, caster, victim, target) is not None
 
 
 def _jace_add(p, n, e=None):
@@ -695,7 +757,12 @@ def _jace_add(p, n, e=None):
 def jace_died(p, e):
     """Der Jace-Token faellt auf 0 Loyalty und kommt in den Friedhof (704.5i), er stirbt also (700.4): Ausloeser
     "another creature or planeswalker you control dies" (Edgar, Ancient Bloodlord; Massacre Girl)."""
-    e["events"].append(f"{p.name}: Jace stirbt")
+    walker_died(p, "Jace", e)
+
+
+def walker_died(p, name, e):
+    """Ein Planeswalker von p stirbt (704.5i, 700.4): Ausloeser "another creature or planeswalker you control dies"."""
+    e["events"].append(f"{p.name}: {name} stirbt")
     for c in p.creatures:
         if c.dead:
             continue
@@ -808,20 +875,32 @@ def activate_walker(p, opp, step, e, opt):
         _jace_add(p, cost, e)
     p.jace.used = True
     e["events"].append(f"{p.name}: Jace {'+' if cost > 0 else ''}{cost} ({src}) (Loyalty {p.jace.loyalty})")
+    activation_tokens(p, step, e)
+    mana = _grant_atoms(p, opp, atoms, step, e, target, jace=True)
+    loyalty_triggers(p, cost, e)
+    _jace_zero(p, before, e)
+    return mana
+
+
+def _grant_atoms(p, opp, atoms, step, e, target, jace=False):
+    """Effekte der Jace-Faehigkeiten und der verliehenen Faehigkeiten (auch auf echten Planeswalkern). Gibt Mana
+    zurueck."""
     mana = []
     for a in atoms:
         kind = a[0]
         if kind == "surveil":
             binned = surveil(p.library, a[1], p.hand, p.lands)
             p.graveyard.extend(binned)
-            p.jace.surveils += 1
-            p.jace.surveil_lands += len(binned)
+            if jace:
+                p.jace.surveils += 1
+                p.jace.surveil_lands += len(binned)
             mark_surveil(p, e)
         elif kind == "draw":
             _draw(p, a[1])
-            p.jace.acts += 1
-            if p.jace.first is None:
-                p.jace.first = step
+            if jace:
+                p.jace.acts += 1
+                if p.jace.first is None:
+                    p.jace.first = step
         elif kind == "token":
             make_tokens(p, [(a[1], a[2])], step, e, opp, "Jace")
         elif kind == "sac_token":
@@ -847,18 +926,422 @@ def activate_walker(p, opp, step, e, opt):
                 pick.bonus += len(p.lands)
         elif kind == "mana":
             mana.append(a[1])
+    return mana
+
+
+def loyalty_triggers(p, cost, e):
+    """Ausloeser einer Loyalty-Aktivierung (Jace-Token oder echter Planeswalker): Gideon the Oathless, Way of the Mind
+    Sculptor (2+ Marken entfernt), Way of the Paradox."""
     if p.opponent is not None:  # Gideon the Oathless
         for g in p.opponent.creatures:
             if g.card.opp_loyalty_ping and not g.dead:
                 deal_noncombat(p.opponent, p, g.card.opp_loyalty_ping, e)
     for card in grant_sources(p):
-        if card.loyalty_draw and cost <= -2:  # Way of the Mind Sculptor
+        if card.loyalty_draw and cost != "X" and cost <= -2:  # Way of the Mind Sculptor
             _draw(p, card.loyalty_draw)
         if card.loyalty_paradox:  # Way of the Paradox
             gain_life(p, 1)
             p.extra_lands += 1
-    _jace_zero(p, before, e)
+
+
+def activation_tokens(p, step, e):
+    """"Whenever you activate a loyalty ability, create ..." (Ajani Unrelenting): der Ausloeser kommt ueber die
+    Faehigkeit und loest vorher auf (405.2)."""
+    for w in list(p.walkers):
+        if w.card.activation_tokens:
+            make_tokens(p, w.card.activation_tokens, step, e, p.opponent, w.card.name)
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Echte Planeswalker (L2)
+# ---------------------------------------------------------------------------------------------------------------------
+
+PW_DEFER = {"team_pump", "attack_buff"}  # erst nach den Zaubern aus Main 1, direkt vor dem Kampf
+
+
+def pw_abilities(p, w):
+    """Eigene Loyalty-Faehigkeiten und verliehene ("Planeswalkers you control have ...")."""
+    return list(w.card.pw_abilities) + [(cost, atoms) for card in grant_sources(p) for cost, atoms in card.walker_grants]
+
+
+def _x_cost(w, cost):
+    """-X: so viel wie moeglich, ohne dass der Planeswalker stirbt (X = Loyalty - 1)."""
+    return -(w.loyalty - 1) if cost == "X" else cost
+
+
+def _bounce_target(p, opp):
+    cands = [c for c in opp.creatures if not c.dead and not hexproof(c) and ward_ok(p, c)]
+    return max(cands, key=danger) if cands else None
+
+
+def _kill_target(p, opp, toughness_hit):
+    """Gefaehrlichste gegnerische Kreatur, die toughness_hit Schaden (bzw. -T) toetet."""
+    cands = [c for c in opp.creatures if not c.dead and not hexproof(c) and ward_ok(p, c)
+             and (c.toughness - c.damage <= toughness_hit or (c.touched and toughness_hit > 0))]
+    return max(cands, key=danger) if cands else None
+
+
+def _buffed_lethal(p, opp, step, pw, tw, kw):
+    """Waere der Angriff mit +pw/+tw und Schluesselwoertern fuer alle eigenen Kreaturen Lethal?"""
+    alive = [c for c in p.creatures if not c.dead]
+    saved = [(c.pump, c.tpump, set(c.extra)) for c in alive]
+    for c in alive:
+        c.pump += pw
+        c.tpump += tw
+        c.extra |= set(kw)
+    lethal = _attack_value(p, opp, step) >= opp.life
+    for c, (pu, tp, ex) in zip(alive, saved):
+        c.pump, c.tpump, c.extra = pu, tp, ex
+    return lethal
+
+
+def pw_rank(p, opp, w, cost, atoms, step, phase, pool=None, spells=None):
+    """(Rang, Gleichstand, Ziel) einer Loyalty-Faehigkeit eines echten Planeswalkers; Rang 0 = nicht nutzen.
+    8 Lethal, 7 Ultimate (Kosten -6 oder weniger) oder Emblem, 6 Removal, 5 grosses Token, 4 Ziehen, 3 kleines Token,
+    2 Plus mit Wert, 1 Plus ohne Wert. Verliehene Faehigkeiten wie beim Jace-Token (walker_rank, Lethal = 8)."""
+    kinds = {a[0] for a in atoms}
+    life = opp.life if opp is not None else 99
+    face = sum(a[1] for a in atoms if a[0] == "face")
+    if face and face >= life:
+        return 8, face, None
+    if any(a[0] == "emblem" for a in atoms) or (cost != "X" and cost <= -6):
+        cast_only = all(a[1] in ("cast_draw", "cast_damage") for a in atoms if a[0] == "emblem")             and any(a[0] == "emblem" for a in atoms)
+        if not (cast_only and not any(not c.is_land for c in p.hand)):  # Emblem beim Wirken: nur mit Zauber auf der Hand
+            return 7, 0, None
+        return 0, 0, None
+    if kinds & {"surveil", "draw", "token", "sac_token", "bolt", "face", "life", "counter_lands", "mana"} \
+            and atoms in [g[1] for card in grant_sources(p) for g in card.walker_grants]:
+        return _grant_rank(p, opp, cost, atoms, step, phase, pool, spells)
+    alive = [c for c in p.creatures if not c.dead]
+    theirs = [c for c in opp.creatures if not c.dead] if opp is not None else []
+    if "team_pump" in kinds:
+        pw_, tw = next(a[1:3] for a in atoms if a[0] == "team_pump")
+        kw = next(a[3] for a in atoms if a[0] == "team_pump")
+        if alive and _buffed_lethal(p, opp, step, pw_, tw, kw):
+            return 8, 0, None
+        return (2, 0, None) if any(not c.tapped for c in alive) else (1, 0, None)
+    if "attack_buff" in kinds:
+        pw_, tw = next(a[1:3] for a in atoms if a[0] == "attack_buff")
+        return (8, 0, None) if alive and _buffed_lethal(p, opp, step, pw_, tw, ("trample",)) else (0, 0, None)
+    if "bounce" in kinds:
+        t = _bounce_target(p, opp)
+        return (6,) + (danger(t), t) if t is not None else (0, 0, None)
+    if "bolt_creature" in kinds:
+        n = next(a[1] for a in atoms if a[0] == "bolt_creature")
+        t = _kill_target(p, opp, n)
+        return (6, danger(t), t) if t is not None else (0, 0, None)
+    if "lasting_debuff" in kinds:
+        _pw, tw = next(a[1:3] for a in atoms if a[0] == "lasting_debuff")
+        t = _kill_target(p, opp, tw)
+        if t is not None:
+            return 6, danger(t), t
+        cands = [c for c in theirs if not hexproof(c) and ward_ok(p, c) and c.power > 0]
+        return (2, 0, max(cands, key=danger)) if cands else (1, 0, None)
+    if "stun_x" in kinds:
+        cands = [c for c in theirs if not hexproof(c) and ward_ok(p, c)]
+        t = max(cands, key=danger) if cands else None
+        if t is None or w.loyalty < 2:
+            return 0, 0, None
+        return (6, danger(t), t) if t.dmg >= 3 and w.loyalty >= 3 else (2, 0, t)
+    if "sweep_except_tokens" in kinds:
+        n = next(a[1] for a in atoms if a[0] == "sweep_except_tokens")
+        dead_theirs = sum(c.card.mv + c.power for c in theirs if c.toughness - c.damage <= n)
+        dead_ours = sum(c.card.mv + c.power for c in alive if not c.card.is_token and c.toughness - c.damage <= n)
+        return (6, dead_theirs - dead_ours, None) if dead_theirs > dead_ours else (0, 0, None)
+    if "edict_both" in kinds:
+        if not theirs:
+            return 0, 0, None
+        if not alive or min(_value(c) for c in alive) <= min(_value(c) for c in theirs):
+            return 6, 0, None
+        return 0, 0, None
+    if "token" in kinds:
+        tok = next(a for a in atoms if a[0] == "token")
+        stats = tok[1] * (tok[2].power + tok[2].toughness)
+        return (5, stats, None) if stats >= 8 else (3, stats, None)
+    if "draw" in kinds:
+        return 4, next(a[1] for a in atoms if a[0] == "draw"), None
+    if "opp_discard" in kinds:
+        return (4, 0, None) if opp is not None and opp.hand else (0, 0, None)
+    if "wheel_creatures" in kinds:
+        n = len(alive) + sum(k for x in p.walkers for k, _t in x.card.activation_tokens)
+        return (4, n - len(p.hand), None) if n > len(p.hand) else (0, 0, None)
+    if "mana" in kinds:
+        if phase == "main1" and pool is not None and spells is not None:
+            extra = [a[1] for a in atoms if a[0] == "mana"]
+            if best_cast_reduced(spells, land_key(pool + extra), True, True)[0] > \
+                    best_cast_reduced(spells, land_key(pool), True, True)[0]:
+                return 2, 3, None
+        return (1, 0, None) if cost != "X" and cost >= 0 else (0, 0, None)
+    if "face" in kinds:
+        return 2, face, None
+    if "surveil" in kinds:
+        return (2, 0, None) if p.library else (1, 0, None)
+    if "empower_islands" in kinds:
+        n = sum("island" in land.land_types for land in p.lands)
+        return (2, n, None) if n else (1, 0, None)
+    if "shield" in kinds:
+        return (2, 0, None) if sum(c.dmg for c in theirs) >= 3 else (0, 0, None)
+    return (1, 0, None) if cost != "X" and cost >= 0 else (0, 0, None)
+
+
+def _grant_rank(p, opp, cost, atoms, step, phase, pool, spells):
+    """Verliehene Faehigkeit auf einem echten Planeswalker: Bewertung wie beim Jace-Token (walker_options)."""
+    kinds = {a[0] for a in atoms}
+    alive_opp = [c for c in opp.creatures if not c.dead] if opp is not None else []
+    rank, tie = walker_rank(atoms, opp.life if opp is not None else 99, len(p.lands),
+                            any(not c.dead for c in p.creatures), tokens=True)
+    target = None
+    if "bolt" in kinds and opp is not None:
+        cdmg = next(a[1] for a in atoms if a[0] == "bolt")
+        t = _kill_target(p, opp, cdmg)
+        if rank < 7 and t is not None and t is max(alive_opp, key=danger):
+            rank, target = 6, t
+        elif rank == 7:
+            target = t
+    if "sac_token" in kinds:
+        small = [c for c in p.creatures if not c.dead and c.power + c.toughness < 8]
+        if not small:
+            return 0, 0, None
+        target = min(small, key=lambda c: (not c.card.is_token, c.power + c.toughness, c.card.mv))
+        rank, tie = 5, 8
+    if "mana" in kinds:
+        if phase != "main1" or pool is None or spells is None:
+            return (1, 0, None) if cost >= 0 else (0, 0, None)
+        extra = [a[1] for a in atoms if a[0] == "mana"]
+        if not best_cast_reduced(spells, land_key(pool + extra), True, True)[0] > \
+                best_cast_reduced(spells, land_key(pool), True, True)[0]:
+            return (1, 0, None) if cost >= 0 else (0, 0, None)
+        rank, tie = 2, 3
+    if rank == 7:
+        rank = 8
+    if rank <= 0 and cost >= 0:
+        rank = 1
+    return rank, tie, target
+
+
+def pw_options(p, opp, w, step, phase, pool=None, spells=None):
+    """Bewertete Faehigkeiten eines Planeswalkers, beste zuerst: (Rang, Gleichstand, Kosten, Effekte, Ziel).
+    606.6: Minus-Kosten nur mit genug Loyalty; eine Minus-Faehigkeit, die ihn auf 0 bringt, nur fuer Lethal, Ultimate
+    oder Removal (mit Sanctum Lurker stirbt er bei 0 nicht)."""
+    if w.used or w not in p.walkers:
+        return []
+    no_death = any(c.walker_no_death for c in grant_sources(p))
+    opts = []
+    for cost, atoms in pw_abilities(p, w):
+        real = _x_cost(w, cost)
+        if real < 0 and w.loyalty < -real or (cost == "X" and real >= 0):
+            continue
+        rank, tie, target = pw_rank(p, opp, w, cost, atoms, step, phase, pool, spells)
+        if rank <= 0:
+            continue
+        if w.loyalty + real <= 0 and rank < 6 and not no_death:
+            continue
+        opts.append((rank, (tie if isinstance(tie, tuple) else (tie,), real), cost, atoms, target))
+    return sorted(opts, key=lambda o: (o[0], o[1]), reverse=True)
+
+
+def pw_loyalty(p, w, n, e=None):
+    """Loyalty-Marken auf einen echten Planeswalker; Inspired Tethermage bekommt ihre Marke."""
+    if n <= 0:
+        return
+    w.loyalty += n
+    for c in p.creatures:
+        if c.card.loyalty_counter and not c.dead:
+            c.bonus += c.card.loyalty_counter
+    if e is not None:
+        e["events"].append(f"{p.name}: {w.card.name} +{n} (Loyalty {w.loyalty})")
+
+
+def activate_pw(p, opp, w, ability, step, e, target=None):
+    """Fuehrt eine Loyalty-Faehigkeit eines echten Planeswalkers aus (Kosten zuerst, 606.4). Gibt Mana zurueck."""
+    cost, atoms = ability
+    real = _x_cost(w, cost)
+    if target is None:
+        target = pw_rank(p, opp, w, cost, atoms, step, "after")[2]
+    if real > 0:
+        pw_loyalty(p, w, real)
+    else:
+        w.loyalty += real
+    w.used = True
+    e["events"].append(f"{p.name}: {w.card.name} {'+' if real > 0 else ''}{real} (Loyalty {w.loyalty})")
+    activation_tokens(p, step, e)
+    alive_opp = (lambda: [c for c in opp.creatures if not c.dead]) if opp is not None else (lambda: [])
+    if atoms in [g[1] for card in grant_sources(p) for g in card.walker_grants]:
+        mana = _grant_atoms(p, opp, atoms, step, e, target)
+        loyalty_triggers(p, real, e)
+        bury((p, opp) if opp is not None else (p,), e)
+        return mana
+    mana = []
+    for a in atoms:
+        kind = a[0]
+        if kind == "token":
+            make_tokens(p, [(a[1], a[2])], step, e, opp, w.card.name)
+        elif kind == "bounce":
+            if target is not None and target in alive_opp():
+                pay_ward(p, target, e)
+                opp.creatures.remove(target)
+                if not target.card.is_token:
+                    (target.owner or opp).hand.append(target.card)
+                _leave(opp, target.card)
+                check_auras(opp, e)
+                e["events"].append(f"{p.name}: {w.card.name} – {target.label()} zurück auf die Hand")
+        elif kind == "draw":
+            _draw(p, a[1])
+        elif kind == "counters_hand":
+            for c in p.creatures:
+                if not c.dead:
+                    c.bonus += len(p.hand)
+        elif kind == "attack_buff":
+            p.attack_buff = (a[1], a[2], step)
+        elif kind == "lasting_debuff":
+            if target is not None and target in alive_opp():
+                pay_ward(p, target, e)
+                target.lasting.append((a[1], a[2], p, step))
+                e["events"].append(f"{p.name}: {w.card.name} – {target.card.name} -{a[1]}/-{a[2]}")
+        elif kind == "edict_both":
+            mine = [c for c in p.creatures if not c.dead]
+            theirs = alive_opp()
+            if mine:
+                min(mine, key=_value).dead = True
+            if theirs:
+                min(theirs, key=_value).dead = True
+            bury((p, opp), e)
+            if mine:
+                make_tokens(p, [(1, a[1])], step, e, opp, w.card.name)
+        elif kind == "opp_discard":
+            if opp is not None:
+                before = [c for c in opp.hand]
+                discard(opp, a[1], e)
+                gone = [c for c in before if c not in opp.hand]
+                if sum(not c.is_land for c in gone) < 2:
+                    _draw(p)
+        elif kind == "life":
+            gain_life(p, a[1])
+        elif kind == "emblem":
+            p.emblems.append(a[1:])
+            e["events"].append(f"{p.name}: Emblem von {w.card.name}")
+        elif kind == "team_pump":
+            for c in p.creatures:
+                if not c.dead:
+                    c.pump += a[1]
+                    c.tpump += a[2]
+                    c.extra |= set(a[3])
+        elif kind == "wheel_creatures":
+            n = sum(1 for c in p.creatures if not c.dead)
+            p.graveyard.extend(p.hand)
+            had = bool(p.hand)
+            p.hand.clear()
+            if had:
+                discarded(p, e)
+            _draw(p, n)
+        elif kind == "sweep_except_tokens":
+            for c in p.creatures + (opp.creatures if opp is not None else []):
+                if c.dead or (c in p.creatures and c.card.is_token):
+                    continue
+                c.damage += a[1]
+            e["events"].append(f"{p.name}: {w.card.name} – {a[1]} Schaden an jeder Kreatur außer eigenen Token")
+        elif kind == "surveil":
+            surveil_cards(p, [a[1]], e, w.card.name)
+        elif kind == "mana":
+            mana.append(a[1])
+        elif kind == "stun_x":
+            if target is not None and target in alive_opp():
+                pay_ward(p, target, e)
+                target.tapped = True
+                target.stun += -real
+                e["events"].append(f"{p.name}: {w.card.name} – {target.card.name} getappt, {-real} Stun-Marken")
+        elif kind == "mill_top":
+            if p.library:
+                top = p.library.pop(0)
+                e["events"].append(f"{p.name}: {w.card.name} exiliert {top.name}")
+        elif kind == "face":
+            deal_noncombat(p, opp, a[1], e)
+        elif kind == "bolt_creature":
+            if target is not None and target in alive_opp():
+                pay_ward(p, target, e)
+                target.damage += a[1]
+        elif kind == "empower_islands":
+            _jace_add(p, sum("island" in land.land_types for land in p.lands), e)
+        elif kind == "shield":
+            p.shield = (a[1], step)
+    loyalty_triggers(p, real, e)
+    bury((p, opp) if opp is not None else (p,), e)
     return mana
+
+
+def pw_phase(p, opp, step, e, phase, pool=None, spells=None):
+    """Loyalty-Faehigkeiten echter Planeswalker: "main1" (vor den Zaubern, ausser Pumps fuer den Kampf), "combat"
+    (nach den Zaubern aus Main 1, auch frisch gewirkte), "after" (nach Main 2). Gibt Mana zurueck."""
+    mana = []
+    for w in list(p.walkers):
+        opts = pw_options(p, opp, w, step, phase, pool, spells)
+        if not opts:
+            continue
+        best = opts[0]
+        if phase == "main1" and {a[0] for a in best[3]} & PW_DEFER:
+            continue
+        mana += activate_pw(p, opp, w, (best[2], best[3]), step, e, best[4])
+        if opp is not None and opp.life <= 0:
+            break
+    return mana
+
+
+def walker_check(p, e):
+    """704.5i: ein Planeswalker mit 0 Loyalty kommt in den Friedhof (mit Sanctum Lurker nicht)."""
+    if not p.walkers or any(c.walker_no_death for c in grant_sources(p)):
+        return
+    for w in list(p.walkers):
+        if w.loyalty <= 0:
+            w.loyalty = 0
+            p.walkers.remove(w)
+            if not w.card.is_token:
+                p.graveyard.append(w.card)
+            walker_died(p, w.card.name, e)
+
+
+def pw_target(card, caster, victim, creature_target):
+    """Removal "creature or planeswalker": ein echter Planeswalker, wenn es ihn toetet und der Gegner keine Kreatur mit
+    Power 4+ hat (hoechster Manawert zuerst); der Jace-Token nur ab 5 Loyalty und ohne Kreatur als Ziel. Gibt einen
+    Walker, "jace" oder None zurueck."""
+    spec = card.removal
+    if not card.hits_walkers or not spec or spec[0] not in ("destroy", "damage"):
+        return None
+    amount = _amount(spec, caster)
+    kill = [w for w in victim.walkers if w.loyalty > 0 and (spec[0] == "destroy" or amount >= w.loyalty)]
+    if kill and not any(c.power >= 4 for c in victim.creatures if not c.dead):
+        return max(kill, key=lambda w: (w.card.mv, w.loyalty))
+    if creature_target is None and jace_present(victim) and victim.jace.loyalty >= 5:
+        return "jace"
+    return None
+
+
+def hit_walker(caster, victim, card, target, e):
+    """Removal trifft einen Planeswalker: Zerstoeren oder Schaden (120.3c)."""
+    spec = card.removal
+    if target == "jace":
+        before = victim.jace.loyalty
+        victim.jace.loyalty = 0 if spec[0] == "destroy" else max(0, before - _amount(spec, caster))
+        e["events"].append(f"{caster.name}: {card.name} trifft Jace von {victim.name} (Loyalty {victim.jace.loyalty})")
+        _jace_zero(victim, before, e)
+        return
+    if spec[0] == "destroy":
+        target.loyalty = 0
+    else:
+        target.loyalty = max(0, target.loyalty - _amount(spec, caster))
+    e["events"].append(f"{caster.name}: {card.name} trifft {target.card.name} von {victim.name} "
+                       f"(Loyalty {target.loyalty})")
+    bury((caster, victim), e)
+
+
+def expire_until_next_turn(p, step):
+    """Zu Beginn des eigenen Zugs enden "until your next turn"-Effekte von p (611.2b)."""
+    if p.attack_buff is not None and step > p.attack_buff[2]:
+        p.attack_buff = None
+    if p.shield is not None and step > p.shield[1]:
+        p.shield = None
+    if p.opponent is not None:
+        for c in p.opponent.creatures:
+            c.lasting = [d for d in c.lasting if d[2] is not p or step <= d[3]]
 
 
 def walker_phase(p, opp, step, e, phase, pool=None, spells=None):
@@ -883,6 +1366,7 @@ def walker_phase(p, opp, step, e, phase, pool=None, spells=None):
 def _jace_activate(p, step, e, allow_surveil):
     loyalty, lands = p.jace.loyalty, p.jace.surveil_lands
     if p.jace.try_activate(p.hand, p.library, step, battlefield=p.lands, allow_surveil=allow_surveil):
+        activation_tokens(p, step, e)
         if p.opponent is not None:  # Gideon the Oathless: Schaden fuer jede Loyalty-Aktivierung
             for g in p.opponent.creatures:
                 if g.card.opp_loyalty_ping and not g.dead:
@@ -956,6 +1440,8 @@ def gain_life(p, n, events=1):
         loyalty = sum(c.lifegain_loyalty for c in p.perms) + sum(c.card.lifegain_loyalty for c in p.creatures)
         if loyalty and jace_present(p):  # Way of the Mentor: nur auf einen vorhandenen Jace
             _jace_add(p, loyalty)
+        for w in list(p.walkers):  # Way of the Mentor auf jeden Planeswalker, Ajani Resolute auf sich selbst
+            pw_loyalty(p, w, loyalty + ("lifegain_loyalty" in w.card.pw_static))
 
 
 def combat_life(att, dfn, res):
@@ -1003,9 +1489,30 @@ def mark_surveil(p, e=None, events=1):
                 e["events"].append(f"{p.name}: {card.name} zahlt {{{card.surveil_pay}}}: Marke und eine Karte")
 
 
+def emblem_cast(p, step, e):
+    """Embleme "whenever you cast a spell": eine Karte ziehen (Chandra, Chill of Compliance) bzw. 5 Schaden an ein
+    beliebiges Ziel (Chandra, Torch of Defiance): Lethal an den Gegner, sonst die gefaehrlichste Kreatur, die stirbt,
+    sonst an den Gegner."""
+    opp = p.opponent
+    for em in list(p.emblems):
+        if em[0] == "cast_draw":
+            _draw(p)
+        elif em[0] == "cast_damage" and opp is not None:
+            n = em[1]
+            t = None if opp.life <= n else _kill_target(p, opp, n)
+            if t is None:
+                deal_noncombat(p, opp, n, e)
+            else:
+                t.damage += n
+                e["events"].append(f"{p.name}: Emblem – {n} Schaden an {t.card.name}")
+                bury((p, opp), e)
+
+
 def on_cast(p, card, step, e):
     """Ein Zauber wurde gewirkt: Jace-Ausloeser, Marken fuer Zauber mit Ziel beim Gegner (Danitha)."""
     _jace_on_cast(p, card, step, e)
+    if p.emblems:
+        emblem_cast(p, step, e)
     if not card.is_creature:
         p.noncreature_cast = True
         for c in p.creatures:
@@ -1148,6 +1655,11 @@ def creature_enters(p, new, step, e, opp=None, cast=True):
     for c in alive:
         if c is not new and c.card.ally_enter_life:
             gain_life(p, c.card.ally_enter_life)
+    if new.power >= 4 and not new.dead:  # Garruk, Curse Breaker
+        for w in p.walkers:
+            if "big_enter_draw" in w.card.pw_static:
+                _draw(p)
+                e["events"].append(f"{p.name}: {w.card.name} – zieht für {new.card.name}")
     for c in alive:
         if c.card.enter_counter:
             fresh = [x for x in alive if x.entered == step]
@@ -1214,7 +1726,7 @@ def _leave(p, card):
 
 def walker_flags(p):
     """(Planeswalker auf dem Feld, Jace auf dem Feld) fuer Laender wie im Goldfish."""
-    walkers = [c for c in p.perms if c.is_planeswalker]
+    walkers = [c for c in p.perms if c.is_planeswalker] + [w.card for w in p.walkers]
     return jace_present(p) or bool(walkers), jace_present(p) or any(c.is_jace for c in walkers)
 
 
@@ -1274,6 +1786,17 @@ def legend_rule(p, e):
                 if c is not keep:
                     c.dead = True
                     e["events"].append(f"{p.name}: Legend-Regel – {c.card.name} in den Friedhof")
+    names = {}
+    for w in p.walkers:
+        names.setdefault(w.card.name, []).append(w)
+    for same in names.values():
+        if len(same) > 1:
+            keep = max(same, key=lambda w: (w.loyalty, -w.entered))
+            for w in same:
+                if w is not keep:
+                    p.walkers.remove(w)
+                    p.graveyard.append(w.card)
+                    e["events"].append(f"{p.name}: Legend-Regel – {w.card.name} in den Friedhof")
     seen = set()
     for card in list(p.perms):
         if card.legendary:
@@ -1290,7 +1813,7 @@ def legend_ok(p, card):
     if not card.legendary or card.is_instant_sorcery:
         return True
     return not (any(c.card.name == card.name and not c.dead for c in p.creatures)
-                or any(c.name == card.name for c in p.perms))
+                or any(c.name == card.name for c in p.perms) or any(w.card.name == card.name for w in p.walkers))
 
 
 def bury(players, e):
@@ -1327,12 +1850,15 @@ def bury(players, e):
         if ping == "loyalty":
             if jace_present(p):
                 _jace_add(p, extra, e)
+            for w in p.walkers:  # "each planeswalker you control"
+                pw_loyalty(p, w, extra, e)
             continue
         dmg, life = ping
         deal_noncombat(p, p.opponent, dmg, e)
         gain_life(p, life + extra)
     for p in players:
         check_auras(p, e)
+        walker_check(p, e)
         if p.jace.zero_alive and p.jace.loyalty <= 0 and not any(c.walker_no_death for c in grant_sources(p)):
             p.jace.zero_alive = False
             jace_died(p, e)
@@ -1713,6 +2239,11 @@ def cast_removal(card, caster, victim, e, step, target=None):
         return
     if target is None:
         target = choose_target(spec, caster, victim)
+        lethal_face = kind == "damage" and any_target and victim.life <= amount
+        pw = None if lethal_face else pw_target(card, caster, victim, target)
+        if pw is not None:
+            hit_walker(caster, victim, card, pw, e)
+            return
     if kind == "damage" and any_target and (target is None or victim.life <= amount):
         deal_noncombat(caster, victim, amount, e)
         e["events"].append(f"{caster.name}: {card.name} – {amount} Schaden an {victim.name}")
@@ -1936,6 +2467,8 @@ def _resolve(me, opp, card, step, entry, owner=None, to_exile=False, modes=None)
     elif card.is_instant_sorcery:
         if not to_exile:  # Flashback: danach ins Exil
             (owner or me).graveyard.append(card)
+    elif card.is_planeswalker and card.loyalty_start > 0:
+        me.walkers.append(Walker(card, step))
     else:
         me.perms.append(card)
     on_cast(me, card, step, entry)
@@ -1994,7 +2527,11 @@ def choose_modes(p, opp, card, step, end_step=False):
 
 
 def permanent_enters(p, opp, card, step, e):
-    """Ein Nichtkreatur-Permanent kam ins Spiel: Jace-Ausloeser und Betreten-Effekte."""
+    """Ein Nichtkreatur-Permanent kam ins Spiel: Jace-Ausloeser und Betreten-Effekte. Ein echter Planeswalker hat keine
+    Betreten-Effekte (seine Texte sind Loyalty-Faehigkeiten und Ausloeser)."""
+    if card.is_planeswalker and card.loyalty_start > 0:
+        _jace_on_enter(p, card, step, e)
+        return
     if card.twin:
         attach_twin(p, opp, card, e)
     _jace_etb(p, card, step, e)
@@ -3266,6 +3803,9 @@ def take_turn(me, opp, step, rnd, skip_draw):
         p_.direct_mark, p_.deaths_mark = p_.dealt_direct, p_.deaths
     me.opponent, opp.opponent = opp, me
     me.now = opp.now = step
+    expire_until_next_turn(me, step)
+    for w in me.walkers:
+        w.used = False
     for c in me.creatures:  # Untap (gesperrte Kreaturen bleiben gesperrt; Stun-Marke statt Enttappen, 122.1g)
         if c.stun and c.tapped:
             c.stun -= 1
@@ -3281,6 +3821,10 @@ def take_turn(me, opp, step, rnd, skip_draw):
         me.hand.append(card)
         me.drawn += 1
         e["drew"] = card.name
+        for w in opp.walkers:  # The Theorist: zu Beginn des Draw Steps des Gegners
+            if "opp_draw" in w.card.pw_static:
+                _draw(opp)
+                e["events"].append(f"{opp.name}: {w.card.name} – zieht eine Karte")
     jace_turn_start(me, step, e)
     disc, orig = discount(me), {}  # Kostensenkung, Steuer, Zusatzkosten: angepasste Handkarten fuer die Main Phase
     for i, c in enumerate(me.hand):
@@ -3366,6 +3910,12 @@ def take_turn(me, opp, step, rnd, skip_draw):
         if mana:
             pool_all = pool_all + mana
             spells = phase_spells()
+        if opp.life <= 0:
+            return e
+    if me.walkers:  # L2: echte Planeswalker vor dem Zaubern (Removal, Ziehen, Mana, ...)
+        mana = pw_phase(me, opp, step, e, "main1", pool_all, spells)
+        pool_all = pool_all + mana
+        spells = phase_spells()
         if opp.life <= 0:
             return e
     ward_of = {}  # Ward-Kosten wie Zusatzkosten einplanen (702.21)
@@ -3511,6 +4061,10 @@ def take_turn(me, opp, step, rnd, skip_draw):
     e["main1"] = [c.name for c in main1]
     if opp.life <= 0:
         return e
+    if me.walkers:  # auch frisch gewirkte Planeswalker, Pumps fuer den Kampf
+        pw_phase(me, opp, step, e, "combat")
+        if opp.life <= 0:
+            return e
     # Removal-Instants vor dem Angriff: Blocker entfernen, die einen unserer Angreifer fressen wuerden
     candidates = [c for c in me.creatures if can_attack(c, step)]
     for card, alts, rc, is_spell, zone in sorted(instant_removals(me), key=lambda o: o[0].mv):
@@ -3546,9 +4100,24 @@ def take_turn(me, opp, step, rnd, skip_draw):
             if ef[1] == "trigger" and ef[3] == "attack" and any(pc == a.card for pc, _t in me.jace_perms):
                 n = sum(1 for c in me.creatures if not c.dead) if ef[7] else ef[2]  # X = eigene Kreaturen
                 _jace_add(me, n, e)
-    for a in choose_jace_attackers(attackers, opp, [b for b in opp.creatures if not b.tapped and not b.dead]):
+    free_blockers = [b for b in opp.creatures if not b.tapped and not b.dead]
+    at_pw = choose_walker_attackers(attackers, opp, free_blockers)
+    for a, w in at_pw:
+        a.at_pw = w
+    rest = [a for a in attackers if a.at_pw is None]
+    for a in choose_jace_attackers(rest, opp, free_blockers) if rest else ():
         a.at_jace = True
-    if attackers and me.jace.used and any(c.card.kiora_attack and not c.dead for c in me.creatures):
+    if me.attack_buff is not None:  # Garruk: Angreifer auf den Gegner +P/+T und Trample bis Rundenende
+        pw_, tw, _s = me.attack_buff
+        for a in attackers:
+            if a.at_pw is None and not a.at_jace:
+                a.pump += pw_
+                a.tpump += tw
+                a.extra.add("trample")
+    if opp.shield is not None:  # Jace, Reality Sculptor: jeder Angreifer -N/-0
+        for a in attackers:
+            a.pump -= opp.shield[0]
+    if attackers and (me.jace.used or any(w.used for w in me.walkers)) and any(c.card.kiora_attack and not c.dead for c in me.creatures):
         pick = max(attackers, key=danger)  # Kiora: enttappt und unblockbar
         pick.tapped = False
         pick.extra.add("unblockable")
@@ -3590,6 +4159,9 @@ def take_turn(me, opp, step, rnd, skip_draw):
         e["events"].append(f"{me.name}: {res['jace']} Schaden an Jace von {opp.name} (Loyalty {opp.jace.loyalty})")
         if alive_before and opp.jace.loyalty == 0:
             _jace_zero(opp, 1, e)
+    for w, n in res["pw"].values():  # 120.3c
+        w.loyalty = max(0, w.loyalty - n)
+        e["events"].append(f"{me.name}: {n} Schaden an {w.card.name} von {opp.name} (Loyalty {w.loyalty})")
     opp.life -= res["player"]
     me.dealt_combat += res["player"]
     combat_life(me, opp, res)
@@ -3605,7 +4177,8 @@ def take_turn(me, opp, step, rnd, skip_draw):
                 me.graveyard.remove(pick)
                 put_back(me, pick, "hand", step, e)
     e["attacks"] = [{"attacker": lab, "blockers": blabs, "attacker_dies": a.dead, "blockers_die": [b.dead for b in bs],
-                     "jace": a.at_jace} for (lab, blabs), (a, bs) in zip(before, blocks)]
+                     "jace": a.at_jace, "walker": a.at_pw.card.name if a.at_pw is not None else None}
+                    for (lab, blabs), (a, bs) in zip(before, blocks)]
     bury((me, opp), e)
     if opp.life <= 0:
         return e
@@ -3614,6 +4187,8 @@ def take_turn(me, opp, step, rnd, skip_draw):
         resolve(c)
     e["main2"] = [c.name for c in main2]
     lasting_abilities(me, opp, step, e, own_turn=True, mode="free")  # z. B. Grim Repriser nach dem Angriffs-Schaden
+    if me.walkers:
+        pw_phase(me, opp, step, e, "after")
     if walker_engine(me):
         walker_phase(me, opp, step, e, "after")
     else:
@@ -3669,6 +4244,7 @@ def cleanup(players):
     for p in players:
         for c in p.creatures:
             c.damage, c.pump, c.tpump, c.touched, c.lifted, c.at_jace = 0, 0, 0, False, False, False
+            c.at_pw = None
             c.extra = set()
             c.tdraw = 0
         p.surveilled = False
