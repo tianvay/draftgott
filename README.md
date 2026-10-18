@@ -377,6 +377,9 @@ Diese Werte stehen im Skript und lassen sich nur dort ändern.
   legendärer Kreatur); Traxos wird billiger, wenn in derselben Runde ein Nichtkreatur-Zauber gewirkt wird. Gesenkt wird
   nur generisches Mana, der Manawert bleibt gleich (601.2f); die Curve-Auslastung zählt das tatsächlich bezahlte Mana.
   Im Kampfmodell gilt dieselbe Rechnung.
+- **Heartwood, Haste für alle, Threshold-Zauber:** Heartwood-Token liefern ab der nächsten Runde Mana; Samut
+  gibt allen Kreaturen Haste (Gallia denen mit Marke); Zauber wie Proft, Sinister Mastermind erst ab 7
+  Karten im Friedhof.
 - **Verliehene Loyalty-Fähigkeiten:** Way of the …, Sanctum Lurker, Kiora und Avatar geben dem Jace-Token
   weitere Fähigkeiten; gewählt wird wie im Kampfmodell, im Goldfish ohne Token (Schaden, Ziehen, Surveil,
   Mana, Marken, weiterer Landdrop).

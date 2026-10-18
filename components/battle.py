@@ -22,6 +22,7 @@ from components.mulligan import deal_opening
 from components.jace import (JaceState, cast_filter_matches, enter_filter_matches, once_effects,
                              recurring_effects, surveil)
 from components.simulation import walker_rank
+from components.cards import HEARTWOOD
 from components.simulation import (ANY_COLOR, apply_effects, apply_surveils, best_cast_reduced, choose_land,
                                    cost_reduction, do_cycle, enter_value, enters_prepared, hand_form,
                                    landfall_effects, pay_subsets,
@@ -114,12 +115,20 @@ class Creature:
             return True
         if keyword in card.noncombat_kw and p.dealt_direct > p.direct_mark:
             return True
+        if any(keyword in card.team_kw_all for card in p.perms):  # Ajani's Anguish
+            return True
         for c in p.creatures:
             if c.dead:
                 continue
             other = c.card
+            if keyword in other.team_kw_all:  # Samut: "Creatures you control have haste" (auch sie selbst)
+                return True
             if c is not self and keyword in other.team_kw:
                 return True
+            if keyword == "unblockable" and other.small_unblockable and (self.power <= 1 or self.toughness <= 1):
+                return True  # Tetsuko Umezawa, Fugitive
+            if keyword == "haste" and other.counter_haste and c is not self and self.bonus > 0:
+                return True  # Gallia
             if keyword == "haste" and other.type_haste and other.type_haste in card.creature_types:
                 return True
             if keyword == "vigilance" and other.counter_vigilance and self.bonus > 0:
@@ -422,7 +431,7 @@ def _mana(me, step):
     pool = [land.land_colors for land in me.lands]
     pool += [u for card in me.perms for u in card.mana_src]
     creature_units = [(u, i) for i, c in enumerate(me.creatures)
-                      if c.card.mana_src and not c.tapped and (c.entered < step or c.card.haste)
+                      if c.card.mana_src and not c.tapped and (c.entered < step or c.card.haste or c.has("haste"))
                       for u in c.card.mana_src]
     return pool, creature_units
 
@@ -599,6 +608,7 @@ def pay_ward(caster, c, e):
         caster.hand.remove(gone)
         caster.graveyard.append(gone)
         e["events"].append(f"{caster.name}: wirft {gone.name} ab (Ward von {c.card.name})")
+        discarded(caster, e)
         return True
     n = w[1]
     use = min(n, caster.ward_budget)
@@ -913,6 +923,11 @@ def deal_noncombat(src, victim, amount, e):
     for c in src.creatures:
         if c.card.noncombat_counter and not c.dead:
             c.bonus += c.card.noncombat_counter
+    team = sum(c.card.noncombat_team_pump for c in src.creatures if not c.dead)
+    if team:  # Master of Barbs
+        for c in src.creatures:
+            if not c.dead:
+                c.pump += team
 
 
 def gain_life(p, n, events=1):
@@ -961,6 +976,13 @@ def mark_surveil(p, e=None, events=1):
         card = c.card
         if c.dead:
             continue
+        if card.surveil_counter_all:  # Denzilore Fatehold: bei jedem Surveil
+            for x in p.creatures:
+                if not x.dead:
+                    x.bonus += card.surveil_counter_all * events
+        if card.surveil_self_pump:  # Diviner of Victory
+            c.pump += card.surveil_self_pump[0] * events
+            c.tpump += card.surveil_self_pump[1] * events
         if card.surveil_team_pump and c.once.get("surveil_pump") != p.now:
             c.once["surveil_pump"] = p.now
             for x in p.creatures:
@@ -1113,6 +1135,9 @@ def creature_enters(p, new, step, e, opp=None, cast=True):
             c.tapped = False
         if c.card.ally_enter_pump:  # Arni, Renowned Champion
             c.pump += max(0, new.power)
+    for c in alive:  # Proctor of Potential: sie oder eine andere eigene Kreatur kommt ins Spiel
+        if c.card.enter_surveil:
+            surveil_cards(p, [c.card.enter_surveil], e, c.card.name)
     other = opp if opp is not None else p.opponent
     if other is not None:  # Gideon the Oathless: Schaden, wenn bei uns eine Kreatur ins Spiel kommt
         for g in other.creatures:
@@ -1291,6 +1316,8 @@ def bury(players, e):
                 p.creatures.remove(c)
                 if not c.card.is_token and not c.finality:
                     (c.owner or p).graveyard.append(c.card)
+                if c.card.death_heartwood:  # Aerid Konstrari
+                    p.perms += [HEARTWOOD] * c.card.death_heartwood
                 _leave(p, c.card)
                 gain_life(p, c.card.death_life)
                 e["deaths"].append(f"{c.card.name} ({p.name})")
@@ -1444,7 +1471,7 @@ def use_draw_ability(p, c, ab, e):
         return False
     if kind == "rummage":
         gone = surplus_land(p)
-        if gone is None:
+        if gone is None or not _pay_ability(p, alts, "rest"):
             return False
     elif kind == "sac_land":
         need = max((x.mv for x in p.hand if not x.is_land), default=0)
@@ -1457,10 +1484,12 @@ def use_draw_ability(p, c, ab, e):
         if gone is not None:
             p.hand.remove(gone)
             p.graveyard.append(gone)
+            discarded(p, e)
         e["events"].append(f"{p.name}: {c.card.name} lootet" + (f" (wirft {gone.name} ab)" if gone else ""))
     elif kind == "rummage":
         p.hand.remove(gone)
         p.graveyard.append(gone)
+        discarded(p, e)
         _draw(p)
         e["events"].append(f"{p.name}: {c.card.name} wirft {gone.name} ab und zieht")
     else:
@@ -1473,10 +1502,14 @@ def use_draw_ability(p, c, ab, e):
 
 
 def draw_abilities(p, e):
-    """Am Ende des gegnerischen Zugs: alle Faehigkeiten zum Ziehen der eigenen Kreaturen."""
+    """Am Ende des gegnerischen Zugs: alle Faehigkeiten zum Ziehen der eigenen Kreaturen und Artefakte (Murmuring
+    Volume; Artefakte fallen nicht unter 302.6)."""
     for c in list(p.creatures):
         for ab in c.card.draw_abilities:
             use_draw_ability(p, c, ab, e)
+    for card in list(p.perms):
+        for ab in card.draw_abilities:
+            use_draw_ability(p, Creature(card, -99), ab, e)
 
 
 def choose_from_hand(victim, kind):
@@ -1490,14 +1523,29 @@ def choose_from_hand(victim, kind):
     return max(soon or pool, key=lambda c: (c.mv, c.removal_points, c.name))
 
 
+def discarded(p, e):
+    """p hat eine oder mehrere Karten abgeworfen (701.9): Tinybones beider Spieler schaedigt die Gegner seines
+    Kontrolleurs."""
+    for q in (p, p.opponent):
+        if q is None:
+            continue
+        for c in q.creatures:
+            if c.card.discard_ping and not c.dead:
+                deal_noncombat(q, q.opponent, c.card.discard_ping, e)
+
+
 def discard(p, n, e):
+    done = 0
     for _ in range(n):
         card = choose_discard(p)
         if card is None:
-            return
+            break
         p.hand.remove(card)
         p.graveyard.append(card)
         e["events"].append(f"{p.name} wirft ab: {card.name}")
+        done += 1
+    if done:
+        discarded(p, e)
 
 
 def cast_removal(card, caster, victim, e, step, target=None):
@@ -1513,6 +1561,7 @@ def cast_removal(card, caster, victim, e, step, target=None):
         caster.hand.remove(choice)
         caster.graveyard.append(choice)
         e["events"].append(f"{caster.name} wirft ab: {choice.name}")
+        discarded(caster, e)
     amount = _amount(spec, caster)
     if kind in ("sweep", "sweep_damage"):
         hit = list(victim.creatures)
@@ -1761,6 +1810,8 @@ def mode_value(p, opp, sub, step, end_step=False):
                 return (5,) + danger(target)
     if sub.draws:
         return (4, sub.draws)
+    if sub.loot:
+        return (3.5,)
     if sub.creates_tokens:
         return (3, sum(n * (t.power + t.toughness) for n, t in sub.creates_tokens))
     alive = [c for c in p.creatures if not c.dead]
@@ -1809,6 +1860,17 @@ def card_effects(me, opp, card, step, entry, modes=None):
                 _jace_add(me, ef[2], entry)
     if card.treasure:
         me.treasures += card.treasure
+    if card.heartwood:  # 111.10x: Heartwood-Token (Mana ab dem naechsten Zug)
+        me.perms += [HEARTWOOD] * card.heartwood
+        entry["events"].append(f"{me.name}: {card.name} – {card.heartwood} Heartwood-Token")
+    me.life -= card.life_loss  # "You lose N life"
+    if card.loot:  # "Draw a card, then discard a card"
+        _draw(me)
+        gone = choose_discard(me)
+        if gone is not None:
+            me.hand.remove(gone)
+            me.graveyard.append(gone)
+            discarded(me, entry)
     if card.self_damage:  # "damage to each player" trifft auch uns
         me.life -= card.self_damage
     effects = card
@@ -1828,6 +1890,7 @@ def card_effects(me, opp, card, step, entry, modes=None):
         if gone is not None:
             me.hand.remove(gone)
             me.graveyard.append(gone)
+            discarded(me, entry)
             _draw(me)
             entry["events"].append(f"{me.name}: {card.name} – wirft {gone.name} ab und zieht")
     if card.hand_pick and opp is not None:
@@ -1835,6 +1898,7 @@ def card_effects(me, opp, card, step, entry, modes=None):
         if pick is not None:
             opp.hand.remove(pick)
             opp.graveyard.append(pick)
+            discarded(opp, entry)
             entry["events"].append(f"{me.name}: {card.name} – {opp.name} wirft {pick.name} ab")
     if effects.modes:
         board, bonus, pump = me.board()
@@ -1964,6 +2028,7 @@ def main_phase_spells(me, opp):
     return [c for c in cards if not c.is_instant and not c.flash and legend_ok(me, c) and reanimate_ok(me, c)
             and (not c.rummage_spell or surplus_land(me) is not None)
             and (not c.twin or twin_host(me, opp) is not None)
+            and (not c.cast_threshold or threshold(me))
             and (any(mode_value(me, opp, s, 0) > (0,) for s in c.choices[1]) if c.choices and not c.is_creature
                  else not c.removal or c.removal[4] == "etb" or has_target(c, me, opp))]
 
@@ -2161,6 +2226,7 @@ def _use_removal(p, card, alts, is_spell, step, e, zone="hand", other=None, fx=N
         gain_life(p, fx.spell_life)
     else:
         e["events"].append(f"{p.name}: wirft {card.name} ab (Fähigkeit)")
+        discarded(p, e)
     return True
 
 
@@ -2254,6 +2320,7 @@ def end_step_instants(dfn, act, e, step):
             dfn.hand.remove(gone)
             dfn.graveyard.append(gone)
             e["events"].append(f"{dfn.name}: wirft {gone.name} ab (Flashback)")
+            discarded(dfn, e)
         e["events"].append(f"{dfn.name}: {card.name} per Flashback am Ende des Zugs")
         _resolve(dfn, act, card._replace(draws=card.alt_draws) if card.alt_draws else card, step, e, to_exile=True)
     end_step_cycling(dfn, e)
@@ -3385,6 +3452,10 @@ def take_turn(me, opp, step, rnd, skip_draw):
             for c in list(p_.creatures):
                 if c.card.draw3_token is not None and not c.dead:
                     make_tokens(p_, [(1, c.card.draw3_token)], step, e, p_.opponent, c.card.name)
+    if any(c.card.end_untap_tokens and not c.dead for c in me.creatures):  # Jiang Yanggu, Never Alone
+        for c in me.creatures:
+            if c.card.is_token:
+                c.tapped = False
     for p_ in (me, opp):  # Splinter Twin: Kopien zu Beginn des Endsegments exilieren (kein Sterben)
         for c in list(p_.creatures):
             if c.exile_step is not None and c.exile_step <= step:
@@ -3405,11 +3476,14 @@ def take_turn(me, opp, step, rnd, skip_draw):
 
 def hand_limit(p, e, size=7):
     """514.1: am Ende des eigenen Zugs auf die Handgroesse abwerfen (Auswahl wie beim Abwerfen)."""
+    over = len(p.hand) > size
     while len(p.hand) > size:
         card = choose_discard(p)
         p.hand.remove(card)
         p.graveyard.append(card)
         e["events"].append(f"{p.name}: Handlimit – wirft {card.name} ab")
+    if over:
+        discarded(p, e)
 
 
 def cleanup(players):

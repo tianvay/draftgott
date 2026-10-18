@@ -153,6 +153,20 @@ class Card(NamedTuple):
     loyalty_draw: int = 0      # Loyalty-Aktivierung mit 2+ entfernten Marken: N Karten (Way of the Mind Sculptor)
     loyalty_paradox: bool = False  # Loyalty-Aktivierung: 1 Leben und ein zusaetzlicher Landdrop (Way of the Paradox)
     kiora_attack: bool = False  # Angriff nach einer Loyalty-Aktivierung: ein Angreifer enttappt und unblockbar (Kiora)
+    heartwood: int = 0         # Heartwood-Token beim Wirken bzw. Betreten (111.10x: Artefakt "{T}: Add {R} or {G}")
+    death_heartwood: int = 0   # Heartwood-Token, wenn die Kreatur stirbt (Aerid Konstrari)
+    team_kw_all: tuple = ()    # "Creatures you control have ..." (auch die Quelle selbst; Samut, Ajani's Anguish)
+    small_unblockable: bool = False  # eigene Kreaturen mit Power oder Toughness <= 1 unblockbar (Tetsuko, Fugitive)
+    counter_haste: bool = False  # andere eigene Kreaturen mit +1/+1-Marke haben Haste (Gallia)
+    noncombat_team_pump: int = 0  # Gegner bekommt Schaden ausserhalb des Kampfs: eigene Kreaturen +N/+0 (Master of Barbs)
+    surveil_counter_all: int = 0  # Scry/Surveil: N Marken auf jede eigene Kreatur (Denzilore Fatehold)
+    surveil_self_pump: tuple = ()  # Scry/Surveil: +P/+T bis Rundenende auf sich (Diviner of Victory)
+    enter_surveil: int = 0     # sie oder eine andere eigene Kreatur kommt ins Spiel: Surveil N (Proctor of Potential)
+    discard_ping: int = 0      # ein Spieler wirft ab: N Schaden an jedem Gegner (Tinybones)
+    loot: int = 0              # "Draw a card, then discard a card" beim Wirken/Betreten bzw. als Modus
+    end_untap_tokens: bool = False  # eigenes Endsegment: alle eigenen Token enttappen (Jiang Yanggu, Never Alone)
+    cast_threshold: bool = False  # nur wirkbar ab 7 Karten im Friedhof (601.3; Proft, Sinister Mastermind)
+    life_loss: int = 0         # "You lose N life" beim Aufloesen
 
 
 LANDCYCLE_RE = re.compile(
@@ -517,7 +531,7 @@ _ABILITY_SUBJECTS = ((re.compile(rf"^{_SELF} "), "self"),
                      (re.compile(r"^target creature with a \+1/\+1 counter on it "), "target_counter"),
                      (re.compile(r"^target creature(?: you control)? "), "target"),
                      (re.compile(r"^creatures you control "), "all"))
-_ABILITY_PUMP_RE = re.compile(r"^(?:gets? \+(\d+)/\+(\d+))?(?:,? and )?(?:gains? ([a-z ,]+?))? until end of turn\.?$")
+_ABILITY_PUMP_RE = re.compile(r"^(?:gets? \+(\d+)/([+-]\d+))?(?:,? and )?(?:gains? ([a-z ,]+?))? until end of turn\.?$")
 _ABILITY_COUNTER_RE = re.compile(r"^put (a|an|one|two|three|\d+) \+1/\+1 counters? on (~|this creature|target creature"
                                  r"(?: you control)?|target nonlegendary creature|each creature you control with a "
                                  r"\+1/\+1 counter on it)\.?$")
@@ -660,9 +674,19 @@ _CREATE_TOKEN_RE = re.compile(r"\bcreate (a|an|one|two|three) (\d+)/(\d+) (?:" +
                               r"creature tokens?(?: named ([a-z]+))?(?: with ([a-z ,]+?))?\.")
 
 
+_NAMED_TOKEN_RE = re.compile(r"\bcreate ([a-z]+), a (legendary )?(\d+)/(\d+) (?:" + _COLOR_WORDS +
+                             r" )?([a-z ]+?) creature token(?: with ([a-z ,]+?))?\.")
+
+
 def _tokens_in(text):
     """Kreatur-Token in einem Text: [(Anzahl, Token-Card)]."""
     out = []
+    for m in _NAMED_TOKEN_RE.finditer(text):
+        kws = tuple(k.strip() for k in re.split(r",\s*(?:and\s+)?|\s+and\s+", m.group(6) or "")
+                    if k.strip() in COMBAT_KEYWORDS)
+        token = token_card(m.group(1).capitalize(), True, int(m.group(3)), int(m.group(4)), False, kw=kws,
+                           types=tuple(m.group(5).split()))
+        out.append((1, token._replace(legendary=bool(m.group(2)))))
     for m in _CREATE_TOKEN_RE.finditer(text):
         types = m.group(4).split()
         artifact = "artifact" in types
@@ -974,8 +998,8 @@ _PACKAGE_S_RES = {
                              r"creatures you control"),
     "team_kw": re.compile(r"^other creatures you control have " + _KW_LIST),
     "defender_attack": re.compile(r"^creatures you control can attack as though they didn't have defender"),
-    "hand_pick": re.compile(r"\btarget opponent reveals their hand\. you choose an? (nonland permanent|nonland) card "
-                            r"from it\. that player discards that card"),
+    "hand_pick": re.compile(r"\b(?:target opponent|that player) reveals their hand\. you choose an? (nonland permanent|"
+                            r"nonland) card from it\. (?:that player|they) discards? that card"),
     "removal_exile": re.compile(r"\bif that (?:permanent|creature) would die this turn, exile it instead"),
 }
 
@@ -1000,7 +1024,7 @@ _PACKAGE_M_RES = {
 
 _PACKAGE_M2_RES = {
     "loot": re.compile(r"^\{t\}: draw a card, then discard a card\.?$"),
-    "rummage": re.compile(r"^\{t\}, discard a card: draw a card\.?$"),
+    "rummage": re.compile(r"^((?:\{[^}t]+\})*)(?:, )?\{t\}, discard a card: draw a card\.?$"),
     "sac_land": re.compile(r"^((?:\{[^}]+\})+), \{t\}, sacrifice an artifact or land: draw a card\.?$"),
     "ally_untap": re.compile(r"^whenever another nontoken creature you control enters, untap (?:~|this creature)"),
     "rummage_spell": re.compile(r"^you may discard a card\. if you do, draw a card\.?$"),
@@ -1138,6 +1162,79 @@ def walker_traits(card):
     return out
 
 
+HEARTWOOD = token_card("Heartwood", mana_src=(("G", "R"),))
+_A_RES = {
+    "heartwood": re.compile(r"\bcreate (a|one|two|three) heartwood tokens?"),
+    "team_kw_all": re.compile(r"^creatures you control have ([a-z ,]+?)\.?$"),
+    "small_unblockable": re.compile(r"^creatures you control with power or toughness 1 or less can't be blocked"),
+    "counter_haste": re.compile(r"^each other creature you control with a \+1/\+1 counter on it has haste"),
+    "noncombat_team_pump": re.compile(r"^whenever one or more opponents are dealt noncombat damage, creatures you "
+                                      r"control get \+(\d+)/\+0 until end of turn"),
+    "surveil_counter_all": re.compile(r"^whenever you scry or surveil, put (a|an|one|two) \+1/\+1 counters? on each "
+                                      r"creature you control"),
+    "surveil_self_pump": re.compile(r"^whenever you scry or surveil, (?:~|this creature) gets \+(\d+)/\+(\d+) until "
+                                    r"end of turn\.?$"),
+    "enter_surveil": re.compile(r"^whenever (?:~|this creature) or another creature you control enters, surveil (\d+)"),
+    "discard_ping": re.compile(r"^whenever a player discards one or more cards, (?:~|[a-z]+) deals (\d+) damage to each "
+                               r"opponent"),
+    "loot": re.compile(r"^(?:when (?:~|this [a-z]+) enters, )?draw a card, then discard a card\.?$"),
+    "end_untap_tokens": re.compile(r"^at the beginning of your end step, untap all tokens you control"),
+    "cast_threshold": re.compile(r"^threshold — you can't cast this spell unless there are seven or more cards in your "
+                                 r"graveyard"),
+    "life_loss": re.compile(r"\byou lose (\d+) life\b"),
+}
+
+
+def package_a_traits(card, type_line):
+    """Paket A: Heartwood, statische Team-Effekte, Scry/Surveil- und Betreten-Ausloeser, Abwerfen, Kleinkram."""
+    out = {}
+    res = _A_RES
+    spell_face = "Instant" in type_line or "Sorcery" in type_line
+    for _raw, low in _clean_lines(card):
+        trigger = bool(re.match(r"^(when|whenever|at the beginning)\b", low))
+        m = res["heartwood"].search(low)
+        if m and "sacrifice a land" not in low and '"' not in low:
+            head = low.split(",")[0]
+            if spell_face and not trigger:
+                out["heartwood"] = out.get("heartwood", 0) + _count(m.group(1))
+            elif trigger and "enters" in head:
+                out["heartwood"] = _count(m.group(1))
+            if trigger and "dies" in head:
+                out["death_heartwood"] = _count(m.group(1))
+        m = res["team_kw_all"].match(low)
+        if m and _keyword_list(m.group(1)):
+            out["team_kw_all"] = _keyword_list(m.group(1))
+        if res["small_unblockable"].match(low):
+            out["small_unblockable"] = True
+        if res["counter_haste"].match(low):
+            out["counter_haste"] = True
+        m = res["noncombat_team_pump"].match(low)
+        if m:
+            out["noncombat_team_pump"] = int(m.group(1))
+        m = res["surveil_counter_all"].match(low)
+        if m:
+            out["surveil_counter_all"] = _count(m.group(1))
+        m = res["surveil_self_pump"].match(low)
+        if m:
+            out["surveil_self_pump"] = (int(m.group(1)), int(m.group(2)))
+        m = res["enter_surveil"].match(low)
+        if m:
+            out["enter_surveil"] = int(m.group(1))
+        m = res["discard_ping"].match(low)
+        if m:
+            out["discard_ping"] = int(m.group(1))
+        if res["loot"].match(low) and (spell_face or low.startswith("when")):
+            out["loot"] = 1
+        if res["end_untap_tokens"].match(low):
+            out["end_untap_tokens"] = True
+        if res["cast_threshold"].match(low):
+            out["cast_threshold"] = True
+        m = res["life_loss"].search(low)
+        if m and spell_face and not trigger:
+            out["life_loss"] = int(m.group(1))
+    return out
+
+
 def counter_traits(card):
     """Counterspells (L1): Art, Farbbedingung, "unless its controller pays {N}"; Behold a Jace; nicht konterbar."""
     out = {}
@@ -1164,8 +1261,9 @@ def package_m2_traits(card):
     for raw, low in _clean_lines(card):
         if res["loot"].match(low):
             draws.append((((0, ()),), True, "loot"))
-        if res["rummage"].match(low):
-            draws.append((((0, ()),), True, "rummage"))
+        m = res["rummage"].match(low)
+        if m:
+            draws.append((cost_alternatives(m.group(1).upper()) if m.group(1) else ((0, ()),), True, "rummage"))
         m = res["sac_land"].match(low)
         if m:
             draws.append((cost_alternatives(m.group(1).upper()), True, "sac_land"))
@@ -1530,7 +1628,7 @@ def card_info(card):
                 creates_tokens=creates_tokens(card, type_line), choices=modal_choices(card, type_line),
                 grant_kw=grant_keywords(card, type_line), **package_s_traits(card), **package_m_traits(card),
                 **package_m2_traits(card), **package_m3_traits(card, type_line),
-                **counter_traits(card), **walker_traits(card),
+                **counter_traits(card), **walker_traits(card), **package_a_traits(card, type_line),
                 removal_points=(removal_info(card) or {}).get("points", 0.0),
                 creature_types=(tuple(t.lower() for t in type_line.split("—", 1)[1].split())
                                 if is_creature and "—" in type_line else ())), shown

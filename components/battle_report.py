@@ -211,6 +211,15 @@ RULES = [
     "der stärkste Angreifer enttappt und unblockbar. Sanctum Lurker: Jace bleibt mit 0 Loyalty liegen (nie "
     "negativ), stirbt aber, wenn Lurker geht. Im Goldfish dieselbe Wahl ohne Token. Way of the Cryomancer und Jace's "
     "Machinations folgen.",
+    "Heartwood-Token (111.10x, Artefakt mit {T}: {R} oder {G}) aus Soul Tether, Aerid Konstrari, Hungering "
+    "Puppetbeast: Mana ab dem nächsten Zug. Statische Team-Effekte, auch von Verzauberungen: Samut (alle haben "
+    "Haste), Ajani's Anguish (Trample), Tetsuko Umezawa, Fugitive (Power oder Toughness höchstens 1: unblockbar), "
+    "Gallia (Haste mit Marke), Master of Barbs (+1/+0 bei Schaden außerhalb des Kampfs am Gegner). Scry/Surveil: "
+    "Denzilore (Marke auf jede Kreatur) und Diviner of Victory (+1/+1) bei jedem Surveil; Proctor of Potential "
+    "surveilt, wenn eine eigene Kreatur kommt. Abwerfen (701.9): Tinybones schädigt bei jedem Abwerfen eines "
+    "Spielers; Loot als Effekt (Divining Duelist, Echoverse Fulcrum) und als Artefakt-Fähigkeit (Murmuring Volume). "
+    "Jiang Yanggu: legendäres Token Mowu, eigene Token enttappen am Zugende. Proft, Sinister Mastermind erst ab "
+    "Threshold wirkbar (601.3). „You lose N life“ beim Auflösen.",
     "Noch nicht im Kampf: weitere Auslöser und Fähigkeiten (siehe Modell-Abdeckung). Solche Karten werden gewirkt, "
     "wirken aber nur mit den schon modellierten Effekten.",
 ]

@@ -3,7 +3,7 @@ import itertools
 import random
 from collections import Counter
 
-from components.cards import enters_tapped
+from components.cards import HEARTWOOD, enters_tapped
 from components.jace import (JaceState, cast_filter_matches, creates_jace, creates_walker, enter_filter_matches,
                              once_effects, recurring_effects, surveil)
 from components.mana import can_cast_all, can_pay, has_two_colors, land_key
@@ -292,11 +292,19 @@ def apply_surveils(amounts, library, hand, battlefield, graveyard=None):
     return events, lands
 
 
-def _attacks(entry, turn, board=None):
-    """Greift die Kreatur an? Defender nur, wenn auf dem Feld (board) eine Karte wie Ghalta the Immovable liegt."""
+def _attacks(entry, turn, board=None, counters=0):
+    """Greift die Kreatur an? Defender nur, wenn auf dem Feld (board) eine Karte wie Ghalta the Immovable liegt; Haste
+    auch von Samut ("Creatures you control have haste") und Gallia (Kreaturen mit Marke, counters)."""
     card, t_in = entry
     free = board is not None and any(c.defender_attack for c, _t in board)
-    return (not card.defender or free) and (t_in < turn or card.haste)
+    haste = card.haste or (board is not None and any(
+        "haste" in c.team_kw_all or (c.counter_haste and counters > 0 and c is not card) for c, _t in board))
+    return (not card.defender or free) and (t_in < turn or haste)
+
+
+def cast_allowed(card, graveyard_size):
+    """601.3: Zauber mit "can't cast unless ... seven or more cards in your graveyard" erst ab Threshold."""
+    return not card.cast_threshold or graveyard_size >= 7
 
 
 def _power(board, bonus, pump, i):
@@ -757,7 +765,7 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
     has_draws = any(c.draws for c in cards)
     has_surveil = any(c.surveil for c in cards)
     has_prepared = any(c.prepared for c in cards)
-    has_ramp = any(c.mana_src or c.treasure for c in cards)
+    has_ramp = any(c.mana_src or c.treasure or c.heartwood for c in cards)
     ef = {"face": 0, "counters": 0, "pump": 0}
     GY_TURNS = (3, 5, 8)
     gys = {"size": {t: 0 for t in GY_TURNS}, "max_mv": {t: 0 for t in GY_TURNS}, "n": {t: 0 for t in GY_TURNS},
@@ -877,7 +885,7 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                 return discounted_hand([p_[0].prepared[1] for p_ in prep if p_[1]], board, bonus)[0]
 
             def castable():  # Handkarten und verfuegbare Prepared-Kopien (Splinter Twin nur mit passender Kreatur)
-                return [c for c in hand if not c.is_land
+                return [c for c in hand if not c.is_land and cast_allowed(c, len(gy))
                         and (not c.twin or twin_host_index(board, bonus, dmg_target - dmg_total) is not None)] \
                     + copies_now()
 
@@ -1070,6 +1078,8 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                     mana_perms.append((c, turn))
                 if not c.is_creature and not c.is_instant_sorcery and not c.is_land and not c.is_copy:
                     nperms.append(c)
+                for _k in range(c.heartwood):  # Heartwood-Token: Mana ab der naechsten Runde
+                    mana_perms.append((HEARTWOOD, turn))
                 if c.treasure:
                     treasures += c.treasure
                     rp["made"] += c.treasure
@@ -1182,7 +1192,7 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
             turn_dmg = face_now
             ef["face"] += face_now
             for i, (c, t) in enumerate(board):
-                if not _attacks((c, t), turn, board):
+                if not _attacks((c, t), turn, board, bonus[i]):
                     continue
                 if held[(c, t)]:
                     held[(c, t)] -= 1

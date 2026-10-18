@@ -1,42 +1,38 @@
 Deck
-1 Denzilore Fatehold (FRA) 128
-2 Infinite Coursework (FRA) 31
+1 The Theorist, Jace Beleren (FRA) 43
+2 Prudent Fateseer (FRA) 146
+1 Desperate Futurescribe (FRA) 129
+3 Mindseeker Oculus (FRA) 33
+1 Keeper of the Quiet Hour (FRA) 171
+1 Unsummon (FRA) 46
+1 Surveillance Phantasm (FRA) 42
+1 Way of the Healer (FRA) 207
+2 Memory Trap (FRA) 15
+1 Tomik, Orzhov Lawmage (FRA) 206
+1 Campus Crier (FRA) 4
+1 Twinned Vision (FRA) 157
+1 Proft, Consulting Detective (FRA) 218
 1 Hexhaven Battalion (FRA) 12
-1 Protege's Awakening (FRA) 37
-1 Sphinx's Approach (FRA) 41
-1 Yoshimaru, Beloved Companion (FRA) 209
-1 Cryotheory Adept (FRA) 27
-1 Traxos, Scourge Eternal (FRA) 280
-1 Vigorbloom Vanguard (FRA) 161
-2 Twinned Vision (FRA) 157
-2 Icy Reception (FRA) 30
-1 Traxos, Academy Guardian (FRA) 222
-1 Prudent Fateseer (FRA) 146
 1 Arni, Humble Scribe (FRA) 211
-1 Plan for All Outcomes (FRA) 35
-1 Tetsuko Umezawa, Fugitive (FRA) 221
-1 Paradox Shaper (FRA) 143
-1 Unflinching Hortimancer (FRA) 23
-1 Eye of Jace (FRA) 170
-1 Predictive Preparations (FRA) 16
-8 Plains (SPM) 194
+1 Semester Foreseer (FRA) 39
+1 Icy Reception (FRA) 30
+1 Cryotheory Adept (FRA) 27
+1 Afterthought Sentry (FRA) 166
 9 Island (SPM) 195
+8 Plains (SPM) 194
 
 Sideboard
-1 Yoshimaru, Beloved Companion (FRA) 209
-1 Traxos, Scourge Eternal (FRA) 280
-2 Theorix Annex (FRA) 192
-1 Danitha, Spear of Agony (FRA) 227
-1 Danitha, Sword of Hope (FRA) 196
-1 Loot, the Anomaly (FRA) 232
-1 Artifist Acumen (FRA) 73
-1 Codie, Ravenous Codex (FRA) 168
-1 Eardrum Rattler (FRA) 81
+2 Arcane Amphisbaena (FRA) 97
+2 Transformative Commons (FRA) 193
+1 Afterthought Sentry (FRA) 166
+1 Proft, Sinister Mastermind (FRA) 235
+1 Vigorbloom Charm (FRA) 160
+1 Meticulous Commons (FRA) 184
 1 Rank Rat (FRA) 61
-1 Hallway Heckler (FRA) 85
-1 Gallia, the Merrymaker (FRA) 245
-1 Recursive Recruitment (FRA) 147
-1 Screeching Soulbreaker (FRA) 65
+1 Arni, Renowned Champion (FRA) 243
+1 Hexhaven Dueling Arena (FRA) 181
+1 Rise of the Deathbringer (FRA) 63
+1 Extended Absence (FRA) 54
 1 Hall of Echoes (FRA) 179
-1 Cast Away Doubt (FRA) 51
+1 Loot, the Anomaly (FRA) 232
 1 Skilled Battlecarver (FRA) 92

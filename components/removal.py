@@ -90,7 +90,8 @@ def _classify(low):
         found.append((_amount(m.group(1)), "Massenremoval"))
     for m in _DESTROY.finditer(low):
         phrase = m.group(2)
-        if not _HOLDS_CREATURE.search(phrase.split(" to ")[0]) or "you control" in phrase:
+        if not _HOLDS_CREATURE.search(phrase.split(" to ")[0]) or "you control" in phrase \
+                or re.match(r"noncreature\b", phrase):  # "noncreature, nonland permanent" trifft keine Kreatur
             continue
         until = " until " in phrase
         value, label = (0.9, "Exil bis verlassen") if until else (1.0, "Hart")
