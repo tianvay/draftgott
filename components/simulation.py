@@ -148,7 +148,33 @@ def discounted_hand(hand, board, bonus):
 
 def best_cast_reduced(spells, key, has_creature, auras_need_creature, must=None):
     """best_cast, dazu Traxos-Senkung "if you've cast a noncreature spell this turn": eine Kombination, in der ein
-    Nichtkreatur-Zauber zuerst gewirkt wird, darf die Karte verbilligt enthalten."""
+    Nichtkreatur-Zauber zuerst gewirkt wird, darf die Karte verbilligt enthalten. Manastein zuerst: eine Karte, die
+    sofort Mana liefert (Nichtkreatur oder Haste, auch ein Zauber mit Heartwood-Token), wird zuerst gewirkt, wenn ihr
+    Mana zusammen mit dem Rest eine bessere Kombination ergibt."""
+    best = _best_cast_traxos(spells, key, has_creature, auras_need_creature, must)
+    rocks = sorted({c for c in spells if (not c.is_creature or c.haste) and fresh_mana([c])})
+    for rock in rocks:
+        if must is not None and must != rock:
+            continue
+        rests = pay_subsets(list(key), rock.alts) if rock.alts else [list(key)]
+        others = list(spells)
+        others.remove(rock)
+        seen = set()
+        for rest in rests or ():
+            new_key = land_key(list(rest) + fresh_mana([rock]))
+            if new_key in seen:
+                continue
+            seen.add(new_key)
+            _sc, extra = best_cast_reduced(others, new_key, has_creature or rock.is_creature, auras_need_creature)
+            if not extra:
+                continue
+            combo = [rock] + extra
+            if aura_ok(combo, has_creature, auras_need_creature) and play_score(combo) > best[0]:
+                best = (play_score(combo), combo)
+    return best
+
+
+def _best_cast_traxos(spells, key, has_creature, auras_need_creature, must=None):
     best = best_cast(spells, key, has_creature, auras_need_creature, must=must)
     waiting = [c for c in spells if c.self_discount and c.self_discount[0] == "noncreature"]
     if not waiting:

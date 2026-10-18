@@ -1,0 +1,25 @@
+Deck
+1 Sphinx of False Conclusions (FRA) 40
+1 Warrior's Blades (FRA) 163
+1 Memory Trap (FRA) 15
+2 Mindseeker Oculus (FRA) 33
+1 Surveillance Phantasm (FRA) 42
+1 No Admittance (FRA) 89
+1 Campus Crier (FRA) 4
+1 Fblthp, Impossibly Lost (FRA) 213
+1 Tam's Resistance (FRA) 153
+1 Tetsuko Umezawa, Fugitive (FRA) 221
+1 Proctor of Potential (FRA) 145
+2 Prophesied End (FRA) 17
+1 Hexhaven Battalion (FRA) 12
+1 Diviner of Victory (FRA) 28
+2 Unsummon (FRA) 46
+1 Way of the Warlord (FRA) 255
+1 Surgical Precision (FRA) 22
+1 Undulating Witness (FRA) 45
+1 Way of the Cryomancer (FRA) 223
+1 Theorist's Proxy (FRA) 44
+1 Fatehold Annex (FRA) 177
+4 Mountain (SPM) 197
+6 Island (SPM) 195
+6 Plains (SPM) 194

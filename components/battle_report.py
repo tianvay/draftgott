@@ -250,7 +250,9 @@ RULES = [
     "Im Goldfish ohne Token und Removal (Schaden, Ziehen, Mana, Marken, Embleme, Empower).",
     "Heartwood-Token (111.10x, Artefakt mit {T}: {R} oder {G}) aus Soul Tether, Aerid Konstrari, Hungering "
     "Puppetbeast: sofort Mana (Artefakt, keine Einsatzverzögerung, 302.6 gilt nur für Kreaturen), auch für weitere "
-    "Zauber in derselben Main Phase; entsteht er mitten im Zug (Aerid stirbt), ist sein Mana offen. Statische Team-Effekte, auch von Verzauberungen: Samut (alle haben "
+    "Zauber in derselben Main Phase (Manastein zuerst: eine Karte, die sofort Mana liefert, wird zuerst "
+    "eingeplant, wenn ihr Mana eine bessere Kombination ergibt; Kreaturen ohne Haste nicht); entsteht er mitten "
+    "im Zug (Aerid stirbt), ist sein Mana offen. Statische Team-Effekte, auch von Verzauberungen: Samut (alle haben "
     "Haste), Ajani's Anguish (Trample), Tetsuko Umezawa, Fugitive (Power oder Toughness höchstens 1: unblockbar), "
     "Gallia (Haste mit Marke), Master of Barbs (+1/+0 bei Schaden außerhalb des Kampfs am Gegner). Scry/Surveil: "
     "Denzilore (Marke auf jede Kreatur) und Diviner of Victory (+1/+1) bei jedem Surveil; Proctor of Potential "

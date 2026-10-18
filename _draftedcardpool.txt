@@ -1,44 +1,40 @@
 Deck
-1 Sphinx of False Conclusions (FRA) 40
-1 Warrior's Blades (FRA) 163
-1 Memory Trap (FRA) 15
-2 Mindseeker Oculus (FRA) 33
-1 Surveillance Phantasm (FRA) 42
-1 No Admittance (FRA) 89
-1 Campus Crier (FRA) 4
-1 Fblthp, Impossibly Lost (FRA) 213
-1 Tam's Resistance (FRA) 153
-1 Tetsuko Umezawa, Fugitive (FRA) 221
-1 Proctor of Potential (FRA) 145
-2 Prophesied End (FRA) 17
-1 Hexhaven Battalion (FRA) 12
-1 Diviner of Victory (FRA) 28
-2 Unsummon (FRA) 46
+1 Curse-Marred Demon (FRA) 79
+1 Extended Absence (FRA) 54
+1 Vindictive Triumph (FRA) 162
+2 Silence the Echo (FRA) 66
+1 Screeching Soulbreaker (FRA) 65
 1 Way of the Warlord (FRA) 255
-1 Surgical Precision (FRA) 22
-1 Undulating Witness (FRA) 45
-1 Way of the Cryomancer (FRA) 223
-1 Theorist's Proxy (FRA) 44
-1 Fatehold Annex (FRA) 177
-4 Mountain (SPM) 197
-6 Island (SPM) 195
-6 Plains (SPM) 194
+3 Hallway Heckler (FRA) 85
+1 Proft, Sinister Mastermind (FRA) 235
+2 Archive Arbiter (FRA) 167
+1 Apex Witchstalker (FRA) 48
+1 Way of the Pyromancer (FRA) 254
+1 Twisted Fates (FRA) 158
+1 Face Yourself (FRA) 83
+1 Rewrite Regrets (FRA) 62
+1 Winter, Tormented Loner (FRA) 240
+1 Gallia, Tragic Host (FRA) 228
+1 Lich's Relic (FRA) 57
+2 Wrath of the Bloodmane (FRA) 96
+1 Break Under Pressure (FRA) 50
+1 Grim Repriser (FRA) 136
+1 Warrior's Blades (FRA) 163
+3 Plains (SPM) 194
+7 Swamp (SPM) 196
+7 Mountain (SPM) 197
 
 Sideboard
-1 Emrakul, the Exigent Doom (FRA) 1
-1 Divining Duelist (FRA) 29
-1 Blessed Ghoul (FRA) 123
-1 Tethermage's Advantage (FRA) 117
-1 Jiang Yanggu, Alone (FRA) 246
-1 Skilled Battlecarver (FRA) 92
-1 Grim Repriser (FRA) 136
+1 Rank Rat (FRA) 61
+1 Graft Surgeon (FRA) 10
+1 Terminal Criticism (FRA) 68
+1 Aerid Konstrari (FRA) 121
+1 Mind Meanderer (FRA) 141
+1 Way of the Cryomancer (FRA) 223
 1 Blazing Crescendo (FRA) 75
-1 Arcane Amphisbaena (FRA) 97
-1 Flourishing Grapple (FRA) 102
-1 Konstrari Improviser (FRA) 139
-1 Vigorbloom Annex (FRA) 194
-1 Icy Reception (FRA) 30
-1 Artifist Acumen (FRA) 73
-1 Formidable Commons (FRA) 178
-1 Compel Brutality (FRA) 101
-1 Primal Witchstalker (FRA) 144
+1 Koth, the Geomancer (FRA) 248
+1 Void Extrapolator (FRA) 70
+2 Tomik, Izzet Sparkmage (FRA) 253
+1 Marwyn, the Clearcutter (FRA) 249
+1 Unflinching Hortimancer (FRA) 23
+1 Unsummon (FRA) 46

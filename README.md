@@ -361,7 +361,9 @@ Diese Werte stehen im Skript und lassen sich nur dort ändern.
   Mulligan wird neu gemischt und eine Karte weniger gezogen, dieselben Regeln gelten für jede neue Hand.
 - **Kartenauswahl pro Runde:** Aus allen zusammen bezahlbaren Kombinationen gewinnt nacheinander: (1) die meiste
   Mana-Ausgabe, (2) die meisten Kreaturen, (3) die höchste Summe aus Power und Toughness, (4) die meisten Karten.
-  Es gibt keine Vorausschau auf spätere Runden, außer beim Landcycling.
+  Es gibt keine Vorausschau auf spätere Runden, außer beim Landcycling. Eine Karte, die sofort Mana liefert
+  (Mana-Artefakt, Haste-Kreatur mit Mana-Fähigkeit, Zauber mit Heartwood-Token), wird zuerst eingeplant, wenn ihr Mana
+  zusammen mit dem Rest eine bessere Kombination ergibt (Kreaturen ohne Haste nicht).
 - **Kreaturen und Schaden:** aufgedruckte Power und Toughness, Einsatzverzögerung außer bei aufgedrucktem Haste, Kreaturen mit Defender
   greifen nie an (außer mit Ghalta the Immovable: dann greifen sie an, und Kreaturen mit mehr Toughness als
   Power machen Schaden in Höhe der Toughness), alle anderen Kreaturen greifen jede Runde an. Jace und andere Planeswalker haben keine
