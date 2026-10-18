@@ -39,7 +39,8 @@ _GY_TYPES = {"creature": "is_creature", "planeswalker": "is_planeswalker", "arti
 class Creature:
     """Eine Kreatur auf dem Feld (Karte, Schritt des Eintritts, getappt, Schaden, Marken, Pump)."""
     __slots__ = ("card", "entered", "tapped", "damage", "bonus", "pump", "dead", "touched", "locked", "prepared",
-                 "tpump", "extra", "lifted", "owner", "at_jace", "gy", "dealt", "finality", "ctl", "once")
+                 "tpump", "extra", "lifted", "owner", "at_jace", "gy", "dealt", "finality", "ctl", "once", "stun", "gear",
+                 "tdraw")
 
     def __init__(self, card, entered=0):
         self.card = card
@@ -62,6 +63,9 @@ class Creature:
         self.finality = False  # Finality-Marke: stirbt sie, wird sie exiliert
         self.ctl = None       # Kontrolleur (Player), fuer Power nach Domain (Fblthp)
         self.once = {}        # Ausloeser "only once each turn": Name -> Schritt, in dem er zuletzt ausgeloest hat
+        self.stun = 0         # Stun-Marken (122.1g): statt zu enttappen wird eine entfernt
+        self.gear = []        # angelegte Ausruestung (Karten aus p.perms)
+        self.tdraw = 0        # bis Rundenende: zieht so viele Karten bei Kampfschaden am Spieler (Lyra, Tolarian)
 
     @property
     def power(self):
@@ -70,11 +74,21 @@ class Creature:
             base += sum(1 for g in self.gy if any(getattr(g, _GY_TYPES[t], False) for t in self.card.gy_power))
         if self.card.domain_power and self.ctl is not None:
             base += len({t for land in self.ctl.lands for t in land.land_types} & BASIC_TYPES)
-        return base + self._threshold()
+        return base + self._threshold() + sum(g.equip[1] for g in self.gear)
 
     @property
     def toughness(self):
-        return self.card.toughness + self.bonus + self.tpump + self._threshold()
+        return self.card.toughness + self.bonus + self.tpump + self._threshold() + sum(g.equip[2] for g in self.gear)
+
+    @property
+    def dmg(self):
+        """Kampfschaden, den die Kreatur zuweist (510.1a): Power, mit Ghalta the Immovable beim Kontrolleur die
+        Toughness, wenn sie groesser ist."""
+        power, tough = self.power, self.toughness
+        if tough > power and self.ctl is not None and any(c.card.toughness_damage and not c.dead
+                                                          for c in self.ctl.creatures):
+            return tough
+        return power
 
     def _threshold(self):
         """Threshold: +N/+N ab 7 Karten im Friedhof des Kontrolleurs (Void Extrapolator)."""
@@ -119,6 +133,7 @@ class Creature:
         c.ctl = self.ctl
         c.dealt = self.dealt
         c.once = dict(self.once)
+        c.stun, c.gear, c.tdraw = self.stun, list(self.gear), self.tdraw
         return c
 
     def label(self):
@@ -131,7 +146,7 @@ def _defender_ok(c):
 
 
 def can_attack(c, step):
-    return (not c.tapped and not c.dead and not c.locked and (not c.card.defender or _defender_ok(c)) and c.power > 0
+    return (not c.tapped and not c.dead and not c.locked and (not c.card.defender or _defender_ok(c)) and c.dmg > 0
             and (c.entered < step or c.card.haste or c.has("haste")))
 
 
@@ -164,10 +179,10 @@ def resolve_combat(pairs):
     for first_step in (True, False):
         hits = []  # (Ziel-Kreatur, Schaden, Deathtouch)
         for att, blockers in pairs:
-            if not att.dead and _deals_in(att, first_step) and att.power > 0:
+            if not att.dead and _deals_in(att, first_step) and att.dmg > 0:
                 if not blockers or any(not b.dead for b in blockers) or att.has("trample"):
                     att.dealt = True
-                power, dt = att.power, att.has("deathtouch")
+                power, dt = att.dmg, att.has("deathtouch")
                 if not blockers:
                     _hit_player(out, att, power)
                 else:
@@ -188,11 +203,11 @@ def resolve_combat(pairs):
                     out["lifelink_attacker"] += power
                     out["lifelink_events_attacker"] += 1
             for b in blockers:
-                if not b.dead and not att.dead and _deals_in(b, first_step) and b.power > 0:
+                if not b.dead and not att.dead and _deals_in(b, first_step) and b.dmg > 0:
                     b.dealt = True
-                    hits.append((att, b.power, b.has("deathtouch")))
+                    hits.append((att, b.dmg, b.has("deathtouch")))
                     if b.has("lifelink"):
-                        out["lifelink_defender"] += b.power
+                        out["lifelink_defender"] += b.dmg
                         out["lifelink_events_defender"] += 1
         for target, amount, dt in hits:
             target.damage += amount
@@ -236,7 +251,7 @@ def choose_jace_attackers(attackers, defender, blockers):
         return []
     need = loyalty if loyalty < 3 else loyalty - 2
     picked = []
-    for a in sorted(attackers, key=lambda a: (a.power, a.toughness, a.card.mv)):
+    for a in sorted(attackers, key=lambda a: (a.dmg, a.toughness, a.card.mv)):
         picked.append(a)
         if max_through(picked, blockers) >= need:
             return picked
@@ -247,8 +262,8 @@ def max_through(attackers, blockers):
     """Schaden, der bei bestmoeglichem Blocken mindestens durchkommt (gierige Naeherung, ohne Kampftricks)."""
     free = [b for b in blockers if not b.tapped and not b.dead]
     total = 0
-    for a in sorted(attackers, key=lambda a: -a.power * (2 if a.has("double strike") else 1)):
-        dmg = a.power * (2 if a.has("double strike") else 1)
+    for a in sorted(attackers, key=lambda a: -a.dmg * (2 if a.has("double strike") else 1)):
+        dmg = a.dmg * (2 if a.has("double strike") else 1)
         cands = sorted((b for b in free if can_block(b, a)),
                        key=lambda b: (b.has("flying") or b.has("reach"), -b.toughness))
         need = 2 if a.has("menace") else 1
@@ -280,7 +295,7 @@ def choose_attackers(mine, theirs, their_life, my_life, step):
     if max_through(cand, blockers) >= their_life:
         return cand
     attack = [c for c in cand if not any(_eats(b, c) for b in blockers)]
-    their_attackers = [t for t in theirs if not t.dead and not t.card.defender and t.power > 0]
+    their_attackers = [t for t in theirs if not t.dead and (not t.card.defender or _defender_ok(t)) and t.dmg > 0]
 
     def crack_back(attack_set):
         home = [c for c in mine if not c.dead and not c.tapped and (c not in attack_set or c.has("vigilance"))]
@@ -288,7 +303,7 @@ def choose_attackers(mine, theirs, their_life, my_life, step):
 
     if crack_back([]) < my_life:  # nur zurueckhalten, wenn es den Gegenangriff wirklich aufhaelt
         while attack and crack_back(attack) >= my_life:
-            attack.remove(min(attack, key=lambda c: (c.power, c.toughness)))
+            attack.remove(min(attack, key=lambda c: (c.dmg, c.toughness)))
     return attack
 
 
@@ -296,7 +311,7 @@ def choose_blocks(attackers, defenders, life):
     """Blocker je Angreifer: [(Angreifer, [Blocker])] in der Reihenfolge der Angreifer."""
     free = [d for d in defenders if not d.tapped and not d.dead]
     plan = {id(a): [] for a in attackers}
-    order = sorted(attackers, key=lambda a: (-a.power, -a.toughness))
+    order = sorted(attackers, key=lambda a: (-a.dmg, -a.toughness))
     for a in order:
         cands = [b for b in free if can_block(b, a)]
         if not a.has("menace"):
@@ -380,6 +395,11 @@ class Player:
         self.noncreature_cast = False  # in diesem Zug schon einen Nichtkreatur-Zauber gewirkt (Traxos)
         self.ward_budget = 0  # in der Main Phase fuer Ward eingeplantes Mana (mit dem Zauber bezahlt)
         self.ward_pool = None  # beim Planen der Main Phase: Mana des Zugs fuer die Ward-Pruefung
+        self.impulse = []     # Karten im Exil, die wir spielen duerfen: (Karte, letzter eigener Zug)
+        self.own_turns = 0    # Zahl der eigenen Zuege bisher
+        self.drawn = 0        # gezogene Karten insgesamt (Lyra, Tolarian Archangel)
+        self.drawn_mark = 0   # drawn zu Beginn des aktuellen Zugs
+        self.predrawn = Counter()  # Main Phase: Karten, deren "draw N" die Planung (resolve_draws) schon gezogen hat
 
     def board(self):
         return [(c.card, c.entered) for c in self.creatures], [c.bonus for c in self.creatures], \
@@ -505,7 +525,7 @@ def affordable(p, card):
 
 def danger(c):
     """Gefaehrlichste Kreatur: hoechste Power, dann Flying/Trample/Deathtouch, dann Manawert."""
-    return (c.power, any(c.has(k) for k in ("flying", "trample", "deathtouch")), c.card.mv)
+    return (c.dmg, any(c.has(k) for k in ("flying", "trample", "deathtouch")), c.card.mv)
 
 
 def _amount(spec, caster):
@@ -670,6 +690,7 @@ def _jace_activate(p, step, e, allow_surveil):
         if loyalty > 0 and p.jace.loyalty <= 0:
             jace_died(p, e)
         if p.jace.loyalty == loyalty - 3:
+            p.drawn += 1
             e["events"].append(f"{p.name}: Jace −3, zieht eine Karte (Loyalty {p.jace.loyalty})")
         else:
             mark_surveil(p, e)
@@ -722,9 +743,7 @@ def gain_life(p, n, events=1):
                         x.bonus += k
             if c.card.lifegain_draw and c.once.get("lifegain") != p.now:  # Bloombrute: einmal pro Zug
                 c.once["lifegain"] = p.now
-                for _k in range(c.card.lifegain_draw):
-                    if p.library:
-                        p.hand.append(p.library.pop(0))
+                _draw(p, c.card.lifegain_draw)
         loyalty = sum(c.lifegain_loyalty for c in p.perms) + sum(c.card.lifegain_loyalty for c in p.creatures)
         if loyalty and p.jace.loyalty > 0:  # Way of the Mentor: nur auf einen vorhandenen Jace
             _jace_add(p, loyalty)
@@ -764,8 +783,7 @@ def mark_surveil(p, e=None, events=1):
                 if not _pay_ability(p, ((card.surveil_pay, ()),), "free"):
                     break
                 c.bonus += 1
-                if p.library:
-                    p.hand.append(p.library.pop(0))
+                _draw(p)
                 e["events"].append(f"{p.name}: {card.name} zahlt {{{card.surveil_pay}}}: Marke und eine Karte")
 
 
@@ -1197,6 +1215,7 @@ def _draw(p, n=1):
     for _ in range(n):
         if p.library:
             p.hand.append(p.library.pop(0))
+            p.drawn += 1
 
 
 def tap_ready(p, c):
@@ -1322,9 +1341,7 @@ def cast_removal(card, caster, victim, e, step, target=None):
         e["events"].append(f"{caster.name}: {card.name} ohne Ziel (Ward)")
         return
     label = target.label()
-    for _k in range(target.card.targeted_draw):  # Ruric Thar, Biomagus: Ziel eines gegnerischen Zaubers
-        if victim.library:
-            victim.hand.append(victim.library.pop(0))
+    _draw(victim, target.card.targeted_draw)  # Ruric Thar, Biomagus: Ziel eines gegnerischen Zaubers
     if kind in ("destroy", "damage", "minus", "counters", "lock") and sacrifice_for(victim, target, e):
         bury((caster, victim), e)  # als Antwort geopfert: der Zauber hat kein Ziel mehr (608.2b)
         e["events"].append(f"{caster.name}: {card.name} ohne Ziel ({target.card.name} geopfert)")
@@ -1446,6 +1463,7 @@ def choose_modes(p, opp, card, step, end_step=False):
 def permanent_enters(p, opp, card, step, e):
     """Ein Nichtkreatur-Permanent kam ins Spiel: Jace-Ausloeser und Betreten-Effekte."""
     _jace_etb(p, card, step, e)
+    gain_life(p, card.etb_life)
     card_effects(p, opp, card, step, e)
 
 
@@ -1475,6 +1493,11 @@ def card_effects(me, opp, card, step, entry, modes=None):
             effects = card._replace(modes=tuple(tuple(a for a in m if a[0] != "face") for m in card.modes))
     if card.discard and opp is not None:
         discard(opp, card.discard, entry)
+    for _k in range(card.impulse):  # Blazing Crescendo: bis Ende des naechsten eigenen Zugs spielbar
+        if me.library:
+            top = me.library.pop(0)
+            me.impulse.append((top, me.own_turns + 1))
+            entry["events"].append(f"{me.name}: {card.name} – {top.name} ins Exil (spielbar)")
     if card.rummage_spell:  # "You may discard a card. If you do, draw a card."
         gone = surplus_land(me)
         if gone is not None:
@@ -1500,9 +1523,10 @@ def card_effects(me, opp, card, step, entry, modes=None):
         if gain["face"] and opp is not None:
             deal_noncombat(me, opp, gain["face"], entry)
     if card.draws:
-        for _ in range(card.draws):
-            if me.library:
-                me.hand.append(me.library.pop(0))
+        if me.predrawn[card] > 0:  # schon bei der Planung der Main Phase gezogen
+            me.predrawn[card] -= 1
+        else:
+            _draw(me, card.draws)
     if card.surveil:
         surveil_cards(me, [card.surveil], entry, card.name)
     gain_life(me, card.spell_life)
@@ -2375,7 +2399,7 @@ def combat_etb(me, opp, card, step, chosen=()):
         return any(combat_etb(me, opp, sub, step, chosen) for sub in card.choices[1])
     alive = [c for c in me.creatures if not c.dead]
     attackers = [c for c in alive if can_attack(c, step)]
-    waiting = [c for c in alive if c.card.surveil_attack and not c.lifted and not c.tapped and c.power > 0
+    waiting = [c for c in alive if c.card.surveil_attack and not c.lifted and not c.tapped and c.dmg > 0
                and (c.entered < step or c.card.haste)]
     if card.surveil and waiting and not me.surveilled:
         return True
@@ -2400,6 +2424,127 @@ def combat_etb(me, opp, card, step, chosen=()):
     return False
 
 
+def stun_from_graveyard(me, opp, step, e):
+    """Cryotheory Adept aus dem Friedhof (nur zur Sorcery-Zeit): tappt die gefaehrlichste Kreatur des Gegners, die
+    blocken koennte (ungetappt) oder uns gefaehrlich wird (Kampfschaden 3 oder mehr), mit freiem Mana; die Stun-Marke
+    haelt sie auch beim naechsten Untap getappt."""
+    for card in list(dict.fromkeys(me.graveyard)):
+        if not card.gy_ability or _kinds((0, 0, False, "", card.gy_ability[1])) != {"stun"}:
+            continue
+        cands = [c for c in opp.creatures if not c.dead and not hexproof(c) and ward_ok(me, c) and not c.stun
+                 and (not c.tapped or c.dmg >= 3)]
+        if not cands:
+            return
+        pick = max(cands, key=danger)
+        if not _pay_ability(me, card.gy_ability[0], "free"):
+            continue
+        me.graveyard.remove(card)
+        pay_ward(me, pick, e)
+        pick.tapped = True
+        pick.stun += 1
+        e["events"].append(f"{me.name}: {card.name} (aus dem Friedhof) – {pick.card.name} getappt mit Stun-Marke")
+
+
+def equip_gear(me, step, e):
+    """Ausruestung anlegen (Sorcery-Zeit, freies Mana): an den staerksten Angreifer (bei Gleichstand der mit den meisten
+    Marken, das macht Warrior's Blades billiger); umgehaengt nur, wenn die bisherige Kreatur nicht angreifen kann."""
+    for g in [c for c in me.perms if c.equip]:
+        host = next((c for c in me.creatures if g in c.gear and not c.dead), None)
+        if host is not None and can_attack(host, step):
+            continue
+        cands = [c for c in me.creatures if can_attack(c, step) and c is not host]
+        if not cands:
+            continue
+        pick = max(cands, key=lambda c: (c.dmg, c.bonus))
+        alts, _p, _t, per_counter = g.equip
+        cut = pick.bonus if per_counter else 0
+        cost = tuple(sorted({(max(0, gen - cut), cols) for gen, cols in alts}))
+        if not _pay_ability(me, cost, "free"):
+            continue
+        if host is not None:
+            host.gear.remove(g)
+        pick.gear.append(g)
+        e["events"].append(f"{me.name}: {g.name} an {pick.card.name}")
+
+
+def combat_draw_abilities(me, opp, step, e):
+    """Lyra, Tolarian Archangel: Faehigkeit "zieht bei Kampfschaden" vor dem Angriff mit freiem Mana, wenn sie
+    angreifen kann und kein Blocker des Gegners sie aufhalten kann."""
+    for c in me.creatures:
+        if not c.card.combat_draw_ability or c.tdraw or not can_attack(c, step):
+            continue
+        if any(can_block(b, c) for b in opp.creatures):
+            continue
+        alts, n = c.card.combat_draw_ability
+        if _pay_ability(me, alts, "free"):
+            c.tdraw += n
+            e["events"].append(f"{me.name}: Fähigkeit von {c.card.name} (zieht {n} bei Kampfschaden)")
+
+
+def _debuff_card(card):
+    """(Karte, Modus mit -N/-0) fuer Instants wie Icy Reception, sonst None."""
+    if not card.is_instant:
+        return None
+    if card.debuff:
+        return card
+    if card.choices:
+        return next((sub for sub in card.choices[1] if sub.debuff), None)
+    return None
+
+
+def debuff_tricks(p, pairs, opp, e, step, attacking):
+    """-N/-0 bis Rundenende als Kampftrick nach den Blocks. Als Verteidiger auf einen Angreifer: zuerst, wenn dadurch
+    ein eigener Blocker ueberlebt, dann gegen Lethal, dann gegen einen ungeblockten Angreifer, wenn mindestens 4
+    Schaden weniger durchkommen. Als Angreifer auf einen Blocker, wenn dadurch unser Angreifer ueberlebt."""
+    for card in sorted([c for c in p.hand if _debuff_card(c)], key=lambda c: c.mv):
+        if card not in p.hand or not _payable(p, _alts(p, card)):
+            continue
+        n = _debuff_card(card).debuff
+        target = None
+        if attacking:
+            for a, bs in pairs:
+                if a.dead or a not in p.creatures or not outcome(a, bs)[0]:
+                    continue
+                for b in bs:
+                    if b.dead or not ward_ok(p, b):
+                        continue
+                    b.pump -= n
+                    saved = not outcome(a, bs)[0]
+                    b.pump += n
+                    if saved:
+                        target = b
+                        break
+                if target is not None:
+                    break
+        else:
+            live = [(a, bs) for a, bs in pairs if not a.dead and a in opp.creatures and ward_ok(p, a)]
+            for a, bs in live:  # eigener Blocker ueberlebt
+                if not bs:
+                    continue
+                before = outcome(a, bs)[1]
+                a.pump -= n
+                after = outcome(a, bs)[1]
+                a.pump += n
+                if any(d and not d2 for d, d2 in zip(before, after)):
+                    target = a
+                    break
+            unblocked = [a for a, bs in live if not bs]
+            if target is None and unblocked:
+                big = max(unblocked, key=lambda a: a.dmg)
+                through = sum(a.dmg for a, bs in pairs if not bs and not a.dead and not a.at_jace)
+                saved = min(max(0, big.dmg), n)
+                if (through >= p.life > through - saved) or saved >= 4:
+                    target = big
+        if target is None or not _pay_open(p, _alts(p, card)):
+            continue
+        p.hand.remove(card)
+        p.graveyard.append(card)
+        on_cast(p, card, step, e)
+        pay_ward(p, target, e)
+        target.pump -= n
+        e["events"].append(f"{p.name}: {card.name} – {target.card.name} −{n}/−0")
+
+
 def combat_buffs(me, step, e):
     """Zu Beginn des eigenen Kampfs: eine andere eigene Kreatur (der staerkste Angreifer) bekommt +N/+N bis
     Rundenende, nach einem Surveil in diesem Zug stattdessen N +1/+1-Marken (Desperate Futurescribe)."""
@@ -2420,6 +2565,19 @@ def combat_buffs(me, step, e):
             e["events"].append(f"{me.name}: {c.card.name} – {pick.card.name} +{n}/+{n}")
 
 
+def expire_impulse(p):
+    """Ende des eigenen Zugs: Karten im Exil, deren Frist ("until the end of your next turn") abgelaufen ist, bleiben
+    dort und sind nicht mehr spielbar."""
+    p.impulse = [(c, last) for c, last in p.impulse if last > p.own_turns]
+
+
+def _take_impulse(p, card):
+    for i, (c, _last) in enumerate(p.impulse):
+        if c == card:
+            del p.impulse[i]
+            return
+
+
 def gy_exile_target(victim):
     """Karte aus dem Friedhof des Gegners zum Exilieren: zuerst eine, die sich selbst nutzt (zurueckholen, Phoenix,
     Flashback, Faehigkeit aus dem Friedhof), sonst seine teuerste Kreatur, sonst keine."""
@@ -2438,11 +2596,16 @@ def take_turn(me, opp, step, rnd, skip_draw):
     me.noncreature_cast = opp.noncreature_cast = False
     me.ward_budget, me.ward_pool = 0, None
     me.turn_start = step
+    me.own_turns += 1
+    me.drawn_mark, opp.drawn_mark = me.drawn, opp.drawn
     for p_ in (me, opp):
         p_.direct_mark, p_.deaths_mark = p_.dealt_direct, p_.deaths
     me.opponent, opp.opponent = opp, me
     me.now = opp.now = step
-    for c in me.creatures:  # Untap (gesperrte Kreaturen bleiben gesperrt)
+    for c in me.creatures:  # Untap (gesperrte Kreaturen bleiben gesperrt; Stun-Marke statt Enttappen, 122.1g)
+        if c.stun and c.tapped:
+            c.stun -= 1
+            continue
         c.tapped = False
     upkeep(me)
     if not skip_draw:  # Draw
@@ -2452,6 +2615,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
             return e
         card = me.library.pop(0)
         me.hand.append(card)
+        me.drawn += 1
         e["drew"] = card.name
     jace_turn_start(me, step, e)
     disc, orig = discount(me), {}  # Kostensenkung, Steuer, Zusatzkosten: angepasste Handkarten fuer die Main Phase
@@ -2467,6 +2631,12 @@ def take_turn(me, opp, step, rnd, skip_draw):
                 cheap = _discounted(_any_mana(c), disc, me)
                 ex_map[cheap] = c
                 me.hand.append(cheap)
+
+    im_map = {}  # Exil spielbar (Blazing Crescendo): voruebergehend auf der Hand, markiert
+    for c, _last in me.impulse:
+        mark = _discounted(c._replace(impulse_mark=True), disc, me)
+        im_map[mark] = c
+        me.hand.append(mark)
 
     fb_map = {}  # Flashback: Sorceries aus dem Friedhof mit Flashback-Kosten, voruebergehend auf der Hand
     for c in me.graveyard:
@@ -2508,6 +2678,9 @@ def take_turn(me, opp, step, rnd, skip_draw):
     land, tapped, forced = choose_land(me.hand, spells, pool_all, me.lands, walker_bf, jace_bf, has_creature, True)
     if land is not None:
         me.hand.remove(land)
+        if land in im_map:  # Land aus dem Exil (Blazing Crescendo)
+            _take_impulse(me, im_map[land])
+            land = im_map[land]
         me.lands.append(land)
         e["land"] = land.name + (" (getappt)" if tapped else "")
         if not tapped:
@@ -2548,6 +2721,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
         walker_bf, jace_bf = walker_flags(me)
         rd = resolve_draws(me.hand, me.library, chosen, pool_all, me.lands, land, has_creature, True, walker_bf,
                            jace_bf, copies=[cost(c) for c in copies(me)])
+        me.drawn += rd["drawn"]
         chosen = [c for c in rd["chosen"] if not c.is_instant and not c.flash and c is not (held or (None,))[0]]
         pool_all = rd["pool"]
         if rd["land"] is not None:
@@ -2585,6 +2759,12 @@ def take_turn(me, opp, step, rnd, skip_draw):
                 from_exile[ex_map[c]] += 1
         me.hand[:] = [c for c in me.hand if c not in ex_map]
         chosen = [ex_map.get(c, c) for c in chosen]
+    if im_map:  # gewirkte Karten aus dem Exil verlassen es, die anderen bleiben dort
+        for c in chosen:
+            if c in im_map:
+                _take_impulse(me, im_map[c])
+        me.hand[:] = [c for c in me.hand if c not in im_map]
+        chosen = [im_map.get(c, c) for c in chosen]
     owner_of = me.exiled_from or opp
     if any(c.is_creature and not c.is_token and not c.is_copy for c in chosen):  # Arni, Humble Scribe enttappt dann
         for c in list(me.creatures):
@@ -2599,6 +2779,8 @@ def take_turn(me, opp, step, rnd, skip_draw):
                 from_graveyard[fb_map[c]] += 1
         me.hand[:] = [c for c in me.hand if c not in fb_map]
         chosen = [fb_map.get(c, c) for c in chosen]
+
+    me.predrawn = Counter(c for c in chosen if c.draws)  # resolve_draws hat sie schon gezogen
 
     def resolve(c):
         owner, exile = None, False
@@ -2645,8 +2827,11 @@ def take_turn(me, opp, step, rnd, skip_draw):
     if 0 < me.jace.loyalty < 3 and not me.surveilled and any(c.card.surveil_team_pump or c.card.combat_buff
                                                               for c in alive):
         _jace_activate(me, step, e, True)
+    stun_from_graveyard(me, opp, step, e)
+    equip_gear(me, step, e)
     # Faehigkeiten vor dem Angriff: Marken und Empower mit freiem Mana, Flying/Menace fuer den Angriff
     pre_attack_abilities(me, opp, step, e)
+    combat_draw_abilities(me, opp, step, e)
     # Kampf: zu Beginn Darklight Phoenix und Desperate Futurescribe
     phoenix_check(me, opp, step, e)
     combat_buffs(me, step, e)
@@ -2688,6 +2873,8 @@ def take_turn(me, opp, step, rnd, skip_draw):
     combat_tricks(me, blocks, opp, e, step, attacking=True)
     me.cast_count += len(e["events"]) - n_events
     combat_tricks(opp, blocks, me, e, step, attacking=False)
+    debuff_tricks(me, blocks, opp, e, step, attacking=True)
+    debuff_tricks(opp, blocks, me, e, step, attacking=False)
     sacrifice_blockers(opp, blocks, e)
     before = [(a.label(), [b.label() for b in bs]) for a, bs in blocks]
     res = resolve_combat(blocks)
@@ -2702,11 +2889,9 @@ def take_turn(me, opp, step, rnd, skip_draw):
     combat_life(me, opp, res)
     e["damage"] = res["player"]
     for a, _bs in blocks:  # "deals combat damage to a player, draw ..." (Frostbite Pyromental)
-        if a.card.combat_draw and res["to_player"].get(id(a)):
-            for _ in range(a.card.combat_draw):
-                if me.library:
-                    me.hand.append(me.library.pop(0))
-            e["events"].append(f"{me.name}: {a.card.name} zieht {a.card.combat_draw}")
+        if (a.card.combat_draw or a.tdraw) and res["to_player"].get(id(a)):
+            _draw(me, a.card.combat_draw + a.tdraw)
+            e["events"].append(f"{me.name}: {a.card.name} zieht {a.card.combat_draw + a.tdraw}")
         if a.card.combat_land_return and res["to_player"].get(id(a)):  # Carnivorous Cultivator
             lands = gy_candidates(me, "land")
             if lands:
@@ -2724,12 +2909,18 @@ def take_turn(me, opp, step, rnd, skip_draw):
     e["main2"] = [c.name for c in main2]
     lasting_abilities(me, opp, step, e, own_turn=True, mode="free")  # z. B. Grim Repriser nach dem Angriffs-Schaden
     _jace_activate(me, step, e, True)
+    me.predrawn = Counter()
     # End Phase: Edgar ("if you didn't cast a spell this turn"), danach Instants und Flash des Gegners
     if not me.cast_count:
         for c in me.creatures:
             if c.card.endstep_counters:
                 c.bonus += c.card.endstep_counters
     confidant_end_step(me, e)
+    for p_ in (me, opp):  # Lyra, Tolarian Archangel: 3 oder mehr Karten in diesem Zug gezogen
+        if p_.drawn - p_.drawn_mark >= 3:
+            for c in list(p_.creatures):
+                if c.card.draw3_token is not None and not c.dead:
+                    make_tokens(p_, [(1, c.card.draw3_token)], step, e, p_.opponent, c.card.name)
     for p_ in (me, opp):  # "At the beginning of the end step, sacrifice this creature"
         for c in p_.creatures:
             if c.card.end_sacrifice:
@@ -2738,6 +2929,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     bury((me, opp), e)
     end_step_instants(opp, me, e, step)
     hand_limit(me, e)
+    expire_impulse(me)
     cleanup((me, opp))
     return e
 
@@ -2757,6 +2949,7 @@ def cleanup(players):
         for c in p.creatures:
             c.damage, c.pump, c.tpump, c.touched, c.lifted, c.at_jace = 0, 0, 0, False, False, False
             c.extra = set()
+            c.tdraw = 0
         p.surveilled = False
         p.gained = 0
 

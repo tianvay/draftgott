@@ -213,7 +213,7 @@ def _sections():
         ("schaden", "Schaden durch Kreaturen", _panel("Bedeutung", _p(
             "Erste Runde, in der der Gesamtschaden das Ziel erreicht (<code>--schaden</code>, Standard "
             f"{_D.schaden}). Ø und Median nur über Spiele, in denen es bis zum Ende der Beobachtung eintritt. Alle "
-            "Kreaturen greifen jede Runde an, Einsatzverzögerung außer Haste, Defender greift nie an, keine Blocker oder "
+            "Kreaturen greifen jede Runde an, Einsatzverzögerung außer Haste, Defender greift nie an (außer mit Ghalta the Immovable, der auch Schaden nach Toughness gibt), keine Blocker oder "
             "Removal. Schaden = Power plus +1/+1-Marken und Pumps dieser Runde, dazu Schaden an den Gegner aus Zaubern, "
             "beim Betreten und durch Landfall (auch „any target“ zählt als Schaden an den Gegner). Marken und Pumps gehen "
             "an die stärkste Kreatur, die in dieser Runde angreift; dauerhafte Marken ohne Angreifer an die stärkste "
@@ -301,7 +301,7 @@ def _sections():
             "zuerst ein Zauber gewirkt, der einen Planeswalker erschafft. „Behold a Jace“ gilt auch mit einer "
             "Jace-Karte auf der Hand.",
             "Auras werden nur mit eigener Kreatur gespielt (außer mit <code>--auras-ohne-kreatur</code>).",
-            "Kreaturen: aufgedruckte Power/Toughness plus +1/+1-Marken, Einsatzverzögerung außer Haste, Defender greift nie an, keine "
+            "Kreaturen: aufgedruckte Power/Toughness plus +1/+1-Marken, Einsatzverzögerung außer Haste, Defender greift nie an (außer mit Ghalta the Immovable, der auch Schaden nach Toughness gibt), keine "
             "Blocker oder Removal.",
             "Landcycling, Empower Jace, Draw-Zauber, Surveil durch Karten und Prepared: Regeln in den jeweiligen "
             "Abschnitten.",

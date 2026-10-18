@@ -168,6 +168,20 @@ RULES = [
     "Main Phase werden die Ward-Kosten wie Zusatzkosten eingeplant (ohne bezahlbares Ziel wird der Zauber nicht "
     "gewirkt). „Discard a card“ zahlen wir mit der Karte, die wir sonst auch abwerfen würden. Gilt auch für Removal "
     "beim Betreten und Lock-Auras, für beide Seiten.",
+    "Ghalta the Immovable: unsere Kreaturen mit mehr Toughness als Power machen Kampfschaden in Höhe ihrer "
+    "Toughness (als Angreifer und Blocker, auch für Lifelink, Trample, Angriffs- und Blockplanung und Lethal); "
+    "Defender greift an. Fight und „damage equal to its power“ bleiben bei der Power.",
+    "−N/−0-Kampftricks (Icy Reception) nach den Blocks: als Verteidiger auf einen Angreifer, wenn dadurch ein "
+    "Blocker überlebt, gegen Lethal oder wenn ein ungeblockter Angreifer mindestens 4 Schaden weniger macht; als "
+    "Angreifer auf einen Blocker, wenn unser Angreifer dadurch überlebt. Counterspell-Modi werden nicht genutzt. "
+    "Cryotheory Adept aus dem Friedhof (Sorcery-Zeit, freies Mana): tappt die gefährlichste Kreatur des Gegners, "
+    "die blocken könnte oder 3+ Kampfschaden macht; die Stun-Marke hält sie beim nächsten Untap getappt (122.1g).",
+    "Blazing Crescendo: die oberste Karte ins Exil, bis Ende unseres nächsten Zugs in der Main Phase spielbar "
+    "(Länder als Landdrop). Lyra, Tolarian Archangel: am Ende jedes Zugs ein 3/3-Engel mit Flying, wenn wir in "
+    "diesem Zug 3 oder mehr Karten gezogen haben (alle Ziehungen zählen); ihre Fähigkeit vor dem Angriff mit freiem "
+    "Mana, wenn sie angreift und kein Blocker sie aufhalten kann. Ausrüstung (Warrior's Blades): vor dem Angriff "
+    "mit freiem Mana an den stärksten Angreifer (Gleichstand: meiste Marken, Equip {1} billiger je Marke); "
+    "umgehängt nur, wenn die bisherige Kreatur nicht angreifen kann; stirbt sie, bleibt die Ausrüstung liegen.",
     "Noch nicht im Kampf: weitere Auslöser und Fähigkeiten (siehe Modell-Abdeckung). Solche Karten werden gewirkt, "
     "wirken aber nur mit den schon modellierten Effekten.",
 ]

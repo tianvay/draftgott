@@ -363,7 +363,8 @@ Diese Werte stehen im Skript und lassen sich nur dort ändern.
   Mana-Ausgabe, (2) die meisten Kreaturen, (3) die höchste Summe aus Power und Toughness, (4) die meisten Karten.
   Es gibt keine Vorausschau auf spätere Runden, außer beim Landcycling.
 - **Kreaturen und Schaden:** aufgedruckte Power und Toughness, Einsatzverzögerung außer bei aufgedrucktem Haste, Kreaturen mit Defender
-  greifen nie an, alle anderen Kreaturen greifen jede Runde an. Jace und andere Planeswalker haben keine
+  greifen nie an (außer mit Ghalta the Immovable: dann greifen sie an, und Kreaturen mit mehr Toughness als
+  Power machen Schaden in Höhe der Toughness), alle anderen Kreaturen greifen jede Runde an. Jace und andere Planeswalker haben keine
   Einsatzverzögerung (Aktivierung höchstens 1x pro Runde), keine Blocker, kein Removal. Gezählt werden +1/+1-Marken
   und Pumps beim Wirken oder Betreten (auf die stärkste angreifende Kreatur), Landfall-Schaden und -Marken, Marken
   am Rundenende ohne Zauber (Edgar) und bei Loyalty (Inspired Tethermage) sowie Schaden an den Gegner aus Zaubern und
@@ -499,10 +500,10 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
   Ende des gegnerischen Zugs.
 - Modelliert sind u. a. Jace (Empower) mit Angriffen auf Jace, aktivierte Fähigkeiten, Token, Prowess,
   Auslöser beim Wirken, Betreten, Angriff, Tod, Lebensgewinn, Scry/Surveil und Landfall, Friedhof (Flashback, Zurückholen,
-  Phoenix, Finality), modale Karten, Loot und Rummage, Ward, Legend-Regel, Handlimit, Kostensenkung und
+  Phoenix, Finality), modale Karten, Loot und Rummage, Ward, Ausrüstung, Stun-Marken, Karten aus dem
+  Exil spielen, Schaden nach Toughness (Ghalta the Immovable), Legend-Regel, Handlimit, Kostensenkung und
   Zusatzkosten.
-- Nicht modelliert sind u. a. Counterspells, Planeswalker außer dem Jace-Token, Convoke, Opfern als Kosten (außer Edgar, Ancient Bloodlord)
-  und Ausrüstung; solche Karten werden gespielt, wirken aber nur mit ihren modellierten Effekten.
+- Nicht modelliert sind u. a. Counterspells, Planeswalker außer dem Jace-Token, Convoke, Opfern als Kosten (außer Edgar, Ancient Bloodlord); solche Karten werden gespielt, wirken aber nur mit ihren modellierten Effekten.
 
 ## Details pro Variante
 

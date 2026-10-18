@@ -137,6 +137,13 @@ class Card(NamedTuple):
     opp_enter_ping: int = 0    # Kreatur des Gegners kommt ins Spiel: N Schaden an ihm (Gideon the Oathless)
     opp_loyalty_ping: int = 0  # Gegner aktiviert eine Loyalty-Faehigkeit: N Schaden an ihm (Gideon the Oathless)
     ward: tuple = ()           # Ward (702.21): ("mana", n) oder ("discard",)
+    toughness_damage: bool = False  # eigene Kreaturen mit Toughness > Power machen Kampfschaden nach Toughness (Ghalta)
+    debuff: int = 0            # "Target creature gets -N/-0 until end of turn" (Icy Reception, als Kampftrick)
+    impulse: int = 0           # oberste N Karten ins Exil, bis Ende des naechsten eigenen Zugs spielbar (Blazing Crescendo)
+    impulse_mark: bool = False  # diese Karte liegt im Exil und ist voruebergehend spielbar (nur intern)
+    draw3_token: object = None  # jedes Endsegment: 3+ Karten in diesem Zug gezogen -> dieses Token (Lyra, Tolarian)
+    combat_draw_ability: tuple = ()  # "Kosten: Until end of turn, whenever ~ deals combat damage to a player, draw N"
+    equip: tuple = ()          # Ausruestung: (Equip-Kosten, +P, +T, {1} billiger je +1/+1-Marke am Ziel)
 
 
 LANDCYCLE_RE = re.compile(
@@ -508,6 +515,7 @@ _ABILITY_COUNTER_RE = re.compile(r"^put (a|an|one|two|three|\d+) \+1/\+1 counter
 _ABILITY_COUNTER_SCOPE = {"~": "self", "this creature": "self", "target creature": "target",
                           "target creature you control": "target", "target nonlegendary creature": "nonlegendary"}
 _ABILITY_EMPOWER_RE = re.compile(r"^empower jace (\d+)\.?$")
+_ABILITY_STUN_RE = re.compile(r"^tap target creature and put a stun counter on it\.(?: activate only as a sorcery\.?)?$")
 _ABILITY_UNBLOCKABLE_RE = re.compile(r"^another target creature you control with power (\d+) or less can't be blocked "
                                      r"this turn\.?$")
 _ABILITY_PUMP_ARTIFACTS_RE = re.compile(r"^target creature gets \+x/\+0 until end of turn, where x is the number of "
@@ -524,6 +532,8 @@ def _ability_atoms(body):
     m = _ABILITY_EMPOWER_RE.match(body)
     if m:
         return (("empower", int(m.group(1))),)
+    if _ABILITY_STUN_RE.match(body):  # Cryotheory Adept (aus dem Friedhof)
+        return (("stun", 1),)
     m = _ABILITY_UNBLOCKABLE_RE.match(body)
     if m:  # Eardrum Rattler
         return (("grant", ("unblockable",), f"pow_le_{m.group(1)}"),)
@@ -992,7 +1002,55 @@ _PACKAGE_M2_RES = {
     "opp_loyalty_ping": re.compile(r"^whenever an opponent activates a loyalty ability, (?:~|this creature|[a-z]+) deals (\d+) "
                                    r"damage to that player"),
     "ward": re.compile(r"^ward(?: \{(\d+)\}|—discard a card)\.?$"),
+    "toughness_damage": re.compile(r"^each creature you control with toughness greater than its power assigns combat "
+                                   r"damage equal to its toughness rather than its power"),
 }
+
+
+_PACKAGE_M3_RES = {
+    "debuff": re.compile(r"^target creature gets -(\d+)/-0 until end of turn\.?$"),
+    "impulse": re.compile(r"^exile the top card of your library\. until the end of your next turn, you may play that "
+                          r"card"),
+    "draw3_token": re.compile(r"^at the beginning of each end step, if you've drawn three or more cards this turn, "
+                              r"(create [^.]*\.)"),
+    "combat_draw_ability": re.compile(r"^((?:\{[^}]+\})+): until end of turn, whenever (?:~|this creature|[a-z]+) "
+                                      r"deals combat damage to a player, draw (a|one|two|three) cards?"),
+    "equip_pump": re.compile(r"^equipped creature gets \+(\d+)/\+(\d+)\.?$"),
+    "equip_cost": re.compile(r"^equip ((?:\{[^}]+\})+)\.?( this ability costs \{1\} less to activate for each "
+                             r"\+1/\+1 counter on the creature it targets\.?)?$"),
+    "etb_gain": re.compile(r"^when (?:this [a-z]+|~) enters,[^.]* you gain (\d+) life"),
+}
+
+
+def package_m3_traits(card, type_line):
+    """Paket M, Teil 3: Kampftrick -N/-0, Exil spielbar, Lyra, Ausruestung, Leben beim Betreten (Nichtkreaturen)."""
+    out = {}
+    res = _PACKAGE_M3_RES
+    pump = cost = None
+    for raw, low in _clean_lines(card):
+        m = res["debuff"].match(low)
+        if m:
+            out["debuff"] = int(m.group(1))
+        if res["impulse"].match(low):
+            out["impulse"] = 1
+        m = res["draw3_token"].match(low)
+        if m and _tokens_in(m.group(1)):
+            out["draw3_token"] = _tokens_in(m.group(1))[0][1]
+        m = res["combat_draw_ability"].match(low)
+        if m:
+            out["combat_draw_ability"] = (cost_alternatives(m.group(1).upper()), _count(m.group(2)))
+        m = res["equip_pump"].match(low)
+        if m:
+            pump = (int(m.group(1)), int(m.group(2)))
+        m = res["equip_cost"].match(low)
+        if m:
+            cost = (cost_alternatives(m.group(1).upper()), bool(m.group(2)))
+        m = res["etb_gain"].match(low)
+        if m and "Creature" not in type_line:
+            out["etb_life"] = int(m.group(1))
+    if pump and cost:
+        out["equip"] = (cost[0], pump[0], pump[1], cost[1])
+    return out
 
 
 def package_m2_traits(card):
@@ -1023,6 +1081,8 @@ def package_m2_traits(card):
         m = res["ward"].match(low)
         if m:
             out["ward"] = ("mana", int(m.group(1))) if m.group(1) else ("discard",)
+        if res["toughness_damage"].match(low):
+            out["toughness_damage"] = True
     if draws:
         out["draw_abilities"] = tuple(draws)
     return out
@@ -1366,7 +1426,7 @@ def card_info(card):
                 **token_triggers(card), **life_and_costs(card, type_line, keywords),
                 creates_tokens=creates_tokens(card, type_line), choices=modal_choices(card, type_line),
                 grant_kw=grant_keywords(card, type_line), **package_s_traits(card), **package_m_traits(card),
-                **package_m2_traits(card),
+                **package_m2_traits(card), **package_m3_traits(card, type_line),
                 removal_points=(removal_info(card) or {}).get("points", 0.0),
                 creature_types=(tuple(t.lower() for t in type_line.split("—", 1)[1].split())
                                 if is_creature and "—" in type_line else ())), shown

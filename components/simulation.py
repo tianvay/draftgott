@@ -292,19 +292,31 @@ def apply_surveils(amounts, library, hand, battlefield, graveyard=None):
     return events, lands
 
 
-def _attacks(entry, turn):
+def _attacks(entry, turn, board=None):
+    """Greift die Kreatur an? Defender nur, wenn auf dem Feld (board) eine Karte wie Ghalta the Immovable liegt."""
     card, t_in = entry
-    return not card.defender and (t_in < turn or card.haste)
+    free = board is not None and any(c.defender_attack for c, _t in board)
+    return (not card.defender or free) and (t_in < turn or card.haste)
 
 
 def _power(board, bonus, pump, i):
     return board[i][0].power + bonus[i] + pump.get(i, 0)
 
 
+def combat_damage(board, bonus, pump, i):
+    """Kampfschaden der Kreatur i: Power, mit Ghalta the Immovable auf dem Feld die Toughness, wenn sie groesser ist
+    (510.1a; Pumps im Goldfish sind nur +X/+0)."""
+    power = _power(board, bonus, pump, i)
+    tough = board[i][0].toughness + bonus[i]
+    if tough > power and any(c.toughness_damage for c, _t in board):
+        return tough
+    return power
+
+
 def _ranked(board, bonus, pump, turn, attackers_only):
     """Indizes der Kreaturen, staerkste zuerst; Angreifer dieser Runde vor den uebrigen."""
-    idx = [i for i in range(len(board)) if not attackers_only or _attacks(board[i], turn)]
-    return sorted(idx, key=lambda i: (not _attacks(board[i], turn), -_power(board, bonus, pump, i), i))
+    idx = [i for i in range(len(board)) if not attackers_only or _attacks(board[i], turn, board)]
+    return sorted(idx, key=lambda i: (not _attacks(board[i], turn, board), -_power(board, bonus, pump, i), i))
 
 
 def _run_mode(mode, board, bonus, pump, turn):
@@ -319,12 +331,12 @@ def _run_mode(mode, board, bonus, pump, turn):
             for i in _ranked(board, bonus, pump, turn, False)[:atom[2]]:
                 bonus[i] += atom[1]
                 counters += atom[1]
-                gain += atom[1] if _attacks(board[i], turn) else 0
+                gain += atom[1] if _attacks(board[i], turn, board) else 0
         elif kind == "counter_all":
             for i in range(len(board)):
                 bonus[i] += atom[1]
                 counters += atom[1]
-                gain += atom[1] if _attacks(board[i], turn) else 0
+                gain += atom[1] if _attacks(board[i], turn, board) else 0
         elif kind == "pump":
             best = _ranked(board, bonus, pump, turn, True)[:1]
             for i in best:
@@ -955,12 +967,12 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
             turn_dmg = face_now
             ef["face"] += face_now
             for i, (c, t) in enumerate(board):
-                if not _attacks((c, t), turn):
+                if not _attacks((c, t), turn, board):
                     continue
                 if held[(c, t)]:
                     held[(c, t)] -= 1
                     continue
-                turn_dmg += max(0, _power(board, bonus, pump, i))
+                turn_dmg += max(0, combat_damage(board, bonus, pump, i))
                 ef["pump"] += pump.get(i, 0)
             if not chosen:  # Rundenende ohne Zauber: Marken (Edgar)
                 for i, (c, _t) in enumerate(board):
