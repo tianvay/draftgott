@@ -1961,8 +1961,9 @@ def bury(players, e):
                 p.creatures.remove(c)
                 if not c.card.is_token and not c.finality:
                     (c.owner or p).graveyard.append(c.card)
-                if c.card.death_heartwood:  # Aerid Konstrari
+                if c.card.death_heartwood:  # Aerid Konstrari: ungetappt, sofort offenes Mana (kein 302.6)
                     p.perms += [HEARTWOOD] * c.card.death_heartwood
+                    p.open += list(HEARTWOOD.mana_src) * c.card.death_heartwood
                 _leave(p, c.card)
                 gain_life(p, c.card.death_life)
                 e["deaths"].append(f"{c.card.name} ({p.name})")

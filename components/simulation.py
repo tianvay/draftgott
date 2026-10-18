@@ -167,8 +167,20 @@ ANY_COLOR = ("B", "G", "R", "U", "W")
 
 
 def usable_now(card):
-    """Liefert eine Manaquelle schon in der Runde, in der sie ins Spiel kommt (Nichtkreatur oder Haste)?"""
-    return bool(card.mana_src) and (not card.is_creature or card.haste)
+    """Liefert eine Manaquelle schon in der Runde, in der sie ins Spiel kommt (Nichtkreatur oder Haste; ein
+    Heartwood-Token, den die Karte erschafft, ist ein Artefakt und hat keine Einsatzverzoegerung, 302.6)?"""
+    return (bool(card.mana_src) and (not card.is_creature or card.haste)) or card.heartwood > 0
+
+
+def fresh_mana(cards):
+    """Mana, das die gewirkten Karten noch in dieser Runde liefern: eigene Manaquellen (Nichtkreatur oder Haste) und
+    erschaffene Heartwood-Token."""
+    out = []
+    for c in cards:
+        if c.mana_src and (not c.is_creature or c.haste):
+            out += list(c.mana_src)
+        out += list(HEARTWOOD.mana_src) * c.heartwood
+    return out
 
 
 def mana_units(perms, turn):
@@ -231,7 +243,7 @@ def resolve_draws(hand, library, chosen, pool, battlefield, land_played, has_cre
     drawn = used = 0
     pending = sum(c.draws for c in cast)
     fresh = enters_prepared(cast)
-    new_mana = [u for c in cast if usable_now(c) for u in c.mana_src]
+    new_mana = fresh_mana(cast)
     mana_added = 0
     while pending or fresh or new_mana:
         pool += new_mana
@@ -271,7 +283,7 @@ def resolve_draws(hand, library, chosen, pool, battlefield, land_played, has_cre
         used += len(extra)
         pending = sum(c.draws for c in extra)
         fresh = enters_prepared(extra)
-        new_mana = [u for c in extra if usable_now(c) for u in c.mana_src]
+        new_mana = fresh_mana(extra)
     return {"chosen": cast, "land": land, "tapped": tapped, "pool": pool, "drawn": drawn, "used": used,
             "mana_added": mana_added}
 
