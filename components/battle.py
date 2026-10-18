@@ -414,6 +414,8 @@ class Player:
         self.drawn = 0        # gezogene Karten insgesamt (Lyra, Tolarian Archangel)
         self.drawn_mark = 0   # drawn zu Beginn des aktuellen Zugs
         self.extra_lands = 0  # zusaetzliche Landdrops in diesem Zug (Way of the Paradox)
+        self.trap_links = []  # Exil bis zum Verlassen (610.3): {"trap", "card", "owner", "creature"}
+        self.lock_links = []  # Lock-Auras dieses Spielers: {"aura", "creature"}
         self.predrawn = Counter()  # Main Phase: Karten, deren "draw N" die Planung (resolve_draws) schon gezogen hat
 
     def board(self):
@@ -1343,7 +1345,20 @@ def bury(players, e):
 
 
 def check_auras(p, e=None):
-    """704.5m: eine eigene Aura (Splinter Twin), deren Kreatur nicht mehr da ist, kommt in den Friedhof."""
+    """704.5m: eine eigene Aura (Splinter Twin), deren Kreatur nicht mehr da ist, kommt in den Friedhof; ebenso eine
+    Lock-Aura (eigene oder des Gegners), deren Kreatur das Spielfeld verlassen hat."""
+    for q in (p, p.opponent):
+        if q is None:
+            continue
+        for link in list(q.lock_links):
+            holder = link["creature"].ctl
+            if holder is None or link["creature"] not in holder.creatures or link["creature"].dead:
+                q.lock_links.remove(link)
+                if link["aura"] in q.perms:
+                    q.perms.remove(link["aura"])
+                    q.graveyard.append(link["aura"])
+                    if e is not None:
+                        e["events"].append(f"{q.name}: {link['aura'].name} in den Friedhof (keine Kreatur mehr)")
     attached = Counter(a for c in p.creatures for a in c.auras)
     for card in list(p.perms):
         if not card.twin:
@@ -1355,6 +1370,118 @@ def check_auras(p, e=None):
         p.graveyard.append(card)
         if e is not None:
             e["events"].append(f"{p.name}: {card.name} in den Friedhof (keine Kreatur mehr)")
+
+
+def noncreature_targets(caster, victim, allowed):
+    """Nichtkreatur-Permanents von victim als Ziel, beste zuerst: [(Rang, Gleichstand, Ziel)]. Ziel ist ein Eintrag
+    aus trap_links (Falle) oder die Karte. Rang 1: Falle mit einer unserer Karten, 2: Lock-Aura auf unserer Kreatur,
+    3: Splinter Twin oder Ausruestung an seiner Kreatur, 4: sonstige Verzauberungen/Artefakte (Way of ... vor anderen,
+    dann Manawert). Token nie. allowed: "artifact_enchantment" (ohne Planeswalker) oder "noncreature"/"nonland"."""
+    out, used = [], Counter()
+
+    def ok(card):
+        return not card.is_token and (allowed != "artifact_enchantment" or not card.is_planeswalker)
+
+    for link in victim.trap_links:
+        if link["owner"] is caster and ok(link["trap"]) and not link["card"].is_token:
+            out.append((1, (link["card"].mv,), link))
+            used[link["trap"]] += 1
+    for link in victim.lock_links:
+        if link["creature"] in caster.creatures and ok(link["aura"]):
+            out.append((2, (link["creature"].card.mv,), link["aura"]))
+            used[link["aura"]] += 1
+    for c in victim.creatures:
+        for a in list(c.auras) + list(c.gear):
+            if ok(a):
+                out.append((3, danger(c), a))
+                used[a] += 1
+    rest = Counter(victim.perms)
+    rest.subtract(used)
+    for card, n in rest.items():
+        if n > 0 and ok(card) and not card.is_planeswalker:
+            out.append((4, (card.name.startswith("Way of the"), card.mv), card))
+    return sorted(out, key=lambda o: (o[0], tuple(-x if isinstance(x, int) else -int(x) for x in o[1])))
+
+
+def _return_linked(link, e):
+    """610.3: die exilierte Karte kehrt unter der Kontrolle ihres Besitzers zurueck (610.3c), als neues Objekt (400.7);
+    ein Token nicht (111.8)."""
+    owner, card = link["owner"], link["card"]
+    if card.is_token:
+        return
+    e["events"].append(f"{owner.name}: {card.name} kehrt aus dem Exil zurück")
+    if link["creature"]:
+        new = Creature(card, owner.now)
+        owner.creatures.append(new)
+        creature_enters(owner, new, owner.now, e, owner.opponent, cast=False)
+    else:
+        owner.perms.append(card)
+        permanent_enters(owner, owner.opponent, card, owner.now, e)
+
+
+def destroy_permanent(p, target, e, exile=False):
+    """Ein Nichtkreatur-Permanent von p verlaesst das Spielfeld (zerstoert, bei exile ins Exil). target: Karte oder
+    Eintrag aus trap_links. Folgen: Falle gibt ihre Karte zurueck, Lock-Aura gibt die Kreatur frei, Aura/Ausruestung
+    loesen sich."""
+    link = target if isinstance(target, dict) else None
+    card = link["trap"] if link else target
+    if card not in p.perms:
+        return False
+    p.perms.remove(card)
+    if not card.is_token and not exile:
+        p.graveyard.append(card)
+    e["events"].append(f"{p.name}: {card.name} " + ("ins Exil" if exile else "zerstört"))
+    if link is None:
+        link = next((l for l in p.trap_links if l["trap"] == card), None)
+    if link is not None and link in p.trap_links:
+        p.trap_links.remove(link)
+        _return_linked(link, e)
+    for lock in list(p.lock_links):
+        if lock["aura"] == card:
+            p.lock_links.remove(lock)
+            lock["creature"].locked = False
+            break
+    for c in p.creatures:
+        if card in c.auras:
+            c.auras.remove(card)
+            break
+        if card in c.gear:
+            c.gear.remove(card)
+            break
+    bury((p, p.opponent) if p.opponent is not None else (p,), e)
+    return True
+
+
+def perm_abilities(me, opp, step, e):
+    """Eigene Main Phase (Sorcery-Zeit): Budding Insurgent opfert sich fuer ein Ziel aus Rang 1-3 (Karte, wenn es
+    eine legendaere Verzauberung war); The Echoverse Fulcrum, wenn die gegnerischen Kreaturen (Manawert + Power)
+    mindestens doppelt so viel wert sind wie unsere."""
+    for c in list(me.creatures):
+        if c.dead or not c.card.sac_perm_removal:
+            continue
+        targets = [t for t in noncreature_targets(me, opp, c.card.sac_perm_removal) if t[0] <= 3]
+        if not targets:
+            continue
+        target = targets[0][2]
+        card = target["trap"] if isinstance(target, dict) else target
+        c.dead = True
+        e["events"].append(f"{me.name}: opfert {c.card.name}")
+        bury((me,), e)
+        destroy_permanent(opp, target, e)
+        if c.card.sac_perm_draw and card.legendary and not card.is_artifact and not card.is_planeswalker:
+            _draw(me)
+    for card in list(me.perms):
+        if not card.sweep_ability:
+            continue
+        theirs = sum(c.card.mv + c.power for c in opp.creatures if not c.dead)
+        ours = sum(c.card.mv + c.power for c in me.creatures if not c.dead)
+        if theirs <= 0 or theirs < 2 * ours or not _pay_ability(me, card.sweep_ability, "free"):
+            continue
+        destroy_permanent(me, card, e, exile=True)
+        for c in me.creatures + opp.creatures:
+            c.dead = True
+        e["events"].append(f"{me.name}: {card.name} – alle Kreaturen zerstört")
+        bury((me, opp), e)
 
 
 def choose_discard(p):
@@ -1590,6 +1717,14 @@ def cast_removal(card, caster, victim, e, step, target=None):
         deal_noncombat(caster, victim, amount, e)
         e["events"].append(f"{caster.name}: {card.name} – {amount} Schaden an {victim.name}")
         return
+    if target is None and card.exile_until:  # Memory Trap: sonst ein Nichtkreatur-Permanent
+        nc = [t for t in noncreature_targets(caster, victim, "nonland") if t[0] <= 4]
+        if nc:
+            item = nc[0][2]
+            gone = item["trap"] if isinstance(item, dict) else item
+            caster.trap_links.append({"trap": card, "card": gone, "owner": victim, "creature": False})
+            destroy_permanent(victim, item, e, exile=True)
+            return
     if target is None:
         e["events"].append(f"{caster.name}: {card.name} ohne Ziel")
         return
@@ -1607,8 +1742,26 @@ def cast_removal(card, caster, victim, e, step, target=None):
         bury((caster, victim), e)  # als Antwort geopfert: der Zauber hat kein Ziel mehr (608.2b)
         e["events"].append(f"{caster.name}: {card.name} ohne Ziel ({target.card.name} geopfert)")
         return
+    if kind == "destroy" and card.exile_until:  # 610.3: Exil, bis die Falle das Spielfeld verlaesst
+        victim.creatures.remove(target)
+        _leave(victim, target.card)
+        if not target.card.is_token:
+            caster.trap_links.append({"trap": card, "card": target.card, "owner": target.owner or victim,
+                                      "creature": True})
+        e["events"].append(f"{caster.name}: {card.name} – {label} ins Exil")
+        bury((caster, victim), e)
+        return
     if kind == "destroy":
         target.dead = True
+    elif kind == "shuffle":  # Living Library: in die Bibliothek mischen
+        victim.creatures.remove(target)
+        _leave(victim, target.card)
+        if not target.card.is_token:
+            owner = target.owner or victim
+            owner.library.insert(random.randint(0, len(owner.library)), target.card)
+        e["events"].append(f"{caster.name}: {card.name} – {label} in die Bibliothek gemischt")
+        bury((caster, victim), e)
+        return
     elif kind in ("damage", "minus"):
         target.damage += amount
     elif kind == "counters":
@@ -1630,6 +1783,8 @@ def cast_removal(card, caster, victim, e, step, target=None):
         return
     elif kind == "lock":
         target.locked = True
+        if card in caster.perms:
+            caster.lock_links.append({"aura": card, "creature": target})
         e["events"].append(f"{caster.name}: {card.name} – {label} gesperrt")
         return
     elif kind == "tuck":
@@ -1643,6 +1798,8 @@ def cast_removal(card, caster, victim, e, step, target=None):
         if target.card.mv <= len(owner.lands) + 1:  # wieder spielbar: oben, sonst unten
             owner.library.insert(0, target.card)
             where = "oben"
+            if card.tuck_top_damage:  # Clash of Elements: oben kostet 2 Schaden
+                deal_noncombat(caster, owner, card.tuck_top_damage, e)
         else:
             owner.library.append(target.card)
             where = "unten"
@@ -1808,6 +1965,8 @@ def mode_value(p, opp, sub, step, end_step=False):
             target = choose_target(spec, p, opp)
             if target is not None:
                 return (5,) + danger(target)
+    if sub.perm_destroy and opp is not None and any(t[0] <= 4 for t in noncreature_targets(p, opp, sub.perm_destroy)):
+        return (5, 0, False, 0)
     if sub.draws:
         return (4, sub.draws)
     if sub.loot:
@@ -1858,6 +2017,7 @@ def card_effects(me, opp, card, step, entry, modes=None):
         for ef in once_effects(card):
             if ef[1] == "spell":
                 _jace_add(me, ef[2], entry)
+        gain_life(me, card.etb_life)  # Modus beim Betreten: "you gain N life" (z. B. Archive Arbiter)
     if card.treasure:
         me.treasures += card.treasure
     if card.heartwood:  # 111.10x: Heartwood-Token (Mana ab dem naechsten Zug)
@@ -1874,10 +2034,16 @@ def card_effects(me, opp, card, step, entry, modes=None):
     if card.self_damage:  # "damage to each player" trifft auch uns
         me.life -= card.self_damage
     effects = card
-    if card.removal and opp is not None and _edict_paid(me, opp, card, entry):
+    if card.removal and opp is not None and len(me.lands) >= card.etb_lands_needed \
+            and _edict_paid(me, opp, card, entry):
         cast_removal(card, me, opp, entry, step)
+        opp.treasures += card.victim_treasure  # Vraska, the Cutting Glare
         if card.removal[3]:  # any target: der Schaden ist schon verteilt
             effects = card._replace(modes=tuple(tuple(a for a in m if a[0] != "face") for m in card.modes))
+    if card.perm_destroy and opp is not None:  # Archive Arbiter
+        targets = [t for t in noncreature_targets(me, opp, card.perm_destroy) if t[0] <= 4]
+        if targets:
+            destroy_permanent(opp, targets[0][2], entry)
     if card.discard and opp is not None:
         discard(opp, card.discard, entry)
     for _k in range(card.impulse):  # Blazing Crescendo: bis Ende des naechsten eigenen Zugs spielbar
@@ -2151,6 +2317,9 @@ def instant_removals(p):
             out.append((card, _alts(p, card), card, True, "hand"))
         elif card.hand_removal:
             out.append((card, card.hand_removal[0], card._replace(removal=card.hand_removal[1]), False, "hand"))
+    for c in p.creatures:  # "{N}, Sacrifice this creature: Removal" (Living Library)
+        if c.card.sac_removal and not c.dead:
+            out.append((c.card, c.card.sac_removal[0], c.card._replace(removal=c.card.sac_removal[1]), False, "board"))
     if threshold(p):
         for card in p.exiled:
             if card.is_instant and card.removal and card.removal[4] == "spell":
@@ -2200,6 +2369,8 @@ def _any_mana(card):
 
 
 def _zone(p, zone):
+    if zone == "board":
+        return [c.card for c in p.creatures if not c.dead]
     return {"exile": p.exiled, "flashback": p.graveyard}.get(zone, p.hand)
 
 
@@ -2211,6 +2382,12 @@ def _use_removal(p, card, alts, is_spell, step, e, zone="hand", other=None, fx=N
         return False
     if zone == "flashback":  # aus dem Friedhof, danach ins Exil
         p.graveyard.remove(card)
+    elif zone == "board":  # die Kreatur opfert sich als Kosten
+        src = next(c for c in p.creatures if c.card == card and not c.dead)
+        src.dead = True
+        e["events"].append(f"{p.name}: opfert {card.name}")
+        bury((p,), e)
+        return True
     else:
         (p.exiled if zone == "exile" else p.hand).remove(card)
         ((p.exiled_from or other or p) if zone == "exile" else p).graveyard.append(card)
@@ -3350,6 +3527,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
             c.card.surveil_team_pump or c.card.combat_buff for c in alive):
         _jace_activate(me, step, e, True)
     stun_from_graveyard(me, opp, step, e)
+    perm_abilities(me, opp, step, e)
     equip_gear(me, step, e)
     # Faehigkeiten vor dem Angriff: Marken und Empower mit freiem Mana, Flying/Menace fuer den Angriff
     pre_attack_abilities(me, opp, step, e)

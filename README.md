@@ -509,7 +509,8 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
   Ende des gegnerischen Zugs.
 - Modelliert sind u. a. Jace (Empower) mit Angriffen auf Jace, aktivierte Fähigkeiten, Token, Prowess,
   Auslöser beim Wirken, Betreten, Angriff, Tod, Lebensgewinn, Scry/Surveil und Landfall, Friedhof (Flashback, Zurückholen,
-  Phoenix, Finality), modale Karten, Loot und Rummage, Ward, Ausrüstung, Stun-Marken, Karten aus dem
+  Phoenix, Finality), modale Karten, Loot und Rummage, Ward, Ausrüstung, Exil bis zum Verlassen (Memory Trap),
+  Removal gegen Verzauberungen und Artefakte, Stun-Marken, Karten aus dem
   Exil spielen, Schaden nach Toughness (Ghalta the Immovable), Legend-Regel, Handlimit, Kostensenkung und
   Zusatzkosten.
 - Counterspells: gekontert wird, was Lethal bringt, Removal auf die gefährlichste eigene Kreatur und Kreaturen

@@ -35,7 +35,8 @@ _BITE_THAT = re.compile(r"\btarget creature(?: or planeswalker)? an opponent con
                         r"creature you control deals damage equal to its power to that (?:permanent|creature)")
 # Zurueck in die Bibliothek, der Besitzer waehlt oben oder unten (Plan for All Outcomes)
 _TUCK = re.compile(r"\bthe owner of (?:up to one )?(?:other )?target (nonland permanent|creature|permanent)[^.]* puts "
-                   r"it on (?:their choice of )?the top or bottom of their library")
+                   r"it on (?:their choice of )?the top or bottom of their library|\bchoose target nonland permanent\. "
+                   r"its owner may put it on top of their library")
 _DAMAGE_EACH = re.compile(r"\bdeals? (\d+) damage to each (creature|other creature)")
 _MINUS = re.compile(r"\b" + _TARGET + r" creature[^.]*? gets? -(\d+|x)/-(\d+|x)")
 _FIGHT = re.compile(r"\bfights? (" + _TARGET + r" creature[^.]*|another target creature[^.]*)")

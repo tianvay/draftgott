@@ -220,6 +220,17 @@ RULES = [
     "Spielers; Loot als Effekt (Divining Duelist, Echoverse Fulcrum) und als Artefakt-Fähigkeit (Murmuring Volume). "
     "Jiang Yanggu: legendäres Token Mowu, eigene Token enttappen am Zugende. Proft, Sinister Mastermind erst ab "
     "Threshold wirkbar (601.3). „You lose N life“ beim Auflösen.",
+    "Exil bis zum Verlassen (610.3; Memory Trap, Solitary Cell): die gefährlichste passende Kreatur, sonst ein "
+    "Nichtkreatur-Permanent. Verlässt die Falle das Spielfeld, kommt die Karte unter der Kontrolle ihres Besitzers "
+    "zurück (610.3c) als neues Objekt (400.7: ohne Marken, mit Einsatzverzögerung, Betreten-Effekte wirken); Token "
+    "nicht (111.8). Nichtkreatur-Ziele: 1. Falle mit unserer Karte, 2. Lock-Aura auf unserer Kreatur, 3. Splinter "
+    "Twin oder Ausrüstung an seiner Kreatur, 4. sonstige Verzauberungen/Artefakte (Way of … vor anderen, dann "
+    "Manawert), nie Token. Budding Insurgent opfert sich nur für Rang 1–3 (Karte bei legendärer Verzauberung); "
+    "Archive Arbiter zerstört bei Rang 1–4, sonst 4 Leben. Lock-Auras geben die Kreatur frei, wenn sie gehen, und "
+    "gehen, wenn die Kreatur geht (704.5m). Clash of Elements wie Plan for All Outcomes, oben mit 2 Schaden; Vraska, "
+    "the Cutting Glare ab 6 Ländern (der Gegner bekommt ein Treasure); Living Library mit 6 offenem Mana gegen die "
+    "gefährlichste Kreatur (in die Bibliothek gemischt); The Echoverse Fulcrum, wenn die gegnerischen Kreaturen "
+    "(Manawert + Power) mindestens doppelt so viel wert sind wie unsere.",
     "Noch nicht im Kampf: weitere Auslöser und Fähigkeiten (siehe Modell-Abdeckung). Solche Karten werden gewirkt, "
     "wirken aber nur mit den schon modellierten Effekten.",
 ]

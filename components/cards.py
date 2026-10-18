@@ -167,6 +167,15 @@ class Card(NamedTuple):
     end_untap_tokens: bool = False  # eigenes Endsegment: alle eigenen Token enttappen (Jiang Yanggu, Never Alone)
     cast_threshold: bool = False  # nur wirkbar ab 7 Karten im Friedhof (601.3; Proft, Sinister Mastermind)
     life_loss: int = 0         # "You lose N life" beim Aufloesen
+    exile_until: bool = False  # Removal: Exil, bis diese Karte das Spielfeld verlaesst (610.3; Memory Trap)
+    sac_perm_removal: str = ""  # "Sacrifice this creature: Destroy target artifact or enchantment" (Budding Insurgent)
+    sac_perm_draw: bool = False  # ... und eine Karte, wenn es eine legendaere Verzauberung war
+    perm_destroy: str = ""     # Effekt: Nichtkreatur-Permanent zerstoeren: "noncreature" / "artifact_enchantment"
+    tuck_top_damage: int = 0   # Bibliothek: legt der Besitzer sie oben hin, bekommt er N Schaden (Clash of Elements)
+    etb_lands_needed: int = 0  # Removal beim Betreten nur mit so vielen Laendern (Vraska, the Cutting Glare)
+    victim_treasure: int = 0   # der Gegner bekommt Treasure-Token (Vraska, the Cutting Glare)
+    sac_removal: tuple = ()    # "{N}, Sacrifice this creature: Removal" (Living Library): (Kosten, Removal-Spec)
+    sweep_ability: tuple = ()  # "{N}, {T}, Exile this: Destroy all creatures" (Echoverse Fulcrum): Kosten
 
 
 LANDCYCLE_RE = re.compile(
@@ -1235,6 +1244,53 @@ def package_a_traits(card, type_line):
     return out
 
 
+_NUM_WORDS = {"two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8}
+_B1_RES = {
+    "exile_until": re.compile(r"\buntil this (?:enchantment|artifact|creature) leaves the battlefield"),
+    "sac_perm": re.compile(r"^sacrifice (?:~|this creature): destroy target artifact or enchantment\."),
+    "perm_destroy": re.compile(r"(?:^|, )destroy target (noncreature, nonland permanent|artifact or enchantment)\.?$"),
+    "tuck_top": re.compile(r"its owner may put it on top of their library\. if they do, ~ deals (\d+) damage to them"),
+    "etb_lands": re.compile(r"^when (?:~|this creature) enters, if you control (\w+) or more lands"),
+    "victim_treasure": re.compile(r"\bthey create a treasure token"),
+    "sac_removal": re.compile(r"^((?:\{[^}]+\})+), sacrifice (?:~|this creature): choose target creature or "
+                              r"planeswalker an opponent controls\. its owner shuffles it into their library"),
+    "sweep_ability": re.compile(r"^((?:\{[^}]+\})+), \{t\}, exile (?:~|this [a-z]+): destroy all creatures\. activate "
+                                r"only as a sorcery"),
+}
+
+
+def b1_traits(card, type_line):
+    """B1: Exil bis zum Verlassen, Removal gegen Nichtkreatur-Permanents, Bibliothek mit Schaden, Bedingungen."""
+    out = {}
+    res = _B1_RES
+    spell_face = "Instant" in type_line or "Sorcery" in type_line
+    for _raw, low in _clean_lines(card):
+        if res["exile_until"].search(low):
+            out["exile_until"] = True
+        if res["sac_perm"].match(low):
+            out["sac_perm_removal"] = "artifact_enchantment"
+            if "legendary enchantment, draw a card" in low:
+                out["sac_perm_draw"] = True
+        m = res["perm_destroy"].search(low)
+        if m and (spell_face or low.startswith("when")) and not res["sac_perm"].match(low):
+            out["perm_destroy"] = "noncreature" if m.group(1).startswith("noncreature") else "artifact_enchantment"
+        m = res["tuck_top"].search(low)
+        if m:
+            out["tuck_top_damage"] = int(m.group(1))
+        m = res["etb_lands"].match(low)
+        if m:
+            out["etb_lands_needed"] = _NUM_WORDS.get(m.group(1)) or int(m.group(1))
+        if res["victim_treasure"].search(low):
+            out["victim_treasure"] = 1
+        m = res["sac_removal"].match(low)
+        if m:
+            out["sac_removal"] = (cost_alternatives(m.group(1).upper()), ("shuffle", 0, (), False, "spell", False))
+        m = res["sweep_ability"].match(low)
+        if m:
+            out["sweep_ability"] = cost_alternatives(m.group(1).upper())
+    return out
+
+
 def counter_traits(card):
     """Counterspells (L1): Art, Farbbedingung, "unless its controller pays {N}"; Behold a Jace; nicht konterbar."""
     out = {}
@@ -1629,6 +1685,7 @@ def card_info(card):
                 grant_kw=grant_keywords(card, type_line), **package_s_traits(card), **package_m_traits(card),
                 **package_m2_traits(card), **package_m3_traits(card, type_line),
                 **counter_traits(card), **walker_traits(card), **package_a_traits(card, type_line),
+                **b1_traits(card, type_line),
                 removal_points=(removal_info(card) or {}).get("points", 0.0),
                 creature_types=(tuple(t.lower() for t in type_line.split("—", 1)[1].split())
                                 if is_creature and "—" in type_line else ())), shown
