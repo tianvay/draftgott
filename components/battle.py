@@ -461,12 +461,20 @@ def _discounted(card, d, p=None):
     own = own_reduction(p, card)
     if own:
         card = reduced(card, own)
-    change = (0 if card.is_creature else d) - card.extra_cost
+    extra = 0 if card.behold_jace and has_jace(p) else card.extra_cost  # Countersculpt: "behold a Jace or pay {1}"
+    change = (0 if card.is_creature else d) - extra
     if not change:
         return card
     if change > 0:
         return reduced(card, change)
     return card._replace(alts=tuple(sorted({(max(0, g - change), cols) for g, cols in card.alts})))
+
+
+def has_jace(p):
+    """Behold a Jace: ein Jace unter unserer Kontrolle (auch der Jace-Token) oder eine Jace-Karte auf der Hand."""
+    if p is None:
+        return False
+    return p.jace.loyalty > 0 or any(c.is_jace for c in p.hand) or any(c.is_jace for c in p.perms)
 
 
 def _alts(p, card):
@@ -1393,10 +1401,119 @@ def cast_removal(card, caster, victim, e, step, target=None):
     target.finality = before
 
 
+def _counter_mode(card):
+    """Die Counter-Wirkung einer Karte (sie selbst oder ihr Modus), sonst None."""
+    if not card.is_instant:
+        return None
+    if card.counter:
+        return card
+    if card.choices:
+        return next((sub for sub in card.choices[1] if sub.counter), None)
+    return None
+
+
+def counter_fits(mode, spell):
+    """Darf dieser Counter den Zauber treffen (Art und Farbe des Zaubers)?"""
+    kind, colors, _n = mode.counter
+    if kind == "creature_or_legendary" and not (spell.is_creature or spell.legendary):
+        return False
+    if kind == "noncreature" and spell.is_creature:
+        return False
+    return not colors or bool(colors_of_alts(spell.alts) & set(colors))
+
+
+def counter_reason(holder, caster, spell, threat=None):
+    """Kontern wir (holder) den Zauber von caster? 1. er bringt Lethal (Schaden am Spieler; Kampftrick oder Kreatur mit
+    Haste, mit denen der Angriff Lethal wird), 2. Removal auf unsere gefaehrlichste Kreatur (auch Massenremoval, das sie
+    toetet; keine Edikte), 3. Kreatur ab Manawert 3. threat: "lethal" oder das Ziel des Removals."""
+    if threat == "lethal":
+        return True
+    face = sum(a[1] for m in spell.modes[:1] for a in m if a[0] == "face")
+    spec = spell.removal
+    if spec and spec[0] == "damage" and spec[3]:
+        face = max(face, _amount(spec, caster))
+    if face and face >= holder.life:
+        return True
+    alive = [c for c in holder.creatures if not c.dead]
+    if spec and alive:
+        best = max(alive, key=danger)
+        if spec[0] == "sweep":
+            return True
+        if spec[0] == "sweep_damage":
+            if best.toughness - best.damage <= spec[1]:
+                return True
+        elif spec[0] != "edict":
+            target = threat if isinstance(threat, Creature) else choose_target(spec, caster, holder)
+            if target is best:
+                return True
+    if spell.is_creature and spell.mv >= 3:
+        return True
+    if spell.is_creature and spell.haste and caster.turn_start == caster.now:  # Haste vor dem Kampf
+        new = Creature(spell, caster.now)
+        new.ctl = caster
+        mine = [c for c in caster.creatures if can_attack(c, caster.now)]
+        blockers = [b for b in holder.creatures if not b.tapped and not b.dead]
+        if max_through(mine + [new], blockers) >= holder.life > max_through(mine, blockers):
+            return True
+    return False
+
+
+def try_counter(caster, spell, step, e, threat=None, effects=None):
+    """Antwortfenster: der Gegner von caster darf den Zauber kontern (701.6). Er nutzt den billigsten passenden
+    Counterspell mit offenem Mana; weiche Counter ("unless its controller pays {N}") nur, wenn caster nicht zahlen kann.
+    Ein Counterspell ist selbst keiner der Gruende, also gibt es keine Gegenkonter. Gibt True zurueck, wenn gekontert."""
+    holder = caster.opponent
+    if holder is None or spell.uncounterable:
+        return False
+    if not any(counter_reason(holder, caster, fx, threat) for fx in [spell] + list(effects or ())):
+        return False
+    options = []
+    for c in holder.hand:
+        mode = _counter_mode(c)
+        if mode is None or not counter_fits(mode, spell):
+            continue
+        n = mode.counter[2]
+        if n and _payable(caster, ((n, ()),)):
+            continue  # weicher Counter: der Gegner wuerde zahlen
+        alts = _alts(holder, c)
+        if _payable(holder, alts):
+            options.append((min(g + sum(k for _c, k in cols) for g, cols in alts), c.name, c, alts))
+    if not options:
+        return False
+    _cost, _name, card, alts = min(options, key=lambda o: (o[0], o[1]))
+    _pay_open(holder, alts)
+    holder.hand.remove(card)
+    holder.graveyard.append(card)
+    on_cast(holder, card, step, e)
+    e["events"].append(f"{holder.name}: {card.name} kontert {spell.name}")
+    return True
+
+
+def held_counter(p, orig=None):
+    """Billigster Counterspell der Hand (Kosten nach Behold a Jace) zum Freihalten: (Karte, Kosten) oder None.
+    orig: Handkarte -> Originalkarte (siehe held_removal)."""
+    orig = orig or {}
+    opts = [(c, _alts(p, orig.get(c, c))) for c in p.hand if _counter_mode(c) is not None]
+    if not opts:
+        return None
+    return min(opts, key=lambda o: (min(g + sum(n for _c, n in cols) for g, cols in o[1]), o[0].name))
+
+
 def _resolve(me, opp, card, step, entry, owner=None, to_exile=False, modes=None):
     """Eine gewirkte Karte kommt ins Spiel bzw. wirkt: Kreatur aufs Feld, Permanents, Instants/Sorceries in den
     Friedhof. Erst die Ausloeser beim Wirken (on_cast), dann bei Permanents die Betreten-Effekte (wie bei jedem
-    anderen Weg ins Spiel), bei Instants/Sorceries und Prepared-Kopien ihre Effekte (card_effects)."""
+    anderen Weg ins Spiel), bei Instants/Sorceries und Prepared-Kopien ihre Effekte (card_effects). Vorher darf der
+    Gegner kontern: dann nur die Ausloeser beim Wirken, die Karte geht in den Friedhof (Flashback: Exil, Kopie: weg)."""
+    if try_counter(me, card, step, entry, effects=modes):
+        if card.is_copy:
+            src = next((c for c in me.creatures if c.prepared and c.card.prepared[1] == card), None)
+            if src is not None:
+                src.prepared = False
+        elif not to_exile:
+            (owner or me).graveyard.append(card)
+        on_cast(me, card, step, entry)
+        bury((me, opp), entry)
+        return
     if card.is_copy:  # Prepared-Kopie: eine passende Kreatur ist nicht mehr prepared, kein Friedhof
         src = next((c for c in me.creatures if c.prepared and c.card.prepared[1] == card), None)
         if src is not None:
@@ -1728,10 +1845,14 @@ def combat_tricks(p, pairs, opp, e, step, attacking):
                 for c, (pu, bo, tp, ex) in zip(own, saved):
                     c.pump, c.bonus, c.tpump, c.extra = pu, bo, tp, ex
                 if gain > 0 and (best is None or gain > best[0]):
-                    best = (gain, mode, i, tough, grants)
+                    best = (gain, mode, i, tough, grants, base < 1000 <= base + gain)
         if best is None:
             continue
         _cast_from_open(p, card)
+        if try_counter(p, card, step, e, threat="lethal" if best[5] else None):
+            p.graveyard.append(card)
+            on_cast(p, card, step, e)
+            continue
         _apply_trick(best[1], own[best[2]], own, best[3], best[4])
         if card.is_creature:
             p.creatures.append(Creature(card, step))
@@ -1766,12 +1887,15 @@ def instant_removals(p):
     return out
 
 
-def held_removal(me, opp):
+def held_removal(me, opp, orig=None):
     """Mana freihalten (Variante B): das billigste Removal, das wir im Zug des Gegners mit offenem Mana nutzen koennen
     (Instants, Removal per Abwerfen von der Hand, Flash-Kreaturen mit Removal beim Betreten), wenn der Gegner jetzt
-    eine Kreatur hat, die es toetet. Gibt (Karte, Kosten) oder None zurueck."""
-    opts = [(card, alts, rc) for card, alts, rc, _spell, zone in instant_removals(me) if zone == "hand"]
-    opts += [(c, _alts(me, c), c) for c in me.hand
+    eine Kreatur hat, die es toetet. Gibt (Karte, Kosten) oder None zurueck. orig: Handkarte -> Originalkarte (in der
+    Main Phase sind die Kosten der Handkarten schon angepasst; nicht doppelt rechnen)."""
+    orig = orig or {}
+    opts = [(card, _alts(me, orig.get(card, card)) if not card.hand_removal else alts, rc)
+            for card, alts, rc, _spell, zone in instant_removals(me) if zone == "hand"]
+    opts += [(c, _alts(me, orig.get(c, c)), c) for c in me.hand
              if c.flash and c.is_creature and c.removal and c.removal[4] == "etb" and legend_ok(me, c)]
     alive = [c for c in opp.creatures if not c.dead]
     ok = []
@@ -1805,9 +1929,10 @@ def _zone(p, zone):
     return {"exile": p.exiled, "flashback": p.graveyard}.get(zone, p.hand)
 
 
-def _use_removal(p, card, alts, is_spell, step, e, zone="hand", other=None, fx=None):
+def _use_removal(p, card, alts, is_spell, step, e, zone="hand", other=None, fx=None, target=None):
     """Bezahlt und legt die Karte in den Friedhof (gewirkt oder abgeworfen); aus dem Exil in den Friedhof des
-    Besitzers (other: der Gegner, falls der Besitzer nicht gespeichert ist)."""
+    Besitzers (other: der Gegner, falls der Besitzer nicht gespeichert ist). Gibt False zurueck, wenn der Zauber
+    gekontert wurde (dann kein Removal)."""
     if not _pay_open(p, alts):
         return False
     if zone == "flashback":  # aus dem Friedhof, danach ins Exil
@@ -1815,6 +1940,9 @@ def _use_removal(p, card, alts, is_spell, step, e, zone="hand", other=None, fx=N
     else:
         (p.exiled if zone == "exile" else p.hand).remove(card)
         ((p.exiled_from or other or p) if zone == "exile" else p).graveyard.append(card)
+    if is_spell and try_counter(p, card, step, e, threat=target, effects=[fx] if fx is not None else None):
+        on_cast(p, card, step, e)
+        return False
     if is_spell:
         on_cast(p, card, step, e)
         fx = fx or card  # Effekte: bei modalen Karten der gewaehlte Modus
@@ -1846,8 +1974,8 @@ def respond_to_attack(dfn, att, attackers, e, step):
         if not options:
             break
         _d, card, target, alts, rc, is_spell, zone = max(options, key=lambda o: (o[0], -o[1].mv))
-        _use_removal(dfn, card, alts, is_spell, step, e, zone, att, rc)
-        cast_removal(rc, dfn, att, e, step, target=target)
+        if _use_removal(dfn, card, alts, is_spell, step, e, zone, att, rc, target=target):
+            cast_removal(rc, dfn, att, e, step, target=target)
     alive = [a for a in attackers if a in att.creatures and not a.dead and not a.locked]
     for card in sorted([c for c in dfn.hand if c.flash and c.is_creature], key=lambda c: -c.mv):
         if not affordable(dfn, card) or not legend_ok(dfn, card):
@@ -1858,6 +1986,10 @@ def respond_to_attack(dfn, att, attackers, e, step):
         good = any(can_block(new, a) and outcome(a, [new]) == (True, [False]) for a in alive)
         if lethal or good:
             _cast_from_open(dfn, card)
+            if try_counter(dfn, card, step, e):
+                dfn.graveyard.append(card)
+                on_cast(dfn, card, step, e)
+                continue
             dfn.creatures.append(new)
             e["events"].append(f"{dfn.name}: {card.name} mit Flash als Blocker")
             if card.treasure:
@@ -1876,8 +2008,8 @@ def end_step_instants(dfn, act, e, step):
             continue
         if rc.removal[3] and choose_target(rc.removal, dfn, act) is None and act.life > _amount(rc.removal, dfn):
             continue  # "any target" am Endstep nur gegen eine Kreatur oder als Lethal
-        _use_removal(dfn, card, alts, is_spell, step, e, zone, act, rc)
-        cast_removal(rc, dfn, act, e, step)
+        if _use_removal(dfn, card, alts, is_spell, step, e, zone, act, rc):
+            cast_removal(rc, dfn, act, e, step)
     for card in sorted([c for c in dfn.hand if c.flash], key=lambda c: -c.mv):
         if card in dfn.hand and legend_ok(dfn, card) and _cast_from_open(dfn, card):
             e["events"].append(f"{dfn.name}: {card.name} mit Flash am Ende des Zugs")
@@ -1896,7 +2028,7 @@ def end_step_instants(dfn, act, e, step):
             e["events"].append(f"{dfn.name}: {card.name} am Ende des Zugs")
             _resolve(dfn, act, card, step, e, modes=[card.choices[1][best[1]]])
     for card in sorted([c for c in dfn.hand if c.is_instant and not c.removal and not _trick_atoms(c)
-                        and not c.choices], key=lambda c: -c.mv):
+                        and not c.choices and not c.counter], key=lambda c: -c.mv):
         if card in dfn.hand and reanimate_ok(dfn, card) and _cast_from_open(dfn, card):
             e["events"].append(f"{dfn.name}: {card.name} am Ende des Zugs")
             _resolve(dfn, act, card, step, e)
@@ -2540,6 +2672,8 @@ def debuff_tricks(p, pairs, opp, e, step, attacking):
         p.hand.remove(card)
         p.graveyard.append(card)
         on_cast(p, card, step, e)
+        if try_counter(p, card, step, e):
+            continue
         pay_ward(p, target, e)
         target.pump -= n
         e["events"].append(f"{p.name}: {card.name} – {target.card.name} −{n}/−0")
@@ -2697,7 +2831,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
             ward_of[dear] = n
     spells = phase_spells()
     # Mana fuer Removal im Zug des Gegners freihalten, wenn er jetzt ein passendes Ziel hat (Variante B)
-    held, kept = held_removal(me, opp) if forced is None else None, []
+    held, kept = held_removal(me, opp, orig) if forced is None else None, []
     if held is not None:
         left = pay(pool_all, held[1])
         if left is not None:
@@ -2708,6 +2842,23 @@ def take_turn(me, opp, step, rnd, skip_draw):
             if held[0] in spells:
                 spells.remove(held[0])
             e["events"].append(f"{me.name}: hält {len(kept)} Mana für {held[0].name} offen")
+    hc = held_counter(me, orig) if rnd >= 5 and forced is None else None  # Counterspell ab Runde 5 freihalten
+    if hc is not None:
+        left = pay(pool_all, hc[1])
+        if left is None and kept:  # beides geht nicht: nur der Counterspell
+            pool_all = pool_all + kept
+            kept = []
+            e["events"] = [ev for ev in e["events"] if not ev.startswith(f"{me.name}: hält ")]
+            if held is not None and held[0] in me.hand and held[0] not in spells and not held[0].is_instant:
+                spells.append(held[0])
+            left = pay(pool_all, hc[1])
+        if left is not None:
+            used = list(pool_all)
+            for u in left:
+                used.remove(u)
+            kept += used
+            pool_all = left
+            e["events"].append(f"{me.name}: hält {len(used)} Mana für {hc[0].name} offen")
     me.ward_pool = None
     _score_, chosen = best_cast_reduced(spells, land_key(pool_all), has_creature, True, must=forced)
     if treasure_count(me) and forced is None:  # Treasure nur, wenn er diese Runde mehr ermoeglicht
@@ -2819,9 +2970,9 @@ def take_turn(me, opp, step, rnd, skip_draw):
             continue
         eaters = [t for t in valid_targets(rc.removal, me, opp) if any(_eats(t, a) for a in candidates)]
         if eaters:
-            _use_removal(me, card, alts, is_spell, step, e, zone, opp, rc)
             me.cast_count += 1 if is_spell else 0
-            cast_removal(rc, me, opp, e, step, target=max(eaters, key=danger))
+            if _use_removal(me, card, alts, is_spell, step, e, zone, opp, rc, target=max(eaters, key=danger)):
+                cast_removal(rc, me, opp, e, step, target=max(eaters, key=danger))
     # Jace surveilt schon vor dem Kampf, wenn das in diesem Kampf etwas bringt (Prudent Fateseer, Futurescribe)
     alive = [c for c in me.creatures if not c.dead]
     if 0 < me.jace.loyalty < 3 and not me.surveilled and any(c.card.surveil_team_pump or c.card.combat_buff

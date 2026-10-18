@@ -144,6 +144,9 @@ class Card(NamedTuple):
     draw3_token: object = None  # jedes Endsegment: 3+ Karten in diesem Zug gezogen -> dieses Token (Lyra, Tolarian)
     combat_draw_ability: tuple = ()  # "Kosten: Until end of turn, whenever ~ deals combat damage to a player, draw N"
     equip: tuple = ()          # Ausruestung: (Equip-Kosten, +P, +T, {1} billiger je +1/+1-Marke am Ziel)
+    counter: tuple = ()        # Counterspell: (Art any/noncreature/creature_or_legendary, Farben, unless-Kosten N)
+    behold_jace: bool = False  # Zusatzkosten "behold a Jace or pay {N}": mit Jace entfallen sie (Countersculpt)
+    uncounterable: bool = False  # "This spell can't be countered."
 
 
 LANDCYCLE_RE = re.compile(
@@ -1053,6 +1056,30 @@ def package_m3_traits(card, type_line):
     return out
 
 
+_COLOR_LETTER = {"white": "W", "blue": "U", "black": "B", "red": "R", "green": "G"}
+_COUNTERSPELL_RE = re.compile(r"^counter target (?:(white|blue|black|red|green) or (white|blue|black|red|green) |"
+                              r"(white|blue|black|red|green) |(creature or legendary) |(noncreature) )?spell"
+                              r"(?: unless its controller pays \{(\d+)\})?\.")
+_BEHOLD_RE = re.compile(r"^as an additional cost to cast this spell, behold a jace or pay \{\d+\}")
+_UNCOUNTERABLE_RE = re.compile(r"^this spell can't be countered")
+
+
+def counter_traits(card):
+    """Counterspells (L1): Art, Farbbedingung, "unless its controller pays {N}"; Behold a Jace; nicht konterbar."""
+    out = {}
+    for _raw, low in _clean_lines(card):
+        m = _COUNTERSPELL_RE.match(low)
+        if m:
+            colors = tuple(sorted(_COLOR_LETTER[c] for c in m.group(1, 2, 3) if c))
+            kind = "creature_or_legendary" if m.group(4) else "noncreature" if m.group(5) else "any"
+            out["counter"] = (kind, colors, int(m.group(6)) if m.group(6) else 0)
+        if _BEHOLD_RE.match(low):
+            out["behold_jace"] = True
+        if _UNCOUNTERABLE_RE.match(low):
+            out["uncounterable"] = True
+    return out
+
+
 def package_m2_traits(card):
     """Paket M, Teil 2: Loot/Rummage, Enttappen, Ausloeser beim Betreten anderer Kreaturen, Ward."""
     out = {}
@@ -1427,6 +1454,7 @@ def card_info(card):
                 creates_tokens=creates_tokens(card, type_line), choices=modal_choices(card, type_line),
                 grant_kw=grant_keywords(card, type_line), **package_s_traits(card), **package_m_traits(card),
                 **package_m2_traits(card), **package_m3_traits(card, type_line),
+                **counter_traits(card),
                 removal_points=(removal_info(card) or {}).get("points", 0.0),
                 creature_types=(tuple(t.lower() for t in type_line.split("—", 1)[1].split())
                                 if is_creature and "—" in type_line else ())), shown

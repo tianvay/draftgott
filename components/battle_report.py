@@ -182,6 +182,17 @@ RULES = [
     "Mana, wenn sie angreift und kein Blocker sie aufhalten kann. Ausrüstung (Warrior's Blades): vor dem Angriff "
     "mit freiem Mana an den stärksten Angreifer (Gleichstand: meiste Marken, Equip {1} billiger je Marke); "
     "umgehängt nur, wenn die bisherige Kreatur nicht angreifen kann; stirbt sie, bleibt die Ausrüstung liegen.",
+    "Counterspells (701.6): Vor dem Auflösen jedes Zaubers darf der andere Spieler kontern. Gekontert wird nur, "
+    "1. was Lethal bringt (Schaden am Spieler, Kampftrick oder Kreatur mit Haste, mit denen der Angriff Lethal wird), "
+    "2. Removal auf unsere gefährlichste Kreatur (auch Massenremoval, das sie tötet; keine Edikte), 3. eine Kreatur "
+    "ab Manawert 3. Der billigste passende Counterspell (Farbe, Kreatur/Nichtkreatur); „unless its controller pays "
+    "{N}“ nur, wenn der Zaubernde nicht zahlen kann (er zahlt, wenn er kann, plant es aber nicht ein). Ab Runde 5 "
+    "halten wir Mana für den billigsten Counterspell frei (mit Removal zusammen, wenn das Mana reicht, sonst nur den "
+    "Counterspell). Gekonterte Zauber gehen in den Friedhof (Flashback: Exil); Auslöser beim Wirken passieren "
+    "trotzdem. Countersculpt: „behold a Jace“ mit Jace-Token oder Jace-Karte auf der Hand, sonst {1} mehr. "
+    "Fähigkeiten sind keine Zauber und können nicht gekontert werden.",
+    "Festgelegt: keine Gegenkonter. Ein Counterspell ist keiner der drei Gründe, also wird er selbst nie gekontert "
+    "(bewusst so gewählt, kann später erweitert werden).",
     "Noch nicht im Kampf: weitere Auslöser und Fähigkeiten (siehe Modell-Abdeckung). Solche Karten werden gewirkt, "
     "wirken aber nur mit den schon modellierten Effekten.",
 ]

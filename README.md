@@ -503,7 +503,9 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
   Phoenix, Finality), modale Karten, Loot und Rummage, Ward, Ausrüstung, Stun-Marken, Karten aus dem
   Exil spielen, Schaden nach Toughness (Ghalta the Immovable), Legend-Regel, Handlimit, Kostensenkung und
   Zusatzkosten.
-- Nicht modelliert sind u. a. Counterspells, Planeswalker außer dem Jace-Token, Convoke, Opfern als Kosten (außer Edgar, Ancient Bloodlord); solche Karten werden gespielt, wirken aber nur mit ihren modellierten Effekten.
+- Counterspells: gekontert wird, was Lethal bringt, Removal auf die gefährlichste eigene Kreatur und Kreaturen
+  ab Manawert 3; ab Runde 5 bleibt Mana dafür frei. Festgelegt: keine Gegenkonter.
+- Nicht modelliert sind u. a. Planeswalker außer dem Jace-Token, Convoke, Opfern als Kosten (außer Edgar, Ancient Bloodlord); solche Karten werden gespielt, wirken aber nur mit ihren modellierten Effekten.
 
 ## Details pro Variante
 
