@@ -261,7 +261,7 @@ Die tatsächliche Länge eines Spiels ist der größte der drei Werte `--max-run
 | `--min-handkarten N` | `5` | Fällt die Starthand durch Mulligans unter N Karten, gilt das Spiel als verloren und wird nicht gespielt. Bei `4` darf also noch auf 4 Karten gespielt werden. |
 
 Die Mulligan-Regeln selbst (keine spielbare Karte nach Farben, 6 oder mehr Länder, höchstens 2 Länder bei weniger als
-3 spielbaren Karten) sind fest eingebaut. Siehe „Feste Annahmen“.
+3 spielbaren Karten, Ausnahme Landcycling) und der London-Mulligan sind fest eingebaut. Siehe „Feste Annahmen“.
 
 ### Landcycling
 
@@ -357,8 +357,12 @@ Diese Werte stehen im Skript und lassen sich nur dort ändern.
   Alles darunter ist rot. Beim schnellsten Lethal gilt: grün bis Runde 5, gelb Runde 6 und 7, rot ab Runde 8
   (Funktion `lethal_level`).
 - **Mulligan-Regeln:** (1) mit den Länderfarben der Hand ist keine Karte spielbar (nur Farben, nicht die Manamenge),
-  (2) 6 oder mehr Länder, (3) höchstens 2 Länder und weniger als 3 mit diesen Ländern bezahlbare Karten. Bei einem
-  Mulligan wird neu gemischt und eine Karte weniger gezogen, dieselben Regeln gelten für jede neue Hand.
+  (2) 6 oder mehr Länder, (3) höchstens 2 Länder und weniger als 3 mit diesen Ländern bezahlbare Karten.
+  Ausnahme Landcycling: Eine Hand mit 6 oder 7 Karten, mindestens 2 Ländern, einer Karte mit Basic Landcycling und einer anderen Nichtland-Karte bis Manawert 3 wird trotz zu weniger Länder oder fehlender Farben behalten.
+  London-Mulligan (103.5): Bei einem Mulligan wird neu gemischt, wieder 7 Karten gezogen und je Mulligan eine Karte
+  unter die Bibliothek gelegt. Behalten wird die Auswahl ohne Mulligan-Grund, dann mit dem Länderanteil am nächsten
+  am Deck (bei Gleichstand ein Land mehr), dann mit den meisten bezahlbaren Karten, dann mit den geringsten
+  Manakosten.
 - **Kartenauswahl pro Runde:** Aus allen zusammen bezahlbaren Kombinationen gewinnt nacheinander: (1) die meiste
   Mana-Ausgabe, (2) die meisten Kreaturen, (3) die höchste Summe aus Power und Toughness, (4) die meisten Karten.
   Es gibt keine Vorausschau auf spätere Runden, außer beim Landcycling. Eine Karte, die sofort Mana liefert

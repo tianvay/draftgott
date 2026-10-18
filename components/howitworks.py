@@ -143,7 +143,11 @@ def _sections():
             "<b>Zu viele Länder:</b> 6 oder mehr Länder auf der Starthand.",
             "<b>Zu wenige Länder:</b> Höchstens 2 Länder und weniger als 3 Karten, die sich mit diesen Ländern bezahlen "
             "lassen (Manawert und Farben). Zwei Länder plus lauter 1- und 2-Mana-Karten werden also behalten."])
-            + _p("Bei einem Mulligan wird das Deck neu gemischt und eine neue Starthand mit einer Karte weniger gezogen. "
+            + _p("Bei einem Mulligan wird das Deck neu gemischt, es werden wieder 7 Karten gezogen und je Mulligan "
+                 "eine Karte unter die Bibliothek gelegt (London-Mulligan): behalten wird die Auswahl ohne "
+                 "Mulligan-Grund, dann mit dem Länderanteil am nächsten am Deck, dann mit den meisten bezahlbaren "
+                 "Karten, dann mit den geringsten Manakosten. "
+                 "Ausnahme Landcycling: eine Hand mit 6 oder 7 Karten, mindestens 2 Ländern, einer Karte mit Basic Landcycling und einer anderen Nichtland-Karte bis Manawert 3 wird trotz zu weniger Länder oder fehlender Farben behalten. "
                  "Dieselben Regeln gelten für jede neue Hand. Fällt die Hand unter die Mindestzahl "
                  f"(<code>--min-handkarten</code>, Standard {_D.min_handkarten}), gilt das Spiel als verloren; auch eine "
                  "Hand dieser Größe, die einen Mulligan auslösen würde, zählt als verloren. Mit <code>--ohne-mulligan"

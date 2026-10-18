@@ -51,7 +51,8 @@ def logic_example():
 def render_logic_section(has_jace=False):
     tables, flow = logic_example()
     steps = [
-        "<b>Starthand:</b> 7 Karten, bei Bedarf Mulligan mit einer Karte weniger (Regeln im Abschnitt Mulligan).",
+        "<b>Starthand:</b> 7 Karten, bei Bedarf London-Mulligan: wieder 7 ziehen, je Mulligan eine Karte unter die "
+        "Bibliothek (Regeln im Abschnitt Mulligan).",
         "<b>Ziehen:</b> Auf dem Play entfällt die Karte in Runde 1, auf dem Draw wird jede Runde gezogen.",
         "<b>Landcycling (Pflicht):</b> Fehlt in den ersten Runden ein Land auf der Hand, wird ein Landcycler "
         "gecycelt, damit der Landdrop klappt.",
