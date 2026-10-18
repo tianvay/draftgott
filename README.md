@@ -539,6 +539,9 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
 - Lilianas lösen auch bei Planeswalkern aus; Liliana the Repentant holt per Exhaust einmal eine Kreatur oder einen
   Planeswalker ab Manawert 4 zurück; Mabel, Bitter Recluse entfernt Marken (Loyalty zuerst); Tam verbilligt
   Planeswalker-Zauber um {1}; Rewrite Regrets holt Kreaturen und Planeswalker zurück.
+- Kleinere FRA-Effekte (Mill, Threshold-Boni, Loot beim Angriff, Token-Bonus, Roiling Canopy, Hapatra, Eye of
+  Jace, Enroot, Germinate Recruits, Room of Refuge, Solitary Cell u. a.) wirken im Kampfmodell, soweit sinnvoll auch im
+  Goldfish (Mill, Karn, Loot, Roiling Canopy, Room of Refuge, Eye of Jace, Enroot).
 - Tomik: höchstens ein Angreifer je Planeswalker. Entrust the Spark opfert nur einen Jace-Token und holt den
   teuersten Planeswalker; Loyal Tutor legt einen Planeswalker oben auf die Bibliothek (auch im Goldfish).
 - Way of the Cryomancer: die Kopie des ersten Instants/Sorcery wird in Main 1 eingeplant (Lethal, Removal mit

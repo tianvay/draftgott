@@ -123,9 +123,10 @@ class CategoryTests(unittest.TestCase):
             self.assertEqual(analyze_card(sc(text=text, type_line="Instant")), [], text)
 
     def test_life_gain_has_no_metric(self):
-        self.check("Whenever an opponent casts a spell with mana value 2 or less, you gain 2 life.", "Lebensgewinn",
-                   M_NONE)
+        self.check("Whenever a creature an opponent controls dies, you gain 1 life.", "Lebensgewinn", M_NONE)
         self.assertEqual(analyze_card(sc(text="You gain 3 life.", type_line="Instant")), [])  # modelliert
+        self.assertEqual(analyze_card(sc(text="Whenever an opponent casts a spell with mana value 2 or less, you gain 2 "
+                                               "life.")), [])  # modelliert (Solarium Sentry)
 
     def test_flashback_keyword_and_line(self):
         self.check("Flashback—{2}, Sacrifice a creature.", "Zweitverwertung (Friedhof)", M_MANA, type_line="Sorcery",
@@ -228,10 +229,12 @@ class FoundByReviewTests(unittest.TestCase):
                                          text="A deck can have any number of cards named Test Spell.")), [])
 
     def test_ability_word_line_is_classified_by_its_text_not_as_a_keyword(self):
-        card = sc(text="Threshold — This creature gets +1/+0 and has flying as long as there are seven or more cards "
-                       "in your graveyard.", keywords=["Threshold"])
+        card = sc(text="Threshold — Creatures you control get +1/+0 as long as there are seven or more cards in your "
+                       "graveyard.", keywords=["Threshold"])
         self.assertIn("Zählmarken / Stärkebonus", cats(card))
         self.assertNotIn("Unbekannter Effekt", cats(card))
+        self.assertEqual(analyze_card(sc(text="Threshold — This creature gets +1/+0 and has flying as long as there are "
+                                               "seven or more cards in your graveyard.", keywords=["Threshold"])), [])
 
     def test_defender_exception_is_its_own_category(self):
         line = "as long as you've scried or surveilled this turn, this creature can attack as though it didn't have " \

@@ -191,6 +191,27 @@ class Card(NamedTuple):
     exhaust_reanimate: tuple = ()  # Exhaust: (Kosten, Filter) "return target ... from your graveyard to the battlefield"
     etb_remove_counters: int = 0  # Betreten: bis zu N Marken von einer Kreatur oder einem Planeswalker entfernen
     pw_discount: int = 0       # Planeswalker-Zauber kosten {N} weniger (Tam)
+    mill_self: int = 0         # Mill N als Zauber bzw. beim Betreten (Dark Matter Manipulator, Omit Variables)
+    gy_step_power: tuple = ()  # (Schritt, +N/+0): je volle Schritt Karten im Friedhof (Dark Matter Manipulator)
+    threshold_power: int = 0   # Threshold: +N/+0 (Theorix Metamage)
+    threshold_kw: tuple = ()   # Threshold: Schluesselwoerter (Theorix Metamage: flying)
+    death_draw: int = 0        # "When this creature dies, draw a card" (Simulacrum Shaper)
+    etb_artifact_colors_draw: bool = False  # Karn, Gilded Guardian: je Farbe unter den anderen eigenen Artefakten
+    attack_loot: bool = False  # Angriff: ziehen, dann abwerfen (Sphinx of False Conclusions)
+    team_grant: tuple = ()     # Zauber: alle eigenen Kreaturen bekommen Schluesselwoerter bis Rundenende (Artifist Acumen)
+    jace_vigilance: bool = False  # Vigilance, solange ein Jace liegt (Mind Meanderer)
+    token_pump: int = 0        # eigene Kreatur-Token +N/+0 (Gideon's Memorial)
+    token_kw: tuple = ()       # eigene Kreatur-Token haben diese Schluesselwoerter (Gideon's Memorial)
+    forest_pump: int = 0       # Land: Forest kommt, 5 andere Forests -> eigene Kreatur +N/+N (Roiling Canopy)
+    etb_stun_opp: bool = False  # Betreten: gegnerische Kreatur tappen, Stun-Marke (Hapatra, the Desert Frost)
+    opp_cheap_cast_life: tuple = ()  # (Manawert, Leben): Gegner wirkt einen billigen Zauber (Solarium Sentry)
+    discard_life: int = 0      # "When you discard this card, you gain N life" (Titanbones)
+    upkeep_surveil: int = 0    # Upkeep: Surveil N (Eye of Jace)
+    eye_threshold: tuple = ()  # danach ab 7 im Friedhof opfern: (Schaden, Leben) (Eye of Jace)
+    land_to_graveyard: bool = False  # Land aus der Bibliothek in den Friedhof (Enroot)
+    life_tokens: object = None  # X Token, X = Leben in diesem Zug (Germinate Recruits): die Token-Karte
+    land_sac_counters: tuple = ()  # Land: (Kosten, N) "{5}, {T}, Sacrifice this land: N +1/+1 counters" (Room of Refuge)
+    legend_discard_draw: tuple = ()  # Kosten "{1}, {T}, Discard a legendary card: Draw a card" (Solitary Cell)
 
 
 LANDCYCLE_RE = re.compile(
@@ -1419,6 +1440,77 @@ def _pw_atoms(body):
     return None
 
 
+def easy_traits(card, type_line):
+    """Paket leichte FRA-Mechaniken (Mill, Threshold-Boni, Ziehen beim Sterben, Loot beim Angriff, Team-Schluesselwort,
+    Token-Bonus, Landfall eines Landes, Stun, Leben, Eye of Jace, Enroot, Germinate Recruits, Room of Refuge,
+    Solitary Cell)."""
+    out = {}
+    spell_face = "Instant" in type_line or "Sorcery" in type_line
+    for _raw, low in _clean_lines(card):
+        m = re.match(r"^(?:when (?:~|this creature) enters, )?mill (a|one|two|three|four|\d+) cards?\.?$", low)
+        if m and (spell_face or low.startswith("when ")):
+            out["mill_self"] = _count(m.group(1))
+        m = re.match(r"^(?:~|this creature) gets \+(\d+)/\+0 for every seven cards in your graveyard", low)
+        if m:
+            out["gy_step_power"] = (7, int(m.group(1)))
+        m = re.match(r"^threshold — (?:~|this creature) gets \+(\d+)/\+0 and has ([a-z ]+?) as long as there are "
+                     r"seven or more cards in your graveyard", low)
+        if m and m.group(2) in COMBAT_KEYWORDS:
+            out["threshold_power"], out["threshold_kw"] = int(m.group(1)), (m.group(2),)
+        m = re.match(r"^when (?:~|this creature) dies, draw (a|one|two) cards?\.?$", low)
+        if m:
+            out["death_draw"] = _count(m.group(1))
+        if low.startswith("when ~ enters, draw a card for each color among other artifacts you control"):
+            out["etb_artifact_colors_draw"] = True
+        if re.match(r"^whenever (?:~|this creature) attacks, draw a card, then discard a card", low):
+            out["attack_loot"] = True
+        m = re.match(r"^creatures you control gain ([a-z ,]+?) until end of turn\.?$", low)
+        if m and spell_face:
+            kws = tuple(k.strip() for k in re.split(r",\s*(?:and\s+)?|\s+and\s+", m.group(1)) if k.strip())
+            if kws and all(k in COMBAT_KEYWORDS for k in kws):
+                out["team_grant"] = kws
+        if re.match(r"^(?:~|this creature) has vigilance as long as you control a jace planeswalker", low):
+            out["jace_vigilance"] = True
+        m = re.match(r"^creature tokens you control get \+(\d+)/\+0 and have ([a-z ]+?)\.?$", low)
+        if m and m.group(2) in COMBAT_KEYWORDS:
+            out["token_pump"], out["token_kw"] = int(m.group(1)), (m.group(2),)
+        m = re.match(r"^whenever a forest you control enters, if you control at least five other forests, target "
+                     r"creature you control gets \+(\d+)/\+\d+ until end of turn", low)
+        if m:
+            out["forest_pump"] = int(m.group(1))
+        if re.match(r"^when ~ enters, for each opponent, tap up to one target creature that player controls\. put a "
+                    r"stun counter on each of those creatures", low):
+            out["etb_stun_opp"] = True
+        m = re.match(r"^whenever an opponent casts a spell with mana value (\d+) or less, you gain (\d+) life", low)
+        if m:
+            out["opp_cheap_cast_life"] = (int(m.group(1)), int(m.group(2)))
+        m = re.match(r"^when you discard this card, you gain (\d+) life", low)
+        if m:
+            out["discard_life"] = int(m.group(1))
+        m = re.match(r"^at the beginning of your upkeep, surveil (\d+)\. then if there are seven or more cards in your "
+                     r"graveyard, sacrifice this artifact, it deals (\d+) damage to each opponent, and you gain (\d+) "
+                     r"life", low)
+        if m:
+            out["upkeep_surveil"] = int(m.group(1))
+            out["eye_threshold"] = (int(m.group(2)), int(m.group(3)))
+        if low.startswith("search your library for a land card, put it into your graveyard, then shuffle"):
+            out["land_to_graveyard"] = True
+        m = re.match(r"^create x (.+?) creature tokens named ([a-z]+), where x is the amount of life you gained this "
+                     r"turn\.?$", low)
+        if m:
+            tokens = _tokens_in(f"create a {m.group(1)} creature token named {m.group(2)}.")
+            if tokens:
+                out["life_tokens"] = tokens[0][1]
+        m = re.match(r"^((?:\{[^}]+\})+), \{t\}, sacrifice this land: put (a|one|two|three|\d+) \+1/\+1 counters? on "
+                     r"target creature", low)
+        if m:
+            out["land_sac_counters"] = (cost_alternatives(m.group(1).upper()), _count(m.group(2)))
+        m = re.match(r"^((?:\{[^}]+\})+), \{t\}, discard a legendary card: draw a card", low)
+        if m:
+            out["legend_discard_draw"] = cost_alternatives(m.group(1).upper())
+    return out
+
+
 def walker_card_traits(card, type_line, spec):
     """L2: Start-Loyalty, Loyalty-Faehigkeiten und Ausloeser echter Planeswalker; Removal gegen Planeswalker."""
     out, abilities, static = {}, [], []
@@ -1775,7 +1867,9 @@ def card_info(card):
             shown += f"   [Surveil {surveil}]"
         return (Card(True, 0, (), colors, False, False, 0, 0, False, tap_mode, tap_arg, subtypes,
                      card["name"], is_basic="Basic" in type_line, empower=eff, empower_text=etext,
-                     pw_tags=pw_tags_for(card, type_line), surveil=surveil), shown)
+                     pw_tags=pw_tags_for(card, type_line), surveil=surveil,
+                     **{k: v for k, v in easy_traits(card, type_line).items()
+                        if k in ("forest_pump", "land_sac_counters")}), shown)
 
     if card.get("layout") in ("split", "room", "adventure", "flip") and len(faces) > 1:
         used = [f for f in faces if f.get("mana_cost")]  # jede Haelfte ist spielbar
@@ -1852,6 +1946,7 @@ def card_info(card):
                 **package_m2_traits(card), **package_m3_traits(card, type_line),
                 **counter_traits(card), **walker_traits(card), **package_a_traits(card, type_line),
                 **b1_traits(card, type_line), **walker_card_traits(card, type_line, removal_spec(card)),
+                **easy_traits(card, type_line),
                 removal_points=(removal_info(card) or {}).get("points", 0.0),
                 creature_types=(tuple(t.lower() for t in type_line.split("—", 1)[1].split())
                                 if is_creature and "—" in type_line else ())), shown

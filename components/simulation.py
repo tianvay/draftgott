@@ -6,6 +6,7 @@ from collections import Counter
 from components.cards import HEARTWOOD, enters_tapped
 from components.jace import (JaceState, cast_filter_matches, creates_jace, creates_walker, enter_filter_matches,
                              once_effects, recurring_effects, surveil)
+from components.landadvice import colors_of_alts
 from components.mana import can_cast_all, can_pay, has_two_colors, land_key
 from components.mulligan import deal_opening
 
@@ -552,6 +553,18 @@ def goldfish_tutor_pick(library, hand, battlefield):
     return max(ok, key=lambda c: (c.mv, c.name)) if ok else min(cands, key=lambda c: (c.mv, c.name))
 
 
+def goldfish_discard(hand, battlefield):
+    """Abwerfen im Goldfish wie im Kampf (battle.choose_discard): ueberzaehliges Land, sonst die guenstigste Karte."""
+    if not hand:
+        return None
+    lands = [c for c in hand if c.is_land]
+    spells = [c for c in hand if not c.is_land]
+    need = max((c.mv for c in spells), default=0)
+    if lands and (not spells or len(battlefield) + len(lands) >= need):
+        return lands[0]
+    return min(spells, key=lambda c: (c.mv, c.name))
+
+
 def enter_value(card):
     """Bringt das Betreten der Karte etwas (fuer eine Kopie durch Splinter Twin)? Removal, Token, Ziehen, Surveil,
     Treasure, Leben, Mill und Land, Abwerfen, modale Effekte, Schaden/Marken/Pumps, Empower."""
@@ -976,6 +989,12 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
             for p_ in prep:  # Upkeep: "if this creature isn't prepared, it becomes prepared"
                 if p_[0].prepared[0] in ("upkeep", "both"):
                     p_[1] = True
+            for eye in [c for c in nperms if c.upkeep_surveil]:  # Eye of Jace: Surveil, ab 7 im Friedhof opfern
+                apply_surveils([eye.upkeep_surveil], library, hand, battlefield, graveyard=gy)
+                if eye.eye_threshold and len(gy) >= 7:
+                    nperms.remove(eye)
+                    gy.append(eye)
+                    face_now += eye.eye_threshold[0]
             turn_acts0, turn_gain0 = jst.acts, jst.gained
             # Splinter Twin: Kopie am Ende des gegnerischen Zugs (513.2), Betreten-Effekte, greift in diesem Zug mit an
             twin_copies = []
@@ -1067,6 +1086,13 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                     pool = pool + [land_played.land_colors]
                     if land_played.land_colors:
                         avail_total += 1
+                if board and "forest" in land_played.land_types:  # Roiling Canopy: 5 andere Forests
+                    others = sum("forest" in x.land_types for x in battlefield) - 1
+                    for src in battlefield:
+                        if src.forest_pump and others >= 5:
+                            order = _ranked(board, bonus, pump, turn, True)
+                            if order:
+                                pump[order[0]] = pump.get(order[0], 0) + src.forest_pump
                 if board:  # Landfall (z. B. Koth): Schaden, Mana bei Mountain, Marken
                     f_, mana_, c_ = landfall_effects(land_played, board, bonus, turn)
                     face_now += f_
@@ -1303,6 +1329,22 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                     g_ = apply_effects(c, board, bonus, pump, turn)
                     face_now += g_["face"]
                     ef["counters"] += g_["counters"]
+                if c.mill_self:  # Dark Matter Manipulator, Omit Variables
+                    gy.extend(library[:c.mill_self])
+                    del library[:c.mill_self]
+                if c.land_to_graveyard:  # Enroot: das haeufigste Land der Bibliothek in den Friedhof
+                    names = Counter(x.name for x in library if x.is_land)
+                    if names:
+                        name = max(names, key=lambda n: (names[n], n))
+                        pick = next(x for x in library if x.name == name)
+                        library.remove(pick)
+                        random.shuffle(library)
+                        gy.append(pick)
+                if c.etb_artifact_colors_draw:  # Karn, Gilded Guardian
+                    arts = [x for x in nperms if x.is_artifact] + [x for x, _t in board if x.is_artifact and x is not c]
+                    for _k in range(len(set().union(*(colors_of_alts(x.alts) for x in arts))) if arts else 0):
+                        if library:
+                            hand.append(library.pop(0))
                 if copy_pending and c.is_instant_sorcery:  # Kopie (Way of the Cryomancer): im Goldfish nur Schaden
                     face_now += spell_face(c)
                     copy_pending = False
@@ -1422,6 +1464,19 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
             team = sum(em[1] for em in emblems if em[0] == "team")
             for i in range(len(board)) if team else ():  # Emblem "Creatures you control get +N/+N"
                 pump[i] = pump.get(i, 0) + team
+            free_now = avail_total - sum(paid_mv(c) for c in chosen) - cycle_spent
+            for room in [x for x in battlefield if x.land_sac_counters]:  # Room of Refuge: wie im Kampf
+                alts_r, n_r = room.land_sac_counters
+                rest_l = len(battlefield) - 1
+                need_r = alts_r[0][0] + 1 if alts_r else 1
+                if board and rest_l >= 6 and free_now >= need_r and not any(
+                        x.mv > rest_l for x in hand if not x.is_land):
+                    battlefield.remove(room)
+                    gy.append(room)
+                    best_i = max(range(len(board)), key=lambda i: (_power(board, bonus, pump, i), i))
+                    bonus[best_i] += n_r
+                    ef["counters"] += n_r
+                    free_now -= need_r
             # Angriff: Kreaturen vom Vorzug greifen an, neue nur mit Haste, Defender nie (keine Blocker, kein Removal)
             held = Counter()  # Kreaturen, die fuer Mana getappt wurden, greifen nicht an
             if creature_units and chosen:
@@ -1447,6 +1502,12 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                     continue
                 turn_dmg += max(0, combat_damage(board, bonus, pump, i))
                 ef["pump"] += pump.get(i, 0)
+                if c.attack_loot and library:  # Sphinx of False Conclusions: ziehen, dann abwerfen
+                    hand.append(library.pop(0))
+                    gone = goldfish_discard(hand, battlefield)
+                    if gone is not None:
+                        hand.remove(gone)
+                        gy.append(gone)
             for idx in twin_copies:  # die Kopie mit Haste greift neben dem enttappten Original an
                 turn_dmg += _copy_damage(board[idx][0], board)
             for idx, t_cast in twins:  # im eigenen Zug nur fuer Lethal: Original tappt, Kopie greift an
