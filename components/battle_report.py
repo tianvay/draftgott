@@ -193,6 +193,13 @@ RULES = [
     "Fähigkeiten sind keine Zauber und können nicht gekontert werden.",
     "Festgelegt: keine Gegenkonter. Ein Counterspell ist keiner der drei Gründe, also wird er selbst nie gekontert "
     "(bewusst so gewählt, kann später erweitert werden).",
+    "Splinter Twin: kommt auf eine eigene Kreatur mit Betreten-Effekt (höchster Removal-Score, dann Manawert), sonst "
+    "auf die gefährlichste nicht legendäre; legendäre nur, wenn ihr Betreten-Effekt Lethal bringt. Gewirkt wird Twin "
+    "nur, wenn die Kreatur schon liegt. Die Kopie (707.2: nur aufgedruckte Werte, dazu Haste) entsteht am Ende des "
+    "gegnerischen Zugs; nach 513.2 lebt sie bis zu unserem Zugende und greift neben dem enttappten Original an. Im "
+    "eigenen Zug nur, wenn sie Lethal bringt. Betreten-Effekte der Kopie wirken (603.6a), „if you cast it“ nicht; "
+    "eine legendäre Kopie stirbt nach ihrem Effekt an der Legend-Regel. Twin geht mit der Kreatur in den Friedhof "
+    "(704.5m). Im Goldfish genauso, gegen einen Gegner, der nichts tut.",
     "Noch nicht im Kampf: weitere Auslöser und Fähigkeiten (siehe Modell-Abdeckung). Solche Karten werden gewirkt, "
     "wirken aber nur mit den schon modellierten Effekten.",
 ]

@@ -377,6 +377,9 @@ Diese Werte stehen im Skript und lassen sich nur dort ändern.
   legendärer Kreatur); Traxos wird billiger, wenn in derselben Runde ein Nichtkreatur-Zauber gewirkt wird. Gesenkt wird
   nur generisches Mana, der Manawert bleibt gleich (601.2f); die Curve-Auslastung zählt das tatsächlich bezahlte Mana.
   Im Kampfmodell gilt dieselbe Rechnung.
+- **Splinter Twin:** Die verzauberte Kreatur kopiert sich am Ende jedes gegnerischen Zugs (Haste, nur aufgedruckte
+  Werte); die Kopie wiederholt ihre Betreten-Effekte und greift neben dem Original an. Gleiche Regeln wie im
+  Kampfmodell (Wahl der Kreatur, 302.6, nur wenn die Kreatur schon liegt).
 - **Draw, Surveil, Prepared:** Draw-Zauber mit fester Zahl ziehen sofort (Landdrop nachholen, mit übrigem Mana
   weiterzaubern). Surveil durch Karten nach dem Zaubern, Land zuerst. Prepared-Kreaturen: die Kopie der Zauberhälfte
   ist ein zusätzlicher Zauber ohne Handkarte, auch in der Runde des Betretens; Upkeep-Karten werden jede Runde wieder

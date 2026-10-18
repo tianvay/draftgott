@@ -303,6 +303,42 @@ def _power(board, bonus, pump, i):
     return board[i][0].power + bonus[i] + pump.get(i, 0)
 
 
+def enter_value(card):
+    """Bringt das Betreten der Karte etwas (fuer eine Kopie durch Splinter Twin)? Removal, Token, Ziehen, Surveil,
+    Treasure, Leben, Mill und Land, Abwerfen, modale Effekte, Schaden/Marken/Pumps, Empower."""
+    return bool((card.removal and card.removal[4] == "etb") or card.creates_tokens or card.draws or card.surveil
+                or card.treasure or card.etb_life or card.mill_land or card.discard or card.choices or card.modes
+                or card.hand_pick or card.artifact_pump or any(ef[1] == "etb" for ef in once_effects(card)))
+
+
+def enter_face(card):
+    """Schaden am Gegner beim Betreten (feste Zahl)."""
+    face = sum(a[1] for m in card.modes[:1] for a in m if a[0] == "face")
+    spec = card.removal
+    if spec and spec[4] == "etb" and spec[0] == "damage" and spec[3] and spec[1] > 0:
+        face = max(face, spec[1])
+    return face
+
+
+def twin_host_index(board, bonus, need):
+    """Kreatur fuer Splinter Twin (wie im Kampf): mit Betreten-Effekt (hoechster Removal-Score, dann Manawert), sonst
+    die staerkste nicht legendaere; legendaere nur, wenn ihr Betreten-Schaden mindestens need ist (Lethal)."""
+    idx = range(len(board))
+    useful = [i for i in idx if enter_value(board[i][0]) and (not board[i][0].legendary
+                                                             or enter_face(board[i][0]) >= need)]
+    if useful:
+        return max(useful, key=lambda i: (board[i][0].removal_points, board[i][0].mv, -i))
+    plain = [i for i in idx if not board[i][0].legendary]
+    return max(plain, key=lambda i: (board[i][0].power + bonus[i], -i)) if plain else None
+
+
+def _copy_damage(card, board):
+    """Kampfschaden einer Kopie (nur aufgedruckte Werte, 707.2)."""
+    if card.toughness > card.power and any(c.toughness_damage for c, _t in board):
+        return card.toughness
+    return max(0, card.power)
+
+
 def combat_damage(board, bonus, pump, i):
     """Kampfschaden der Kreatur i: Power, mit Ghalta the Immovable auf dem Feld die Toughness, wenn sie groesser ist
     (510.1a; Pumps im Goldfish sind nur +X/+0)."""
@@ -660,6 +696,7 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
         mana_perms, treasures, ramp_first = [], 0, None  # Manaquellen auf dem Feld (Karte, Runde), Treasure-Token
         prep = []  # Prepared-Kreaturen auf dem Feld: [Karte, prepared?]
         bonus = []  # dauerhafte +1/+1-Marken je Kreatur auf dem Feld (gleiche Reihenfolge wie board)
+        twins = []  # Splinter Twin: [Index in board, Runde des Wirkens]
         gy = []     # Friedhof: gewirkte Instants/Sorceries, gelandcycelte Karten, durch Surveil abgelegte Karten
         jst.graveyard = gy
         t_hand, t_ok, t_cast = {}, {}, set()  # Splash-Karten: erste Runde auf der Hand / bezahlbar, gewirkt
@@ -678,6 +715,26 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                 if p_[0].prepared[0] in ("upkeep", "both"):
                     p_[1] = True
             turn_acts0, turn_gain0 = jst.acts, jst.gained
+            # Splinter Twin: Kopie am Ende des gegnerischen Zugs (513.2), Betreten-Effekte, greift in diesem Zug mit an
+            twin_copies = []
+            for idx, t_cast in twins:
+                hc, t_in = board[idx]
+                if t_cast <= turn - 1 and t_in <= turn - 2:  # 302.6: seit Beginn unseres letzten Zugs da
+                    twin_copies.append(idx)
+                    g_ = apply_effects(hc, board, bonus, {}, turn)  # Pumps verfallen im Zug des Gegners
+                    face_now += g_["face"]
+                    ef["counters"] += g_["counters"]
+                    for _k in range(hc.draws):
+                        if library:
+                            hand.append(library.pop(0))
+                            g_drawn += 1
+                    if hc.surveil:
+                        apply_surveils([hc.surveil], library, hand, battlefield, graveyard=gy)
+                    treasures += hc.treasure
+                    if has_jace:
+                        for e in once_effects(hc):
+                            if e[1] == "etb":
+                                jst.add(e[2])
             if has_jace:
                 for pc, t_in in perms:
                     if t_in < turn:
@@ -700,8 +757,10 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
             def copies_now():
                 return discounted_hand([p_[0].prepared[1] for p_ in prep if p_[1]], board, bonus)[0]
 
-            def castable():  # Handkarten und verfuegbare Prepared-Kopien
-                return [c for c in hand if not c.is_land] + copies_now()
+            def castable():  # Handkarten und verfuegbare Prepared-Kopien (Splinter Twin nur mit passender Kreatur)
+                return [c for c in hand if not c.is_land
+                        and (not c.twin or twin_host_index(board, bonus, dmg_target - dmg_total) is not None)] \
+                    + copies_now()
 
             spells = castable()
             has_creature = bool(board)
@@ -869,6 +928,11 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                 if c.treasure:
                     treasures += c.treasure
                     rp["made"] += c.treasure
+            for c in chosen:  # Splinter Twin auf die passende Kreatur (auch eine aus dieser Runde)
+                if c.twin:
+                    idx = twin_host_index(board, bonus, dmg_target - dmg_total)
+                    if idx is not None:
+                        twins.append([idx, turn])
             for c in chosen:
                 if c.is_copy:  # Kopie gewirkt: eine passende Kreatur ist nicht mehr prepared
                     p_ = next(p_ for p_ in prep if p_[1] and p_[0].prepared[1] == original(c))
@@ -974,6 +1038,17 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                     continue
                 turn_dmg += max(0, combat_damage(board, bonus, pump, i))
                 ef["pump"] += pump.get(i, 0)
+            for idx in twin_copies:  # die Kopie mit Haste greift neben dem enttappten Original an
+                turn_dmg += _copy_damage(board[idx][0], board)
+            for idx, t_cast in twins:  # im eigenen Zug nur fuer Lethal: Original tappt, Kopie greift an
+                hc, t_in = board[idx]
+                if idx in twin_copies or t_in >= turn:
+                    continue
+                host = max(0, combat_damage(board, bonus, pump, idx)) if _attacks(board[idx], turn, board) else 0
+                alt = turn_dmg - host + _copy_damage(hc, board) + enter_face(hc)
+                if dmg_total + alt >= dmg_target > dmg_total + turn_dmg:
+                    turn_dmg = alt
+                    break
             if not chosen:  # Rundenende ohne Zauber: Marken (Edgar)
                 for i, (c, _t) in enumerate(board):
                     if c.endstep_counters:

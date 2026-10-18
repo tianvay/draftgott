@@ -147,6 +147,7 @@ class Card(NamedTuple):
     counter: tuple = ()        # Counterspell: (Art any/noncreature/creature_or_legendary, Farben, unless-Kosten N)
     behold_jace: bool = False  # Zusatzkosten "behold a Jace or pay {N}": mit Jace entfallen sie (Countersculpt)
     uncounterable: bool = False  # "This spell can't be countered."
+    twin: bool = False         # Aura: verzauberte Kreatur kopiert sich mit Haste bis zum naechsten Endsegment (Splinter Twin)
 
 
 LANDCYCLE_RE = re.compile(
@@ -1062,6 +1063,8 @@ _COUNTERSPELL_RE = re.compile(r"^counter target (?:(white|blue|black|red|green) 
                               r"(?: unless its controller pays \{(\d+)\})?\.")
 _BEHOLD_RE = re.compile(r"^as an additional cost to cast this spell, behold a jace or pay \{\d+\}")
 _UNCOUNTERABLE_RE = re.compile(r"^this spell can't be countered")
+_TWIN_RE = re.compile(r"^enchanted creature has \"\{t\}: create a token that's a copy of this creature, except it has "
+                      r"haste\. exile that token at the beginning of the next end step\.\"")
 
 
 def counter_traits(card):
@@ -1077,6 +1080,8 @@ def counter_traits(card):
             out["behold_jace"] = True
         if _UNCOUNTERABLE_RE.match(low):
             out["uncounterable"] = True
+        if _TWIN_RE.match(low):
+            out["twin"] = True
     return out
 
 

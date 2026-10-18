@@ -22,7 +22,8 @@ from components.mulligan import deal_opening
 from components.jace import (JaceState, cast_filter_matches, enter_filter_matches, once_effects,
                              recurring_effects, surveil)
 from components.simulation import (ANY_COLOR, apply_effects, apply_surveils, best_cast_reduced, choose_land,
-                                   cost_reduction, do_cycle, enters_prepared, hand_form, landfall_effects, pay_subsets,
+                                   cost_reduction, do_cycle, enter_value, enters_prepared, hand_form,
+                                   landfall_effects, pay_subsets,
                                    plan_cycle, reduced, resolve_draws, tapped_for_mana, usable_now, use_treasures)
 from components.landadvice import colors_of_alts
 
@@ -40,7 +41,7 @@ class Creature:
     """Eine Kreatur auf dem Feld (Karte, Schritt des Eintritts, getappt, Schaden, Marken, Pump)."""
     __slots__ = ("card", "entered", "tapped", "damage", "bonus", "pump", "dead", "touched", "locked", "prepared",
                  "tpump", "extra", "lifted", "owner", "at_jace", "gy", "dealt", "finality", "ctl", "once", "stun", "gear",
-                 "tdraw")
+                 "tdraw", "auras", "exile_step")
 
     def __init__(self, card, entered=0):
         self.card = card
@@ -66,6 +67,8 @@ class Creature:
         self.stun = 0         # Stun-Marken (122.1g): statt zu enttappen wird eine entfernt
         self.gear = []        # angelegte Ausruestung (Karten aus p.perms)
         self.tdraw = 0        # bis Rundenende: zieht so viele Karten bei Kampfschaden am Spieler (Lyra, Tolarian)
+        self.auras = []       # eigene Auras auf dieser Kreatur (Splinter Twin; Karten aus p.perms)
+        self.exile_step = None  # Token-Kopie von Splinter Twin: wird im Endsegment dieses Schritts exiliert
 
     @property
     def power(self):
@@ -134,6 +137,7 @@ class Creature:
         c.dealt = self.dealt
         c.once = dict(self.once)
         c.stun, c.gear, c.tdraw = self.stun, list(self.gear), self.tdraw
+        c.auras, c.exile_step = list(self.auras), self.exile_step
         return c
 
     def label(self):
@@ -1118,12 +1122,29 @@ def bury(players, e):
         dmg, life = ping
         deal_noncombat(p, p.opponent, dmg, e)
         gain_life(p, life + extra)
+    for p in players:
+        check_auras(p, e)
     for p, n, name in moves:
         alive = [c for c in p.creatures if not c.dead]
         if alive:
             pick = max(alive, key=lambda x: (can_attack(x, p.now + 1), danger(x)))
             pick.bonus += n
             e["events"].append(f"{p.name}: {name} – {n} Marke(n) auf {pick.card.name}")
+
+
+def check_auras(p, e=None):
+    """704.5m: eine eigene Aura (Splinter Twin), deren Kreatur nicht mehr da ist, kommt in den Friedhof."""
+    attached = Counter(a for c in p.creatures for a in c.auras)
+    for card in list(p.perms):
+        if not card.twin:
+            continue
+        if attached[card] > 0:
+            attached[card] -= 1
+            continue
+        p.perms.remove(card)
+        p.graveyard.append(card)
+        if e is not None:
+            e["events"].append(f"{p.name}: {card.name} in den Friedhof (keine Kreatur mehr)")
 
 
 def choose_discard(p):
@@ -1372,6 +1393,7 @@ def cast_removal(card, caster, victim, e, step, target=None):
         if not target.card.is_token:
             (target.owner or victim).hand.append(target.card)
         _leave(victim, target.card)
+        check_auras(victim, e)
         e["events"].append(f"{caster.name}: {card.name} – {label} zurück auf die Hand")
         return
     elif kind == "lock":
@@ -1381,6 +1403,7 @@ def cast_removal(card, caster, victim, e, step, target=None):
     elif kind == "tuck":
         victim.creatures.remove(target)
         _leave(victim, target.card)
+        check_auras(victim, e)
         if target.card.is_token:  # Token ausserhalb des Spielfelds hoert auf zu existieren (111.7)
             e["events"].append(f"{caster.name}: {card.name} – {label} verschwindet")
             return
@@ -1579,6 +1602,8 @@ def choose_modes(p, opp, card, step, end_step=False):
 
 def permanent_enters(p, opp, card, step, e):
     """Ein Nichtkreatur-Permanent kam ins Spiel: Jace-Ausloeser und Betreten-Effekte."""
+    if card.twin:
+        attach_twin(p, opp, card, e)
     _jace_etb(p, card, step, e)
     gain_life(p, card.etb_life)
     card_effects(p, opp, card, step, e)
@@ -1755,6 +1780,7 @@ def main_phase_spells(me, opp):
     cards = [c for c in me.hand if not c.is_land] + copies(me)
     return [c for c in cards if not c.is_instant and not c.flash and legend_ok(me, c) and reanimate_ok(me, c)
             and (not c.rummage_spell or surplus_land(me) is not None)
+            and (not c.twin or twin_host(me, opp) is not None)
             and (any(mode_value(me, opp, s, 0) > (0,) for s in c.choices[1]) if c.choices and not c.is_creature
                  else not c.removal or c.removal[4] == "etb" or has_target(c, me, opp))]
 
@@ -2051,6 +2077,7 @@ def end_step_instants(dfn, act, e, step):
     lasting_abilities(dfn, act, step, e, own_turn=False, mode="rest")
     tap_artifact_abilities(dfn, e)
     draw_abilities(dfn, e)
+    twin_activate(dfn, act, step, e, end_step=True)
 
 
 def confidant_end_step(p, e):
@@ -2712,6 +2739,81 @@ def _take_impulse(p, card):
             return
 
 
+def etb_value(card):
+    """Bringt das Betreten der Karte etwas (fuer eine Kopie durch Splinter Twin)? Wie im Goldfish."""
+    return enter_value(card)
+
+
+def etb_face(card, p):
+    """Schaden am Gegner durch das Betreten (fuer Lethal)."""
+    face = sum(a[1] for m in card.modes[:1] for a in m if a[0] == "face")
+    spec = card.removal
+    if spec and spec[4] == "etb" and spec[0] == "damage" and spec[3]:
+        face = max(face, _amount(spec, p))
+    return face
+
+
+def twin_host(p, opp):
+    """Kreatur fuer Splinter Twin: mit Betreten-Effekt (hoechster Removal-Score, dann Manawert), sonst die
+    gefaehrlichste nicht legendaere; legendaere nur, wenn ihr Betreten-Effekt Lethal bringt (Legend-Regel 704.5j)."""
+    alive = [c for c in p.creatures if not c.dead and not c.card.is_token and not c.exile_step]
+    life = opp.life if opp is not None else 99
+    useful = [c for c in alive if etb_value(c.card) and (not c.card.legendary or etb_face(c.card, p) >= life)]
+    if useful:
+        return max(useful, key=lambda c: (c.card.removal_points, c.card.mv))
+    plain = [c for c in alive if not c.card.legendary]
+    return max(plain, key=danger) if plain else None
+
+
+def attach_twin(p, opp, card, e):
+    host = twin_host(p, opp)
+    if host is None:  # keine passende Kreatur: die Aura geht in den Friedhof (704.5m)
+        p.perms.remove(card)
+        p.graveyard.append(card)
+        return
+    host.auras.append(card)
+    e["events"].append(f"{p.name}: {card.name} auf {host.card.name}")
+
+
+def _twin_token(p, host, step, end_step):
+    """Kopie mit Haste (707.2: nur aufgedruckte Werte); Exil im naechsten Endsegment (im Endsegment aktiviert: erst
+    im Endsegment des naechsten Zugs, 513.2)."""
+    token = Creature(host.card._replace(is_token=True, haste=True), step)
+    token.gy, token.ctl = p.graveyard, p
+    token.exile_step = step + 1 if end_step else step
+    return token
+
+
+def twin_activate(p, opp, step, e, end_step=True, hosts=None):
+    """{T}: Kopie von jeder verzauberten Kreatur, die tappen darf (302.6)."""
+    for host in list(hosts if hosts is not None else p.creatures):
+        if host.dead or not any(a.twin for a in host.auras) or not tap_ready(p, host):
+            continue
+        host.tapped = True
+        token = _twin_token(p, host, step, end_step)
+        p.creatures.append(token)
+        e["events"].append(f"{p.name}: Splinter Twin – Kopie von {host.card.name}")
+        creature_enters(p, token, step, e, opp, cast=False)
+        bury((p, opp), e)
+
+
+def twin_for_lethal(me, opp, step, e):
+    """Im eigenen Zug nur, wenn die Kopie (Betreten-Effekt plus Angriff mit Haste) Lethal bringt."""
+    base = _attack_value(me, opp, step)
+    for host in list(me.creatures):
+        if host.dead or not any(a.twin for a in host.auras) or not tap_ready(me, host):
+            continue
+        token = _twin_token(me, host, step, False)
+        host.tapped = True
+        me.creatures.append(token)
+        value = _attack_value(me, opp, step) + etb_face(host.card, me)
+        me.creatures.remove(token)
+        host.tapped = False
+        if value >= opp.life > base:
+            twin_activate(me, opp, step, e, end_step=False, hosts=[host])
+            return
+
+
 def gy_exile_target(victim):
     """Karte aus dem Friedhof des Gegners zum Exilieren: zuerst eine, die sich selbst nutzt (zurueckholen, Phoenix,
     Flashback, Faehigkeit aus dem Friedhof), sonst seine teuerste Kreatur, sonst keine."""
@@ -2986,6 +3088,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     # Kampf: zu Beginn Darklight Phoenix und Desperate Futurescribe
     phoenix_check(me, opp, step, e)
     combat_buffs(me, step, e)
+    twin_for_lethal(me, opp, step, e)
     sacrifice_for_lethal(me, opp, step, e)
     attackers = choose_attackers(me.creatures, opp.creatures, opp.life, me.life, step)
     art_vigilance = any(c.card.artifact_vigilance for c in me.creatures if not c.dead)
@@ -3072,6 +3175,11 @@ def take_turn(me, opp, step, rnd, skip_draw):
             for c in list(p_.creatures):
                 if c.card.draw3_token is not None and not c.dead:
                     make_tokens(p_, [(1, c.card.draw3_token)], step, e, p_.opponent, c.card.name)
+    for p_ in (me, opp):  # Splinter Twin: Kopien zu Beginn des Endsegments exilieren (kein Sterben)
+        for c in list(p_.creatures):
+            if c.exile_step is not None and c.exile_step <= step:
+                p_.creatures.remove(c)
+                e["events"].append(f"{p_.name}: Kopie von {c.card.name} exiliert")
     for p_ in (me, opp):  # "At the beginning of the end step, sacrifice this creature"
         for c in p_.creatures:
             if c.card.end_sacrifice:
