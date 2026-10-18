@@ -552,6 +552,8 @@ def _discounted(card, d, p=None):
         card = reduced(card, own)
     extra = 0 if card.behold_jace and has_jace(p) else card.extra_cost  # Countersculpt: "behold a Jace or pay {1}"
     change = (0 if card.is_creature else d) - extra
+    if card.is_planeswalker and p is not None:  # Tam, the Possibility
+        change += sum(c.card.pw_discount for c in p.creatures if not c.dead) + sum(c.pw_discount for c in p.perms)
     if not change:
         return card
     if change > 0:
@@ -755,14 +757,99 @@ def _jace_add(p, n, e=None):
     """Loyalty fuer Jace; Kreaturen mit "whenever you put loyalty counters" (Tethermage) bekommen sofort ihre Marken."""
     if n <= 0:
         return
+    created = not jace_present(p)  # Empower ohne Jace erschafft den Token: er kommt ins Spiel
     before = p.jace.events
     p.jace.add(n)
+    if created:
+        ally_walker_enters(p, e)
     delta = p.jace.events - before
     for c in p.creatures:
         if c.card.loyalty_counter and not c.dead:
             c.bonus += c.card.loyalty_counter * delta
     if e is not None:
         e["events"].append(f"{p.name}: Jace +{n} (Loyalty {p.jace.loyalty})")
+
+
+def _mill(p, n, e=None, source=""):
+    milled = p.library[:n]
+    del p.library[:n]
+    p.graveyard.extend(milled)
+    if e is not None and milled:
+        e["events"].append(f"{p.name}: {source} – Mill {len(milled)}")
+
+
+def ally_walker_enters(p, e=None):
+    """Ein Planeswalker (Karte oder Jace-Token) kommt bei p ins Spiel: Ausloeser "another creature or planeswalker you
+    control enters" (Liliana the Faultless: Leben, Liliana the Repentant: Mill)."""
+    for c in p.creatures:
+        if c.dead or not c.card.enter_pw_too:
+            continue
+        gain_life(p, c.card.ally_enter_life)
+        if c.card.ally_enter_mill:
+            _mill(p, c.card.ally_enter_mill, e, c.card.name)
+
+
+def remove_counters(p, opp, n, src, e):
+    """Mabel, Bitter Recluse: bis zu n Marken von einem anderen Ziel. Reihenfolge: gegnerischer Planeswalker oder
+    Jace-Token mit hoechstens n Loyalty (stirbt) > gegnerische Kreatur mit den meisten +1/+1-Marken > gegnerischer
+    Planeswalker mit der meisten Loyalty > eigene Kreatur mit Stun-Marken."""
+    if opp is not None:
+        small = [w for w in opp.walkers if 0 < w.loyalty <= n]
+        if small:
+            w = max(small, key=lambda w: (w.card.mv, w.loyalty))
+            w.loyalty = 0
+            e["events"].append(f"{p.name}: {src} – {w.card.name} verliert seine Loyalty")
+            bury((p, opp), e)
+            return
+        if jace_present(opp) and 0 < opp.jace.loyalty <= n:
+            before = opp.jace.loyalty
+            opp.jace.loyalty = 0
+            e["events"].append(f"{p.name}: {src} – Jace von {opp.name} verliert seine Loyalty")
+            _jace_zero(opp, before, e)
+            return
+        marked = [c for c in opp.creatures if not c.dead and c.bonus > 0 and not hexproof(c) and ward_ok(p, c)]
+        if marked:
+            c = max(marked, key=lambda c: (c.bonus, danger(c)))
+            pay_ward(p, c, e)
+            k = min(n, c.bonus)
+            c.bonus -= k
+            e["events"].append(f"{p.name}: {src} – {k} Marken von {c.card.name}")
+            return
+        big = [(w.loyalty, w) for w in opp.walkers if w.loyalty > 0]
+        if jace_present(opp) and opp.jace.loyalty > 0:
+            big.append((opp.jace.loyalty, "jace"))
+        if big:
+            _l, w = max(big, key=lambda t: (t[0], t[1] != "jace"))
+            if w == "jace":
+                opp.jace.loyalty -= n
+                e["events"].append(f"{p.name}: {src} – Jace von {opp.name} -{n} Loyalty")
+            else:
+                w.loyalty -= n
+                e["events"].append(f"{p.name}: {src} – {w.card.name} -{n} Loyalty")
+            return
+    stunned = [c for c in p.creatures if not c.dead and c.stun > 0 and c.card.name != src]
+    if stunned:
+        c = max(stunned, key=danger)
+        c.stun = max(0, c.stun - n)
+        e["events"].append(f"{p.name}: {src} – Stun-Marken von {c.card.name} entfernt")
+
+
+def exhaust_abilities(p, opp, step, e):
+    """Exhaust (702.177, einmal je Objekt), Sorcery-Zeit in Main 2 mit uebrigem Mana: Liliana the Repentant holt die
+    Kreatur oder den Planeswalker mit dem hoechsten Manawert (mindestens 4) zurueck und bekommt eine Marke."""
+    for c in list(p.creatures):
+        ex = c.card.exhaust_reanimate
+        if c.dead or not ex or c.once.get("exhaust") is not None:
+            continue
+        cands = [g for g in gy_candidates(p, ex[1]) if g.mv >= 4]
+        if not cands or not _pay_ability(p, ex[0], "free"):
+            continue
+        c.once["exhaust"] = step
+        pick = _best_from_gy(p, cands)
+        p.graveyard.remove(pick)
+        e["events"].append(f"{p.name}: {c.card.name} – Exhaust: {pick.name}")
+        put_back(p, pick, "battlefield", step, e, opp)
+        c.bonus += 1
 
 
 def jace_died(p, e):
@@ -1775,6 +1862,10 @@ def creature_enters(p, new, step, e, opp=None, cast=True):
     for c in alive:
         if c is not new and c.card.ally_enter_life:
             gain_life(p, c.card.ally_enter_life)
+        if c is not new and c.card.ally_enter_mill:  # Liliana the Repentant
+            _mill(p, c.card.ally_enter_mill, e, c.card.name)
+    if card.etb_remove_counters:  # Mabel, Bitter Recluse
+        remove_counters(p, opp if opp is not None else p.opponent, card.etb_remove_counters, card.name, e)
     if new.power >= 4 and not new.dead:  # Garruk, Curse Breaker
         for w in p.walkers:
             if "big_enter_draw" in w.card.pw_static:
@@ -2691,6 +2782,7 @@ def permanent_enters(p, opp, card, step, e):
     Betreten-Effekte (seine Texte sind Loyalty-Faehigkeiten und Ausloeser)."""
     if card.is_planeswalker and card.loyalty_start > 0:
         _jace_on_enter(p, card, step, e)
+        ally_walker_enters(p, e)
         return
     if card.twin:
         attach_twin(p, opp, card, e)
@@ -2829,6 +2921,8 @@ def _edict_paid(me, opp, card, e):
 def _gy_matches(card, filt, mv_max):
     if filt == "creature":
         ok = card.is_creature
+    elif filt == "creature_pw":
+        ok = card.is_creature or card.is_planeswalker
     elif filt == "land":
         ok = card.is_land
     else:
@@ -4357,6 +4451,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
         resolve(c)
     e["main2"] = [c.name for c in main2]
     lasting_abilities(me, opp, step, e, own_turn=True, mode="free")  # z. B. Grim Repriser nach dem Angriffs-Schaden
+    exhaust_abilities(me, opp, step, e)
     if me.walkers:
         pw_phase(me, opp, step, e, "after")
     if walker_engine(me):

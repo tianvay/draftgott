@@ -225,6 +225,13 @@ RULES = [
     "Zugs, wenn kein Planeswalker auf der Hand ist; oben auf die Bibliothek kommt der teuerste, den wir nächste Runde "
     "bezahlen können (Länder + 1), sonst der billigste. Teyo legt seine Marke nie auf einen Planeswalker. Im Goldfish "
     "Entrust und Loyal Tutor genauso.",
+    "Planeswalker-Umfeld: Liliana the Faultless (1 Leben) und Liliana the Repentant (Mill 2) lösen auch aus, wenn ein "
+    "Planeswalker kommt, ebenso ein neu erschaffener Jace-Token. Liliana the Repentant, Exhaust {5}{B} (einmal, 702.177): "
+    "in Main 2 mit übrigem Mana, holt die Kreatur oder den Planeswalker mit dem höchsten Manawert, mindestens 4. Mabel, "
+    "Bitter Recluse entfernt bis zu 3 Marken: gegnerischer Planeswalker oder Jace-Token mit höchstens 3 Loyalty (stirbt) "
+    "> gegnerische Kreatur mit den meisten +1/+1-Marken > gegnerischer Planeswalker mit der meisten Loyalty > eigene "
+    "Kreatur mit Stun-Marken. Tam, the Possibility: Planeswalker-Zauber {1} billiger (601.2f, Manawert bleibt). Rewrite "
+    "Regrets: Kreatur oder Planeswalker bis Manawert 6 zurück, Empower 2.",
     "Echte Planeswalker (L2): kommen mit ihrer aufgedruckten Loyalty (306.5b), eine Loyalty-Fähigkeit pro Zug "
     "(606.3), Minus-Kosten nur mit genug Loyalty (606.6), −X so groß wie möglich ohne zu sterben, Tod bei 0 "
     "(704.5i, mit Sanctum Lurker nicht); aus dem Friedhof aufs Feld zurück als neues Objekt mit voller Loyalty "

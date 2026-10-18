@@ -186,6 +186,11 @@ class Card(NamedTuple):
     tomik_guard: bool = False  # Tomik: hoechstens eine Kreatur greift jeden eigenen Planeswalker an
     entrust: bool = False      # Entrust the Spark: Planeswalker opfern, einen aus der Bibliothek aufs Feld
     pw_tutor: bool = False     # Loyal Tutor: Planeswalker-Karte oben auf die Bibliothek
+    enter_pw_too: bool = False  # Ausloeser "another creature or planeswalker you control enters" (Lilianas)
+    ally_enter_mill: int = 0   # Mill N, wenn eine andere eigene Kreatur (oder ein Planeswalker) kommt
+    exhaust_reanimate: tuple = ()  # Exhaust: (Kosten, Filter) "return target ... from your graveyard to the battlefield"
+    etb_remove_counters: int = 0  # Betreten: bis zu N Marken von einer Kreatur oder einem Planeswalker entfernen
+    pw_discount: int = 0       # Planeswalker-Zauber kosten {N} weniger (Tam)
 
 
 LANDCYCLE_RE = re.compile(
@@ -651,7 +656,8 @@ def parse_abilities(card):
 _SUBJ = r"(?:~|this creature)"
 _COMBAT_DRAW_RE = re.compile(rf"^whenever {_SUBJ} deals combat damage to a player, draw (a|an|one|two|three|\d+) cards?")
 _END_SAC_RE = re.compile(rf"^at the beginning of (?:the|your) end step, sacrifice {_SUBJ}\.?$")
-_ALLY_LIFE_RE = re.compile(r"^whenever another creature you control enters, you gain (a|one|two|three|\d+) life")
+_ALLY_LIFE_RE = re.compile(r"^whenever another creature (?:or planeswalker )?you control enters, you gain "
+                           r"(a|one|two|three|\d+) life")
 _ENTER_COUNTER_RE = re.compile(r"^whenever (?:~|this creature) or another creature you control enters, put "
                                r"(a|an|one|two|three|\d+) \+1/\+1 counters? on target creature that entered this turn")
 _ARTIFACT_PUMP_RE = re.compile(rf"^when {_SUBJ} enters, creatures you control gain ([a-z ,]+?) and get \+x/\+0 until "
@@ -787,6 +793,24 @@ def battle_triggers(card):
         m = _ALLY_LIFE_RE.match(low)
         if m:
             out["ally_enter_life"] = _EFFECT_NUM.get(m.group(1)) or int(m.group(1))
+            if "or planeswalker" in low.split(",")[0]:
+                out["enter_pw_too"] = True
+        m = re.match(r"^whenever another creature or planeswalker you control enters, mill (a|one|two|three|\d+) cards?",
+                     low)
+        if m:
+            out["ally_enter_mill"] = _count(m.group(1))
+            out["enter_pw_too"] = True
+        m = re.match(r"^exhaust — ((?:\{[^}]+\})+): return target creature or planeswalker card from your graveyard to the "
+                     r"battlefield", low)
+        if m:
+            out["exhaust_reanimate"] = (cost_alternatives(m.group(1).upper()), "creature_pw")
+        m = re.match(r"^when (?:~|this creature) enters, remove up to (one|two|three|\d+) counters? from another target "
+                     r"creature or planeswalker", low)
+        if m:
+            out["etb_remove_counters"] = _count(m.group(1))
+        m = re.match(r"^planeswalker spells you cast cost \{(\d+)\} less to cast", low)
+        if m:
+            out["pw_discount"] = int(m.group(1))
         m = _ENTER_COUNTER_RE.match(low)
         if m:
             out["enter_counter"] = _count(m.group(1))
@@ -833,7 +857,8 @@ _HEXPROOF_UNTIL_RE = re.compile(r"^(?:~|this creature) has hexproof as long as (
                                 r"combat damage yet")
 _FLASHBACK_RE = re.compile(r"^flashback(?: |—)((?:\{[^}]+\})+)(, discard a card)?\.?$")
 _ALT_DRAWS_RE = re.compile(r"if this spell wasn't cast from your hand, draw (a|one|two|three) cards? instead")
-_REANIMATE_RE = re.compile(r"\breturn (target|all) (creature|permanent|land) cards?(?: with mana value (\d+) or less)? "
+_REANIMATE_RE = re.compile(r"\breturn (target|all) (creature or planeswalker|creature|permanent|land) cards?"
+                           r"(?: with mana value (\d+) or less)? "
                            r"from your graveyard to (the battlefield|your hand)( tapped)?( with an additional \+1/\+1 "
                            r"counter on (?:it|them))?")
 _GY_RETURN_RE = re.compile(r"^((?:\{[^}]+\})+)(, exile another creature card from your graveyard)?: return this card "
@@ -950,7 +975,8 @@ def life_and_costs(card, type_line, keywords):
                 (not spell_face and _ETB_EFFECT_RE.match(low))) and not _MILL_LAND_RE.match(low):
             m = _REANIMATE_RE.search(low)  # Primal Witchstalker (Mill + Land) ist eigene Logik
             if m:
-                out["reanimate"] = (m.group(1), m.group(2), int(m.group(3)) if m.group(3) else 99,
+                out["reanimate"] = (m.group(1), "creature_pw" if m.group(2) == "creature or planeswalker" else m.group(2),
+                                    int(m.group(3)) if m.group(3) else 99,
                                     "battlefield" if m.group(4) == "the battlefield" else "hand",
                                     1 if m.group(6) else 0)
         m = _GY_RETURN_RE.match(low)

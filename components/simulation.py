@@ -73,11 +73,13 @@ def best_cast(spells, key, has_creature, auras_need_creature, must=None, fixed=(
 _REDUCED = {}  # verbilligte Karte -> (Originalkarte, Senkung)
 
 
-def cost_reduction(card, powers=(), toughs=(), legendary=False, noncreature=False, spell_discount=0):
+def cost_reduction(card, powers=(), toughs=(), legendary=False, noncreature=False, spell_discount=0, pw_discount=0):
     """Generisches Mana, um das die Karte billiger ist (601.2f): eigene Senkung (Ghalta: hoechste Power bzw. Toughness
     eigener Kreaturen; Wrath of the Bloodmane mit legendaerer Kreatur; Traxos nach einem Nichtkreatur-Zauber in diesem
     Zug) plus spell_discount fuer Nichtkreatur-Zauber (Geist of Saint Thalia). Der Manawert bleibt gleich."""
     n = 0 if card.is_creature or card.is_land else spell_discount
+    if card.is_planeswalker:  # Tam, the Possibility
+        n += pw_discount
     sd = card.self_discount
     if sd:
         if sd[0] == "power":
@@ -133,9 +135,11 @@ def discounted_hand(hand, board, bonus):
     toughs = [c.toughness + bonus[i] for i, (c, _t) in enumerate(board)]
     legendary = any(c.legendary for c, _t in board)
     spell_discount = sum(c.spell_discount for c, _t in board)
+    pw_discount = sum(c.pw_discount for c, _t in board)
     out, back = [], {}
     for c in hand:
-        cheap = reduced(c, cost_reduction(c, powers, toughs, legendary, False, spell_discount)) if not c.is_land else c
+        cheap = reduced(c, cost_reduction(c, powers, toughs, legendary, False, spell_discount, pw_discount)) \
+            if not c.is_land else c
         if cheap is not c:
             back[cheap] = c
         out.append(cheap)
@@ -1204,6 +1208,11 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                         pws.append([c, c.loyalty_start, 0])  # [Karte, Loyalty, Runde der letzten Aktivierung]
                 if c.jace_instant:
                     mach_now = True
+                if c.is_creature or c.is_planeswalker:  # Liliana the Repentant: Mill 2 fuer jede andere
+                    for lili, _t in board:
+                        if lili.ally_enter_mill and lili is not c and (c.is_creature or lili.enter_pw_too):
+                            gy.extend(library[:lili.ally_enter_mill])
+                            del library[:lili.ally_enter_mill]
                 if c.entrust:  # Entrust the Spark: Jace-Token opfern, Planeswalker aus der Bibliothek aufs Feld
                     pick = goldfish_entrust_pick(library, walkers, jst)
                     if pick is not None:
