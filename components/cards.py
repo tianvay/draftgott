@@ -123,6 +123,13 @@ class Card(NamedTuple):
     self_discount: tuple = ()  # eigene Kostensenkung: ("legendary", n), ("noncreature", n), ("power",), ("toughness",)
     team_kw: tuple = ()        # andere eigene Kreaturen haben diese Schluesselwoerter (Ghalta the Unstoppable)
     defender_attack: bool = False  # eigene Kreaturen greifen trotz Defender an (Ghalta the Immovable)
+    surveil_team_pump: int = 0  # Scry/Surveil: eigene Kreaturen +N/+0 bis Rundenende, einmal pro Zug (Prudent Fateseer)
+    surveil_tokens: tuple = ()  # Scry/Surveil: Token, einmal pro Zug (Saheeli, Consul of Oversight)
+    surveil_pay: int = 0       # Scry/Surveil: {N} zahlen fuer +1/+1-Marke und eine Karte (Proft)
+    combat_buff: int = 0       # Beginn des eigenen Kampfs: andere eigene Kreatur +N/+N, nach Surveil als Marke
+    death_loyalty: int = 0     # eigene Kreatur stirbt: Loyalty auf jeden eigenen Planeswalker (Way of the Necromancer)
+    ally_death_life: int = 0   # andere eigene Kreatur oder Planeswalker stirbt: N Leben (Edgar, Ancient Bloodlord)
+    sac_counter: tuple = ()    # "{N}, Sacrifice another creature: Marke auf sich, Schluesselwoerter": (Kosten, n, kw)
 
 
 LANDCYCLE_RE = re.compile(
@@ -937,6 +944,54 @@ _PACKAGE_S_RES = {
 }
 
 
+_PACKAGE_M_RES = {
+    "surveil_team_pump": re.compile(r"^whenever you scry or surveil, creatures you control get \+(\d+)/\+0 until end of "
+                                    r"turn\. this ability triggers only once each turn"),
+    "surveil_tokens": re.compile(r"^whenever you scry or surveil, (create [^.]*\.) this ability triggers only once "
+                                 r"each turn"),
+    "surveil_pay": re.compile(r"^whenever you scry or surveil, you may pay \{(\d+)\}\. if you do, put a \+1/\+1 counter "
+                              r"on (?:~|this creature) and draw a card"),
+    "combat_buff": re.compile(r"^at the beginning of combat on your turn, another target creature you control gets "
+                              r"\+(\d+)/\+\d+ until end of turn\. if you've scried or surveilled this turn, put an? "
+                              r"\+1/\+1 counters? on that creature instead"),
+    "death_loyalty": re.compile(r"^whenever a creature you control dies, put (a|one|two) loyalty counters? on each "
+                                r"planeswalker you control"),
+    "ally_death_life": re.compile(r"^whenever another creature or planeswalker you control dies, you gain (\d+) life\.?$"),
+    "sac_counter": re.compile(r"^((?:\{[^}]+\})+), sacrifice another creature(?: or planeswalker)?: put (a|an|one|two) "
+                              r"\+1/\+1 counters? on (?:~|this creature)\. (?:he|she|it|they) gains? " + _KW_LIST),
+}
+
+
+def package_m_traits(card):
+    """Paket M: Ausloeser bei Scry/Surveil, Beginn des Kampfs, Tod und Opfern (als dict mit den Card-Feldern)."""
+    out = {}
+    res = _PACKAGE_M_RES
+    for raw, low in _clean_lines(card):
+        m = res["surveil_team_pump"].match(low)
+        if m:
+            out["surveil_team_pump"] = int(m.group(1))
+        m = res["surveil_tokens"].match(low)
+        if m and _tokens_in(m.group(1)):
+            out["surveil_tokens"] = tuple(_tokens_in(m.group(1)))
+        m = res["surveil_pay"].match(low)
+        if m:
+            out["surveil_pay"] = int(m.group(1))
+        m = res["combat_buff"].match(low)
+        if m:
+            out["combat_buff"] = int(m.group(1))
+        m = res["death_loyalty"].match(low)
+        if m:
+            out["death_loyalty"] = _count(m.group(1))
+        m = res["ally_death_life"].match(low)
+        if m:
+            out["ally_death_life"] = int(m.group(1))
+        m = res["sac_counter"].match(low)
+        if m:
+            kws = re.sub(r" until end of turn$", "", m.group(3).strip())
+            out["sac_counter"] = (cost_alternatives(m.group(1).upper()), _count(m.group(2)), _keyword_list(kws))
+    return out
+
+
 def _keyword_list(text):
     kws = tuple(k.strip() for k in re.split(r",\s*(?:and\s+)?|\s+and\s+", text) if k.strip())
     return kws if kws and all(k in COMBAT_KEYWORDS or k == "haste" for k in kws) else ()
@@ -1244,7 +1299,7 @@ def card_info(card):
                 targets_opp=targets_opponent(card, type_line, removal_spec(card)), **battle_triggers(card),
                 **token_triggers(card), **life_and_costs(card, type_line, keywords),
                 creates_tokens=creates_tokens(card, type_line), choices=modal_choices(card, type_line),
-                grant_kw=grant_keywords(card, type_line), **package_s_traits(card),
+                grant_kw=grant_keywords(card, type_line), **package_s_traits(card), **package_m_traits(card),
                 removal_points=(removal_info(card) or {}).get("points", 0.0),
                 creature_types=(tuple(t.lower() for t in type_line.split("—", 1)[1].split())
                                 if is_creature and "—" in type_line else ())), shown

@@ -497,9 +497,9 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
   Massenremoval) trifft die gefährlichste passende Kreatur; Removal-Instants vor dem Angriff, gegen Angreifer oder am
   Ende des gegnerischen Zugs.
 - Modelliert sind u. a. Jace (Empower) mit Angriffen auf Jace, aktivierte Fähigkeiten, Token, Prowess,
-  Auslöser beim Wirken, Betreten, Angriff, Tod, Lebensgewinn und Landfall, Friedhof (Flashback, Zurückholen,
+  Auslöser beim Wirken, Betreten, Angriff, Tod, Lebensgewinn, Scry/Surveil und Landfall, Friedhof (Flashback, Zurückholen,
   Phoenix, Finality), modale Karten, Legend-Regel, Handlimit, Kostensenkung und Zusatzkosten.
-- Nicht modelliert sind u. a. Counterspells, Planeswalker außer dem Jace-Token, Ward, Convoke, Opfern als Kosten
+- Nicht modelliert sind u. a. Counterspells, Planeswalker außer dem Jace-Token, Ward, Convoke, Opfern als Kosten (außer Edgar, Ancient Bloodlord)
   und Ausrüstung; solche Karten werden gespielt, wirken aber nur mit ihren modellierten Effekten.
 
 ## Details pro Variante

@@ -140,8 +140,20 @@ RULES = [
     "Betreten und beim Tod weitergeben (Graft Surgeon), Karte ziehen, wenn ein gegnerischer Zauber sie zum Ziel hat "
     "(Ruric Thar). Kostensenkung (601.2f, auch im Goldfish): Ghalta um die höchste Power bzw. Toughness, Wrath of the "
     "Bloodmane mit legendärer Kreatur, Traxos, wenn in diesem Zug zuerst ein Nichtkreatur-Zauber gewirkt wird.",
-    "Noch nicht im Kampf: Fähigkeiten mit Opfern als Kosten (z. B. Edgar, Ancient Bloodlord) und weitere Auslöser. "
-    "Solche Karten werden gewirkt, wirken aber nur mit den schon modellierten Effekten.",
+    "Scry/Surveil-Auslöser: Prudent Fateseer (alle +1/+0) und Saheeli, Consul of Oversight (Thopter) einmal pro Zug, "
+    "Proft bei jedem Surveil ({2} mit freiem Mana: Marke und eine Karte). Bringt ein Surveil im Kampf etwas "
+    "(Fateseer, Desperate Futurescribe), surveilt Jace mit weniger als 3 Loyalty schon vor dem Kampf; "
+    "Surveil-Fähigkeiten mit freiem Mana vor dem Angriff, wenn dadurch mehr Schaden durchkommt. Futurescribe: zu "
+    "Beginn des eigenen Kampfs bekommt der stärkste andere Angreifer +1/+1, nach einem Surveil eine Marke.",
+    "Tod und Opfern: Way of the Necromancer gibt einem vorhandenen Jace je gestorbene eigene Kreatur eine Loyalty, "
+    "Edgar, Ancient Bloodlord 1 Leben je andere gestorbene Kreatur. Der Jace-Token stirbt mit 0 Loyalty (704.5i, "
+    "700.4) und löst Edgar und Massacre Girl aus. Edgar opfert ({2}, Marke und Menace): einen Blocker, der stirbt, "
+    "ohne den Angreifer zu töten (der Angreifer bleibt geblockt, 509.1h; nicht gegen Trample); eine Kreatur, auf die "
+    "ein gegnerisches Removal zielt (Destroy, Schaden, −X/−X, Marken, Lock; der Zauber hat dann kein Ziel mehr, "
+    "608.2b); vor dem Angriff die schwächsten anderen Kreaturen (Token zuerst), wenn das Lethal ergibt – gerechnet "
+    "ohne den Schaden der Geopferten.",
+    "Noch nicht im Kampf: weitere Auslöser und Fähigkeiten (siehe Modell-Abdeckung). Solche Karten werden gewirkt, "
+    "wirken aber nur mit den schon modellierten Effekten.",
 ]
 
 CSS = """

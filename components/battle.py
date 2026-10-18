@@ -584,13 +584,29 @@ def _jace_add(p, n, e=None):
         e["events"].append(f"{p.name}: Jace +{n} (Loyalty {p.jace.loyalty})")
 
 
+def jace_died(p, e):
+    """Der Jace-Token faellt auf 0 Loyalty und kommt in den Friedhof (704.5i), er stirbt also (700.4): Ausloeser
+    "another creature or planeswalker you control dies" (Edgar, Ancient Bloodlord; Massacre Girl)."""
+    e["events"].append(f"{p.name}: Jace stirbt")
+    for c in p.creatures:
+        if c.dead:
+            continue
+        gain_life(p, c.card.ally_death_life)
+        if c.card.ally_death_ping:
+            dmg, life = c.card.ally_death_ping
+            deal_noncombat(p, p.opponent, dmg, e)
+            gain_life(p, life)
+
+
 def _jace_activate(p, step, e, allow_surveil):
     loyalty, lands = p.jace.loyalty, p.jace.surveil_lands
     if p.jace.try_activate(p.hand, p.library, step, battlefield=p.lands, allow_surveil=allow_surveil):
+        if loyalty > 0 and p.jace.loyalty <= 0:
+            jace_died(p, e)
         if p.jace.loyalty == loyalty - 3:
             e["events"].append(f"{p.name}: Jace −3, zieht eine Karte (Loyalty {p.jace.loyalty})")
         else:
-            mark_surveil(p)
+            mark_surveil(p, e)
             binned = p.jace.surveil_lands - lands
             e["events"].append(f"{p.name}: Jace −1, Surveil 1" + (" (Land abgelegt)" if binned else "")
                                + f" (Loyalty {p.jace.loyalty})")
@@ -654,11 +670,37 @@ def combat_life(att, dfn, res):
     gain_life(dfn, res["lifelink_defender"], res["lifelink_events_defender"])
 
 
-def mark_surveil(p):
+def mark_surveil(p, e=None, events=1):
+    """Wir haben gesurveilt (events: Zahl der einzelnen Surveils). Ausloeser "whenever you scry or surveil": Prudent
+    Fateseer (alle +N/+0, einmal pro Zug), Saheeli, Consul of Oversight (Token, einmal pro Zug), Proft ({2} mit freiem
+    Mana: Marke und eine Karte, bei jedem Surveil)."""
     p.surveilled = True
     for c in p.creatures:
         if c.card.surveil_attack:
             c.lifted = True
+    if e is None:
+        e = {"events": []}
+    for c in list(p.creatures):
+        card = c.card
+        if c.dead:
+            continue
+        if card.surveil_team_pump and c.once.get("surveil_pump") != p.now:
+            c.once["surveil_pump"] = p.now
+            for x in p.creatures:
+                if not x.dead:
+                    x.pump += card.surveil_team_pump
+            e["events"].append(f"{p.name}: {card.name} – alle +{card.surveil_team_pump}/+0")
+        if card.surveil_tokens and c.once.get("surveil_token") != p.now:
+            c.once["surveil_token"] = p.now
+            make_tokens(p, card.surveil_tokens, p.now, e, p.opponent, card.name)
+        if card.surveil_pay:
+            for _ in range(events):
+                if not _pay_ability(p, ((card.surveil_pay, ()),), "free"):
+                    break
+                c.bonus += 1
+                if p.library:
+                    p.hand.append(p.library.pop(0))
+                e["events"].append(f"{p.name}: {card.name} zahlt {{{card.surveil_pay}}}: Marke und eine Karte")
 
 
 def on_cast(p, card, step, e):
@@ -866,10 +908,10 @@ def surveil_cards(p, amounts, e, source):
     if not amounts:
         return
     before = len(p.graveyard)
-    mark_surveil(p)
-    apply_surveils(amounts, p.library, p.hand, p.lands, graveyard=p.graveyard)
+    events, _lands = apply_surveils(amounts, p.library, p.hand, p.lands, graveyard=p.graveyard)
     binned = len(p.graveyard) - before
     e["events"].append(f"{p.name}: {source} – Surveil {sum(amounts)}" + (f" ({binned} abgelegt)" if binned else ""))
+    mark_surveil(p, e, max(1, events))
 
 
 def on_land(me, opp, land, step, e, with_mana=True):
@@ -943,10 +985,14 @@ def bury(players, e):
         legend_rule(p, e)
     triggers = []  # erst alle gleichzeitig sterben lassen (704.3), dann die Ausloeser
     for p in players:
-        watchers = [c for c in p.creatures if c.card.ally_death_ping]
+        watchers = [c for c in p.creatures if c.card.ally_death_ping or c.card.ally_death_life]
         dying = [c for c in p.creatures
                  if c.dead or c.toughness <= 0 or c.damage >= c.toughness or (c.touched and c.damage > 0)]
-        triggers += [(p, w.card.ally_death_ping) for w in watchers for d in dying if d is not w]
+        triggers += [(p, w.card.ally_death_ping or (0, 0), w.card.ally_death_life) for w in watchers for d in dying
+                     if d is not w]
+        loyalty = sum(c.death_loyalty for c in p.perms) + sum(c.card.death_loyalty for c in p.creatures)
+        if loyalty:  # Way of the Necromancer: je gestorbene eigene Kreatur Loyalty auf einen vorhandenen Jace
+            triggers += [(p, "loyalty", loyalty)] * len(dying)
     moves = []  # Graft Surgeon: Marken auf eine eigene Kreatur, die ueberlebt
     for p in players:
         for c in list(p.creatures):
@@ -960,9 +1006,14 @@ def bury(players, e):
                 _leave(p, c.card)
                 gain_life(p, c.card.death_life)
                 e["deaths"].append(f"{c.card.name} ({p.name})")
-    for p, (dmg, life) in triggers:  # Massacre Girl
+    for p, ping, extra in triggers:  # Massacre Girl, Edgar, Way of the Necromancer
+        if ping == "loyalty":
+            if p.jace.loyalty > 0:
+                _jace_add(p, extra, e)
+            continue
+        dmg, life = ping
         deal_noncombat(p, p.opponent, dmg, e)
-        gain_life(p, life)
+        gain_life(p, life + extra)
     for p, n, name in moves:
         alive = [c for c in p.creatures if not c.dead]
         if alive:
@@ -981,6 +1032,78 @@ def choose_discard(p):
     if lands and (not spells or len(p.lands) + len(lands) >= need):
         return lands[0]
     return min(spells, key=lambda c: (c.mv, c.name))
+
+
+def _sacrificer(p):
+    """Eigene Kreatur mit "{N}, Sacrifice another creature: Marke auf sich" (Edgar, Ancient Bloodlord)."""
+    return next((c for c in p.creatures if c.card.sac_counter and not c.dead), None)
+
+
+def sacrifice_for(p, victim, e, mode="rest"):
+    """Opfert victim fuer die Faehigkeit von Edgar (bezahlt mit mode, siehe _pay_ability). victim stirbt (bury
+    danach), Edgar bekommt seine Marke und die Schluesselwoerter bis Rundenende."""
+    ed = _sacrificer(p)
+    if ed is None or victim is ed or victim.dead:
+        return False
+    alts, n, kws = ed.card.sac_counter
+    if not _pay_ability(p, alts, mode):
+        return False
+    victim.dead = True
+    ed.bonus += n
+    ed.extra |= set(kws)
+    e["events"].append(f"{p.name}: {ed.card.name} opfert {victim.card.name} (+{n}/+{n}"
+                       + (", " + ", ".join(kws) if kws else "") + ")")
+    return True
+
+
+def sacrifice_blockers(dfn, pairs, e):
+    """Nach den Blocks: ein eigener Blocker, der stirbt, ohne den Angreifer zu toeten, wird fuer Edgar geopfert. Der
+    Angreifer bleibt geblockt (509.1h) und macht keinen Schaden; nicht gegen Trample (702.19e: alles ginge an uns)."""
+    if _sacrificer(dfn) is None:
+        return
+    done = False
+    for att, bs in pairs:
+        if att.has("trample") or not bs:
+            continue
+        att_dies, die = outcome(att, bs)
+        if att_dies:
+            continue
+        for b, dies in zip(bs, die):
+            if dies and sacrifice_for(dfn, b, e):
+                done = True
+    if done:
+        bury((dfn,), e)
+
+
+def sacrifice_for_lethal(me, opp, step, e):
+    """Vor dem eigenen Angriff: opfert die schwaechsten anderen Kreaturen (Token zuerst) fuer Edgar, wenn Marken und
+    Menace Lethal ergeben. Gerechnet wird ohne den Schaden der Geopferten."""
+    ed = _sacrificer(me)
+    if ed is None or not can_attack(ed, step) or _attack_value(me, opp, step) >= opp.life:
+        return
+    alts, n, kws = ed.card.sac_counter
+    others = sorted((c for c in me.creatures if c is not ed and not c.dead),
+                    key=lambda c: (not c.card.is_token, c.power, c.toughness, c.card.mv))
+    pool = list(me.open) + [ANY_COLOR] * treasure_count(me)
+    for k in range(1, min(3, len(others)) + 1):
+        pool = pay(pool, alts)
+        if pool is None:
+            return
+        picked, extra = others[:k], set(ed.extra)
+        for c in picked:
+            c.dead = True
+        ed.bonus += n * k
+        ed.extra |= set(kws)
+        value = _attack_value(me, opp, step)
+        for c in picked:
+            c.dead = False
+        ed.bonus -= n * k
+        ed.extra = extra
+        if value >= opp.life:
+            for c in picked:
+                sacrifice_for(me, c, e, "any")
+            bury((me,), e)
+            return
 
 
 def choose_from_hand(victim, kind):
@@ -1052,6 +1175,10 @@ def cast_removal(card, caster, victim, e, step, target=None):
     for _k in range(target.card.targeted_draw):  # Ruric Thar, Biomagus: Ziel eines gegnerischen Zaubers
         if victim.library:
             victim.hand.append(victim.library.pop(0))
+    if kind in ("destroy", "damage", "minus", "counters", "lock") and sacrifice_for(victim, target, e):
+        bury((caster, victim), e)  # als Antwort geopfert: der Zauber hat kein Ziel mehr (608.2b)
+        e["events"].append(f"{caster.name}: {card.name} ohne Ziel ({target.card.name} geopfert)")
+        return
     if kind == "destroy":
         target.dead = True
     elif kind in ("damage", "minus"):
@@ -1596,7 +1723,7 @@ def confidant_end_step(p, e):
     for c in p.creatures:
         if not c.card.confidant or c.dead or p.gained <= 0 or not p.library:
             continue
-        mark_surveil(p)
+        mark_surveil(p, e)
         for card in surveil(p.library, 1, p.hand, p.lands):
             if card.mv <= p.gained:
                 p.hand.append(card)
@@ -1973,12 +2100,18 @@ def _surveil_to_attack(me, opp, step, e):
     """Surveil-Faehigkeit, damit eine Kreatur trotz Defender angreifen darf (Surveillance Phantasm), wenn dadurch
     mehr Schaden durchkommt (bei Lethal auch mit Mana fuer Instants und Treasure, sonst mit freiem Mana)."""
     waiting = [c for c in me.creatures if c.card.surveil_attack and not c.lifted and not c.dead]
-    if me.surveilled or not waiting or not me.library:
+    pumpers = [c for c in me.creatures if c.card.surveil_team_pump and not c.dead]  # Prudent Fateseer
+    if me.surveilled or not (waiting or pumpers) or not me.library:
         return
     base = _attack_value(me, opp, step)
+    snap = _snapshot(me)
     for c in waiting:
         c.lifted = True
+    for c in me.creatures:
+        if not c.dead:
+            c.pump += sum(x.card.surveil_team_pump for x in pumpers)
     value = _attack_value(me, opp, step)
+    _restore(snap)
     for c in waiting:
         c.lifted = False
     if value <= base:
@@ -2060,6 +2193,26 @@ def combat_etb(me, opp, card, step, chosen=()):
         if any(t in a.card.creature_types for a in attackers for t in angels):
             return True
     return False
+
+
+def combat_buffs(me, step, e):
+    """Zu Beginn des eigenen Kampfs: eine andere eigene Kreatur (der staerkste Angreifer) bekommt +N/+N bis
+    Rundenende, nach einem Surveil in diesem Zug stattdessen N +1/+1-Marken (Desperate Futurescribe)."""
+    for c in list(me.creatures):
+        if c.dead or not c.card.combat_buff:
+            continue
+        others = [x for x in me.creatures if x is not c and not x.dead]
+        if not others:
+            continue
+        pick = max(others, key=lambda x: (can_attack(x, step), danger(x)))
+        n = c.card.combat_buff
+        if me.surveilled:
+            pick.bonus += n
+            e["events"].append(f"{me.name}: {c.card.name} – Marke auf {pick.card.name}")
+        else:
+            pick.pump += n
+            pick.tpump += n
+            e["events"].append(f"{me.name}: {c.card.name} – {pick.card.name} +{n}/+{n}")
 
 
 def gy_exile_target(victim):
@@ -2250,10 +2403,17 @@ def take_turn(me, opp, step, rnd, skip_draw):
             _use_removal(me, card, alts, is_spell, step, e, zone, opp, rc)
             me.cast_count += 1 if is_spell else 0
             cast_removal(rc, me, opp, e, step, target=max(eaters, key=danger))
+    # Jace surveilt schon vor dem Kampf, wenn das in diesem Kampf etwas bringt (Prudent Fateseer, Futurescribe)
+    alive = [c for c in me.creatures if not c.dead]
+    if 0 < me.jace.loyalty < 3 and not me.surveilled and any(c.card.surveil_team_pump or c.card.combat_buff
+                                                              for c in alive):
+        _jace_activate(me, step, e, True)
     # Faehigkeiten vor dem Angriff: Marken und Empower mit freiem Mana, Flying/Menace fuer den Angriff
     pre_attack_abilities(me, opp, step, e)
-    # Kampf: zu Beginn Darklight Phoenix
+    # Kampf: zu Beginn Darklight Phoenix und Desperate Futurescribe
     phoenix_check(me, opp, step, e)
+    combat_buffs(me, step, e)
+    sacrifice_for_lethal(me, opp, step, e)
     attackers = choose_attackers(me.creatures, opp.creatures, opp.life, me.life, step)
     art_vigilance = any(c.card.artifact_vigilance for c in me.creatures if not c.dead)
     for a in attackers:
@@ -2291,11 +2451,15 @@ def take_turn(me, opp, step, rnd, skip_draw):
     combat_tricks(me, blocks, opp, e, step, attacking=True)
     me.cast_count += len(e["events"]) - n_events
     combat_tricks(opp, blocks, me, e, step, attacking=False)
+    sacrifice_blockers(opp, blocks, e)
     before = [(a.label(), [b.label() for b in bs]) for a, bs in blocks]
     res = resolve_combat(blocks)
     if res["jace"]:
+        alive_before = opp.jace.loyalty > 0
         opp.jace.loyalty = max(0, opp.jace.loyalty - res["jace"])
         e["events"].append(f"{me.name}: {res['jace']} Schaden an Jace von {opp.name} (Loyalty {opp.jace.loyalty})")
+        if alive_before and opp.jace.loyalty == 0:
+            jace_died(opp, e)
     opp.life -= res["player"]
     me.dealt_combat += res["player"]
     combat_life(me, opp, res)
