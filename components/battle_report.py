@@ -21,7 +21,9 @@ RULES = [
     "Kreaturen ohne Haste. Kreaturen, deren Betreten den Kampf verbessert, kommen schon in Main 1: Surveil, während "
     "eine Kreatur auf ein Surveil wartet (Surveillance Phantasm), Removal gegen einen Blocker, der einen Angreifer "
     "fressen würde, Pumps/Marken für Angreifer, Lebensgewinn für angreifende Engel (Lyra). Übriges Mana bleibt offen "
-    "für Instants und Flash, auch im Zug des Gegners.",
+    "für Instants und Flash, auch im Zug des Gegners. Hat der Gegner eine Kreatur, die unser Removal töten kann, "
+    "bleiben die Kosten des billigsten solchen Removals frei (Instants, Flash-Kreaturen mit Removal beim Betreten, "
+    "Removal per Abwerfen wie Sureshot Sower); eingesetzt wird es dann im Zug des Gegners.",
     "<b>Removal</b> trifft die gefährlichste passende Kreatur (höchste Power, dann Flying/Trample/Deathtouch, dann "
     "Manawert): Destroy/Exile, Schaden und −X/−X nur, wenn sie tötet, Edikt (der Gegner opfert seine schwächste "
     "Kreatur, bei „greatest mana value“ die teuerste), Fight, Bounce (zurück auf die Hand), Lock-Aura (greift nicht an, "
@@ -152,6 +154,20 @@ RULES = [
     "ein gegnerisches Removal zielt (Destroy, Schaden, −X/−X, Marken, Lock; der Zauber hat dann kein Ziel mehr, "
     "608.2b); vor dem Angriff die schwächsten anderen Kreaturen (Token zuerst), wenn das Lethal ergibt – gerechnet "
     "ohne den Schaden der Geopferten.",
+    "Ziehen per Fähigkeit: Loot (ziehen, dann abwerfen) am Ende des gegnerischen Zugs; Arni, Humble Scribe lootet "
+    "auch im eigenen Zug vor einer Nicht-Token-Kreatur, die ihn wieder enttappt. Rummage (erst abwerfen: Hallway "
+    "Heckler, Improvised Act) nur mit überzähligem Land; Marwyn, the Clearcutter opfert ein Land ab 6 Ländern auf dem "
+    "Feld, wenn es mehr sind als der höchste Manawert der Hand. {T}-Fähigkeiten nur von Kreaturen, die seit Beginn "
+    "des eigenen Zugs da sind (302.6).",
+    "Ausweichen mit {T}-Fähigkeiten (Eardrum Rattler: unblockbar für Power bis 2; Tomik: Flying für eine Kreatur mit "
+    "Marke) vor dem Angriff, wenn insgesamt mehr Schaden durchkommt, obwohl die Quelle nicht angreift. Pia: +X/+0, X = "
+    "unsere Artefakte (auch Treasure). Arni, Renowned Champion wächst um die Power jeder neuen Kreatur; kann er "
+    "angreifen, kommen Kreaturen schon in Main 1. Gideon the Oathless: 1 Schaden für jede Kreatur und jede "
+    "Jace-Aktivierung des Gegners.",
+    "Ward (702.21): Ziel ist die gefährlichste Kreatur, deren Ward wir zahlen können, sonst die nächstbeste; in der "
+    "Main Phase werden die Ward-Kosten wie Zusatzkosten eingeplant (ohne bezahlbares Ziel wird der Zauber nicht "
+    "gewirkt). „Discard a card“ zahlen wir mit der Karte, die wir sonst auch abwerfen würden. Gilt auch für Removal "
+    "beim Betreten und Lock-Auras, für beide Seiten.",
     "Noch nicht im Kampf: weitere Auslöser und Fähigkeiten (siehe Modell-Abdeckung). Solche Karten werden gewirkt, "
     "wirken aber nur mit den schon modellierten Effekten.",
 ]

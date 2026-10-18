@@ -103,6 +103,7 @@ class LegendaryTargetTests(unittest.TestCase):
         dfn, act = player("Gegner"), player()
         tapper, bear = bt.Creature(TAPPER, 0), bt.Creature(BEAR, 0)
         dfn.creatures = [bear, tapper]
+        dfn.turn_start = 1  # 302.6: seit Beginn des letzten eigenen Zugs da
         bt.end_step_instants(dfn, act, entry(), 6)
         self.assertEqual((tapper.bonus, bear.bonus), (1, 0))  # staerkste passende Kreatur ist der Tapper selbst
 

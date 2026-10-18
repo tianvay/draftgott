@@ -130,6 +130,13 @@ class Card(NamedTuple):
     death_loyalty: int = 0     # eigene Kreatur stirbt: Loyalty auf jeden eigenen Planeswalker (Way of the Necromancer)
     ally_death_life: int = 0   # andere eigene Kreatur oder Planeswalker stirbt: N Leben (Edgar, Ancient Bloodlord)
     sac_counter: tuple = ()    # "{N}, Sacrifice another creature: Marke auf sich, Schluesselwoerter": (Kosten, n, kw)
+    draw_abilities: tuple = ()  # Ziehen per Faehigkeit: ((Kosten, Tap, "loot"/"rummage"/"sac_land"), ...)
+    ally_untap: bool = False   # andere eigene Nicht-Token-Kreatur kommt ins Spiel: enttappt sich (Arni, Humble Scribe)
+    rummage_spell: bool = False  # Zauber "You may discard a card. If you do, draw a card." (Improvised Act)
+    ally_enter_pump: bool = False  # andere eigene Kreatur kommt: +X/+0 bis Rundenende, X = ihre Power (Arni, Champion)
+    opp_enter_ping: int = 0    # Kreatur des Gegners kommt ins Spiel: N Schaden an ihm (Gideon the Oathless)
+    opp_loyalty_ping: int = 0  # Gegner aktiviert eine Loyalty-Faehigkeit: N Schaden an ihm (Gideon the Oathless)
+    ward: tuple = ()           # Ward (702.21): ("mana", n) oder ("discard",)
 
 
 LANDCYCLE_RE = re.compile(
@@ -491,6 +498,7 @@ def combat_keywords(card):
 _ABILITY_RE = re.compile(r"^((?:\{[^}]+\}|,|\s)+):\s*(.+)$")
 _SELF = r"(?:~|this creature|it)"
 _ABILITY_SUBJECTS = ((re.compile(rf"^{_SELF} "), "self"),
+                     (re.compile(r"^target creature with a \+1/\+1 counter on it "), "target_counter"),
                      (re.compile(r"^target creature(?: you control)? "), "target"),
                      (re.compile(r"^creatures you control "), "all"))
 _ABILITY_PUMP_RE = re.compile(r"^(?:gets? \+(\d+)/\+(\d+))?(?:,? and )?(?:gains? ([a-z ,]+?))? until end of turn\.?$")
@@ -500,6 +508,10 @@ _ABILITY_COUNTER_RE = re.compile(r"^put (a|an|one|two|three|\d+) \+1/\+1 counter
 _ABILITY_COUNTER_SCOPE = {"~": "self", "this creature": "self", "target creature": "target",
                           "target creature you control": "target", "target nonlegendary creature": "nonlegendary"}
 _ABILITY_EMPOWER_RE = re.compile(r"^empower jace (\d+)\.?$")
+_ABILITY_UNBLOCKABLE_RE = re.compile(r"^another target creature you control with power (\d+) or less can't be blocked "
+                                     r"this turn\.?$")
+_ABILITY_PUMP_ARTIFACTS_RE = re.compile(r"^target creature gets \+x/\+0 until end of turn, where x is the number of "
+                                        r"artifacts you control\.?$")
 _ABILITY_SURVEIL_RE = re.compile(r"^surveil (\d+)\.?$")
 _ABILITY_RETURN_RE = re.compile(r"^return (another )?target (creature|land|permanent) card from your graveyard to your "
                                 r"hand\.?$")
@@ -512,6 +524,11 @@ def _ability_atoms(body):
     m = _ABILITY_EMPOWER_RE.match(body)
     if m:
         return (("empower", int(m.group(1))),)
+    m = _ABILITY_UNBLOCKABLE_RE.match(body)
+    if m:  # Eardrum Rattler
+        return (("grant", ("unblockable",), f"pow_le_{m.group(1)}"),)
+    if _ABILITY_PUMP_ARTIFACTS_RE.match(body):  # Pia, Determined Rebuilder
+        return (("pump", "artifacts", 0, "target"),)
     m = _ABILITY_SURVEIL_RE.match(body)
     if m:
         return (("surveil", int(m.group(1))),)
@@ -962,6 +979,55 @@ _PACKAGE_M_RES = {
 }
 
 
+_PACKAGE_M2_RES = {
+    "loot": re.compile(r"^\{t\}: draw a card, then discard a card\.?$"),
+    "rummage": re.compile(r"^\{t\}, discard a card: draw a card\.?$"),
+    "sac_land": re.compile(r"^((?:\{[^}]+\})+), \{t\}, sacrifice an artifact or land: draw a card\.?$"),
+    "ally_untap": re.compile(r"^whenever another nontoken creature you control enters, untap (?:~|this creature)"),
+    "rummage_spell": re.compile(r"^you may discard a card\. if you do, draw a card\.?$"),
+    "ally_enter_pump": re.compile(r"^whenever another creature you control enters, (?:~|this creature) gets \+x/\+0 "
+                                  r"until end of turn, where x is that creature's power"),
+    "opp_enter_ping": re.compile(r"^whenever a creature an opponent controls enters, (?:~|this creature|[a-z]+) deals (\d+) "
+                                 r"damage to that player"),
+    "opp_loyalty_ping": re.compile(r"^whenever an opponent activates a loyalty ability, (?:~|this creature|[a-z]+) deals (\d+) "
+                                   r"damage to that player"),
+    "ward": re.compile(r"^ward(?: \{(\d+)\}|—discard a card)\.?$"),
+}
+
+
+def package_m2_traits(card):
+    """Paket M, Teil 2: Loot/Rummage, Enttappen, Ausloeser beim Betreten anderer Kreaturen, Ward."""
+    out = {}
+    res = _PACKAGE_M2_RES
+    draws = []
+    for raw, low in _clean_lines(card):
+        if res["loot"].match(low):
+            draws.append((((0, ()),), True, "loot"))
+        if res["rummage"].match(low):
+            draws.append((((0, ()),), True, "rummage"))
+        m = res["sac_land"].match(low)
+        if m:
+            draws.append((cost_alternatives(m.group(1).upper()), True, "sac_land"))
+        if res["ally_untap"].match(low):
+            out["ally_untap"] = True
+        if res["rummage_spell"].match(low):
+            out["rummage_spell"] = True
+        if res["ally_enter_pump"].match(low):
+            out["ally_enter_pump"] = True
+        m = res["opp_enter_ping"].match(low)
+        if m:
+            out["opp_enter_ping"] = int(m.group(1))
+        m = res["opp_loyalty_ping"].match(low)
+        if m:
+            out["opp_loyalty_ping"] = int(m.group(1))
+        m = res["ward"].match(low)
+        if m:
+            out["ward"] = ("mana", int(m.group(1))) if m.group(1) else ("discard",)
+    if draws:
+        out["draw_abilities"] = tuple(draws)
+    return out
+
+
 def package_m_traits(card):
     """Paket M: Ausloeser bei Scry/Surveil, Beginn des Kampfs, Tod und Opfern (als dict mit den Card-Feldern)."""
     out = {}
@@ -1300,6 +1366,7 @@ def card_info(card):
                 **token_triggers(card), **life_and_costs(card, type_line, keywords),
                 creates_tokens=creates_tokens(card, type_line), choices=modal_choices(card, type_line),
                 grant_kw=grant_keywords(card, type_line), **package_s_traits(card), **package_m_traits(card),
+                **package_m2_traits(card),
                 removal_points=(removal_info(card) or {}).get("points", 0.0),
                 creature_types=(tuple(t.lower() for t in type_line.split("—", 1)[1].split())
                                 if is_creature and "—" in type_line else ())), shown

@@ -136,7 +136,7 @@ def can_attack(c, step):
 
 
 def can_block(blocker, attacker):
-    if blocker.tapped or blocker.dead or blocker.locked:
+    if blocker.tapped or blocker.dead or blocker.locked or attacker.has("unblockable"):
         return False
     return not attacker.has("flying") or blocker.has("flying") or blocker.has("reach")
 
@@ -378,6 +378,8 @@ class Player:
         self.direct_mark = 0  # dealt_direct zu Beginn des aktuellen Zugs ("noncombat damage this turn")
         self.deaths_mark = 0  # deaths zu Beginn des aktuellen Zugs ("creatures died this turn")
         self.noncreature_cast = False  # in diesem Zug schon einen Nichtkreatur-Zauber gewirkt (Traxos)
+        self.ward_budget = 0  # in der Main Phase fuer Ward eingeplantes Mana (mit dem Zauber bezahlt)
+        self.ward_pool = None  # beim Planen der Main Phase: Mana des Zugs fuer die Ward-Pruefung
 
     def board(self):
         return [(c.card, c.entered) for c in self.creatures], [c.bonus for c in self.creatures], \
@@ -539,10 +541,70 @@ def hexproof(c):
     return c.has("hexproof") or (c.card.hexproof_until_damage and not c.dealt)
 
 
-def valid_targets(spec, caster, victim):
+def ward_ok(caster, c):
+    """Kann caster die Ward-Kosten von c zahlen (702.21)? Mana aus dem offenen Mana (plus eingeplantem Ward-Mana)
+    bzw. beim Planen aus dem Mana des Zugs; "Discard a card" mit einer Handkarte."""
+    w = c.card.ward
+    if not w:
+        return True
+    if w[0] == "discard":
+        return bool(caster.hand)
+    have = len(caster.ward_pool) if caster.ward_pool is not None else len(caster.open) + caster.ward_budget
+    return w[1] <= have
+
+
+def pay_ward(caster, c, e):
+    """Zahlt die Ward-Kosten von c (vorher mit ward_ok geprueft)."""
+    w = c.card.ward
+    if not w:
+        return True
+    if w[0] == "discard":
+        gone = choose_discard(caster)
+        if gone is None:
+            return False
+        caster.hand.remove(gone)
+        caster.graveyard.append(gone)
+        e["events"].append(f"{caster.name}: wirft {gone.name} ab (Ward von {c.card.name})")
+        return True
+    n = w[1]
+    use = min(n, caster.ward_budget)
+    if n - use and not _pay_open(caster, ((n - use, ()),), treasure=False):
+        return False
+    caster.ward_budget -= use
+    e["events"].append(f"{caster.name}: zahlt Ward {{{n}}} für {c.card.name}")
+    return True
+
+
+def ward_plan(me, opp, card, pool):
+    """Main Phase: Ward-Mana, das zum Zauber dazukommt. Ziel ist die gefaehrlichste Kreatur, deren Ward wir mit dem
+    Mana des Zugs zusaetzlich zahlen koennen, sonst die naechstbeste; gibt es keine, ist der Zauber in diesem Zug zu
+    teuer (99). "Any target" geht dann an den Gegner (0)."""
+    spec = card.removal
+    if not spec or spec[0] in ("sweep", "sweep_damage", "edict") or spec[4] not in ("spell", "aura"):
+        return 0
+    cands = sorted(valid_targets(spec, me, opp, ward=False), key=danger, reverse=True)
+    if not cands:
+        return 0
+    rest = pay(pool, card.alts)
+    if rest is None:
+        return 0
+    for t in cands:
+        w = t.card.ward
+        if not w:
+            return 0
+        if w[0] == "discard":
+            if len(me.hand) > 1:
+                return 0
+            continue
+        if w[1] <= len(rest):
+            return w[1]
+    return 0 if spec[3] else 99
+
+
+def valid_targets(spec, caster, victim, ward=True):
     kind = spec[0]
     out = [c for c in victim.creatures if not c.dead and (kind != "lock" or not c.locked) and _matches(spec[2], c)
-           and not hexproof(c)]
+           and not hexproof(c) and (not ward or ward_ok(caster, c))]
     if kind in ("damage", "minus", "counters"):
         amount = _amount(spec, caster)
         out = [c for c in out if c.toughness - c.damage <= amount or (c.touched and amount > 0)]
@@ -601,6 +663,10 @@ def jace_died(p, e):
 def _jace_activate(p, step, e, allow_surveil):
     loyalty, lands = p.jace.loyalty, p.jace.surveil_lands
     if p.jace.try_activate(p.hand, p.library, step, battlefield=p.lands, allow_surveil=allow_surveil):
+        if p.opponent is not None:  # Gideon the Oathless: Schaden fuer jede Loyalty-Aktivierung
+            for g in p.opponent.creatures:
+                if g.card.opp_loyalty_ping and not g.dead:
+                    deal_noncombat(p.opponent, p, g.card.opp_loyalty_ping, e)
         if loyalty > 0 and p.jace.loyalty <= 0:
             jace_died(p, e)
         if p.jace.loyalty == loyalty - 3:
@@ -830,6 +896,18 @@ def creature_enters(p, new, step, e, opp=None, cast=True):
     card_effects(p, opp, card, step, e)
     new.lifted = p.surveilled and new.card.surveil_attack
     alive = [c for c in p.creatures if not c.dead]
+    for c in alive:
+        if c is new:
+            continue
+        if c.card.ally_untap and not card.is_token:  # Arni, Humble Scribe
+            c.tapped = False
+        if c.card.ally_enter_pump:  # Arni, Renowned Champion
+            c.pump += max(0, new.power)
+    other = opp if opp is not None else p.opponent
+    if other is not None:  # Gideon the Oathless: Schaden, wenn bei uns eine Kreatur ins Spiel kommt
+        for g in other.creatures:
+            if g.card.opp_enter_ping and not g.dead:
+                deal_noncombat(other, p, g.card.opp_enter_ping, e)
     for c in alive:
         if c is not new and c.card.ally_enter_life:
             gain_life(p, c.card.ally_enter_life)
@@ -1106,6 +1184,70 @@ def sacrifice_for_lethal(me, opp, step, e):
             return
 
 
+def surplus_land(p):
+    """Ueberzaehliges Land auf der Hand (Laender auf Feld und Hand reichen schon fuer die teuerste Handkarte)."""
+    lands = [c for c in p.hand if c.is_land]
+    need = max((c.mv for c in p.hand if not c.is_land), default=0)
+    if lands and len(p.lands) + len(lands) >= need:
+        return lands[0]
+    return None
+
+
+def _draw(p, n=1):
+    for _ in range(n):
+        if p.library:
+            p.hand.append(p.library.pop(0))
+
+
+def tap_ready(p, c):
+    """{T}-Faehigkeit erlaubt (302.6): seit Beginn des letzten eigenen Zugs unter unserer Kontrolle oder Haste."""
+    return not c.tapped and not c.dead and (c.entered < p.turn_start or c.has("haste"))
+
+
+def use_draw_ability(p, c, ab, e):
+    """Eine Faehigkeit zum Ziehen: Loot (ziehen, dann abwerfen) immer; Rummage (erst abwerfen) nur mit
+    ueberzaehligem Land; Land opfern (Marwyn, the Clearcutter) nur bei mindestens 6 Laendern auf dem Feld und mehr
+    Laendern als der hoechste Manawert der Hand."""
+    alts, tap, kind = ab
+    if tap and not tap_ready(p, c):
+        return False
+    if kind == "rummage":
+        gone = surplus_land(p)
+        if gone is None:
+            return False
+    elif kind == "sac_land":
+        need = max((x.mv for x in p.hand if not x.is_land), default=0)
+        if len(p.lands) < 6 or len(p.lands) <= need or not _pay_ability(p, alts, "rest"):
+            return False
+    c.tapped = c.tapped or tap
+    if kind == "loot":
+        _draw(p)
+        gone = choose_discard(p)
+        if gone is not None:
+            p.hand.remove(gone)
+            p.graveyard.append(gone)
+        e["events"].append(f"{p.name}: {c.card.name} lootet" + (f" (wirft {gone.name} ab)" if gone else ""))
+    elif kind == "rummage":
+        p.hand.remove(gone)
+        p.graveyard.append(gone)
+        _draw(p)
+        e["events"].append(f"{p.name}: {c.card.name} wirft {gone.name} ab und zieht")
+    else:
+        sac = _redundant_land(p)
+        p.lands.remove(sac)
+        p.graveyard.append(sac)
+        _draw(p)
+        e["events"].append(f"{p.name}: {c.card.name} opfert {sac.name} und zieht")
+    return True
+
+
+def draw_abilities(p, e):
+    """Am Ende des gegnerischen Zugs: alle Faehigkeiten zum Ziehen der eigenen Kreaturen."""
+    for c in list(p.creatures):
+        for ab in c.card.draw_abilities:
+            use_draw_ability(p, c, ab, e)
+
+
 def choose_from_hand(victim, kind):
     """Wir waehlen aus der Hand des Gegners: eine bleibende Karte ("permanent") bzw. eine Nichtland-Karte, zuerst
     eine, die er naechste Runde wirken koennte (Manawert <= Laender + 1), dann der hoechste Manawert, bei Gleichstand
@@ -1170,6 +1312,14 @@ def cast_removal(card, caster, victim, e, step, target=None):
         return
     if target is None:
         e["events"].append(f"{caster.name}: {card.name} ohne Ziel")
+        return
+    if not ward_ok(caster, target):  # Ward nicht bezahlbar: anderes Ziel
+        target = choose_target(spec, caster, victim)
+        if target is None:
+            e["events"].append(f"{caster.name}: {card.name} ohne Ziel (Ward)")
+            return
+    if not pay_ward(caster, target, e):
+        e["events"].append(f"{caster.name}: {card.name} ohne Ziel (Ward)")
         return
     label = target.label()
     for _k in range(target.card.targeted_draw):  # Ruric Thar, Biomagus: Ziel eines gegnerischen Zaubers
@@ -1325,6 +1475,13 @@ def card_effects(me, opp, card, step, entry, modes=None):
             effects = card._replace(modes=tuple(tuple(a for a in m if a[0] != "face") for m in card.modes))
     if card.discard and opp is not None:
         discard(opp, card.discard, entry)
+    if card.rummage_spell:  # "You may discard a card. If you do, draw a card."
+        gone = surplus_land(me)
+        if gone is not None:
+            me.hand.remove(gone)
+            me.graveyard.append(gone)
+            _draw(me)
+            entry["events"].append(f"{me.name}: {card.name} – wirft {gone.name} ab und zieht")
     if card.hand_pick and opp is not None:
         pick = choose_from_hand(opp, card.hand_pick)
         if pick is not None:
@@ -1456,6 +1613,7 @@ def main_phase_spells(me, opp):
     Kopien der Prepared-Kreaturen."""
     cards = [c for c in me.hand if not c.is_land] + copies(me)
     return [c for c in cards if not c.is_instant and not c.flash and legend_ok(me, c) and reanimate_ok(me, c)
+            and (not c.rummage_spell or surplus_land(me) is not None)
             and (any(mode_value(me, opp, s, 0) > (0,) for s in c.choices[1]) if c.choices and not c.is_creature
                  else not c.removal or c.removal[4] == "etb" or has_target(c, me, opp))]
 
@@ -1582,6 +1740,27 @@ def instant_removals(p):
         if card.flashback and card.is_instant and card.removal and card.removal[4] == "spell":
             out.append((card, _flashback_version(p, card).alts, card, True, "flashback"))
     return out
+
+
+def held_removal(me, opp):
+    """Mana freihalten (Variante B): das billigste Removal, das wir im Zug des Gegners mit offenem Mana nutzen koennen
+    (Instants, Removal per Abwerfen von der Hand, Flash-Kreaturen mit Removal beim Betreten), wenn der Gegner jetzt
+    eine Kreatur hat, die es toetet. Gibt (Karte, Kosten) oder None zurueck."""
+    opts = [(card, alts, rc) for card, alts, rc, _spell, zone in instant_removals(me) if zone == "hand"]
+    opts += [(c, _alts(me, c), c) for c in me.hand
+             if c.flash and c.is_creature and c.removal and c.removal[4] == "etb" and legend_ok(me, c)]
+    alive = [c for c in opp.creatures if not c.dead]
+    ok = []
+    for card, alts, rc in opts:
+        spec = rc.removal
+        if spec[0] in ("sweep", "sweep_damage", "edict"):
+            if alive:
+                ok.append((card, alts))
+        elif choose_target(spec, me, opp) is not None:
+            ok.append((card, alts))
+    if not ok:
+        return None
+    return min(ok, key=lambda o: (min(g + sum(n for _c, n in cols) for g, cols in o[1]), o[0].name))
 
 
 def _flashback_version(p, card):
@@ -1715,6 +1894,7 @@ def end_step_instants(dfn, act, e, step):
     end_step_cycling(dfn, e)
     lasting_abilities(dfn, act, step, e, own_turn=False, mode="rest")
     tap_artifact_abilities(dfn, e)
+    draw_abilities(dfn, e)
 
 
 def confidant_end_step(p, e):
@@ -1798,7 +1978,7 @@ def _speed_ok(ab, own_turn, main):
 
 def ability_sources(p, step, own_turn, main=False):
     """Aktivierbare Faehigkeiten von p: [(Kreatur oder None, Faehigkeit)]. Tap-Faehigkeiten nur von ungetappten
-    Kreaturen, die seit Beginn des eigenen Zugs da sind (oder Haste)."""
+    Kreaturen, die seit Beginn des letzten eigenen Zugs da sind (oder Haste, 302.6)."""
     out = []
     for c in p.creatures:
         if c.dead:
@@ -1806,7 +1986,7 @@ def ability_sources(p, step, own_turn, main=False):
         for ab in c.card.abilities:
             if not _speed_ok(ab, own_turn, main):
                 continue
-            if ab[2] and (c.tapped or not (c.entered < step or c.card.haste)):
+            if ab[2] and not tap_ready(p, c):  # 302.6
                 continue
             out.append((c, ab))
     for card in p.perms:
@@ -1820,17 +2000,33 @@ def _kinds(ab):
     return {a[0] for a in ab[4]}
 
 
+def _is_target_scope(scope):
+    return scope in ("target", "nonlegendary", "target_counter") or str(scope).startswith("pow_le_")
+
+
 def _needs_target(ab):
-    return any(len(a) > 2 and a[-1] in ("target", "nonlegendary") for a in ab[4])
+    return any(len(a) > 2 and _is_target_scope(a[-1]) for a in ab[4])
 
 
 def _targets(p, src, ab, pool=None):
     if not _needs_target(ab):
         return [None]
     cands = [c for c in (pool if pool is not None else p.creatures) if not c.dead and c in p.creatures]
-    if any(a[-1] == "nonlegendary" for a in ab[4] if len(a) > 2):
+    scopes = [a[-1] for a in ab[4] if len(a) > 2]
+    if "nonlegendary" in scopes:
         cands = [c for c in cands if not c.card.legendary]
+    if "target_counter" in scopes:  # Tomik: Kreatur mit +1/+1-Marke
+        cands = [c for c in cands if c.bonus > 0]
+    for sc in scopes:
+        if str(sc).startswith("pow_le_"):  # Eardrum Rattler: eine andere Kreatur mit Power hoechstens N
+            cands = [c for c in cands if c is not src and c.power <= int(sc[7:])]
     return cands
+
+
+def artifact_count(p):
+    """Artefakte unter unserer Kontrolle: Artefaktkreaturen, Artefakt-Permanents (Heartwood ...) und Treasure."""
+    return (sum(1 for c in p.creatures if c.card.is_artifact and not c.dead)
+            + sum(1 for c in p.perms if c.is_artifact) + p.treasures)
 
 
 def _snapshot(p):
@@ -1895,7 +2091,7 @@ def apply_ability(p, src, ab, target, e=None, gy=None):
             hit = [target] if target is not None else []
         for c in hit:
             if kind == "pump":
-                c.pump += atom[1]
+                c.pump += artifact_count(p) if atom[1] == "artifacts" else atom[1]  # Pia: X = Artefakte
                 c.tpump += atom[2]
             elif kind == "grant":
                 c.extra |= set(atom[1])
@@ -2075,16 +2271,23 @@ def pre_attack_abilities(me, opp, step, e):
         options = []
         for src, ab in ability_sources(me, step, own_turn=True, main=True):
             grants = {k for a in ab[4] if a[0] == "grant" for k in a[1]}
-            if ab[2] or not grants & {"flying", "menace"} or not _kinds(ab) <= {"pump", "grant"}:
+            if not grants & {"flying", "menace", "unblockable"} or not _kinds(ab) <= {"pump", "grant"}:
                 continue
-            pool = [c for c in me.creatures if can_attack(c, step)]
+            if ab[2] and (src is None or any(a[-1] == "self" for a in ab[4])):
+                continue  # mit {T}: nur fuer eine andere Kreatur; die Quelle greift dann nicht an
+            pool = [c for c in me.creatures if can_attack(c, step) and not (ab[2] and c is src)]
             if any(a[-1] == "self" for a in ab[4]) and src not in pool:
                 continue
             for target in _targets(me, src, ab, pool):
                 snap = _snapshot(me)
+                was_tapped = src.tapped if src is not None else False
+                if ab[2]:
+                    src.tapped = True
                 apply_ability(me, src, ab, target)
                 value = _attack_value(me, opp, step)
                 _restore(snap)
+                if ab[2]:
+                    src.tapped = was_tapped
                 if value > base:
                     options.append((value, value >= opp.life > base, src, ab, target))
         done = False
@@ -2185,6 +2388,8 @@ def combat_etb(me, opp, card, step, chosen=()):
     if card.enter_counter or any(c.card.enter_counter for c in alive):
         if any(c.entered == step for c in attackers) or any(c.is_creature and c.haste for c in chosen):
             return True
+    if card.is_creature and any(c.card.ally_enter_pump and can_attack(c, step) for c in alive):
+        return True  # Arni, Renowned Champion waechst vor dem Angriff
     if "haste" in card.noncombat_kw:  # Whiplash Wordsmith: Haste nach Schaden ausserhalb des Kampfs am Gegner
         if me.dealt_direct > me.direct_mark or any(_hits_face(c) for c in chosen if not c.is_creature):
             return True
@@ -2231,6 +2436,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
          "damage": 0, "face": 0, "deaths": [], "events": [], "note": ""}
     me.cast_count = 0
     me.noncreature_cast = opp.noncreature_cast = False
+    me.ward_budget, me.ward_pool = 0, None
     me.turn_start = step
     for p_ in (me, opp):
         p_.direct_mark, p_.deaths_mark = p_.dealt_direct, p_.deaths
@@ -2307,6 +2513,29 @@ def take_turn(me, opp, step, rnd, skip_draw):
         if not tapped:
             pool_all = pool_all + [land.land_colors]
         pool_all = pool_all + on_land(me, opp, land, step, e)
+    ward_of = {}  # Ward-Kosten wie Zusatzkosten einplanen (702.21)
+    me.ward_pool = pool_all
+    for i, c in enumerate(me.hand):
+        n = ward_plan(me, opp, c, pool_all)
+        if n:
+            dear = c._replace(alts=tuple(sorted({(g + n, cols) for g, cols in c.alts})))
+            orig[dear] = orig.get(c, c)
+            me.hand[i] = dear
+            ward_of[dear] = n
+    spells = phase_spells()
+    # Mana fuer Removal im Zug des Gegners freihalten, wenn er jetzt ein passendes Ziel hat (Variante B)
+    held, kept = held_removal(me, opp) if forced is None else None, []
+    if held is not None:
+        left = pay(pool_all, held[1])
+        if left is not None:
+            kept = list(pool_all)
+            for u in left:
+                kept.remove(u)
+            pool_all = left
+            if held[0] in spells:
+                spells.remove(held[0])
+            e["events"].append(f"{me.name}: hält {len(kept)} Mana für {held[0].name} offen")
+    me.ward_pool = None
     _score_, chosen = best_cast_reduced(spells, land_key(pool_all), has_creature, True, must=forced)
     if treasure_count(me) and forced is None:  # Treasure nur, wenn er diese Runde mehr ermoeglicht
         k_t, _ch = use_treasures(spells, pool_all, treasure_count(me), has_creature, True)
@@ -2319,7 +2548,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
         walker_bf, jace_bf = walker_flags(me)
         rd = resolve_draws(me.hand, me.library, chosen, pool_all, me.lands, land, has_creature, True, walker_bf,
                            jace_bf, copies=[cost(c) for c in copies(me)])
-        chosen = [c for c in rd["chosen"] if not c.is_instant and not c.flash]
+        chosen = [c for c in rd["chosen"] if not c.is_instant and not c.flash and c is not (held or (None,))[0]]
         pool_all = rd["pool"]
         if rd["land"] is not None:
             e["land"] = rd["land"].name
@@ -2331,13 +2560,16 @@ def take_turn(me, opp, step, rnd, skip_draw):
         for i in tapped_for_mana([c.alts for c in chosen if c.alts], other, creature_units,
                                  [c.card for c in me.creatures]):
             me.creatures[i].tapped = True
+    pool_all = pool_all + kept  # das freigehaltene Mana bleibt offen
     rest = list(pool_all)  # offenes Mana nach dem Bezahlen (Kreaturen-Mana zaehlt nicht dazu)
     for c in chosen:
-        rest = pay(rest, c.alts) or rest
+        paid = pay(rest, c.alts)  # [] heisst: alles ausgegeben (nicht mit None verwechseln)
+        rest = paid if paid is not None else rest
     for u, _i in creature_units:
         if u in rest:
             rest.remove(u)
     me.open = rest
+    me.ward_budget = sum(ward_of.get(c, 0) for c in chosen if ward_of.get(c, 0) < 99)
     chosen = [c if c.is_copy else hand_form(c, me.hand) if c not in me.hand else c for c in chosen]
     for c in chosen:
         if not c.is_copy:
@@ -2354,6 +2586,11 @@ def take_turn(me, opp, step, rnd, skip_draw):
         me.hand[:] = [c for c in me.hand if c not in ex_map]
         chosen = [ex_map.get(c, c) for c in chosen]
     owner_of = me.exiled_from or opp
+    if any(c.is_creature and not c.is_token and not c.is_copy for c in chosen):  # Arni, Humble Scribe enttappt dann
+        for c in list(me.creatures):
+            if c.card.ally_untap:
+                for ab in c.card.draw_abilities:
+                    use_draw_ability(me, c, ab, e)
     from_graveyard = Counter()  # per Flashback gewirkt: danach ins Exil
     if fb_map:
         for c in chosen:

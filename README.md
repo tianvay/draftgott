@@ -488,7 +488,8 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
   Mulligan wie in MTG Arena (wie im Goldfish); fällt unsere Hand unter die Mindestzahl, geben wir auf.
 - Ein Zug: Untap, Draw, Main 1 (Land und alle Zauber außer Kreaturen ohne Haste; Kreaturen, deren Betreten den
   Kampf verbessert, schon hier), Kampf, Main 2, End Phase. Übriges Mana bleibt offen für Instants, Flash,
-  Kampftricks und Fähigkeiten, auch im Zug des Gegners.
+  Kampftricks und Fähigkeiten, auch im Zug des Gegners. Hat der Gegner eine Kreatur, die unser Removal töten kann,
+  halten wir die Kosten des billigsten Instant-, Flash- oder Abwerf-Removals frei.
 - Angriff: alles bei sicherem Lethal, sonst nur Kreaturen, die kein Blocker tötet und dabei überlebt. Block:
   Blocker tötet und überlebt, Tausch bei mindestens gleichem Manawert, Doppel-Block, Chump nur gegen Lethal.
 - Kampf-Schlüsselwörter: Flying, Reach, First Strike, Double Strike, Deathtouch, Trample, Lifelink, Menace,
@@ -498,8 +499,9 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
   Ende des gegnerischen Zugs.
 - Modelliert sind u. a. Jace (Empower) mit Angriffen auf Jace, aktivierte Fähigkeiten, Token, Prowess,
   Auslöser beim Wirken, Betreten, Angriff, Tod, Lebensgewinn, Scry/Surveil und Landfall, Friedhof (Flashback, Zurückholen,
-  Phoenix, Finality), modale Karten, Legend-Regel, Handlimit, Kostensenkung und Zusatzkosten.
-- Nicht modelliert sind u. a. Counterspells, Planeswalker außer dem Jace-Token, Ward, Convoke, Opfern als Kosten (außer Edgar, Ancient Bloodlord)
+  Phoenix, Finality), modale Karten, Loot und Rummage, Ward, Legend-Regel, Handlimit, Kostensenkung und
+  Zusatzkosten.
+- Nicht modelliert sind u. a. Counterspells, Planeswalker außer dem Jace-Token, Convoke, Opfern als Kosten (außer Edgar, Ancient Bloodlord)
   und Ausrüstung; solche Karten werden gespielt, wirken aber nur mit ihren modellierten Effekten.
 
 ## Details pro Variante

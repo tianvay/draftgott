@@ -206,6 +206,7 @@ class CounterAndEmpowerTests(unittest.TestCase):
         src, bear = bt.Creature(tapper, 0), bt.Creature(BEAR, 0)
         src.tapped = True
         dfn.creatures = [src, bear]
+        dfn.turn_start = 1  # 302.6: seit Beginn des letzten eigenen Zugs da
         bt.end_step_instants(dfn, act, entry(), 6)
         self.assertEqual(bear.bonus, 0)
         src.tapped = False

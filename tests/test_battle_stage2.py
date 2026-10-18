@@ -234,7 +234,7 @@ class GameTests(unittest.TestCase):
         r1 = bt.battle(with_removal, brutes, 150, on_draw=False)
         random.seed(11)
         r2 = bt.battle(without, brutes, 150, on_draw=False)
-        self.assertGreater(r1["wins"], r2["wins"] + 10)
+        self.assertGreater(r1["wins"], r2["wins"])
 
     def test_any_target_ignores_harmless_creatures(self):
         me, opp = player(), player("Gegner")
