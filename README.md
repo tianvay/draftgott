@@ -383,6 +383,9 @@ Diese Werte stehen im Skript und lassen sich nur dort ändern.
 - **Verliehene Loyalty-Fähigkeiten:** Way of the …, Sanctum Lurker, Kiora und Avatar geben dem Jace-Token
   weitere Fähigkeiten; gewählt wird wie im Kampfmodell, im Goldfish ohne Token (Schaden, Ziehen, Surveil,
   Mana, Marken, weiterer Landdrop).
+- **Way of the Cryomancer und Jace's Machinations:** Die Kopie des nächsten Instants/Sorcery zählt im Goldfish nur
+  für Schaden (Jace-Token: Lethal vor Ziehen, sonst nach Ziehen; echte Planeswalker nur für Lethal). Machinations gibt
+  in seiner Runde jedem Jace (Token und Karten) eine weitere Aktivierung.
 - **Echte Planeswalker:** Planeswalker-Karten kommen mit ihrer Loyalty und nutzen jede Runde eine Fähigkeit,
   gewählt wie im Kampfmodell, aber ohne Token und Removal (Schaden, Ziehen, Marken, Embleme, Empower; Mana nur,
   wenn es einen weiteren Zauber ermöglicht). Bei 0 Loyalty sind sie weg.
@@ -524,6 +527,9 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
   Ultimate oder Removal. Planeswalker des Gegners werden immer angegriffen, mit so wenig Schaden wie nötig (Lethal
   auf den Spieler geht vor). Removal „creature or planeswalker“ trifft einen Planeswalker, wenn es ihn tötet und der
   Gegner keine Kreatur mit Power 4+ hat, den Jace-Token nur ab 5 Loyalty ohne Kreatur als Ziel.
+- Way of the Cryomancer: die Kopie des ersten Instants/Sorcery wird in Main 1 eingeplant (Lethal, Removal mit
+  zweitem Ziel, Ziehen; echte Planeswalker nur für Lethal oder Removal). Jace's Machinations am Ende des gegnerischen
+  Zugs mit einer weiteren Aktivierung aller Jaces.
 - Nicht modelliert sind u. a. das Wirken der von Chandra, Torch of Defiance exilierten Karte, die Sieg-Fähigkeit von
   Jace, Reality Sculptor, Convoke, Opfern als Kosten (außer Edgar, Ancient Bloodlord); solche Karten werden gespielt, wirken aber nur mit ihren modellierten Effekten.
 

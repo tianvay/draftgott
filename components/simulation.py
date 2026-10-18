@@ -337,18 +337,40 @@ def walker_rank(atoms, opp_life, lands, have_creature, tokens=True):
     return 0, 0
 
 
-def walker_choice(loyalty, sources, face_need, lands, creatures=True, alive=False, helps_mana=False):
+def copy_abilities(sources):
+    """Way of the Cryomancer: die verliehene Kopier-Faehigkeit (Kosten, Effekte), hoechstens einmal."""
+    costs = sorted({c.copy_grant for c in sources if c.copy_grant}, reverse=True)
+    return [(costs[0], (("copy_next",),))] if costs else []
+
+
+def spell_face(card):
+    """Schaden am Gegner, den ein Instant/Sorcery macht (bester Modus), z. B. fuer seine Kopie."""
+    return max((sum(a[1] for a in m if a[0] == "face") for m in card.modes), default=0)
+
+
+def copy_face_of(spells, pool, has_creature, auras_need_creature):
+    """Schaden des ersten Instants/Sorcery, den die Runde wirken wuerde (Kopie durch Way of the Cryomancer)."""
+    chosen = best_cast_reduced(spells, land_key(pool), has_creature, auras_need_creature)[1]
+    first = next((c for c in chosen if c.is_instant_sorcery), None)
+    return spell_face(first) if first is not None else 0
+
+
+def walker_choice(loyalty, sources, face_need, lands, creatures=True, alive=False, helps_mana=False, copy_face=0):
     """Goldfish: beste Loyalty-Faehigkeit des Jace-Tokens (Kosten, Effekte) oder None. Wie im Kampf, aber ohne Token,
-    Opfern und Removal (kein Gegner); Mana nur, wenn es einen weiteren Zauber ermoeglicht (helps_mana)."""
+    Opfern und Removal (kein Gegner); Mana nur, wenn es einen weiteren Zauber ermoeglicht (helps_mana). Kopie (Way of
+    the Cryomancer) nur fuer Schaden (copy_face): Lethal 8, sonst 2."""
     if not (loyalty > 0 or alive):
         return None
     sculptor = any(c.loyalty_draw for c in sources)
-    abilities = [(-1, (("surveil", 1),)), (-3, (("draw", 1),))] + [g for c in sources for g in c.walker_grants]
+    abilities = [(-1, (("surveil", 1),)), (-3, (("draw", 1),))] + [g for c in sources for g in c.walker_grants] \
+        + copy_abilities(sources)
     best = None
     for cost, atoms in abilities:
         if cost < 0 and loyalty < -cost:
             continue  # 606.6
         rank, tie = walker_rank(atoms, face_need, lands, creatures, tokens=False)
+        if atoms == (("copy_next",),):
+            rank, tie = ((8 if 2 * copy_face >= face_need else 2), copy_face) if copy_face else (0, 0)
         if any(a[0] == "mana" for a in atoms):
             rank, tie = (2, 0) if helps_mana else (0, 0)
         if rank <= 0:
@@ -360,13 +382,14 @@ def walker_choice(loyalty, sources, face_need, lands, creatures=True, alive=Fals
 
 
 def goldfish_walker(jst, phase, sources, hand, library, battlefield, board, bonus, pump, turn, face_need,
-                    helps_mana=False):
+                    helps_mana=False, copy_face=0):
     """Goldfish-Aktivierung (L2a) zu einem Zeitpunkt wie im Kampf: "start" (nur Ziehen; mit Way of the Paradox alles
     ausser Mana), "main1" (Mana, Marken je Land), "after" (die beste). Gibt {"face", "mana", "lands"} zurueck."""
-    out = {"face": 0, "mana": [], "lands": 0}
+    out = {"face": 0, "mana": [], "lands": 0, "copy": False}
     if jst.used:
         return out
-    choice = walker_choice(jst.loyalty, sources, face_need, len(battlefield), bool(board), jst.zero_alive, helps_mana)
+    choice = walker_choice(jst.loyalty, sources, face_need, len(battlefield), bool(board), jst.zero_alive, helps_mana,
+                           copy_face)
     if choice is None:
         return out
     cost, atoms = choice
@@ -374,7 +397,9 @@ def goldfish_walker(jst, phase, sources, hand, library, battlefield, board, bonu
     paradox = any(c.loyalty_paradox for c in sources)
     if phase == "start" and not (kinds == {"draw"} or (paradox and "mana" not in kinds)):
         return out
-    if phase == "main1" and not kinds & {"mana", "counter_lands"}:
+    if phase == "start" and copy_abilities(sources) and any(c.is_instant_sorcery for c in hand):
+        return out  # mit Way of the Cryomancer und Instant/Sorcery auf der Hand: erst in Main 1 entscheiden
+    if phase == "main1" and not kinds & {"mana", "counter_lands", "copy_next"}:
         return out
     if cost < 0:
         jst.loyalty = max(0, jst.loyalty + cost)
@@ -402,6 +427,8 @@ def goldfish_walker(jst, phase, sources, hand, library, battlefield, board, bonu
             bonus[order[0]] += len(battlefield)
         elif a[0] == "mana":
             out["mana"].append(a[1])
+        elif a[0] == "copy_next":
+            out["copy"] = True
     for c in sources:
         if c.loyalty_draw and cost <= -2 and library:  # Way of the Mind Sculptor
             hand.append(library.pop(0))
@@ -412,7 +439,8 @@ def goldfish_walker(jst, phase, sources, hand, library, battlefield, board, bonu
     return out
 
 
-def pw_choice(card, loyalty, lands=0, creatures=0, hand=0, face_need=99, helps_mana=False, sources=(), spells=None):
+def pw_choice(card, loyalty, lands=0, creatures=0, hand=0, face_need=99, helps_mana=False, sources=(), spells=None,
+              copy_face=0):
     """Goldfish (L2): beste Loyalty-Faehigkeit eines echten Planeswalkers (Kosten, Effekte) oder None. Rangfolge wie im
     Kampf, aber ohne Token und Removal (kein Gegner): 8 Lethal, 7 Ultimate/Emblem, 4 Ziehen, 2 Plus mit Wert (Schaden,
     Surveil, Empower, Mana nur wenn es einen weiteren Zauber ermoeglicht, Team-Pump mit Kreaturen), 1 Plus ohne Wert.
@@ -420,12 +448,14 @@ def pw_choice(card, loyalty, lands=0, creatures=0, hand=0, face_need=99, helps_m
     mit mindestens einem Zauber auf der Hand (spells: Zahl der Nichtland-Karten, None = unbekannt)."""
     best = None
     grants = [g for c in sources for g in c.walker_grants]
-    for cost, atoms in list(card.pw_abilities) + grants:
+    for cost, atoms in list(card.pw_abilities) + grants + copy_abilities(sources):
         if cost == "X" or (cost < 0 and loyalty < -cost):
             continue  # 606.6; -X (Stun) ohne Gegner wertlos
         kinds = {a[0] for a in atoms}
         face = sum(a[1] for a in atoms if a[0] == "face")
-        if (cost, atoms) in grants:
+        if atoms == (("copy_next",),):  # echte Planeswalker kopieren nur fuer Lethal
+            rank, tie = (8, copy_face) if copy_face and 2 * copy_face >= face_need else (0, 0)
+        elif (cost, atoms) in grants:
             rank, tie = walker_rank(atoms, face_need, lands, creatures > 0, tokens=False)
             if rank == 7:
                 rank = 8
@@ -880,6 +910,7 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
             events0 = jst.events
             extra_lands = 0
             pump, face_now, landfall_done = {}, 0, False
+            copy_pending = mach_now = False  # Way of the Cryomancer / Jace's Machinations in dieser Runde
             for p_ in prep:  # Upkeep: "if this creature isn't prepared, it becomes prepared"
                 if p_[0].prepared[0] in ("upkeep", "both"):
                     p_[1] = True
@@ -912,7 +943,7 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                                 jst.add(e[2])
                 sources = nperms + [c for c, _t in board]
                 if jst.zero_alive or any(c.walker_grants or c.walker_no_death or c.loyalty_draw or c.loyalty_paradox
-                                         for c in sources):
+                                         or c.copy_grant for c in sources):
                     wo = goldfish_walker(jst, "start", sources, hand, library, battlefield, board, bonus, pump, turn,
                                          dmg_target - dmg_total)
                     face_now += wo["face"]
@@ -992,15 +1023,28 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                     if land2.land_colors:
                         avail_total += 1
             sources = nperms + [c for c, _t in board]
-            if has_jace and any(c.walker_grants for c in sources):  # Mana und Marken je Land vor dem Zaubern
+            cf = copy_face_of(castable(), pool, has_creature, auras_need_creature) if copy_abilities(sources) else 0
+            for slot in list(pws) if cf else ():  # echte Planeswalker: Kopie nur fuer Lethal, vor dem Zaubern
+                choice = pw_choice(slot[0], slot[1], sources=sources, face_need=dmg_target - dmg_total - face_now,
+                                   copy_face=cf)
+                if choice is not None and choice[1] == (("copy_next",),) and not copy_pending:
+                    slot[1] += choice[0]
+                    slot[2] = turn
+                    copy_pending = True
+                    if slot[1] <= 0:
+                        pws.remove(slot)
+                        if slot[0] in walkers:
+                            walkers.remove(slot[0])
+            if has_jace and any(c.walker_grants or c.copy_grant for c in sources):  # Mana, Marken, Kopie vor dem Zaubern
                 spells = castable()
                 plus_r = [a[1] for c in sources for cost, atoms in c.walker_grants for a in atoms if a[0] == "mana"]
                 helps = bool(plus_r) and best_cast_reduced(spells, land_key(pool + plus_r[:1]), has_creature,
                                                            auras_need_creature)[0] > best_cast_reduced(
                     spells, land_key(pool), has_creature, auras_need_creature)[0]
                 wo = goldfish_walker(jst, "main1", sources, hand, library, battlefield, board, bonus, pump, turn,
-                                     dmg_target - dmg_total, helps)
+                                     dmg_target - dmg_total, helps, 0 if copy_pending else cf)
                 face_now += wo["face"]
+                copy_pending = copy_pending or wo["copy"]
                 pool = pool + wo["mana"]
                 avail_total += len(wo["mana"])
                 spells = castable()
@@ -1123,7 +1167,9 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                 if c.is_planeswalker:
                     walkers.append(c)
                     if c.loyalty_start > 0:
-                        pws.append([c, c.loyalty_start])
+                        pws.append([c, c.loyalty_start, 0])  # [Karte, Loyalty, Runde der letzten Aktivierung]
+                if c.jace_instant:
+                    mach_now = True
                 for em in emblems:  # Embleme beim Wirken
                     if em[0] == "cast_draw" and library:
                         hand.append(library.pop(0))
@@ -1173,6 +1219,9 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                     g_ = apply_effects(c, board, bonus, pump, turn)
                     face_now += g_["face"]
                     ef["counters"] += g_["counters"]
+                if copy_pending and c.is_instant_sorcery:  # Kopie (Way of the Cryomancer): im Goldfish nur Schaden
+                    face_now += spell_face(c)
+                    copy_pending = False
             if has_jace:
                 for c in sorted(chosen, key=lambda x: (not recurring_effects(x), x.mv)):
                     for pc, _t in perms:
@@ -1225,14 +1274,26 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                 # Loyalty aus dieser Runde: ab 3 ziehen, sonst Surveil 1 (auch bis 0); mit Way of the ... (L2a)
                 sources = nperms + [c for c, _t in board]
                 if jst.zero_alive or any(c.walker_grants or c.walker_no_death or c.loyalty_draw or c.loyalty_paradox
-                                         for c in sources):
+                                         or c.copy_grant for c in sources):
                     face_now += goldfish_walker(jst, "after", sources, hand, library, battlefield, board, bonus, pump,
                                                 turn, dmg_target - dmg_total)["face"]
                 else:
                     jst.try_activate(hand, library, turn, battlefield=battlefield, allow_surveil=True)
+                if mach_now and (jst.loyalty > 0 or jst.zero_alive):  # Jace's Machinations: noch eine Aktivierung
+                    jst.used = False
+                    if any(c.walker_grants or c.walker_no_death or c.loyalty_draw or c.loyalty_paradox or c.copy_grant
+                           for c in sources):
+                        face_now += goldfish_walker(jst, "after", sources, hand, library, battlefield, board, bonus,
+                                                    pump, turn, dmg_target - dmg_total)["face"]
+                    else:
+                        jst.try_activate(hand, library, turn, battlefield=battlefield, allow_surveil=True)
 
-            for slot in list(pws):  # L2: echte Planeswalker, eine Faehigkeit pro Runde (606.3)
-                pwc, loy = slot
+            passes = [(s_, False) for s_ in pws] + [(s_, True) for s_ in pws if mach_now and s_[0].is_jace]
+            for slot, extra in passes:  # L2: echte Planeswalker, eine Faehigkeit pro Runde (606.3); Machinations
+                if slot not in pws or (slot[2] == turn and not extra):
+                    continue
+                slot[2] = turn
+                pwc, loy = slot[0], slot[1]
                 choice = pw_choice(pwc, loy, len(battlefield), len(board), len(hand), dmg_target - dmg_total - face_now,
                                    sources=nperms + [c for c, _t in board], spells=sum(not h.is_land for h in hand))
                 if choice is None:

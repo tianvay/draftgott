@@ -181,6 +181,8 @@ class Card(NamedTuple):
     pw_static: tuple = ()      # Planeswalker-Ausloeser: opp_draw, big_enter_draw, lifegain_loyalty
     activation_tokens: tuple = ()  # "Whenever you activate a loyalty ability, create ..." (Ajani Unrelenting)
     hits_walkers: bool = False  # Removal darf auch einen Planeswalker treffen ("creature or planeswalker", any target)
+    copy_grant: int = 0        # Way of the Cryomancer: Kosten der verliehenen Faehigkeit "copy the next instant/sorcery"
+    jace_instant: bool = False  # Jace's Machinations: Jace-Loyalty-Faehigkeiten auch im Zug des Gegners
 
 
 LANDCYCLE_RE = re.compile(
@@ -1160,6 +1162,11 @@ def walker_traits(card):
             atoms = _grant_atoms(m.group(2).strip())
             if atoms:
                 grants.append((int(m.group(1).replace("−", "-")), atoms))
+            elif m.group(2).startswith("when you next cast an instant or sorcery spell this turn, copy that spell"):
+                out["copy_grant"] = int(m.group(1).replace("−", "-"))
+        if low.startswith("until end of turn, you may activate loyalty abilities of jace planeswalkers you control on "
+                          "any player's turn"):
+            out["jace_instant"] = True
         if low.startswith("planeswalkers you control aren't put into their owners' graveyards for having 0 loyalty"):
             out["walker_no_death"] = True
         if low.startswith("whenever you activate a loyalty ability, if you removed two or more loyalty counters to "

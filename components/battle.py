@@ -478,6 +478,7 @@ class Player:
         self.emblems = []     # Embleme (114): ("team", P, T), ("cast_draw",), ("cast_damage", N)
         self.attack_buff = None  # bis zum naechsten Zug: (P, T, Schritt) fuer Angriffe auf den Gegner (Garruk)
         self.shield = None    # bis zum naechsten Zug: (-N, Schritt) fuer Angreifer auf uns (Jace, Reality Sculptor)
+        self.copy_next = None  # Way of the Cryomancer: in diesem Schritt wird der naechste Instant/Sorcery kopiert
 
     def board(self):
         return [(c.card, c.entered) for c in self.creatures], [c.bonus for c in self.creatures], \
@@ -786,7 +787,7 @@ def grant_sources(p):
 def walker_engine(p):
     """Gibt es Karten fuer den erweiterten Jace (L2a)? Sonst bleibt alles wie bisher."""
     return p.jace.zero_alive or any(c.walker_grants or c.walker_no_death or c.loyalty_draw or c.loyalty_paradox
-                                    or c.kiora_attack for c in grant_sources(p))
+                                    or c.kiora_attack or c.copy_grant for c in grant_sources(p))
 
 
 def _jace_zero(p, before, e):
@@ -807,7 +808,44 @@ def walker_abilities(p):
     out = [(-1, (("surveil", 1),), "Jace"), (-3, (("draw", 1),), "Jace")]
     for card in grant_sources(p):
         out += [(cost, atoms, card.name) for cost, atoms in card.walker_grants]
+    out += _copy_abilities(p)
     return out
+
+
+def _copy_abilities(p):
+    """Way of the Cryomancer: eine verliehene Kopier-Faehigkeit (mehrere Quellen geben dieselbe Faehigkeit)."""
+    costs = sorted({card.copy_grant for card in grant_sources(p) if card.copy_grant}, reverse=True)
+    return [(costs[0], (("copy_next",),), "Cryomancer")] if costs else []
+
+
+def copy_rank(p, opp, pool, spells):
+    """(Rang, Gleichstand) der Kopie des ersten Instants/Sorcery, den die Main Phase wirken wuerde: 8 Lethal (der
+    Schaden doppelt reicht), 6 Removal mit einem zweiten gueltigen Ziel, 4 Ziehen, 2 sonst etwas (Token, Marken,
+    Schaden); 0 nichts."""
+    if pool is None or spells is None or opp is None:
+        return 0, 0
+    chosen = best_cast_reduced(spells, land_key(pool), any(not c.dead for c in p.creatures), True)[1]
+    first = next((c for c in chosen if c.is_instant_sorcery), None)
+    if first is None:
+        return 0, 0
+    face = max((sum(a[1] for a in m if a[0] == "face") for m in first.modes), default=0)
+    if face and 2 * face >= opp.life:
+        return 8, face
+    spec = first.removal
+    if spec:
+        if spec[0] == "edict":
+            n = sum(1 for c in opp.creatures if not c.dead)
+        elif spec[0] in ("sweep", "sweep_damage"):
+            n = 0
+        else:
+            n = len(valid_targets(spec, p, opp))
+        if n >= 2:
+            return 6, n
+    if first.draws:
+        return 4, first.draws
+    if first.modes or first.creates_tokens or face:
+        return 2, face
+    return 0, 0
 
 
 def walker_options(p, opp, step, phase, pool=None, spells=None):
@@ -859,6 +897,10 @@ def walker_options(p, opp, step, phase, pool=None, spells=None):
             rank, tie = 2, 0
         if kinds == {"surveil"} and not p.library:
             continue
+        if "copy_next" in kinds:
+            if phase != "main1":
+                continue
+            rank, tie = copy_rank(p, opp, pool, spells)
         if rank <= 0:
             continue
         opts.append((rank, (1 if sculptor and cost <= -2 else 0, tie), cost, atoms, src, target))
@@ -926,6 +968,9 @@ def _grant_atoms(p, opp, atoms, step, e, target, jace=False):
                 pick.bonus += len(p.lands)
         elif kind == "mana":
             mana.append(a[1])
+        elif kind == "copy_next":
+            p.copy_next = step
+            e["events"].append(f"{p.name}: der nächste Instant/Sorcery wird kopiert")
     return mana
 
 
@@ -961,7 +1006,8 @@ PW_DEFER = {"team_pump", "attack_buff"}  # erst nach den Zaubern aus Main 1, dir
 
 def pw_abilities(p, w):
     """Eigene Loyalty-Faehigkeiten und verliehene ("Planeswalkers you control have ...")."""
-    return list(w.card.pw_abilities) + [(cost, atoms) for card in grant_sources(p) for cost, atoms in card.walker_grants]
+    return list(w.card.pw_abilities) + [(cost, atoms) for card in grant_sources(p) for cost, atoms in card.walker_grants] \
+        + [(cost, atoms) for cost, atoms, _src in _copy_abilities(p)]
 
 
 def _x_cost(w, cost):
@@ -1000,6 +1046,9 @@ def pw_rank(p, opp, w, cost, atoms, step, phase, pool=None, spells=None):
     8 Lethal, 7 Ultimate (Kosten -6 oder weniger) oder Emblem, 6 Removal, 5 grosses Token, 4 Ziehen, 3 kleines Token,
     2 Plus mit Wert, 1 Plus ohne Wert. Verliehene Faehigkeiten wie beim Jace-Token (walker_rank, Lethal = 8)."""
     kinds = {a[0] for a in atoms}
+    if "copy_next" in kinds:  # echte Planeswalker kopieren nur fuer Lethal oder Removal
+        rank, tie = copy_rank(p, opp, pool, spells) if phase == "main1" else (0, 0)
+        return (rank, tie, None) if rank >= 6 else (0, 0, None)
     life = opp.life if opp is not None else 99
     face = sum(a[1] for a in atoms if a[0] == "face")
     if face and face >= life:
@@ -1264,6 +1313,9 @@ def activate_pw(p, opp, w, ability, step, e, target=None):
             _jace_add(p, sum("island" in land.land_types for land in p.lands), e)
         elif kind == "shield":
             p.shield = (a[1], step)
+        elif kind == "copy_next":
+            p.copy_next = step
+            e["events"].append(f"{p.name}: der nächste Instant/Sorcery wird kopiert")
     loyalty_triggers(p, real, e)
     bury((p, opp) if opp is not None else (p,), e)
     return mana
@@ -1356,11 +1408,20 @@ def walker_phase(p, opp, step, e, phase, pool=None, spells=None):
     sources = grant_sources(p)
     if phase == "start":
         go = kinds == {"draw"} or (any(c.loyalty_paradox for c in sources) and "mana" not in kinds)
+        if go and copy_waits(p):
+            go = False
     elif phase == "main1":
-        go = best[0] >= 6 or bool(kinds & {"mana", "counter_lands"}) or any(c.kiora_attack for c in sources)
+        go = best[0] >= 6 or bool(kinds & {"mana", "counter_lands", "copy_next"}) or any(c.kiora_attack
+                                                                                       for c in sources)
     else:
         go = True
     return activate_walker(p, opp, step, e, best) if go else []
+
+
+def copy_waits(p):
+    """Mit Way of the Cryomancer und einem Instant/Sorcery auf der Hand wartet der Jace-Token bis Main 1 (dort wird
+    zwischen Ziehen und Kopieren gewaehlt)."""
+    return bool(_copy_abilities(p)) and any(c.is_instant_sorcery for c in p.hand)
 
 
 def _jace_activate(p, step, e, allow_surveil):
@@ -2446,7 +2507,13 @@ def _resolve(me, opp, card, step, entry, owner=None, to_exile=False, modes=None)
     """Eine gewirkte Karte kommt ins Spiel bzw. wirkt: Kreatur aufs Feld, Permanents, Instants/Sorceries in den
     Friedhof. Erst die Ausloeser beim Wirken (on_cast), dann bei Permanents die Betreten-Effekte (wie bei jedem
     anderen Weg ins Spiel), bei Instants/Sorceries und Prepared-Kopien ihre Effekte (card_effects). Vorher darf der
-    Gegner kontern: dann nur die Ausloeser beim Wirken, die Karte geht in den Friedhof (Flashback: Exil, Kopie: weg)."""
+    Gegner kontern: dann nur die Ausloeser beim Wirken, die Karte geht in den Friedhof (Flashback: Exil, Kopie: weg).
+    Way of the Cryomancer: der erste Instant/Sorcery des Schritts wird kopiert; die Kopie loest zuerst auf, wird nicht
+    gewirkt (707.10) und waehlt neue Ziele (707.10c). Jace's Machinations: im Zug des Gegners eine weitere
+    Aktivierung der Jaces."""
+    copy = card.is_instant_sorcery and not card.is_copy and me.copy_next == step
+    if copy:
+        me.copy_next = None
     if try_counter(me, card, step, entry, effects=modes):
         if card.is_copy:
             src = next((c for c in me.creatures if c.prepared and c.card.prepared[1] == card), None)
@@ -2455,6 +2522,8 @@ def _resolve(me, opp, card, step, entry, owner=None, to_exile=False, modes=None)
         elif not to_exile:
             (owner or me).graveyard.append(card)
         on_cast(me, card, step, entry)
+        if copy:
+            _resolve_copy(me, opp, card, step, entry, modes)
         bury((me, opp), entry)
         return
     if card.is_copy:  # Prepared-Kopie: eine passende Kreatur ist nicht mehr prepared, kein Friedhof
@@ -2475,10 +2544,41 @@ def _resolve(me, opp, card, step, entry, owner=None, to_exile=False, modes=None)
     if card.is_creature and not card.is_copy:
         creature_enters(me, me.creatures[-1], step, entry, opp)
     elif card.is_instant_sorcery or card.is_copy:
+        if copy:
+            _resolve_copy(me, opp, card, step, entry, modes)
         card_effects(me, opp, card, step, entry, modes)
     else:
         permanent_enters(me, opp, card, step, entry)
+    if card.jace_instant and me.turn_start != step:
+        jace_instant_turn(me, opp, step, entry)
     bury((me, opp), entry)
+
+
+def _resolve_copy(me, opp, card, step, entry, modes):
+    """Kopie eines Instants/Sorcery (Way of the Cryomancer): nur die Effekte, kein Wirken."""
+    entry["events"].append(f"{me.name}: Kopie von {card.name}")
+    for ef in once_effects(card) if not card.choices else ():  # Empower gehoert zum Effekt (sonst beim Wirken)
+        if ef[1] == "spell":
+            _jace_add(me, ef[2], entry)
+    card_effects(me, opp, card, step, entry, modes)  # zieht die Planung schon, zieht danach das Original selbst
+    bury((me, opp), entry)
+
+
+def jace_instant_turn(p, opp, step, e):
+    """Jace's Machinations im Zug des Gegners: der Jace-Token und jeder echte Jace-Planeswalker duerfen dort noch
+    einmal aktivieren (606.3 zaehlt je Zug); gewaehlt wird wie nach Main 2."""
+    if jace_present(p):
+        p.jace.used = False
+        if walker_engine(p):
+            walker_phase(p, opp, step, e, "after")
+        else:
+            _jace_activate(p, step, e, True)
+    for w in list(p.walkers):
+        if w.card.is_jace and w in p.walkers:
+            w.used = False
+            opts = pw_options(p, opp, w, step, "after")
+            if opts:
+                activate_pw(p, opp, w, (opts[0][2], opts[0][3]), step, e, opts[0][4])
 
 
 def mode_value(p, opp, sub, step, end_step=False):

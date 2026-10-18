@@ -209,8 +209,15 @@ RULES = [
     "Fähigkeit), sonst nach Main 2. Way of the Mind Sculptor: Karte bei −2 oder mehr; Way of the Paradox: 1 Leben "
     "und ein weiterer Landdrop (dann wird schon zu Beginn des Zugs aktiviert); Kiora: nach einer Aktivierung wird "
     "der stärkste Angreifer enttappt und unblockbar. Sanctum Lurker: Jace bleibt mit 0 Loyalty liegen (nie "
-    "negativ), stirbt aber, wenn Lurker geht. Im Goldfish dieselbe Wahl ohne Token. Way of the Cryomancer und Jace's "
-    "Machinations folgen.",
+    "negativ), stirbt aber, wenn Lurker geht. Im Goldfish dieselbe Wahl ohne Token.",
+    "Way of the Cryomancer (−3: den nächsten Instant/Sorcery dieses Zugs kopieren): nur in Main 1 vor dem Zaubern, "
+    "bewertet wird der erste geplante Instant/Sorcery: Lethal (Schaden doppelt reicht) 8, Removal mit einem zweiten "
+    "gültigen Ziel 6, Ziehen 4, sonst 2; echte Planeswalker nur für Lethal oder Removal. Die Kopie wird nicht gewirkt "
+    "(707.10: kein Prowess, kein „whenever you cast“), löst zuerst auf und wählt neue Ziele (707.10c); Empower gehört "
+    "zum Effekt und zählt mit. Mit Cryomancer und Instant/Sorcery auf der Hand zieht der Jace-Token nicht schon zu "
+    "Beginn des Zugs. Jace's Machinations: am Ende des gegnerischen Zugs (Empower 8), danach je eine weitere "
+    "Aktivierung des Jace-Tokens und jedes echten Jace-Planeswalkers (606.3 zählt je Zug), andere Planeswalker nicht. "
+    "Im Goldfish genauso, die Kopie aber nur für Schaden.",
     "Echte Planeswalker (L2): kommen mit ihrer aufgedruckten Loyalty (306.5b), eine Loyalty-Fähigkeit pro Zug "
     "(606.3), Minus-Kosten nur mit genug Loyalty (606.6), −X so groß wie möglich ohne zu sterben, Tod bei 0 "
     "(704.5i, mit Sanctum Lurker nicht). Wahl: Lethal > Ultimate (−6 oder mehr) oder Emblem > Removal > großes Token "
