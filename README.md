@@ -562,6 +562,8 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
   (Ausrüstungs-Bonus, Null Summoner, Dueling Arena, Campus Crier, Repurposed Enforcer, Jace +1, Tether Technician),
   gelten als abgedeckt; bewusst nicht modelliert: Theorist's Proxy (opfert sich nie), Marwyn (Hexproof für Länder),
   Paradox Shaper ({2}: Karte unter die Bibliothek), Sphinx's Approach (fünf Exemplare).
+- FRA-Paket G (Kampfmodell): Aerid Konstrari {6}, Yoshimaru {6}, Hapatra {2}{U}, Teyo (beide), Liliana the Faultless
+  (Hexproof als Antwort auf Removal), Jace, Reality Sculptor 0 (Bibliothek ab 25 Loyalty).
 - Tomik: höchstens ein Angreifer je Planeswalker. Entrust the Spark opfert nur einen Jace-Token und holt den
   teuersten Planeswalker; Loyal Tutor legt einen Planeswalker oben auf die Bibliothek (auch im Goldfish).
 - Way of the Cryomancer: die Kopie des ersten Instants/Sorcery wird in Main 1 eingeplant (Lethal, Removal mit

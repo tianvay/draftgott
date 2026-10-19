@@ -117,6 +117,8 @@ COVERED_BY_CARD = (
      lambda c: c.empower_x == "exiled"),
     (re.compile(r"empower jace x, where x is that excess damage"), lambda c: c.empower_x == "excess"),
     (re.compile(r"^untap it\.?$"), lambda c: c.untap_target),
+    (re.compile(r"^when (?:~|[a-z ,]+) enters, target permanent you control gains (?:deathtouch|hexproof) until end of "
+                r"turn"), lambda c: bool(c.etb_grant)),  # Teyo; Loyalty-Marke nie auf einen Planeswalker (Nutzer)
     (re.compile(r"^it gains [a-z ,]+ until end of turn\.?$"),  # Rest nach Marken/Pump eines Modus
      lambda c: bool(c.grant_kw) or any(s.grant_kw for s in (c.choices[1] if c.choices else ()))),
 )

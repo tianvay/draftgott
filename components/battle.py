@@ -578,6 +578,7 @@ class Player:
         self.no_legend_step = None  # Hall of Echoes: in diesem Schritt gilt die Legend-Regel nicht
         self.land_now = None  # in diesem Zug gelegtes Land (Hall of Echoes: noch nicht angriffsbereit)
         self.cc_land = None   # Land mit "{T}: Add {C}{C}", bis Emrakul aus dem Exil gewirkt wird
+        self.grant_target = None  # Teyo: Ziel des Betreten-Effekts (Kreatur oder "done": schon angewendet)
         self.x_values = []    # X gewirkter Kreaturen mit "enters with X counters": [(Karte, X)] (Guiding Hydra)
         self.max_deck_mv = max((c.mv for c in cards if not c.is_land), default=0)  # teuerste Karte des Decks (Pia)
         self.noncombat_step = None  # Schritt, in dem dieser Spieler zuletzt Schaden ausserhalb des Kampfs bekam
@@ -832,6 +833,46 @@ def ward_plan(me, opp, card, pool):
         if w[1] <= len(rest):
             return w[1]
     return 0 if spec[3] else 99
+
+
+def protect_response(p, target, caster, e, step):
+    """p antwortet auf Removal gegen target mit Hexproof (der Zauber hat dann kein legales Ziel, 608.2b): Teyo,
+    Lightshield Expert (Flash) fuer eine Kreatur ab Manawert 3 oder unsere gefaehrlichste; Liliana the Faultless fuer
+    eine andere Kreatur ab Manawert 3, abgeworfen wird nur eine ueberzaehlige Karte (zuerst ein Land)."""
+    if hexproof(target) or target.dead:
+        return False
+    alive = [c for c in p.creatures if not c.dead]
+    if target.card.mv >= 3 or target is max(alive, key=danger):
+        for card in [c for c in p.hand if c.flash and c.is_creature and "hexproof" in c.etb_grant]:
+            if not affordable(p, card) or not legend_ok(p, card):
+                continue
+            _cast_from_open(p, card)
+            if try_counter(p, card, step, e):
+                p.graveyard.append(card)
+                on_cast(p, card, step, e)
+                continue
+            new = Creature(card, step)
+            p.creatures.append(new)
+            p.grant_target = target
+            e["events"].append(f"{p.name}: {card.name} mit Flash als Antwort")
+            on_cast(p, card, step, e)
+            creature_enters(p, new, step, e, caster)
+            return True
+    if target.card.mv < 3:
+        return False
+    for lili in [c for c in alive if c.card.liliana_hexproof and c is not target and tap_ready(p, c)]:
+        gone = surplus_land(p) or max((c for c in p.hand if not c.is_land and c.mv > len(p.lands) + 2),
+                                      key=lambda c: c.mv, default=None)
+        if gone is None or not _pay_open(p, lili.card.liliana_hexproof, treasure=False):
+            continue
+        lili.tapped = True
+        p.hand.remove(gone)
+        p.graveyard.append(gone)
+        discarded(p, e)
+        target.extra.add("hexproof")
+        e["events"].append(f"{p.name}: {lili.card.name} wirft {gone.name} ab – {target.card.name} bekommt Hexproof")
+        return True
+    return False
 
 
 def sac_order(p):
@@ -1298,6 +1339,89 @@ def emrakul_exile(p, step, e):
         return
 
 
+def _artifacts(p):
+    return sum(c.is_artifact for c in p.perms) + sum(1 for c in p.creatures if c.card.is_artifact and not c.dead)
+
+
+def aerid_pump(me, opp, step, e):
+    """Vor dem Angriff: Aerid Konstrari {6} (Heartwood-Token, +X/+0), wenn das Lethal bringt oder einen Blocker
+    besiegt, der Aerid sonst aufhaelt."""
+    for c in [c for c in me.creatures if c.card.aerid_pump and not c.dead and can_attack(c, step)]:
+        if not _payable(me, c.card.aerid_pump):
+            continue
+        x = _artifacts(me) + 1
+        before = _attack_value(me, opp, step)
+        c.pump += x
+        lethal = _attack_value(me, opp, step) >= opp.life > before
+        c.pump -= x
+        wall = any(not b.tapped and not b.dead and can_block(b, c) and c.power < b.toughness - b.damage <= c.power + x
+                   for b in opp.creatures)
+        if (lethal or wall) and _pay_ability(me, c.card.aerid_pump, "free"):
+            artifact_tokens(me, HEARTWOOD, 1, step, e)
+            n = _artifacts(me)
+            c.pump += n
+            e["events"].append(f"{me.name}: {c.card.name} – Heartwood-Token, +{n}/+0")
+
+
+def end_step_abilities(p, e, step):
+    """Am Ende des gegnerischen Zugs mit freiem Mana: Aerid Konstrari nur fuer den Heartwood-Token, Yoshimaru eine Marke
+    auf die gefaehrlichste legendaere Kreatur."""
+    for c in [c for c in p.creatures if c.card.aerid_pump and not c.dead]:
+        if _pay_open(p, c.card.aerid_pump, treasure=False):
+            artifact_tokens(p, HEARTWOOD, 1, step, e)
+            e["events"].append(f"{p.name}: {c.card.name} – Heartwood-Token")
+    for y in [c for c in p.creatures if c.card.yoshi_counter and not c.dead]:
+        legends = [c for c in p.creatures if c.card.legendary and not c.dead]
+        while legends and _pay_open(p, y.card.yoshi_counter, treasure=False):
+            t = max(legends, key=danger)
+            t.bonus += 1
+            e["events"].append(f"{p.name}: {y.card.name} – Marke auf {t.card.name}")
+
+
+def _through(pairs):
+    return resolve_combat([(a.copy(), [b.copy() for b in bs]) for a, bs in pairs])["player"]
+
+
+def yoshimaru_combat(p, pairs, opp, e, step, attacking):
+    """Im Kampf (nach den Blockern): Yoshimaru {6} auf eine legendaere Kampfkreatur, wenn das Lethal bringt, den Kampf
+    verbessert oder gegnerisches Lethal verhindert."""
+    sources = [c for c in p.creatures if c.card.yoshi_counter and not c.dead]
+    own = [a for a, _bs in pairs] if attacking else [b for _a, bs in pairs for b in bs]
+    legends = [c for c in own if c.card.legendary and not c.dead]
+    for y in sources:
+        for _k in range(3):
+            if not legends or not _payable(p, y.card.yoshi_counter):
+                return
+            base = _score(pairs, attacking, opp.life)
+            dying = not attacking and _through(pairs) >= p.life
+            best = None
+            for t in legends:
+                old = t.bonus
+                t.bonus += 1
+                gain = _score(pairs, attacking, opp.life) - base
+                if dying and _through(pairs) < p.life:
+                    gain += 1000
+                t.bonus = old
+                if gain > 0 and (best is None or gain > best[0]):
+                    best = (gain, t)
+            if best is None or not _pay_open(p, y.card.yoshi_counter, treasure=False):
+                break
+            best[1].bonus += 1
+            e["events"].append(f"{p.name}: {y.card.name} – Marke auf {best[1].card.name}")
+
+
+def hapatra_untap(p, step, e):
+    """Main 2: Hapatra {2}{U} enttappt den staerksten eigenen Angreifer dieses Zugs (kann dann blocken)."""
+    for h in [c for c in p.creatures if c.card.hapatra_untap and not c.dead]:
+        while True:
+            cands = [c for c in p.creatures if not c.dead and c.tapped and c.attacked == step]
+            if not cands or not _pay_ability(p, h.card.hapatra_untap, "free"):
+                break
+            t = max(cands, key=danger)
+            t.tapped = False
+            e["events"].append(f"{p.name}: {h.card.name} enttappt {t.card.name}")
+
+
 def fblthp_lost(p, opp, e):
     """Fblthp, Impossibly Lost: der Gegner bekam in unserem Zug Kampfschaden -> N ziehen; ist die Bibliothek dann
     leer, gewinnen wir; Fblthp wird in die Bibliothek gemischt."""
@@ -1725,6 +1849,10 @@ def pw_rank(p, opp, w, cost, atoms, step, phase, pool=None, spells=None):
     8 Lethal, 7 Ultimate (Kosten -6 oder weniger) oder Emblem, 6 Removal, 5 grosses Token, 4 Ziehen, 3 kleines Token,
     2 Plus mit Wert, 1 Plus ohne Wert. Verliehene Faehigkeiten wie beim Jace-Token (walker_rank, Lethal = 8)."""
     kinds = {a[0] for a in atoms}
+    if "library_exile" in kinds:  # Jace, Reality Sculptor: ab 25 Loyalty auf unseren Jaces immer
+        need = next(a[1] for a in atoms if a[0] == "library_exile")
+        total = p.jace.loyalty + sum(x.loyalty for x in p.walkers if x.card.is_jace)
+        return (7, 0, None) if total >= need and opp is not None and len(opp.library) > 1 else (0, 0, None)
     if "copy_next" in kinds:  # echte Planeswalker kopieren nur fuer Lethal oder Removal
         rank, tie = copy_rank(p, opp, pool, spells) if phase == "main1" else (0, 0)
         return (rank, tie, None) if rank >= 6 else (0, 0, None)
@@ -1992,6 +2120,9 @@ def activate_pw(p, opp, w, ability, step, e, target=None):
             _jace_add(p, sum("island" in land.land_types for land in p.lands), e)
         elif kind == "shield":
             p.shield = (a[1], step)
+        elif kind == "library_exile" and opp is not None:  # alle Karten bis auf die unterste ins Exil
+            e["events"].append(f"{p.name}: {w.card.name} exiliert {len(opp.library) - 1} Karten der Bibliothek")
+            opp.library = opp.library[-1:]
         elif kind == "copy_next":
             p.copy_next = step
             e["events"].append(f"{p.name}: der nächste Instant/Sorcery wird kopiert")
@@ -2432,6 +2563,14 @@ def creature_enters(p, new, step, e, opp=None, cast=True):
         search_basics(p, x, e, card.name)
     if card.uldaros_cast and cast and opp is not None:
         uldaros_copies(p, opp, card, step, e)
+    if card.etb_grant:  # Teyo: Ziel vorgegeben (Antwort, Kampf) oder die gefaehrlichste eigene Kreatur, auch er selbst
+        t, p.grant_target = p.grant_target, None
+        if t != "done":
+            alive = [c for c in p.creatures if not c.dead]
+            t = t if t is not None and t in alive else max(alive, key=danger)
+            t.extra |= set(card.etb_grant)
+            t.bonus += 1
+            e["events"].append(f"{p.name}: {card.name} – {t.card.name} bekommt {', '.join(card.etb_grant)} und eine Marke")
     gain_life(p, card.etb_life)
     if card.land_to_tokens and p.lands:
         n, token = card.land_to_tokens
@@ -3268,6 +3407,10 @@ def _cast_removal(card, caster, victim, e, step, target=None):
         e["events"].append(f"{caster.name}: {card.name} ohne Ziel (Ward)")
         return
     label = target.label()
+    if protect_response(victim, target, caster, e, step):
+        bury((caster, victim), e)
+        e["events"].append(f"{caster.name}: {card.name} ohne Ziel ({target.card.name} hat Hexproof)")
+        return
     _draw(victim, target.card.targeted_draw)  # Ruric Thar, Biomagus: Ziel eines gegnerischen Zaubers
     if kind in ("destroy", "damage", "minus", "counters", "lock") and sacrifice_for(victim, target, e):
         bury((caster, victim), e)  # als Antwort geopfert: der Zauber hat kein Ziel mehr (608.2b)
@@ -3646,7 +3789,7 @@ def card_effects(me, opp, card, step, entry, modes=None):
             discarded(me, entry)
     if card.self_damage:  # "damage to each player" trifft auch uns
         me.life -= card.self_damage
-    effects = card
+    effects = card._replace(modes=()) if card.etb_grant else card  # Teyo: Marke mit dem Schluesselwort (creature_enters)
     if card.removal and opp is not None and len(me.lands) >= card.etb_lands_needed \
             and _edict_paid(me, opp, card, entry):
         cast_removal(card, me, opp, entry, step)
@@ -3885,7 +4028,7 @@ def _trick_modes(card):
                 out.append((atoms, sub.pump_tough[0] if sub.pump_tough else (), sub.grant_kw))
         return out
     tough = card.pump_tough or ()
-    out = [(m, tough[i] if i < len(tough) else (), card.grant_kw) for i, m in enumerate(card.modes)
+    out = [(m, tough[i] if i < len(tough) else (), card.grant_kw or card.etb_grant) for i, m in enumerate(card.modes)
            if any(a[0] in _TRICK_KINDS for a in m)]
     if not out and card.grant_kw:
         out = [((), (), card.grant_kw)]
@@ -3954,6 +4097,8 @@ def combat_tricks(p, pairs, opp, e, step, attacking):
         if card.untap_target:  # Tethermage's Advantage: "Untap it"
             own[best[2]].tapped = False
         if card.is_creature:
+            if card.etb_grant:
+                p.grant_target = "done"  # Teyo: Marke und Schluesselwort schon auf der Kampfkreatur
             p.creatures.append(Creature(card, step))
             creature_enters(p, p.creatures[-1], step, e, opp)
         elif card.is_instant_sorcery:
@@ -4092,10 +4237,18 @@ def respond_to_attack(dfn, att, attackers, e, step):
         if not affordable(dfn, card) or not legend_ok(dfn, card):
             continue
         new = Creature(card, step)
+        if card.etb_grant:  # Teyo, Diamondblade Mage: Marke und Deathtouch auf sich selbst
+            new.gy, new.ctl = dfn.graveyard, dfn
+            new.extra |= set(card.etb_grant)
+            new.bonus += 1
         blockers = [b for b in dfn.creatures if not b.tapped and not b.dead]
         lethal = max_through(alive, blockers) >= dfn.life and max_through(alive, blockers + [new]) < dfn.life
         good = any(can_block(new, a) and outcome(a, [new]) == (True, [False]) for a in alive)
+        if card.etb_grant and "deathtouch" in card.etb_grant:  # auch ein Tausch gegen einen gefaehrlicheren Angreifer
+            good = good or any(can_block(new, a) and outcome(a, [new])[0] and danger(a) > danger(new) for a in alive)
         if lethal or good:
+            if card.etb_grant:
+                dfn.grant_target = "done"
             _cast_from_open(dfn, card)
             if try_counter(dfn, card, step, e):
                 dfn.graveyard.append(card)
@@ -4168,6 +4321,7 @@ def end_step_instants(dfn, act, e, step):
     tap_artifact_abilities(dfn, e)
     draw_abilities(dfn, e)
     gy_draws(dfn, e)
+    end_step_abilities(dfn, e, step)
     legend_discard_draw(dfn, e)
     twin_activate(dfn, act, step, e, end_step=True)
 
@@ -5299,6 +5453,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
             c.card.surveil_team_pump or c.card.combat_buff for c in alive):
         _jace_activate(me, step, e, True)
     stun_from_graveyard(me, opp, step, e)
+    aerid_pump(me, opp, step, e)
     perm_abilities(me, opp, step, e)
     equip_gear(me, step, e)
     puppetbeast_sac(me, step, e)
@@ -5412,6 +5567,8 @@ def take_turn(me, opp, step, rnd, skip_draw):
         debuff_tricks(opp, blocks, me, e, step, attacking=False)
         hand_bolt_tricks(me, blocks, opp, e, step, attacking=True)
         hand_bolt_tricks(opp, blocks, me, e, step, attacking=False)
+        yoshimaru_combat(me, blocks, opp, e, step, attacking=True)
+        yoshimaru_combat(opp, blocks, me, e, step, attacking=False)
         sacrifice_blockers(opp, blocks, e)
     before = [(a.label(), [b.label() for b in bs]) for a, bs in blocks]
     res = resolve_combat(blocks)
@@ -5458,6 +5615,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     identity_echo(me, opp, step, e)
     prepare_abilities(me, step, e)
     emrakul_exile(me, step, e)
+    hapatra_untap(me, step, e)
     if me.walkers:
         pw_phase(me, opp, step, e, "after")
     if walker_engine(me):

@@ -301,6 +301,15 @@ RULES = [
     "Loyalty hinaus; Avatar of Burgeoning Echoes gibt bei jedem eigenen Landdrop Empower 2; das {C} von Heartwood "
     "Crafter bezahlt nur Prepared-Kopien; Gideon's Memorial macht Planeswalker-Zauber um {1} billiger (sein Mana zählt "
     "nur für sie).",
+    "FRA-Paket G: Aerid Konstrari zahlt {6} vor dem Angriff nur für Lethal oder gegen einen Blocker, den Aerid sonst "
+    "nicht besiegt, sonst am Ende des gegnerischen Zugs für den Heartwood-Token; Yoshimaru legt mit {6} eine Marke (durch "
+    "Yoshimaru zwei) auf eine legendäre Kreatur – im Kampf für Lethal, einen besseren Block oder gegen Lethal, sonst am "
+    "Ende des gegnerischen Zugs auf die gefährlichste; Hapatra enttappt in Main 2 den stärksten Angreifer; Teyo, "
+    "Diamondblade Mage ist Kampftrick (Deathtouch und Marke auf eine Kampfkreatur) oder Flash-Blocker mit Deathtouch und "
+    "Marke auf sich selbst (auch als Tausch gegen einen gefährlicheren Angreifer), sonst Flash am Ende des gegnerischen "
+    "Zugs; Teyo, Lightshield Expert (Kreatur ab Manawert 3 oder unsere gefährlichste) und Liliana the Faultless (ab "
+    "Manawert 3, nur mit überzähliger Karte) geben Hexproof als Antwort auf Removal; Jace, Reality Sculptor exiliert ab 25 "
+    "Loyalty auf unseren Jaces die Bibliothek des Gegners bis auf eine Karte.",
     "Echte Planeswalker (L2): kommen mit ihrer aufgedruckten Loyalty (306.5b), eine Loyalty-Fähigkeit pro Zug "
     "(606.3), Minus-Kosten nur mit genug Loyalty (606.6), −X so groß wie möglich ohne zu sterben, Tod bei 0 "
     "(704.5i, mit Sanctum Lurker nicht); aus dem Friedhof aufs Feld zurück als neues Objekt mit voller Loyalty "

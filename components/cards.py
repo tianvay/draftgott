@@ -269,6 +269,11 @@ class Card(NamedTuple):
     empower_x: str = ""        # Empower X: "exiled" (exilierte Kreaturen) bzw. "excess" (ueberschuessiger Schaden)
     memorial_pw_mana: int = 0  # Gideon's Memorial: Mana nur fuer Planeswalker-Zauber (wie {1} Kostensenkung)
     restricted_mana: tuple = ()  # "{T}: Add {C}. This mana can't be spent to cast spells from your hand" (Crafter)
+    aerid_pump: tuple = ()     # Aerid Konstrari: Kosten "Heartwood-Token, dann +X/+0 (X = eigene Artefakte)"
+    yoshi_counter: tuple = ()  # Yoshimaru: Kosten "+1/+1-Marke auf eine legendaere Kreatur"
+    hapatra_untap: tuple = ()  # Hapatra: Kosten "Untap target creature"
+    etb_grant: tuple = ()      # Teyo: beim Betreten bekommt ein eigenes Permanent das Schluesselwort und eine Marke
+    liliana_hexproof: tuple = ()  # Liliana the Faultless: Kosten (dazu Tap, abwerfen) "andere Kreatur Hexproof"
 
 
 LANDCYCLE_RE = re.compile(
@@ -1492,6 +1497,9 @@ _PW_ATOMS = [
     (re.compile(r"^empower (?:jace|~) x, where x is the number of islands you control\.$"), lambda m: (("empower_islands",),)),
     (re.compile(r"^until your next turn, whenever a creature attacks you or a planeswalker you control, it gets "
                 r"-(\d+)/-0 until end of turn\.$"), lambda m: (("shield", int(m.group(1))),)),
+    (re.compile(r"^exile all but the bottom card of each opponent's library\. activate only if there are "
+                r"(twenty-five|\d+) or more loyalty counters among jaces you control\.$"),
+     lambda m: (("library_exile", 25 if m.group(1) == "twenty-five" else int(m.group(1))),)),
 ]
 
 
@@ -1737,6 +1745,24 @@ def easy_traits(card, type_line):
             out["memorial_pw_mana"] = 1
         if low.startswith("{t}: add {c}. this mana can't be spent to cast spells from your hand"):
             out["restricted_mana"] = (("C",),)
+        m = re.match(r"^((?:\{[^}]+\})+): create a heartwood token\. then (?:~|[a-z ]+) gets \+x/\+0 until end of "
+                     r"turn, where x is the number of artifacts you control", low)
+        if m:
+            out["aerid_pump"] = cost_alternatives(m.group(1).upper())
+        m = re.match(r"^((?:\{[^}]+\})+): put a \+1/\+1 counter on target legendary creature\.?$", low)
+        if m:
+            out["yoshi_counter"] = cost_alternatives(m.group(1).upper())
+        m = re.match(r"^((?:\{[^}]+\})+): untap target creature\.?$", low)
+        if m:
+            out["hapatra_untap"] = cost_alternatives(m.group(1).upper())
+        m = re.match(r"^when ~ enters, target permanent you control gains (deathtouch|hexproof) until end of turn\. put "
+                     r"a \+1/\+1 counter on it if it's a creature", low)
+        if m:
+            out["etb_grant"] = (m.group(1),)
+        m = re.match(r"^((?:\{[^}]+\})+), \{t\}, discard a card: another target creature or planeswalker you control "
+                     r"gains hexproof until end of turn", low)
+        if m:
+            out["liliana_hexproof"] = cost_alternatives(m.group(1).upper())
     return out
 
 

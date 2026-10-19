@@ -145,7 +145,7 @@ class ParseTests(unittest.TestCase):
     def test_loyalty_and_costs(self):
         self.assertEqual((THEORIST.loyalty_start, [a[0] for a in THEORIST.pw_abilities]), (3, [1, -2, -6]))
         self.assertEqual([a[0] for a in CHILL.pw_abilities], [1, 1, "X", -6])
-        self.assertEqual([a[0] for a in SCULPTOR.pw_abilities], [1, -3])  # Sonderwin (0) ausgelassen
+        self.assertEqual([a[0] for a in SCULPTOR.pw_abilities], [1, -3, 0])  # 0: Bibliothek ab 25 Loyalty (Paket G)
         for card, n in ((GARRUK, 3), (BUTCHER, 3), (RESOLUTE, 3), (UNRELENTING, 3), (TORCH, 4)):
             self.assertEqual(len(card.pw_abilities), n, card.name)
 

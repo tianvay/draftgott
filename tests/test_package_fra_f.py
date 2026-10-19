@@ -93,8 +93,7 @@ class CoverageTests(unittest.TestCase):
             self.assertEqual(lines(card), [], card["name"])
 
     def test_sculptor_only_the_zero_ability(self):
-        self.assertEqual(len(lines(SCULPTOR)), 1)
-        self.assertTrue(lines(SCULPTOR)[0].startswith("0: Exile all but the bottom card"))
+        self.assertEqual(lines(SCULPTOR), [])  # die 0-Faehigkeit ist seit Paket G modelliert
 
     def test_on_purpose_not_modelled(self):
         for card in (PROXY, MARWYN, SHAPER, APPROACH):
