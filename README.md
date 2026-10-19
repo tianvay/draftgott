@@ -546,6 +546,9 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
   Command the Stage, Verdant Kraken, Danitha, Yoshimaru, Bloodline Recollector, Infinite Coursework, Garruk, Veiled
   Butcher (Exil statt Sterben), Guiding Hydra, Curse-Marred Demon, Pia. Lock-Auras auf gegnerischen Kreaturen
   brauchen keine eigene Kreatur.
+- Regeln aus FRA: „attacks alone“ (Jiang Yanggu, Yuriko), Yuriko sperrt Kampf-Zauber, Split Second (Samut), keine
+  Betreten-Auslöser (Karn, Argent Defender), Draconic Visitor, Lotus (Kwia), Tarmogoyf, Traxos, Loot (beide),
+  Seasoned Cryomancer, Medic's Kitesail, Return to the Light Realms.
 - Tomik: höchstens ein Angreifer je Planeswalker. Entrust the Spark opfert nur einen Jace-Token und holt den
   teuersten Planeswalker; Loyal Tutor legt einen Planeswalker oben auf die Bibliothek (auch im Goldfish).
 - Way of the Cryomancer: die Kopie des ersten Instants/Sorcery wird in Main 1 eingeplant (Lethal, Removal mit

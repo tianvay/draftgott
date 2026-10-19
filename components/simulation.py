@@ -606,6 +606,8 @@ def combat_damage(board, bonus, pump, i):
     """Kampfschaden der Kreatur i: Power, mit Ghalta the Immovable auf dem Feld die Toughness, wenn sie groesser ist
     (510.1a; Pumps im Goldfish sind nur +X/+0)."""
     power = _power(board, bonus, pump, i)
+    if power < 0 and board[i][0].abs_damage:  # Loot, the Anomaly
+        power = -power
     tough = board[i][0].toughness + bonus[i]
     if tough > power and any(c.toughness_damage for c, _t in board):
         return tough

@@ -228,6 +228,21 @@ class Card(NamedTuple):
     etb_tutor_any: bool = False  # Betreten: eine Karte suchen, dann zufaellig abwerfen (Curse-Marred Demon)
     etb_discard_enchant: bool = False  # Betreten: abwerfen, dann eine Verzauberung suchen (Pia, Aether Ascetic)
     is_enchantment: bool = False  # Verzauberung (Typzeile)
+    equip_kw: tuple = ()       # Ausruestung: Schluesselwoerter der ausgeruesteten Kreatur (Medic's Kitesail)
+    equip_attack_life: int = 0  # Ausruestung: "Whenever this creature attacks, you gain N life"
+    alone_loot: bool = False   # Jiang Yanggu, Alone: allein angreifen -> abwerfen, ziehen, Marken je Abwurf
+    alone_double_strike: bool = False  # Yuriko: allein angreifen -> Double Strike bis Rundenende
+    combat_lock: bool = False  # Yuriko: im Kampf keine Zauber und keine Faehigkeiten ausser Mana
+    etb_loot_stun: bool = False  # Seasoned Cryomancer: 2 ziehen, 2 abwerfen, Stun je Nichtland-Karte
+    artifact_tokens_dragons: bool = False  # Draconic Visitor: Artefakt-Token werden zu 5/5-Dragons mit Flying
+    lifegain_lotus: bool = False  # Kwia Vigorbloom: Lebensgewinn -> Lotus-Token (einmal pro Zug)
+    nexus_mana: bool = False   # Loot, the Nexus: {T}: ein Mana je verschiedener Power eigener Kreaturen
+    goyf: bool = False         # Tarmogoyf: Power = Kartentypen in allen Friedhoefen, Toughness = Power + 1
+    abs_damage: bool = False   # Loot, the Anomaly: negative Power macht Schaden wie positive
+    no_untap: bool = False     # Traxos: enttappt nicht im Untap Step
+    untap_on_cast: bool = False  # Traxos: enttappt, wenn wir einen Artefakt- oder Kreaturzauber wirken
+    split_second: bool = False  # Samut, Tyrant of Naktamun: unsere Instants/Sorceries haben Split Second
+    no_enter_triggers: bool = False  # Karn, Argent Defender: Artefakte/Kreaturen loesen beim Betreten nichts aus
 
 
 LANDCYCLE_RE = re.compile(
@@ -912,7 +927,8 @@ _HEXPROOF_UNTIL_RE = re.compile(r"^(?:~|this creature) has hexproof as long as (
                                 r"combat damage yet")
 _FLASHBACK_RE = re.compile(r"^flashback(?: |—)((?:\{[^}]+\})+)(, discard a card)?\.?$")
 _ALT_DRAWS_RE = re.compile(r"if this spell wasn't cast from your hand, draw (a|one|two|three) cards? instead")
-_REANIMATE_RE = re.compile(r"\breturn (target|all) (creature or planeswalker|creature|permanent|land) cards?"
+_REANIMATE_RE = re.compile(r"\breturn (target|all) (creature or planeswalker|nonland permanent|creature|permanent|land) "
+                           r"cards?"
                            r"(?: with mana value (\d+) or less)? "
                            r"from your graveyard to (the battlefield|your hand)( tapped)?( with an additional \+1/\+1 "
                            r"counter on (?:it|them))?")
@@ -1030,7 +1046,8 @@ def life_and_costs(card, type_line, keywords):
                 (not spell_face and _ETB_EFFECT_RE.match(low))) and not _MILL_LAND_RE.match(low):
             m = _REANIMATE_RE.search(low)  # Primal Witchstalker (Mill + Land) ist eigene Logik
             if m:
-                out["reanimate"] = (m.group(1), "creature_pw" if m.group(2) == "creature or planeswalker" else m.group(2),
+                out["reanimate"] = (m.group(1), {"creature or planeswalker": "creature_pw",
+                                                 "nonland permanent": "nonland_permanent"}.get(m.group(2), m.group(2)),
                                     int(m.group(3)) if m.group(3) else 99,
                                     "battlefield" if m.group(4) == "the battlefield" else "hand",
                                     1 if m.group(6) else 0)
@@ -1148,7 +1165,7 @@ _PACKAGE_M3_RES = {
                               r"(create [^.]*\.)"),
     "combat_draw_ability": re.compile(r"^((?:\{[^}]+\})+): until end of turn, whenever (?:~|this creature|[a-z]+) "
                                       r"deals combat damage to a player, draw (a|one|two|three) cards?"),
-    "equip_pump": re.compile(r"^equipped creature gets \+(\d+)/\+(\d+)\.?$"),
+    "equip_pump": re.compile(r"^equipped creature gets \+(\d+)/\+(\d+)(?: and has (.+?))?\.?$"),
     "equip_cost": re.compile(r"^equip ((?:\{[^}]+\})+)\.?( this ability costs \{1\} less to activate for each "
                              r"\+1/\+1 counter on the creature it targets\.?)?$"),
     "etb_gain": re.compile(r"^when (?:this [a-z]+|~) enters,[^.]* you gain (\d+) life"),
@@ -1175,6 +1192,13 @@ def package_m3_traits(card, type_line):
         m = res["equip_pump"].match(low)
         if m:
             pump = (int(m.group(1)), int(m.group(2)))
+            rest = m.group(3) or ""
+            kws = tuple(k for k in re.findall(r"^([a-z ]+?)(?: and \"|$)", rest)[:1] if k in COMBAT_KEYWORDS)
+            if kws:
+                out["equip_kw"] = kws
+            ml = re.search(r"whenever this creature attacks, you gain (\d+) life", rest)
+            if ml:
+                out["equip_attack_life"] = int(ml.group(1))
         m = res["equip_cost"].match(low)
         if m:
             cost = (cost_alternatives(m.group(1).upper()), bool(m.group(2)))
@@ -1558,6 +1582,40 @@ def easy_traits(card, type_line):
             out["unprepare"] = True
         if low.startswith("if a creature an opponent controls would die, exile it instead"):
             out["opp_exile_instead"] = True
+        if low.startswith("whenever a creature you control attacks a player alone, discard a card, then draw a card. "
+                          "then put a +1/+1 counter on that creature for each card you've discarded this turn"):
+            out["alone_loot"] = True
+        if low.startswith("whenever a creature you control attacks a player alone, it gains double strike until end "
+                          "of turn"):
+            out["alone_double_strike"] = True
+        if low.startswith("during combat, players can't cast spells or activate abilities that aren't mana "
+                          "abilities"):
+            out["combat_lock"] = True
+        if re.match(r"^when (?:~|this creature) enters, draw two cards, then discard two cards\. when you discard "
+                    r"one or more nonland cards this way, tap up to that many target creatures and put a stun counter "
+                    r"on each of them", low):
+            out["etb_loot_stun"] = True
+        if low.startswith("if one or more artifact tokens would be created under your control, that many 5/5 red "
+                          "dragon creature tokens with flying are created instead"):
+            out["artifact_tokens_dragons"] = True
+        if low.startswith('whenever you gain life, create a colorless artifact token named lotus with "{t}, sacrifice '
+                          'this token: add three mana of any one color."'):
+            out["lifegain_lotus"] = True
+        if low.startswith("{t}: choose a color. add one mana of that color for each different power among creatures "
+                          "you control"):
+            out["nexus_mana"] = True
+        if low.startswith("~'s power is equal to the number of card types among cards in all graveyards"):
+            out["goyf"] = True
+        if low.startswith("if ~'s power is negative, he assigns combat damage as though his power were positive"):
+            out["abs_damage"] = True
+        if low.startswith("~ doesn't untap during your untap step"):
+            out["no_untap"] = True
+        if low.startswith("whenever you cast an artifact or creature spell, untap ~"):
+            out["untap_on_cast"] = True
+        if low.startswith("instant and sorcery spells you control have split second"):
+            out["split_second"] = True
+        if low.startswith("artifacts and creatures entering the battlefield don't cause abilities to trigger"):
+            out["no_enter_triggers"] = True
         if re.match(r"^(?:~|this creature) enters with x \+1/\+1 counters on it", low):
             out["x_counters"] = True
         if re.match(r"^at the beginning of combat on your turn, you may remove a \+1/\+1 counter from (?:~|this "

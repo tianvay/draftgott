@@ -260,6 +260,17 @@ RULES = [
     "nie ein Land, sondern die teuerste Karte, die wir nächste Runde spielen können (sonst die billigste), dann wird "
     "zufällig abgeworfen. Pia wirft nur ein Land ab, wenn wir mehr Länder haben als die teuerste Karte des Decks "
     "kostet, und holt die teuerste Verzauberung, die wir nächste Runde spielen können.",
+    "Regeln und Pflicht-Effekte aus FRA: Medic's Kitesail (Flying, 1 Leben beim Angriff), Hunter's Axe (+2/+0); "
+    "„attacks alone“ (506.5): Jiang Yanggu, Alone wirft ab (wie beim Handlimit), zieht und gibt eine Marke je in diesem "
+    "Zug abgeworfener Karte, Yuriko gibt Double Strike; Yuriko sperrt im Kampf alle Zauber und Fähigkeiten außer Mana "
+    "(beide Seiten); Seasoned Cryomancer zieht 2, wirft 2 ab und stunt je Nichtland-Karte die gefährlichste gegnerische "
+    "Kreatur; Draconic Visitor: Treasure, Heartwood und Lotus werden zu 5/5-Dragons (614.1); Kwia Vigorbloom: Lotus "
+    "bei Lebensgewinn (einmal pro Zug), eingesetzt wie Treasure nur, wenn er mehr ermöglicht; Loot, the Nexus: Mana je "
+    "verschiedener Power; Tarmogoyf (Kartentypen in allen Friedhöfen); Loot, the Anomaly macht Schaden trotz negativer "
+    "Power; Traxos enttappt nicht, nur beim Wirken eines Artefakt- oder Kreaturzaubers; Samut, Tyrant of Naktamun: "
+    "unsere Instants und Sorceries haben Split Second (702.61), sie werden nicht gekontert; Karn, Argent Defender: "
+    "Artefakte und Kreaturen lösen beim Betreten nichts aus (auch sein eigenes Betreten); Return to the Light Realms "
+    "holt alle Nichtland-Permanents zurück.",
     "Echte Planeswalker (L2): kommen mit ihrer aufgedruckten Loyalty (306.5b), eine Loyalty-Fähigkeit pro Zug "
     "(606.3), Minus-Kosten nur mit genug Loyalty (606.6), −X so groß wie möglich ohne zu sterben, Tod bei 0 "
     "(704.5i, mit Sanctum Lurker nicht); aus dem Friedhof aufs Feld zurück als neues Objekt mit voller Loyalty "
