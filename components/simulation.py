@@ -14,7 +14,8 @@ from components.mulligan import deal_opening
 def aura_ok(chosen, has_creature, auras_need_creature):
     if not auras_need_creature or has_creature:
         return True
-    return not (any(c.is_aura for c in chosen) and not any(c.is_creature for c in chosen))
+    # Removal-Auras (Lock) kommen auf eine gegnerische Kreatur und brauchen keine eigene (303.4a)
+    return not (any(c.is_aura and not c.removal for c in chosen) and not any(c.is_creature for c in chosen))
 
 
 def play_score(chosen):
@@ -892,6 +893,7 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
     (Kreaturen ab der Folgerunde, Artefakte sofort); Treasure zaehlen nicht. Die Messung veraendert den Spielablauf
     nicht."""
     cast_in_turn = {t: 0 for t in range(1, max_turn + 1)}
+    max_deck_mv = max((c.mv for c in cards if not c.is_land), default=0)  # teuerste Karte des Decks (Pia)
     cc_colors = list(color_check["colors"]) if color_check else []
     cc_checks = [dict(ch, ok=0) for ch in (color_check.get("checks") or [])] if color_check else []
     cc_turns = {3} | {ch["turn"] for ch in cc_checks}
@@ -1050,7 +1052,8 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                 return [c for c in hand if not c.is_land and cast_allowed(c, len(gy))
                         and (not c.twin or twin_host_index(board, bonus, dmg_target - dmg_total) is not None)
                         and (not c.entrust or goldfish_entrust_pick(library, walkers, jst) is not None)
-                        and (not c.pw_tutor or goldfish_tutor_pick(library, hand, battlefield) is not None)] \
+                        and (not c.pw_tutor or goldfish_tutor_pick(library, hand, battlefield) is not None)
+                        and (not c.x_counters or len(board) >= 2)] \
                     + copies_now()
 
             spells = castable()
@@ -1243,13 +1246,39 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                 if recurring_effects(land_played):
                     perms.append((land_played, turn))
 
+            free_x = avail_total - sum(paid_mv(c) for c in chosen) - cycle_spent  # Guiding Hydra: X = freies Mana
             for c in chosen:
                 if c.is_copy:
                     continue
                 take_from(hand, c)
-                if c.is_creature:
+                if c.is_creature and not (c.x_counters and free_x < 1):  # X = 0: die Hydra stirbt als 1/0
                     board.append((c, turn))
-                    bonus.append(0)
+                    bonus.append(free_x if c.x_counters else 0)
+                    if c.x_counters:
+                        free_x = 0
+                if c.etb_tutor_any and library:  # Curse-Marred Demon: nie ein Land, dann zufaellig abwerfen
+                    spells_l = [x for x in library if not x.is_land]
+                    ok_l = [x for x in spells_l if x.mv <= len(battlefield) + 1]
+                    pick = max(ok_l, key=lambda x: (x.mv, x.name)) if ok_l else (
+                        min(spells_l, key=lambda x: (x.mv, x.name)) if spells_l else None)
+                    if pick is not None:
+                        library.remove(pick)
+                        random.shuffle(library)
+                        hand.append(pick)
+                    if hand:
+                        gone = random.choice(hand)
+                        hand.remove(gone)
+                        gy.append(gone)
+                if c.etb_discard_enchant:  # Pia: Land abwerfen, Verzauberung fuer den naechsten Zug
+                    lands_h = [x for x in hand if x.is_land]
+                    ench = [x for x in library if x.is_enchantment and x.mv <= len(battlefield) + 1]
+                    if lands_h and ench and len(battlefield) > max_deck_mv:
+                        hand.remove(lands_h[0])
+                        gy.append(lands_h[0])
+                        pick = max(ench, key=lambda x: (x.mv, x.name))
+                        library.remove(pick)
+                        random.shuffle(library)
+                        hand.append(pick)
                 if c.is_instant_sorcery:
                     gy.append(c)  # gewirkte Instants und Sorceries kommen in den Friedhof
                 if c.gy_x:  # Hapatra: hoechster Manawert im Friedhof
@@ -1340,6 +1369,15 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                         library.remove(pick)
                         random.shuffle(library)
                         gy.append(pick)
+                if c.etb_basic_tapped:  # Simulacrum Shaper: Basic Land getappt aufs Feld
+                    have = set().union(*(x.land_colors for x in battlefield)) if battlefield else set()
+                    basics = [x for x in library if x.is_basic]
+                    if basics:
+                        count = Counter(x.name for x in basics)
+                        pick = max(basics, key=lambda x: (len(set(x.land_colors) - have), count[x.name], x.name))
+                        library.remove(pick)
+                        random.shuffle(library)
+                        battlefield.append(pick)
                 if c.etb_artifact_colors_draw:  # Karn, Gilded Guardian
                     arts = [x for x in nperms if x.is_artifact] + [x for x, _t in board if x.is_artifact and x is not c]
                     for _k in range(len(set().union(*(colors_of_alts(x.alts) for x in arts))) if arts else 0):
@@ -1477,6 +1515,13 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                     bonus[best_i] += n_r
                     ef["counters"] += n_r
                     free_now -= need_r
+            for h_i, (h_card, _t) in enumerate(board):  # Guiding Hydra zu Kampfbeginn: Marken verteilen
+                if h_card.hydra_spread and bonus[h_i] >= 1 and len(board) - 1 >= 2:
+                    bonus[h_i] -= 1
+                    for j in range(len(board)):
+                        if j != h_i:
+                            bonus[j] += 1
+                            ef["counters"] += 1
             # Angriff: Kreaturen vom Vorzug greifen an, neue nur mit Haste, Defender nie (keine Blocker, kein Removal)
             held = Counter()  # Kreaturen, die fuer Mana getappt wurden, greifen nicht an
             if creature_units and chosen:

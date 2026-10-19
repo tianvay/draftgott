@@ -41,7 +41,7 @@ _GY_TYPES = {"creature": "is_creature", "planeswalker": "is_planeswalker", "arti
 
 class Creature:
     """Eine Kreatur auf dem Feld (Karte, Schritt des Eintritts, getappt, Schaden, Marken, Pump)."""
-    __slots__ = ("card", "entered", "tapped", "damage", "bonus", "pump", "dead", "touched", "locked", "prepared",
+    __slots__ = ("card", "entered", "tapped", "damage", "_bonus", "pump", "dead", "touched", "locked", "prepared",
                  "tpump", "extra", "lifted", "owner", "at_jace", "gy", "dealt", "finality", "ctl", "once", "stun", "gear",
                  "tdraw", "auras", "exile_step", "at_pw", "lasting")
 
@@ -73,6 +73,21 @@ class Creature:
         self.exile_step = None  # Token-Kopie von Splinter Twin: wird im Endsegment dieses Schritts exiliert
         self.at_pw = None     # greift in diesem Kampf diesen echten Planeswalker (Walker) an
         self.lasting = []     # -P/-T bis zum naechsten Zug des Verursachers: (P, T, Verursacher, Schritt)
+
+    @property
+    def bonus(self):
+        """+1/+1-Marken."""
+        return self._bonus
+
+    @bonus.setter
+    def bonus(self, value):
+        """Yoshimaru, Beloved Companion (614.1, auch "enters with", 122.6): kommen Marken auf eine eigene Kreatur,
+        kommt eine mehr dazu."""
+        old = getattr(self, "_bonus", 0)
+        ctl = getattr(self, "ctl", None)
+        if value > old and ctl is not None and any(c.card.counter_plus_one and not c.dead for c in ctl.creatures):
+            value += 1
+        self._bonus = value
 
     @property
     def power(self):
@@ -515,6 +530,10 @@ class Player:
         self.attack_buff = None  # bis zum naechsten Zug: (P, T, Schritt) fuer Angriffe auf den Gegner (Garruk)
         self.shield = None    # bis zum naechsten Zug: (-N, Schritt) fuer Angreifer auf uns (Jace, Reality Sculptor)
         self.copy_next = None  # Way of the Cryomancer: in diesem Schritt wird der naechste Instant/Sorcery kopiert
+        self.charges = 0      # Charge-Marken auf Gardenize
+        self.x_values = []    # X gewirkter Kreaturen mit "enters with X counters": [(Karte, X)] (Guiding Hydra)
+        self.max_deck_mv = max((c.mv for c in cards if not c.is_land), default=0)  # teuerste Karte des Decks (Pia)
+        self.noncombat_step = None  # Schritt, in dem dieser Spieler zuletzt Schaden ausserhalb des Kampfs bekam
 
     def board(self):
         return [(c.card, c.entered) for c in self.creatures], [c.bonus for c in self.creatures], \
@@ -943,6 +962,53 @@ def legend_discard_draw(p, e):
         e["events"].append(f"{p.name}: {card.name} – wirft {pick.name} ab, zieht")
         discarded(p, e, [pick])
         _draw(p)
+
+
+def hydra_spread(p, e):
+    """Guiding Hydra zu Kampfbeginn: eine Marke von ihr auf jede andere eigene Kreatur, wenn mindestens 2 davon
+    profitieren."""
+    for h in list(p.creatures):
+        if not h.card.hydra_spread or h.dead or h.bonus < 1:
+            continue
+        others = [c for c in p.creatures if c is not h and not c.dead]
+        if len(others) < 2:
+            continue
+        h.bonus -= 1
+        for c in others:
+            c.bonus += 1
+        e["events"].append(f"{p.name}: {h.card.name} verteilt Marken")
+    bury((p,) if p.opponent is None else (p, p.opponent), e)
+
+
+def upkeep_triggers(me, opp, step, e):
+    """Zu Beginn jedes Upkeeps (beider Spieler): Verdant Kraken erschafft ein Tentacle fuer seinen Kontrolleur; Command
+    the Stage kommt auf die Hand, wenn ein Gegner seines Besitzers im letzten Zug Schaden ausserhalb des Kampfs
+    bekam."""
+    for p in (me, opp):
+        for c in list(p.creatures):
+            if c.card.upkeep_token is not None and not c.dead:
+                make_tokens(p, [(1, c.card.upkeep_token)], step, e, p.opponent, c.card.name)
+                if p.opponent is not None:  # das Token ist ein Land (Forest): Landfall
+                    on_land(p, p.opponent, c.card.upkeep_token, step, e, with_mana=False)
+        foe = p.opponent
+        if foe is not None and foe.noncombat_step == step - 1:
+            for card in [g for g in p.graveyard if g.noncombat_recur]:
+                p.graveyard.remove(card)
+                p.hand.append(card)
+                e["events"].append(f"{p.name}: {card.name} aus dem Friedhof auf die Hand")
+
+
+def end_step_prepare(players, e):
+    """Zu Beginn jedes Endsegments: Bloodline Recollector wird prepared, wenn in diesem Zug 3 oder mehr Kreaturen
+    gestorben sind (beide Spieler)."""
+    died = sum(p.deaths - p.deaths_mark for p in players)
+    if died < 3:
+        return
+    for p in players:
+        for c in p.creatures:
+            if c.card.prepared and c.card.prepared[0] == "deaths3" and not c.dead and not c.prepared:
+                c.prepared = True
+                e["events"].append(f"{p.name}: {c.card.name} wird prepared")
 
 
 def jace_died(p, e):
@@ -1704,6 +1770,7 @@ def deal_noncombat(src, victim, amount, e):
     if amount <= 0 or victim is None:
         return
     victim.life -= amount
+    victim.noncombat_step = victim.now
     src.dealt_direct += amount
     e["face"] = e.get("face", 0) + amount
     for c in src.creatures:
@@ -1813,6 +1880,13 @@ def on_cast(p, card, step, e):
     _jace_on_cast(p, card, step, e)
     if p.emblems:
         emblem_cast(p, step, e)
+    if card.equip or (not card.removal and (card.is_instant_sorcery or card.is_aura) and any(
+            a[0] in ("pump", "counter") for m in card.modes for a in m)):
+        for c in p.creatures:  # Danitha, Sword of Hope: einmal pro Zug
+            if c.card.own_target_draw and not c.dead and c.once.get("own_target") != p.now:
+                c.once["own_target"] = p.now
+                _draw(p)
+                e["events"].append(f"{p.name}: {c.card.name} zieht")
     foe = p.opponent
     if foe is not None:
         for c in foe.creatures:  # Solarium Sentry
@@ -1903,6 +1977,12 @@ def creature_enters(p, new, step, e, opp=None, cast=True):
     card = new.card
     new.gy, new.ctl = p.graveyard, p
     new.bonus += card.enters_counters  # "enters with N +1/+1 counters" (614.1c)
+    if card.x_counters:  # "enters with X +1/+1 counters" (Guiding Hydra), X beim Wirken festgelegt
+        for i, (xc, xv) in enumerate(p.x_values):
+            if xc == card:
+                new.bonus += xv
+                del p.x_values[i]
+                break
     x, p.next_x = p.next_x, 0  # X des gewirkten Zaubers (107.3m); sonst 0
     if card.x_search_basics and x:
         search_basics(p, x, e, card.name)
@@ -1962,6 +2042,47 @@ def creature_enters(p, new, step, e, opp=None, cast=True):
             gain_life(p, c.card.ally_enter_life)
         if c is not new and c.card.ally_enter_mill:  # Liliana the Repentant
             _mill(p, c.card.ally_enter_mill, e, c.card.name)
+    if card.etb_tutor_any and p.library:  # Curse-Marred Demon: nie ein Land; dann zufaellig abwerfen
+        spells = [c for c in p.library if not c.is_land]
+        ok = [c for c in spells if c.mv <= len(p.lands) + 1]
+        pick = max(ok, key=lambda c: (c.mv, c.name)) if ok else (min(spells, key=lambda c: (c.mv, c.name))
+                                                                  if spells else None)
+        if pick is not None:
+            p.library.remove(pick)
+            random.shuffle(p.library)
+            p.hand.append(pick)
+            e["events"].append(f"{p.name}: {card.name} sucht {pick.name}")
+        if p.hand:
+            gone = random.choice(p.hand)
+            p.hand.remove(gone)
+            p.graveyard.append(gone)
+            e["events"].append(f"{p.name}: wirft zufällig {gone.name} ab")
+            discarded(p, e, [gone])
+    if card.etb_discard_enchant:  # Pia: ein Land abwerfen, eine Verzauberung fuer den naechsten Zug suchen
+        lands = [c for c in p.hand if c.is_land]
+        ench = [c for c in p.library if c.is_enchantment and c.mv <= len(p.lands) + 1]
+        if lands and ench and len(p.lands) > p.max_deck_mv:
+            gone = lands[0]
+            p.hand.remove(gone)
+            p.graveyard.append(gone)
+            discarded(p, e, [gone])
+            pick = max(ench, key=lambda c: (c.mv, c.name))
+            p.library.remove(pick)
+            random.shuffle(p.library)
+            p.hand.append(pick)
+            e["events"].append(f"{p.name}: {card.name} wirft {gone.name} ab, sucht {pick.name}")
+    if card.etb_basic_tapped:  # Simulacrum Shaper: Basic Land getappt aufs Feld (Auswahl wie search_basics)
+        have = set().union(*(c.land_colors for c in p.lands)) if p.lands else set()
+        basics = [c for c in p.library if c.is_basic]
+        if basics:
+            count = Counter(c.name for c in basics)
+            pick = max(basics, key=lambda c: (len(set(c.land_colors) - have), count[c.name], c.name))
+            p.library.remove(pick)
+            random.shuffle(p.library)
+            p.lands.append(pick)
+            e["events"].append(f"{p.name}: {card.name} sucht {pick.name} (getappt)")
+            if opp is not None or p.opponent is not None:
+                on_land(p, opp if opp is not None else p.opponent, pick, step, e, with_mana=False)
     if card.etb_artifact_colors_draw:  # Karn, Gilded Guardian
         arts = [c for c in p.perms if c.is_artifact] + [c.card for c in p.creatures if c is not new and not c.dead
                                                          and c.card.is_artifact]
@@ -2157,7 +2278,10 @@ def bury(players, e):
     for p in players:
         legend_rule(p, e)
     triggers = []  # erst alle gleichzeitig sterben lassen (704.3), dann die Ausloeser
+    copies_made = []
     for p in players:
+        if p.opponent is not None and any(w.card.opp_exile_instead for w in p.opponent.walkers):
+            continue  # Garruk, Veiled Butcher: nichts stirbt
         watchers = [c for c in p.creatures if c.card.ally_death_ping or c.card.ally_death_life]
         dying = [c for c in p.creatures
                  if c.dead or c.toughness <= 0 or c.damage >= c.toughness or (c.touched and c.damage > 0)]
@@ -2168,7 +2292,14 @@ def bury(players, e):
             triggers += [(p, "loyalty", loyalty)] * len(dying)
     moves = []  # Graft Surgeon: Marken auf eine eigene Kreatur, die ueberlebt
     for p in players:
+        exile_instead = p.opponent is not None and any(w.card.opp_exile_instead for w in p.opponent.walkers)
         for c in list(p.creatures):
+            if exile_instead and (c.dead or c.toughness <= 0 or c.damage >= c.toughness
+                                  or (c.touched and c.damage > 0)):
+                p.creatures.remove(c)  # Garruk, Veiled Butcher: exiliert statt zu sterben, kein "dies" (614.6)
+                _leave(p, c.card)
+                e["events"].append(f"{p.name}: {c.card.name} ins Exil (statt zu sterben)")
+                continue
             if c.dead or c.toughness <= 0 or c.damage >= c.toughness or (c.touched and c.damage > 0):
                 if c.card.death_counters_move and c.bonus > 0:
                     moves.append((p, c.bonus, c.card.name))
@@ -2178,12 +2309,21 @@ def bury(players, e):
                     (c.owner or p).graveyard.append(c.card)
                 if c.card.death_draw:  # Simulacrum Shaper
                     _draw(p, c.card.death_draw)
+                if any(x.charge_on_death for x in p.perms):  # Gardenize
+                    p.charges += sum(1 for x in p.perms if x.charge_on_death)
+                if c.card.death_token_copy and not c.card.is_token:  # Sphinx of False Conclusions (707.2, 111.10)
+                    copies_made.append((p, c.card._replace(is_token=True)))
                 if c.card.death_heartwood:  # Aerid Konstrari: ungetappt, sofort offenes Mana (kein 302.6)
                     p.perms += [HEARTWOOD] * c.card.death_heartwood
                     p.open += list(HEARTWOOD.mana_src) * c.card.death_heartwood
                 _leave(p, c.card)
                 gain_life(p, c.card.death_life)
                 e["deaths"].append(f"{c.card.name} ({p.name})")
+    for p, card in copies_made:
+        new = Creature(card, p.now)
+        p.creatures.append(new)
+        creature_enters(p, new, p.now, e, p.opponent, cast=False)
+        e["events"].append(f"{p.name}: Token-Kopie von {card.name}")
     for p, ping, extra in triggers:  # Massacre Girl, Edgar, Way of the Necromancer
         if ping == "loyalty":
             if jace_present(p):
@@ -2657,6 +2797,9 @@ def cast_removal(card, caster, victim, e, step, target=None):
         return
     elif kind == "lock":
         target.locked = True
+        if card.unprepare:  # Infinite Coursework: tappen, unprepared
+            target.tapped = True
+            target.prepared = False
         if card in caster.perms:
             caster.lock_links.append({"aura": card, "creature": target})
         e["events"].append(f"{caster.name}: {card.name} – {label} gesperrt")
@@ -2960,6 +3103,11 @@ def card_effects(me, opp, card, step, entry, modes=None):
         opp.treasures += card.victim_treasure  # Vraska, the Cutting Glare
         if card.removal[3]:  # any target: der Schaden ist schon verteilt
             effects = card._replace(modes=tuple(tuple(a for a in m if a[0] != "face") for m in card.modes))
+    if card.stage_token is not None:  # Command the Stage: Cadet, dann Marke auf jedes andere Wizard-Token
+        others = [c for c in me.creatures if c.card.is_token and "wizard" in c.card.creature_types and not c.dead]
+        make_tokens(me, [(1, card.stage_token)], step, entry, opp, card.name)
+        for c in others:
+            c.bonus += card.wizard_token_counters
     if card.mill_self:  # Dark Matter Manipulator, Omit Variables
         _mill(me, card.mill_self, entry, card.name)
     if card.team_grant:  # Artifist Acumen
@@ -3142,6 +3290,7 @@ def main_phase_spells(me, opp):
             and (not c.twin or twin_host(me, opp) is not None)
             and (not c.cast_threshold or threshold(me))
             and (not c.entrust or entrust_pick(me) is not None)
+            and (not c.x_counters or sum(1 for x in me.creatures if not x.dead) >= 2)
             and (any(mode_value(me, opp, s, 0) > (0,) for s in c.choices[1]) if c.choices and not c.is_creature
                  else not c.removal or c.removal[4] == "etb" or has_target(c, me, opp))]
 
@@ -4227,6 +4376,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
             continue
         c.tapped = False
     upkeep(me)
+    upkeep_triggers(me, opp, step, e)
     eye_upkeep(me, opp, e)
     if not skip_draw:  # Draw
         if not me.library:
@@ -4281,6 +4431,10 @@ def take_turn(me, opp, step, rnd, skip_draw):
         return [cost(c) for c in main_phase_spells(me, opp)]
     # Main 1: Landcycling, wenn ein Land fuer den Landdrop fehlt
     pool, creature_units = _mana(me, step)
+    if me.charges and any(c.charge_on_death for c in me.perms):  # Gardenize: {G} je Charge-Marke in der ersten Main
+        pool = pool + [("G",)] * me.charges
+    elif not any(c.charge_on_death for c in me.perms):
+        me.charges = 0
     spells = phase_spells()
     has_creature = bool(me.creatures)
     if rnd <= CYCLE_TURNS and not any(c.is_land for c in me.hand):
@@ -4457,6 +4611,16 @@ def take_turn(me, opp, step, rnd, skip_draw):
             exile = True
         _resolve(me, opp, c, step, e, owner, exile)
     me.cast_count += len(chosen)
+    for c in list(chosen):  # Guiding Hydra: X = alles freie Mana, mindestens 1 (sonst stirbt sie als 1/0)
+        if c.x_counters:
+            x = free_units(me)
+            if x < 1:
+                chosen.remove(c)
+                me.hand.append(c)
+                continue
+            for _ in range(x):
+                me.open.pop()
+            me.x_values.append((c, x))
     for c in chosen:  # X-Kosten (Fblthp): freies Mana, hoechstens so viel, wie es nutzt
         if c.x_search_basics:
             x = min(free_units(me), len(basic_names_in_library(me)))
@@ -4504,6 +4668,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     combat_draw_abilities(me, opp, step, e)
     # Kampf: zu Beginn Darklight Phoenix und Desperate Futurescribe
     phoenix_check(me, opp, step, e)
+    hydra_spread(me, e)
     combat_buffs(me, step, e)
     twin_for_lethal(me, opp, step, e)
     sacrifice_for_lethal(me, opp, step, e)
@@ -4636,6 +4801,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
         for c in me.creatures:
             if c.card.is_token:
                 c.tapped = False
+    end_step_prepare((me, opp), e)
     for p_ in (me, opp):  # Splinter Twin: Kopien zu Beginn des Endsegments exilieren (kein Sterben)
         for c in list(p_.creatures):
             if c.exile_step is not None and c.exile_step <= step:

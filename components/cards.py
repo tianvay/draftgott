@@ -212,6 +212,22 @@ class Card(NamedTuple):
     life_tokens: object = None  # X Token, X = Leben in diesem Zug (Germinate Recruits): die Token-Karte
     land_sac_counters: tuple = ()  # Land: (Kosten, N) "{5}, {T}, Sacrifice this land: N +1/+1 counters" (Room of Refuge)
     legend_discard_draw: tuple = ()  # Kosten "{1}, {T}, Discard a legendary card: Draw a card" (Solitary Cell)
+    etb_basic_tapped: bool = False  # Betreten: Basic Land getappt aufs Feld suchen (Simulacrum Shaper)
+    charge_on_death: bool = False  # Gardenize: Charge-Marke je eigener gestorbener Kreatur, {G} je Marke in Main 1
+    death_token_copy: bool = False  # "When this creature dies, if it isn't a token, create a token copy" (Sphinx)
+    wizard_token_counters: int = 0  # Command the Stage: Marke auf jedes andere eigene Wizard-Token
+    stage_token: object = None  # Command the Stage: das Token aus "Create ..., then put ..."
+    noncombat_recur: bool = False  # Command the Stage: aus dem Friedhof zurueck, wenn der Gegner Schaden bekam
+    upkeep_token: object = None  # jedes Upkeep ein Token fuer uns (Verdant Kraken): die Token-Karte
+    own_target_draw: bool = False  # Danitha, Sword of Hope: Equipment oder Zauber auf eigene Kreatur -> ziehen
+    counter_plus_one: bool = False  # Yoshimaru: eine +1/+1-Marke mehr auf eigene Kreaturen
+    unprepare: bool = False    # Infinite Coursework: die verzauberte Kreatur wird unprepared
+    opp_exile_instead: bool = False  # Garruk, Veiled Butcher: gegnerische Kreaturen werden exiliert statt zu sterben
+    x_counters: bool = False   # "enters with X +1/+1 counters" (Guiding Hydra)
+    hydra_spread: bool = False  # Kampfbeginn: eine Marke von sich an jede andere eigene Kreatur (Guiding Hydra)
+    etb_tutor_any: bool = False  # Betreten: eine Karte suchen, dann zufaellig abwerfen (Curse-Marred Demon)
+    etb_discard_enchant: bool = False  # Betreten: abwerfen, dann eine Verzauberung suchen (Pia, Aether Ascetic)
+    is_enchantment: bool = False  # Verzauberung (Typzeile)
 
 
 LANDCYCLE_RE = re.compile(
@@ -1446,6 +1462,8 @@ def easy_traits(card, type_line):
     Solitary Cell)."""
     out = {}
     spell_face = "Instant" in type_line or "Sorcery" in type_line
+    if "Enchantment" in type_line.split("—")[0]:
+        out["is_enchantment"] = True
     for _raw, low in _clean_lines(card):
         m = re.match(r"^(?:when (?:~|this creature) enters, )?mill (a|one|two|three|four|\d+) cards?\.?$", low)
         if m and (spell_face or low.startswith("when ")):
@@ -1508,6 +1526,49 @@ def easy_traits(card, type_line):
         m = re.match(r"^((?:\{[^}]+\})+), \{t\}, discard a legendary card: draw a card", low)
         if m:
             out["legend_discard_draw"] = cost_alternatives(m.group(1).upper())
+        if re.match(r"^when (?:~|this creature) enters, you may search your library for a basic land card, put that "
+                    r"card onto the battlefield tapped", low):
+            out["etb_basic_tapped"] = True
+        if low.startswith("whenever a creature you control dies, put a charge counter on this enchantment") or \
+                low.startswith("at the beginning of your first main phase, add {g} for each charge counter"):
+            out["charge_on_death"] = True
+        if re.match(r"^when (?:~|this creature) dies, if it isn't a token, create a token that's a copy of it", low):
+            out["death_token_copy"] = True
+        m = re.match(r"^(create .+? token named [a-z]+), then put a \+1/\+1 counter on each other wizard token you "
+                     r"control\.?$", low)
+        if m:
+            out["wizard_token_counters"] = 1
+            tokens = _tokens_in(m.group(1) + ".")
+            if tokens:
+                out["stage_token"] = tokens[0][1]
+        if re.match(r"^at the beginning of each upkeep, if an opponent was dealt noncombat damage last turn, return "
+                    r"this card from your graveyard to your hand", low):
+            out["noncombat_recur"] = True
+        m = re.match(r"^at the beginning of each player's upkeep, you create a (\d+)/(\d+) green forest tentacle land "
+                     r"creature token", low)
+        if m:
+            out["upkeep_token"] = token_card("Forest Tentacle", True, int(m.group(1)), int(m.group(2)), False,
+                                             mana_src=(("G",),), types=("tentacle",))._replace(land_types=("forest",))
+        if low.startswith("whenever you cast an equipment spell or a spell that targets a creature you control, draw a "
+                          "card"):
+            out["own_target_draw"] = True
+        if low.startswith("if one or more +1/+1 counters would be put on a creature you control, that many plus one"):
+            out["counter_plus_one"] = True
+        if re.match(r"^when this aura enters, tap enchanted creature\. it becomes unprepared", low):
+            out["unprepare"] = True
+        if low.startswith("if a creature an opponent controls would die, exile it instead"):
+            out["opp_exile_instead"] = True
+        if re.match(r"^(?:~|this creature) enters with x \+1/\+1 counters on it", low):
+            out["x_counters"] = True
+        if re.match(r"^at the beginning of combat on your turn, you may remove a \+1/\+1 counter from (?:~|this "
+                    r"creature)\. if you do, put a \+1/\+1 counter on each other creature you control", low):
+            out["hydra_spread"] = True
+        if re.match(r"^when (?:~|this creature) enters, search your library for a card, put it into your hand, "
+                    r"shuffle, then discard a card at random", low):
+            out["etb_tutor_any"] = True
+        if re.match(r"^when ~ enters, you may discard a card\. if you do, search your library for an enchantment card",
+                    low):
+            out["etb_discard_enchant"] = True
     return out
 
 
@@ -1723,6 +1784,9 @@ def prepared_mode(card):
     low = re.sub(r"\([^)]*\)", " ", faces[0].get("oracle_text") or "").lower()
     enters = bool(re.search(r"\benters prepared\b", low))
     upkeep = bool(re.search(r"\bupkeep\b[^.]*\bbecomes prepared\b", low))
+    if not enters and not upkeep and re.search(r"at the beginning of each end step, if three or more creatures died "
+                                               r"this turn, this creature becomes prepared", low):
+        return "deaths3"  # Bloodline Recollector
     return "both" if enters and upkeep else "enters" if enters else "upkeep" if upkeep else ""
 
 

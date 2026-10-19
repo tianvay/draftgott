@@ -72,8 +72,7 @@ class CategoryTests(unittest.TestCase):
         self.assertIn((category, metric), {(c, m) for c, m, _l in found}, found)
 
     def test_tokens(self):
-        self.check("At the beginning of each player's upkeep, you create a 3/3 green Forest Tentacle land creature "
-                   "token.", "Tokens erzeugen", M_LETHAL)
+        self.check("Whenever you roll a die, create a 1/1 black Rat creature token.", "Tokens erzeugen", M_LETHAL)  # erfunden: Wuerfeln gibt es nicht
         self.assertEqual(analyze_card(sc(text="When this creature enters, create a 2/2 colorless Wizard Soldier "
                                                "creature token named Cadet.")), [])  # modelliert
 
@@ -146,9 +145,8 @@ class CategoryTests(unittest.TestCase):
 
     def test_one_card_can_have_several_categories_and_keeps_the_line(self):
         card = sc("Mixed", text=("Flying\nWhenever an opponent casts a spell with mana value 2 or less, Mixed deals 1 "
-                                 "damage to each opponent.\nAt the beginning of each player's upkeep, you create a 3/3 "
-                                 "green Forest Tentacle land creature token.\nCreature tokens you control have haste."),
-                  keywords=["Flying"])
+                                 "damage to each opponent.\nWhenever you roll a die, create a 1/1 black Rat creature token.\nCreature tokens you control have "
+                                 "haste."), keywords=["Flying"])
         found = analyze_card(card)
         self.assertEqual(cats(card), {"Direkter Schaden", "Tokens erzeugen", "Haste verleihen"})
         self.assertTrue(all(isinstance(line, str) and line for _c, _m, line in found))
@@ -290,8 +288,7 @@ class ModelFilterTests(unittest.TestCase):
 class SummaryTests(unittest.TestCase):
     def test_summary_counts_cards_not_copies_per_metric(self):
         data = {
-            "Token": analyze_card(sc(text="At the beginning of each player's upkeep, you create a 3/3 green Forest "
-                                          "Tentacle land creature token.")),
+            "Token": analyze_card(sc(text="Whenever you roll a die, create a 1/1 black Rat creature token.")),
             "Burn": analyze_card(sc(text="At the beginning of your upkeep, Burn deals 1 damage to each opponent.")),
             "Removal": analyze_card(sc(type_line="Sorcery", text="Exile target card from an opponent's graveyard.")),
             "Odd": analyze_card(sc(text="Whenever you sacrifice a permanent, put a bounty counter on it.")),

@@ -542,6 +542,10 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
 - Kleinere FRA-Effekte (Mill, Threshold-Boni, Loot beim Angriff, Token-Bonus, Roiling Canopy, Hapatra, Eye of
   Jace, Enroot, Germinate Recruits, Room of Refuge, Solitary Cell u. a.) wirken im Kampfmodell, soweit sinnvoll auch im
   Goldfish (Mill, Karn, Loot, Roiling Canopy, Room of Refuge, Eye of Jace, Enroot).
+- Weitere FRA-Effekte: Simulacrum Shaper (Basic Land getappt, auch im Goldfish), Gardenize, Token-Kopie der Sphinx,
+  Command the Stage, Verdant Kraken, Danitha, Yoshimaru, Bloodline Recollector, Infinite Coursework, Garruk, Veiled
+  Butcher (Exil statt Sterben), Guiding Hydra, Curse-Marred Demon, Pia. Lock-Auras auf gegnerischen Kreaturen
+  brauchen keine eigene Kreatur.
 - Tomik: höchstens ein Angreifer je Planeswalker. Entrust the Spark opfert nur einen Jace-Token und holt den
   teuersten Planeswalker; Loyal Tutor legt einen Planeswalker oben auf die Bibliothek (auch im Goldfish).
 - Way of the Cryomancer: die Kopie des ersten Instants/Sorcery wird in Main 1 eingeplant (Lethal, Removal mit
