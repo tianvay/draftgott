@@ -63,6 +63,7 @@ class Card(NamedTuple):
     targets_opp: bool = False  # Zauber mit Ziel beim Gegner (Spieler oder seine Kreatur)
     hand_removal: tuple = ()   # "Kosten, Discard this card: Removal" - (Zahlungswege, Removal-Spec)
     gy_ability: tuple = ()     # "Kosten, Exile this card from your graveyard: Effekt" - (Zahlungswege, Effekte)
+    gy_draw: tuple = ()        # "Kosten, Exile this card from your graveyard: Draw N cards" - (Zahlungswege, N)
     surveil_attack: bool = False  # Defender gilt nicht, wenn man in diesem Zug gesurveilt hat
     is_token: bool = False     # Token (kommt nicht in den Friedhof)
     sac_mana: bool = False     # "{T}, Sacrifice this token: Add one mana of any color" (Sculpture: wie Treasure)
@@ -243,6 +244,21 @@ class Card(NamedTuple):
     untap_on_cast: bool = False  # Traxos: enttappt, wenn wir einen Artefakt- oder Kreaturzauber wirken
     split_second: bool = False  # Samut, Tyrant of Naktamun: unsere Instants/Sorceries haben Split Second
     no_enter_triggers: bool = False  # Karn, Argent Defender: Artefakte/Kreaturen loesen beim Betreten nichts aus
+    equip_attack_choice: tuple = ()  # Ausruestung: beim Angriff Schluesselwort nach Wahl (Hunter's Axe)
+    hand_combat_bolt: tuple = ()  # aus der Hand abwerfen: (Kosten, N) Schaden an Angreifer/Blocker (Gideon's Memorial)
+    threshold_sac_minus: bool = False  # Loot, the Anomaly: Threshold, Kreatur opfern: -2/-0
+    aura_pump: tuple = ()      # eigene Aura: verzauberte Kreatur +P/+T
+    aura_kw: tuple = ()        # eigene Aura: Schluesselwoerter der verzauberten Kreatur
+    aura_return: bool = False  # Aura: stirbt die Kreatur, kommt sie getappt zurueck (Ferocity of the Hunt)
+    artifact_sac_counter: tuple = ()  # Kosten: ein anderes Artefakt opfern -> Marke und Schluesselwort (Puppetbeast)
+    identity_echo: tuple = ()  # Kosten: eigene Kreatur exilieren, naechste Kreatur der Bibliothek (Identity Echo)
+    arena_prepare: tuple = ()  # Land: (Kosten nach Angriff, sonst): Kreatur wird prepared (Hexhaven Dueling Arena)
+    codie_prepare: tuple = ()  # Kosten "{T}: each creature you control becomes prepared" (Codie)
+    cast_blink: bool = False   # Flickering Hound: Kreaturzauber gewirkt -> andere eigene Kreatur blinken
+    rescue_bounce: bool = False  # Rescue Girl: {T}: eigenes Permanent auf die Hand (nur im eigenen Zug)
+    hall_copy: tuple = ()      # Land: Kosten "this land becomes a copy of target creature you control" (Hall of Echoes)
+    damage_ramp: bool = False  # Hexhaven Invigorator: bekommt Schaden -> so viele Laender getappt suchen
+    animate_artifact: tuple = ()  # Aura: verzaubertes Artefakt wird P/T-Kreatur (Puppet Crafting)
 
 
 LANDCYCLE_RE = re.compile(
@@ -910,6 +926,9 @@ def battle_triggers(card):
             atoms = _ability_atoms(m.group(2).strip())
             if atoms:
                 out["gy_ability"] = (cost_alternatives(mana), atoms)
+            d = re.match(r"^draw (a|an|one|two|three|four|five) cards?\.?$", m.group(2).strip())
+            if d:
+                out["gy_draw"] = (cost_alternatives(mana), _DRAW_NUM[d.group(1)])
     return out
 
 
@@ -934,8 +953,8 @@ _REANIMATE_RE = re.compile(r"\breturn (target|all) (creature or planeswalker|non
                            r"counter on (?:it|them))?")
 _GY_RETURN_RE = re.compile(r"^((?:\{[^}]+\})+)(, exile another creature card from your graveyard)?: return this card "
                            r"from your graveyard to (the battlefield|your hand)( tapped)?(?: with (?:a|an) "
-                           r"(\+1/\+1|finality) counter on (?:it|her|him|them))?\.( activate only if an opponent has "
-                           r"been dealt noncombat damage this turn\.)?$")
+                           r"(\+1/\+1|finality) counter on (?:it|her|him|them))?\.( activate only if (?:an opponent "
+                           r"has been dealt noncombat damage|you've scried or surveilled) this turn\.)?$")
 _PHOENIX_RE = re.compile(r"^at the beginning of combat on your turn, if two or more creatures died this turn, return "
                          r"this card from your graveyard to the battlefield")
 _DOMAIN_POWER_RE = re.compile(r"^domain — (?:~|this creature)'s power is equal to the number of basic land types among "
@@ -1057,7 +1076,8 @@ def life_and_costs(card, type_line, keywords):
             mana = "".join(re.findall(r"\{[^}]+\}", head))
             out["gy_return"] = (cost_alternatives(mana), "battlefield" if m.group(3) == "the battlefield" else "hand",
                                 bool(m.group(4)), 1 if m.group(5) == "+1/+1" else 0,
-                                "exile_creature" if m.group(2) else "", "noncombat" if m.group(6) else "")
+                                "exile_creature" if m.group(2) else "",
+                                "" if not m.group(6) else "surveilled" if "surveilled" in m.group(6) else "noncombat")
             if m.group(5) == "finality":
                 out["finality"] = True
         if _PHOENIX_RE.match(low):
@@ -1616,6 +1636,54 @@ def easy_traits(card, type_line):
             out["split_second"] = True
         if low.startswith("artifacts and creatures entering the battlefield don't cause abilities to trigger"):
             out["no_enter_triggers"] = True
+        if 'whenever this creature attacks, it gains your choice of trample or deathtouch until end of turn' in low \
+                and low.startswith("equipped creature gets"):
+            out["equip_attack_choice"] = ("trample", "deathtouch")
+        m = re.match(r"^((?:\{[^}]+\})+), discard this card: it deals (\d+) damage to target attacking or blocking "
+                     r"creature", low)
+        if m:
+            out["hand_combat_bolt"] = (cost_alternatives(m.group(1).upper()), int(m.group(2)))
+        if re.match(r"^threshold — sacrifice another creature or planeswalker: ~ gets -2/-0 until end of turn", low):
+            out["threshold_sac_minus"] = True
+        m = re.match(r"^enchanted creature gets \+(\d+)/\+(\d+)(?: and has ([a-z ,]+?))?\.?$", low)
+        if m and "Aura" in type_line:
+            out["aura_pump"] = (int(m.group(1)), int(m.group(2)))
+            kws = tuple(k.strip() for k in re.split(r",\s*(?:and\s+)?|\s+and\s+", m.group(3) or "") if k.strip())
+            if kws and all(k in COMBAT_KEYWORDS for k in kws):
+                out["aura_kw"] = kws
+        if low.startswith("when enchanted creature dies, return that card to the battlefield tapped under its "
+                          "owner's control"):
+            out["aura_return"] = True
+        m = re.match(r"^((?:\{[^}]+\})+), sacrifice another artifact: put a \+1/\+1 counter on (?:~|this creature)\. "
+                     r"it gains your choice of trample, hexproof, or haste until end of turn", low)
+        if m:
+            out["artifact_sac_counter"] = cost_alternatives(m.group(1).upper())
+        m = re.match(r"^((?:\{[^}]+\})+): exile target creature or planeswalker you control\. reveal cards from the "
+                     r"top of your library until you reveal a creature or planeswalker card", low)
+        if m:
+            out["identity_echo"] = cost_alternatives(m.group(1).upper())
+        m = re.match(r"^\{(\d+)\}, \{t\}: target creature that attacked this turn becomes prepared", low)
+        if m:
+            out["arena_prepare"] = (int(m.group(1)), 4)
+        m = re.match(r"^((?:\{[^}]+\})+), \{t\}: each creature you control becomes prepared", low)
+        if m:
+            out["codie_prepare"] = cost_alternatives(m.group(1).upper())
+        if low.startswith("whenever you cast a creature spell, exile up to one other target creature you control, then "
+                          "return that card to the battlefield"):
+            out["cast_blink"] = True
+        if low.startswith("{t}: return another target permanent you control to its owner's hand. activate only during "
+                          "your turn"):
+            out["rescue_bounce"] = True
+        m = re.match(r"^((?:\{[^}]+\})+): this land becomes a copy of target creature you control until end of turn",
+                     low)
+        if m:
+            out["hall_copy"] = cost_alternatives(m.group(1).upper())
+        if re.match(r"^whenever (?:~|this creature) is dealt damage, you may search your library for up to that many "
+                    r"land cards, put them onto the battlefield tapped", low):
+            out["damage_ramp"] = True
+        m = re.match(r"^enchanted permanent is a construct creature with base power and toughness (\d+)/(\d+)", low)
+        if m:
+            out["animate_artifact"] = (int(m.group(1)), int(m.group(2)))
         if re.match(r"^(?:~|this creature) enters with x \+1/\+1 counters on it", low):
             out["x_counters"] = True
         if re.match(r"^at the beginning of combat on your turn, you may remove a \+1/\+1 counter from (?:~|this "
@@ -1991,7 +2059,7 @@ def card_info(card):
                      card["name"], is_basic="Basic" in type_line, empower=eff, empower_text=etext,
                      pw_tags=pw_tags_for(card, type_line), surveil=surveil,
                      **{k: v for k, v in easy_traits(card, type_line).items()
-                        if k in ("forest_pump", "land_sac_counters")}), shown)
+                        if k in ("forest_pump", "land_sac_counters", "arena_prepare", "hall_copy")}), shown)
 
     if card.get("layout") in ("split", "room", "adventure", "flip") and len(faces) > 1:
         used = [f for f in faces if f.get("mana_cost")]  # jede Haelfte ist spielbar

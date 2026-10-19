@@ -549,6 +549,10 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
 - Regeln aus FRA: „attacks alone“ (Jiang Yanggu, Yuriko), Yuriko sperrt Kampf-Zauber, Split Second (Samut), keine
   Betreten-Auslöser (Karn, Argent Defender), Draconic Visitor, Lotus (Kwia), Tarmogoyf, Traxos, Loot (beide),
   Seasoned Cryomancer, Medic's Kitesail, Return to the Light Realms.
+- Spielentscheidungen aus FRA (Kampfmodell): Hunter's Axe, Gideon's Memorial, Loot-Opfer für Lethal, eigene Auras mit
+  Bonus (Ferocity of the Hunt), Proctor of Potential, Hungering Puppetbeast, Identity Echo, Hexhaven Dueling Arena,
+  Codie, Flickering Hound, Rescue Girl, Hall of Echoes, Hexhaven Invigorator, Puppet Crafting, Seasoned Cryomancer
+  (Ziehen aus dem Friedhof).
 - Tomik: höchstens ein Angreifer je Planeswalker. Entrust the Spark opfert nur einen Jace-Token und holt den
   teuersten Planeswalker; Loyal Tutor legt einen Planeswalker oben auf die Bibliothek (auch im Goldfish).
 - Way of the Cryomancer: die Kopie des ersten Instants/Sorcery wird in Main 1 eingeplant (Lethal, Removal mit

@@ -15,7 +15,8 @@ def aura_ok(chosen, has_creature, auras_need_creature):
     if not auras_need_creature or has_creature:
         return True
     # Removal-Auras (Lock) kommen auf eine gegnerische Kreatur und brauchen keine eigene (303.4a)
-    return not (any(c.is_aura and not c.removal for c in chosen) and not any(c.is_creature for c in chosen))
+    return not (any(c.is_aura and not c.removal and not c.animate_artifact for c in chosen)
+                and not any(c.is_creature for c in chosen))
 
 
 def play_score(chosen):

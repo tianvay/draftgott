@@ -187,9 +187,12 @@ class SpecialCardTests(unittest.TestCase):
         self.assertIn("Tokens erzeugen", cats(card))
 
     def test_aura_bonus_is_flagged(self):
+        card = sc(type_line=f"Enchantment {DASH} Aura", text="Enchant creature\nWhenever you roll a die, enchanted "
+                  "creature gets +1/+1 until end of turn.", keywords=["Enchant"])
+        self.assertEqual(cats(card), {"Zählmarken / Stärkebonus"})  # erfunden: Wuerfeln gibt es nicht
         card = sc(type_line=f"Enchantment {DASH} Aura", text="Enchant creature\nEnchanted creature gets +2/+2.",
                   keywords=["Enchant"])
-        self.assertEqual(cats(card), {"Zählmarken / Stärkebonus"})
+        self.assertEqual(analyze_card(card), [])  # eigene Aura mit Bonus ist modelliert
 
 
 class FoundByReviewTests(unittest.TestCase):

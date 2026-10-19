@@ -1,0 +1,42 @@
+Deck
+1 Fulminous Forte (FRA) 84
+2 No Admittance (FRA) 89
+1 Mindseeker Oculus (FRA) 33
+2 Fatehold Chronologist (FRA) 133
+1 Room of Refuge (FRA) 188
+1 Archive Arbiter (FRA) 167
+1 Saheeli, Jewel of Avishkar (FRA) 275
+1 Variable Chaser (FRA) 47
+1 Samut, Hazoret's Champion (FRA) 251
+1 Wrath of the Bloodmane (FRA) 96
+1 Jiang Yanggu, Alone (FRA) 246
+2 Undulating Witness (FRA) 45
+1 Chandra's Emberling (FRA) 76
+1 Tam's Resistance (FRA) 153
+1 Protege's Awakening (FRA) 37
+1 Tetsuko Umezawa, Fugitive (FRA) 221
+1 Prudent Fateseer (FRA) 146
+1 Pia, Determined Rebuilder (FRA) 250
+1 Artifist Acumen (FRA) 73
+1 Keeper of the Quiet Hour (FRA) 171
+8 Island (SPM) 195
+8 Mountain (SPM) 197
+1 Divining Duelist (FRA) 29
+
+Sideboard
+2 Fatehold Annex (FRA) 177
+1 Generous Revival (FRA) 8
+1 Surgical Precision (FRA) 22
+1 Hapatra, the Desert Fang (FRA) 271
+1 Paradox Shaper (FRA) 143
+1 Precise Redaction (FRA) 36
+1 Solve for Disappointment (FRA) 67
+1 Way of the Necromancer (FRA) 239
+1 Way of the Healer (FRA) 207
+1 Arcane Amphisbaena (FRA) 97
+1 Living Library (FRA) 172
+1 Fatehold Charm (FRA) 132
+1 Theorix Metamage (FRA) 156
+1 Konstrari Annex (FRA) 183
+1 Warrior's Blades (FRA) 163
+1 Stingerquill Annex (FRA) 190

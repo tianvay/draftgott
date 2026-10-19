@@ -43,7 +43,8 @@ _GY_TYPES = {"creature": "is_creature", "planeswalker": "is_planeswalker", "arti
 
 class Creature:
     """Eine Kreatur auf dem Feld (Karte, Schritt des Eintritts, getappt, Schaden, Marken, Pump)."""
-    __slots__ = ("card", "entered", "tapped", "damage", "_bonus", "pump", "dead", "touched", "locked", "prepared",
+    __slots__ = ("card", "entered", "tapped", "_damage", "_bonus", "pump", "land_source", "attacked", "ramp_pending",
+                 "base_card", "dead", "touched", "locked", "prepared",
                  "tpump", "extra", "lifted", "owner", "at_jace", "gy", "dealt", "finality", "ctl", "once", "stun", "gear",
                  "tdraw", "auras", "exile_step", "at_pw", "lasting")
 
@@ -73,8 +74,25 @@ class Creature:
         self.tdraw = 0        # bis Rundenende: zieht so viele Karten bei Kampfschaden am Spieler (Lyra, Tolarian)
         self.auras = []       # eigene Auras auf dieser Kreatur (Splinter Twin; Karten aus p.perms)
         self.exile_step = None  # Token-Kopie von Splinter Twin: wird im Endsegment dieses Schritts exiliert
+        self.land_source = None  # Hall of Echoes: das Land, das bis Rundenende diese Kopie ist
+        self.attacked = None  # Schritt, in dem sie zuletzt angegriffen hat (Hexhaven Dueling Arena)
+        self.ramp_pending = 0  # Hexhaven Invigorator: erhaltener Schaden, fuer den noch Laender gesucht werden
+        self.base_card = None  # Puppet Crafting: die Artefakt-Karte hinter der belebten Kreatur
         self.at_pw = None     # greift in diesem Kampf diesen echten Planeswalker (Walker) an
         self.lasting = []     # -P/-T bis zum naechsten Zug des Verursachers: (P, T, Verursacher, Schritt)
+
+    @property
+    def damage(self):
+        """Markierter Schaden."""
+        return self._damage
+
+    @damage.setter
+    def damage(self, value):
+        """Hexhaven Invigorator: erhaltener Schaden wird gemerkt, bury sucht dafuer Laender."""
+        old = getattr(self, "_damage", 0)
+        if value > old and self.card.damage_ramp:
+            self.ramp_pending = getattr(self, "ramp_pending", 0) + value - old
+        self._damage = value
 
     @property
     def bonus(self):
@@ -99,12 +117,14 @@ class Creature:
         if self.card.domain_power and self.ctl is not None:
             base += len({t for land in self.ctl.lands for t in land.land_types} & BASIC_TYPES)
         return base + self._threshold() + sum(g.equip[1] for g in self.gear) + self._emblem(1) \
-            - sum(d[0] for d in self.lasting) + self._gy_power() + self._token_bonus() + self._goyf()
+            - sum(d[0] for d in self.lasting) + self._gy_power() + self._token_bonus() + self._goyf() \
+            + sum(a.aura_pump[0] for a in self.auras if a.aura_pump)
 
     @property
     def toughness(self):
         return self.card.toughness + self.bonus + self.tpump + self._threshold() + sum(g.equip[2] for g in self.gear) \
-            + self._emblem(2) - sum(d[1] for d in self.lasting) + (self._goyf() + 1 if self.card.goyf else 0)
+            + self._emblem(2) - sum(d[1] for d in self.lasting) + (self._goyf() + 1 if self.card.goyf else 0) \
+            + sum(a.aura_pump[1] for a in self.auras if a.aura_pump)
 
     def _gy_power(self):
         """Threshold +N/+0 (Theorix Metamage) und +N/+0 je volle 7 Karten im Friedhof (Dark Matter Manipulator)."""
@@ -175,6 +195,8 @@ class Creature:
             return True
         if any(keyword in g.equip_kw for g in self.gear):  # Medic's Kitesail
             return True
+        if any(keyword in a.aura_kw for a in self.auras):  # eigene Aura (Ferocity of the Hunt)
+            return True
         if keyword in card.threshold_kw and len(p.graveyard) >= 7:  # Theorix Metamage
             return True
         if keyword == "vigilance" and card.jace_vigilance and (  # Mind Meanderer
@@ -219,6 +241,7 @@ class Creature:
         c.stun, c.gear, c.tdraw = self.stun, list(self.gear), self.tdraw
         c.auras, c.exile_step = list(self.auras), self.exile_step
         c.at_pw, c.lasting = self.at_pw, list(self.lasting)
+        c.land_source, c.attacked, c.base_card = self.land_source, self.attacked, self.base_card
         return c
 
     def label(self):
@@ -551,6 +574,8 @@ class Player:
         self.copy_next = None  # Way of the Cryomancer: in diesem Schritt wird der naechste Instant/Sorcery kopiert
         self.charges = 0      # Charge-Marken auf Gardenize
         self.discards_turn = 0  # in diesem Zug abgeworfene Karten (Jiang Yanggu, Alone)
+        self.no_legend_step = None  # Hall of Echoes: in diesem Schritt gilt die Legend-Regel nicht
+        self.land_now = None  # in diesem Zug gelegtes Land (Hall of Echoes: noch nicht angriffsbereit)
         self.x_values = []    # X gewirkter Kreaturen mit "enters with X counters": [(Karte, X)] (Guiding Hydra)
         self.max_deck_mv = max((c.mv for c in cards if not c.is_land), default=0)  # teuerste Karte des Decks (Pia)
         self.noncombat_step = None  # Schritt, in dem dieser Spieler zuletzt Schaden ausserhalb des Kampfs bekam
@@ -986,6 +1011,214 @@ def legend_discard_draw(p, e):
         e["events"].append(f"{p.name}: {card.name} – wirft {pick.name} ab, zieht")
         discarded(p, e, [pick])
         _draw(p)
+
+
+def etb_rank(card):
+    """Wert eines Betreten-Effekts zum Wiederholen: 3 Removal, 2 Ziehen, 1 Token oder sonst etwas, 0 nichts."""
+    if card.removal and card.removal[4] == "etb":
+        return 3
+    if card.draws or card.etb_loot_stun:
+        return 2
+    return 1 if enter_value(card) else 0
+
+
+def blink(p, c, step, e, source):
+    """Eine eigene Kreatur exilieren und als neues Objekt zurueck (400.7): Marken, Schaden, Auras weg, Betreten-
+    Effekte wirken erneut, Einsatzverzoegerung."""
+    p.creatures.remove(c)
+    _leave(p, c.card)
+    check_auras(p, e)
+    new = Creature(c.card, step)
+    p.creatures.append(new)
+    e["events"].append(f"{p.name}: {source} blinkt {c.card.name}")
+    creature_enters(p, new, step, e, p.opponent, cast=False)
+
+
+def animate_target(p):
+    """Puppet Crafting: Token-Artefakt zuerst, sonst das Nichtkreatur-Artefakt mit dem niedrigsten Manawert."""
+    arts = [c for c in p.perms if c.is_artifact and not c.is_creature and not c.equip]
+    return min(arts, key=lambda c: (not c.is_token, c.mv, c.name)) if arts else None
+
+
+def damage_ramp(p, n, e):
+    """Hexhaven Invigorator: bis zu n Laender getappt aufs Feld, neue Farben zuerst."""
+    for _k in range(n):
+        lands = [c for c in p.library if c.is_land]
+        if not lands:
+            break
+        have = set().union(*(c.land_colors for c in p.lands)) if p.lands else set()
+        count = Counter(c.name for c in lands)
+        pick = max(lands, key=lambda c: (len(set(c.land_colors) - have), count[c.name], c.name))
+        p.library.remove(pick)
+        p.lands.append(pick)
+        e["events"].append(f"{p.name}: sucht {pick.name} (getappt)")
+        if p.opponent is not None:
+            on_land(p, p.opponent, pick, p.now, e, with_mana=False)
+    random.shuffle(p.library)
+
+
+def hand_bolt_tricks(p, pairs, opp, e, step, attacking):
+    """Gideon's Memorial aus der Hand: 4 Schaden an einen Angreifer oder Blocker des Gegners, der sonst eine unserer
+    Kreaturen toetet (und daran stirbt)."""
+    for card in [c for c in p.hand if c.hand_combat_bolt]:
+        alts, n = card.hand_combat_bolt
+        for att, blockers in pairs:
+            if not blockers:
+                continue
+            a_dead, b_deads = outcome(att, blockers)
+            if attacking:
+                foes = [b for b in blockers if not b.dead] if a_dead else []
+            else:
+                foes = [att] if any(b_deads) and not att.dead else []
+            foes = [x for x in foes if x.toughness - x.damage <= n]
+            if not foes or not _payable(p, alts):
+                continue
+            x = max(foes, key=danger)
+            _pay_open(p, alts)
+            p.hand.remove(card)
+            p.graveyard.append(card)
+            discarded(p, e, [card])
+            x.damage += n
+            x.dead = True
+            e["events"].append(f"{p.name}: {card.name} – {n} Schaden an {x.card.name}")
+            break
+
+
+def anomaly_for_lethal(me, opp, step, e):
+    """Loot, the Anomaly (Threshold): andere Kreaturen opfern (-2/-0 je Opfer, also mehr Schaden) nur fuer Lethal."""
+    if len(me.graveyard) < 7:
+        return
+    for loot in [c for c in me.creatures if c.card.threshold_sac_minus and not c.dead and can_attack(c, step)]:
+        if _attack_value(me, opp, step) >= opp.life:
+            return
+        others = sorted((c for c in me.creatures if c is not loot and not c.dead),
+                        key=lambda c: (can_attack(c, step), not c.card.is_token, c.power, c.card.mv))
+        for k in range(1, len(others) + 1):
+            picked = others[:k]
+            for c in picked:
+                c.dead = True
+            loot.pump -= 2 * k
+            value = _attack_value(me, opp, step)
+            for c in picked:
+                c.dead = False
+            loot.pump += 2 * k
+            if value >= opp.life:
+                for c in picked:
+                    c.dead = True
+                    e["events"].append(f"{me.name}: opfert {c.card.name} für {loot.card.name}")
+                loot.pump -= 2 * k
+                bury((me,), e)
+                return
+
+
+def puppetbeast_sac(p, step, e):
+    """Hungering Puppetbeast vor dem Angriff: Heartwood-Token opfern, deren Mana noch offen ist (sie bezahlen das {1}
+    selbst); Haste, wenn sie sonst nicht angreifen kann, sonst Trample."""
+    for beast in [c for c in p.creatures if c.card.artifact_sac_counter and not c.dead]:
+        for token in [c for c in p.perms if c.is_token and c.is_artifact and c.mana_src]:
+            unit = token.mana_src[0]
+            if unit not in p.open:
+                continue
+            p.open.remove(unit)  # das Token bezahlt das {1}, dann wird es geopfert
+            p.perms.remove(token)
+            beast.bonus += 1
+            kw = "haste" if not can_attack(beast, step) and not beast.has("haste") else "trample"
+            beast.extra.add(kw)
+            e["events"].append(f"{p.name}: {beast.card.name} opfert {token.name}: Marke, {kw}")
+
+
+def hall_of_echoes(p, step, e):
+    """Hall of Echoes vor dem Angriff: mit 5 freiem Mana eine Kopie der staerksten eigenen Kreatur, die angreift
+    (das Land muss seit Zugbeginn liegen und ungetappt sein)."""
+    for hall in [c for c in p.lands if c.hall_copy]:
+        if hall is p.land_now or hall.land_colors not in p.open:
+            continue
+        alive = [c for c in p.creatures if not c.dead and c.land_source is None]
+        if not alive:
+            continue
+        p.open.remove(hall.land_colors)
+        if not _pay_open(p, hall.hall_copy, treasure=False):
+            p.open.append(hall.land_colors)
+            continue
+        model = max(alive, key=lambda c: (c.card.power + c.card.toughness, c.card.mv))
+        copy = Creature(model.card, 0)
+        copy.gy, copy.ctl, copy.land_source = p.graveyard, p, hall
+        p.creatures.append(copy)
+        p.no_legend_step = p.now
+        e["events"].append(f"{p.name}: {hall.name} wird eine Kopie von {model.card.name}")
+
+
+def rescue_girl(p, opp, step, e):
+    """Rescue Girl in Main 2: eine eigene Kreatur mit wertvollem Betreten-Effekt auf die Hand und sofort neu wirken."""
+    for girl in [c for c in p.creatures if c.card.rescue_bounce and not c.dead and not c.tapped
+                 and (c.entered < step or c.has("haste"))]:
+        cands = [c for c in p.creatures if c is not girl and not c.dead and not c.card.is_token
+                 and etb_rank(c.card) > 0 and pay(list(p.open), _alts(p, c.card)) is not None]
+        if not cands:
+            continue
+        t = max(cands, key=lambda c: (etb_rank(c.card), c.card.mv))
+        girl.tapped = True
+        p.creatures.remove(t)
+        _leave(p, t.card)
+        check_auras(p, e)
+        p.hand.append(t.card)
+        e["events"].append(f"{p.name}: {girl.card.name} – {t.card.name} auf die Hand, neu gewirkt")
+        if _cast_from_open(p, t.card):
+            p.cast_count += 1
+            _resolve(p, opp, t.card, step, e)
+
+
+def identity_echo(p, opp, step, e):
+    """Identity Echo in Main 2 mit freiem Mana: eigene Kreatur mit Manawert hoechstens 2 (die billigste) gegen die
+    naechste Kreatur oder den naechsten Planeswalker der Bibliothek; der Rest kommt gemischt nach unten."""
+    for echo in [c for c in p.perms if c.identity_echo]:
+        small = [c for c in p.creatures if not c.dead and c.card.mv <= 2 and c.land_source is None]
+        if not small or not any(c.is_creature or c.is_planeswalker for c in p.library):
+            continue
+        if not _pay_ability(p, echo.identity_echo, "free"):
+            continue
+        t = min(small, key=lambda c: (c.card.mv, c.power + c.toughness))
+        p.creatures.remove(t)
+        _leave(p, t.card)
+        check_auras(p, e)
+        revealed = []
+        while p.library:
+            top = p.library.pop(0)
+            if top.is_creature or top.is_planeswalker:
+                random.shuffle(revealed)
+                p.library.extend(revealed)
+                e["events"].append(f"{p.name}: {echo.name} – {t.card.name} ins Exil, {top.name} aufs Feld")
+                put_back(p, top, "battlefield", step, e, opp)
+                break
+            revealed.append(top)
+
+
+def prepare_abilities(p, step, e):
+    """Main 2: Hexhaven Dueling Arena macht eine Kreatur mit Zauberhaelfte prepared ({2} nach ihrem Angriff, sonst
+    {4}); Codie macht alle eigenen Kreaturen prepared."""
+    for arena in [c for c in p.lands if c.arena_prepare]:
+        if arena.land_colors not in p.open:
+            continue
+        cands = [c for c in p.creatures if not c.dead and c.card.prepared and not c.prepared]
+        if not cands:
+            continue
+        t = max(cands, key=lambda c: (c.attacked == step, c.card.prepared[1].mv))
+        n = arena.arena_prepare[0] if t.attacked == step else arena.arena_prepare[1]
+        p.open.remove(arena.land_colors)
+        if not _pay_open(p, ((n, ()),), treasure=False):
+            p.open.append(arena.land_colors)
+            continue
+        t.prepared = True
+        e["events"].append(f"{p.name}: {arena.name} – {t.card.name} wird prepared")
+    for codie in [c for c in p.creatures if c.card.codie_prepare and not c.dead and not c.tapped
+                  and (c.entered < step or c.has("haste"))]:
+        cands = [c for c in p.creatures if not c.dead and c.card.prepared and not c.prepared]
+        if not cands or not _pay_open(p, codie.card.codie_prepare, treasure=False):
+            continue
+        codie.tapped = True
+        for c in cands:
+            c.prepared = True
+        e["events"].append(f"{p.name}: {codie.card.name} – alle Kreaturen prepared")
 
 
 def combat_locked(me, opp):
@@ -1933,6 +2166,14 @@ def on_cast(p, card, step, e):
     _jace_on_cast(p, card, step, e)
     if p.emblems:
         emblem_cast(p, step, e)
+    if card.is_creature:  # Flickering Hound: eine andere eigene Kreatur blinken (wertvollster Betreten-Effekt)
+        for h in list(p.creatures):
+            if h.card.cast_blink and not h.dead:
+                cands = [c for c in p.creatures if c is not h and not c.dead and not c.card.is_token
+                         and not (c.entered == step and c.card == card) and etb_rank(c.card) > 0]
+                if cands:
+                    t = max(cands, key=lambda c: (etb_rank(c.card), c.card.mv))
+                    blink(p, t, step, e, h.card.name)
     if card.is_artifact or card.is_creature:  # Traxos
         for c in p.creatures:
             if c.card.untap_on_cast and not c.dead:
@@ -2313,6 +2554,8 @@ def legend_rule(p, e):
     """704.5j: je Spieler nur ein legendaeres Permanent gleichen Namens. Behalten wird die staerkere Kreatur (bei
     Gleichstand die aeltere) bzw. das erste Permanent; die anderen kommen in den Friedhof."""
     groups = {}
+    if p.no_legend_step == p.now:  # Hall of Echoes: "The legend rule doesn't apply ... this turn"
+        return
     for c in p.creatures:
         if c.card.legendary and not c.dead:
             groups.setdefault(c.card.name, []).append(c)
@@ -2359,7 +2602,12 @@ def bury(players, e):
     for p in players:
         legend_rule(p, e)
     triggers = []  # erst alle gleichzeitig sterben lassen (704.3), dann die Ausloeser
-    copies_made = []
+    copies_made, returns = [], []
+    for p in players:  # Invigorator, der in diesem Moment stirbt, loest trotzdem aus
+        for c in p.creatures:
+            if c.ramp_pending and (c.dead or c.damage >= c.toughness):
+                damage_ramp(p, c.ramp_pending, e)
+                c.ramp_pending = 0
     for p in players:
         if p.opponent is not None and any(w.card.opp_exile_instead for w in p.opponent.walkers):
             continue  # Garruk, Veiled Butcher: nichts stirbt
@@ -2386,8 +2634,17 @@ def bury(players, e):
                     moves.append((p, c.bonus, c.card.name))
                 p.deaths += 1
                 p.creatures.remove(c)
-                if not c.card.is_token and not c.finality:
+                if c.land_source is not None:  # Hall of Echoes: das Land stirbt
+                    if c.land_source in p.lands:
+                        p.lands.remove(c.land_source)
+                    p.graveyard.append(c.land_source)
+                elif c.base_card is not None:  # Puppet Crafting: die Artefakt-Karte (Token verschwinden)
+                    if not c.base_card.is_token:
+                        p.graveyard.append(c.base_card)
+                elif not c.card.is_token and not c.finality:
                     (c.owner or p).graveyard.append(c.card)
+                if any(a.aura_return for a in c.auras) and not c.card.is_token and c.land_source is None:
+                    returns.append((c.owner or p, c.card))  # Ferocity of the Hunt
                 if c.card.death_draw:  # Simulacrum Shaper
                     _draw(p, c.card.death_draw)
                 if any(x.charge_on_death for x in p.perms):  # Gardenize
@@ -2400,6 +2657,15 @@ def bury(players, e):
                 _leave(p, c.card)
                 gain_life(p, c.card.death_life)
                 e["deaths"].append(f"{c.card.name} ({p.name})")
+    for owner, card in returns:  # Ferocity of the Hunt: getappt zurueck (neues Objekt)
+        if card in owner.graveyard:
+            owner.graveyard.remove(card)
+            put_back(owner, card, "battlefield", owner.now, e, owner.opponent, tapped=True)
+    for p in players:  # Hexhaven Invigorator: Laender fuer erhaltenen Schaden
+        for c in list(p.creatures):
+            if c.ramp_pending:
+                damage_ramp(p, c.ramp_pending, e)
+                c.ramp_pending = 0
     for p, card in copies_made:
         new = Creature(card, p.now)
         p.creatures.append(new)
@@ -2446,7 +2712,7 @@ def check_auras(p, e=None):
                         e["events"].append(f"{q.name}: {link['aura'].name} in den Friedhof (keine Kreatur mehr)")
     attached = Counter(a for c in p.creatures for a in c.auras)
     for card in list(p.perms):
-        if not card.twin:
+        if not (card.twin or ((card.aura_pump or card.aura_kw or card.animate_artifact) and card.is_aura)):
             continue
         if attached[card] > 0:
             attached[card] -= 1
@@ -3041,8 +3307,9 @@ def _resolve(me, opp, card, step, entry, owner=None, to_exile=False, modes=None)
         if src is not None:
             src.prepared = False
     elif card.is_creature:
-        me.creatures.append(Creature(card, step))
-        me.creatures[-1].owner = owner
+        fresh = Creature(card, step)
+        fresh.owner = owner
+        me.creatures.append(fresh)
     elif card.is_instant_sorcery:
         if not to_exile:  # Flashback: danach ins Exil
             (owner or me).graveyard.append(card)
@@ -3052,7 +3319,7 @@ def _resolve(me, opp, card, step, entry, owner=None, to_exile=False, modes=None)
         me.perms.append(card)
     on_cast(me, card, step, entry)
     if card.is_creature and not card.is_copy:
-        creature_enters(me, me.creatures[-1], step, entry, opp)
+        creature_enters(me, fresh, step, entry, opp)  # nicht creatures[-1]: Wirk-Ausloeser koennen Kreaturen anhaengen
     elif card.is_instant_sorcery or card.is_copy:
         if copy:
             _resolve_copy(me, opp, card, step, entry, modes)
@@ -3143,6 +3410,24 @@ def permanent_enters(p, opp, card, step, e):
         _jace_on_enter(p, card, step, e)
         ally_walker_enters(p, e)
         return
+    if card.is_aura and (card.aura_pump or card.aura_kw) and not card.removal:  # eigene Aura auf die beste Kreatur
+        alive = [c for c in p.creatures if not c.dead]
+        if alive:
+            pick = max(alive, key=lambda c: (can_attack(c, step), danger(c)))
+            pick.auras.append(card)
+            e["events"].append(f"{p.name}: {card.name} an {pick.card.name}")
+    if card.animate_artifact:  # Puppet Crafting: Artefakt wird 5/5-Construct
+        target = animate_target(p)
+        if target is not None:
+            p.perms.remove(target)
+            pw, tw = card.animate_artifact
+            new = Creature(target._replace(is_creature=True, power=pw, toughness=tw, creature_types=("construct",)),
+                           step - 1)  # lag schon auf dem Feld
+            new.base_card = target
+            new.auras.append(card)
+            new.gy, new.ctl = p.graveyard, p
+            p.creatures.append(new)
+            e["events"].append(f"{p.name}: {card.name} belebt {target.name}")
     if card.is_artifact and no_enter_triggers(p):  # Karn, Argent Defender
         return
     if card.twin:
@@ -3374,7 +3659,9 @@ def main_phase_spells(me, opp):
     """Karten fuer die Main Phases: keine Instants, keine Flash-Karten, Removal nur mit gueltigem Ziel; dazu die
     Kopien der Prepared-Kreaturen."""
     cards = [c for c in me.hand if not c.is_land] + copies(me)
-    return [c for c in cards if not c.is_instant and not c.flash and legend_ok(me, c) and reanimate_ok(me, c)
+    return [c for c in cards if not c.is_instant and (not c.flash or (c.is_aura and (c.aura_pump or c.aura_kw)))
+            and legend_ok(me, c) and reanimate_ok(me, c)
+            and (not c.animate_artifact or animate_target(me) is not None)
             and (not c.rummage_spell or surplus_land(me) is not None)
             and (not c.twin or twin_host(me, opp) is not None)
             and (not c.cast_threshold or threshold(me))
@@ -3693,8 +3980,19 @@ def end_step_instants(dfn, act, e, step):
     lasting_abilities(dfn, act, step, e, own_turn=False, mode="rest")
     tap_artifact_abilities(dfn, e)
     draw_abilities(dfn, e)
+    gy_draws(dfn, e)
     legend_discard_draw(dfn, e)
     twin_activate(dfn, act, step, e, end_step=True)
+
+
+def gy_draws(p, e):
+    """Am Ende des gegnerischen Zugs: Ziehen aus dem Friedhof mit freiem Mana (Seasoned Cryomancer: {3}{U}{U},
+    Karte exilieren, zwei ziehen)."""
+    for card in list(dict.fromkeys(p.graveyard)):
+        if card.gy_draw and card in p.graveyard and _pay_open(p, card.gy_draw[0]):
+            p.graveyard.remove(card)
+            _draw(p, card.gy_draw[1])
+            e["events"].append(f"{p.name}: exiliert {card.name} aus dem Friedhof und zieht {card.gy_draw[1]}")
 
 
 def confidant_end_step(p, e):
@@ -4044,6 +4342,8 @@ def _gy_return_ok(p, card):
     """Bedingungen und Zusatzkosten einer Faehigkeit "Return this card from your graveyard"."""
     _alts, _dest, _tapped, _counters, extra, cond = card.gy_return
     if cond == "noncombat" and not p.dealt_direct > p.direct_mark:
+        return False
+    if cond == "surveilled" and not p.surveilled:  # Proctor of Potential
         return False
     if extra == "exile_creature" and not gy_candidates(p, "creature", exclude=card):
         return False
@@ -4464,6 +4764,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
          "damage": 0, "face": 0, "deaths": [], "events": [], "note": ""}
     me.cast_count = 0
     me.discards_turn = 0
+    me.land_now = None
     me.noncreature_cast = opp.noncreature_cast = False
     me.ward_budget, me.ward_pool = 0, None
     me.extra_lands = 0
@@ -4569,6 +4870,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
             _take_impulse(me, im_map[land])
             land = im_map[land]
         me.lands.append(land)
+        me.land_now = land
         e["land"] = land.name + (" (getappt)" if tapped else "")
         if not tapped:
             pool_all = pool_all + [land.land_colors]
@@ -4778,6 +5080,8 @@ def take_turn(me, opp, step, rnd, skip_draw):
     stun_from_graveyard(me, opp, step, e)
     perm_abilities(me, opp, step, e)
     equip_gear(me, step, e)
+    puppetbeast_sac(me, step, e)
+    hall_of_echoes(me, step, e)
     # Faehigkeiten vor dem Angriff: Marken und Empower mit freiem Mana, Flying/Menace fuer den Angriff
     pre_attack_abilities(me, opp, step, e)
     combat_draw_abilities(me, opp, step, e)
@@ -4787,6 +5091,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     combat_buffs(me, step, e)
     twin_for_lethal(me, opp, step, e)
     sacrifice_for_lethal(me, opp, step, e)
+    anomaly_for_lethal(me, opp, step, e)
     attackers = choose_attackers(me.creatures, opp.creatures, opp.life, me.life, step)
     art_vigilance = any(c.card.artifact_vigilance for c in me.creatures if not c.dead)
     for a in attackers:
@@ -4837,8 +5142,15 @@ def take_turn(me, opp, step, rnd, skip_draw):
                     alone.bonus += me.discards_turn
                 e["events"].append(f"{me.name}: {c.card.name} – {alone.card.name} greift allein an")
     for a in attackers:  # Angriffs-Ausloeser der Kreatur selbst
+        a.attacked = step
         for g in a.gear:  # Medic's Kitesail
             gain_life(me, g.equip_attack_life)
+            if g.equip_attack_choice:  # Hunter's Axe: Deathtouch, wenn ein Blocker sonst ueberlebt, sonst Trample
+                tough = [b for b in opp.creatures if not b.tapped and not b.dead and can_block(b, a)
+                         and b.toughness - b.damage > a.dmg]
+                kw = "deathtouch" if tough else "trample"
+                a.extra.add(kw)
+                e["events"].append(f"{me.name}: {a.card.name} – {g.name}: {kw}")
         if a.card.attack_loot:  # Sphinx of False Conclusions: ziehen, dann abwerfen
             _draw(me)
             gone = choose_discard(me)
@@ -4877,6 +5189,8 @@ def take_turn(me, opp, step, rnd, skip_draw):
         combat_tricks(opp, blocks, me, e, step, attacking=False)
         debuff_tricks(me, blocks, opp, e, step, attacking=True)
         debuff_tricks(opp, blocks, me, e, step, attacking=False)
+        hand_bolt_tricks(me, blocks, opp, e, step, attacking=True)
+        hand_bolt_tricks(opp, blocks, me, e, step, attacking=False)
         sacrifice_blockers(opp, blocks, e)
     before = [(a.label(), [b.label() for b in bs]) for a, bs in blocks]
     res = resolve_combat(blocks)
@@ -4917,6 +5231,9 @@ def take_turn(me, opp, step, rnd, skip_draw):
     exhaust_abilities(me, opp, step, e)
     life_token_instants(me, opp, step, e)
     room_of_refuge(me, step, e)
+    rescue_girl(me, opp, step, e)
+    identity_echo(me, opp, step, e)
+    prepare_abilities(me, step, e)
     if me.walkers:
         pw_phase(me, opp, step, e, "after")
     if walker_engine(me):
@@ -4975,6 +5292,7 @@ def hand_limit(p, e, size=7):
 def cleanup(players):
     """Rundenende: Schaden, Pumps und verliehene Schluesselwoerter verfallen."""
     for p in players:
+        p.creatures[:] = [c for c in p.creatures if c.land_source is None]  # Hall of Echoes: wieder ein Land
         for c in p.creatures:
             c.damage, c.pump, c.tpump, c.touched, c.lifted, c.at_jace = 0, 0, 0, False, False, False
             c.at_pw = None
