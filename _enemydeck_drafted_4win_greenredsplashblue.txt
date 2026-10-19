@@ -1,0 +1,30 @@
+Deck
+1 Craterclaw Colossus (FRA) 78
+1 No Admittance (FRA) 89
+2 Wrath of the Bloodmane (FRA) 96
+1 Ghalta the Unstoppable (FRA) 260
+1 Awaken the Inferno (FRA) 74
+1 Saheeli, Jewel of Avishkar (FRA) 275
+3 Sureshot Sower (FRA) 115
+1 Konstrari Annex (FRA) 183
+1 Way of the Warlord (FRA) 255
+1 Heartwood Crafter (FRA) 105
+3 Bestial Incursion (FRA) 98
+1 Woodwork Prodigy (FRA) 165
+1 Undulating Witness (FRA) 45
+1 Tam's Resistance (FRA) 153
+1 Puppet Crafting (FRA) 111
+1 Vigorbloom Vanguard (FRA) 161
+2 Marwyn, the Preserver (FRA) 263
+1 Marwyn, the Clearcutter (FRA) 249
+1 Mindseeker Oculus (FRA) 33
+1 Way of the Wildspeaker (FRA) 268
+1 Wrecking Gecko (FRA) 120
+1 Compel Brutality (FRA) 101
+1 Loot, the Nexus (FRA) 262
+1 Something Worth Saving (FRA) 114
+1 Yoshimaru, Scrappy Stray (FRA) 269
+1 Dedicated Commons (FRA) 175
+4 Island (SPM) 195
+5 Mountain (SPM) 197
+6 Forest (SPM) 198
