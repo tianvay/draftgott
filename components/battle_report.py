@@ -1,8 +1,8 @@
 """Kampfbericht: eigene HTML-Seite fuer die Kaempfe gegen ein Gegnerdeck (Uebersicht und Protokolle).
 
 render_battle_html(decks, args): decks wie im Goldfish (build_deck), jeweils mit "battles" (mtg_sim.simulate_battles).
-Inhalt: Uebersicht (Siege/Niederlagen je Deck und Modus), je Deck der schnellste Sieg und die schnellste Niederlage als
-Zugprotokoll beider Spieler, Regeln des Kampfs. Bei mehreren Decks (Splash/NoSplash) Umschalter an jeder Ueberschrift.
+Inhalt: Uebersicht (Siege/Niederlagen je Deck und Modus), je Deck der schnellste Sieg, die schnellste Niederlage, die
+knappsten und gedrehten Spiele und das laengste Spiel als Zugprotokoll beider Spieler, Regeln des Kampfs. Bei mehreren Decks (Splash/NoSplash) Umschalter an jeder Ueberschrift.
 """
 import datetime
 
@@ -323,8 +323,10 @@ RULES = [
     "so wenig Schaden wie nötig (der kleinste Angreifer, der reicht, sonst die schwächsten bis es reicht; reicht "
     "alles nicht, greift alles Übrige ihn an); Lethal auf den Spieler geht vor; Schaden nimmt Loyalty (120.3c). "
     "Removal „creature or planeswalker“: ein echter Planeswalker, wenn es ihn tötet und der Gegner keine Kreatur mit "
-    "Power 4+ hat; der Jace-Token nur ab 5 Loyalty und ohne Kreatur als Ziel. Nicht modelliert: das Wirken der von "
-    "Chandra exilierten Karte. "
+    "Power 4+ hat; der Jace-Token nur ab 5 Loyalty und ohne Kreatur als Ziel. Chandra, Torch of Defiance +1: "
+    "nach den Zaubern aus Main 1 wird die exilierte Karte mit dem freien Mana gewirkt, wenn sie kein Land ist (und ein "
+    "Ziel hat); sonst oder wenn die 2 Schaden Lethal sind, gibt es die 2 Schaden. Hat ein Zauber beim Auflösen kein "
+    "Ziel mehr (z. B. durch ein Emblem beim Wirken getötet), wirkt er nicht (608.2b). "
     "Im Goldfish ohne Token und Removal (Schaden, Ziehen, Mana, Marken, Embleme, Empower).",
     "Heartwood-Token (111.10x, Artefakt mit {T}: {R} oder {G}) aus Soul Tether, Aerid Konstrari, Hungering "
     "Puppetbeast: sofort Mana (Artefakt, keine Einsatzverzögerung, 302.6 gilt nur für Kreaturen), auch für weitere "
@@ -465,13 +467,16 @@ SPECIALS = [  # (Schluessel, Abschnitt, Titel, Auswahl ueber beide Modi)
     ("closest_loss", "knapp-niederlage", "Knappste Niederlage", lambda g: (_end_life(g, "Gegner"), -g["round"])),
     ("comeback_win", "gedreht-sieg", "Gedrehter Sieg", lambda g: (-_max_gap(g, "Wir"), g["round"])),
     ("comeback_loss", "gedreht-niederlage", "Gedrehte Niederlage", lambda g: (-_max_gap(g, "Gegner"), g["round"])),
+    ("longest_game", "laengstes", "Längstes Spiel", lambda g: (-g["round"], -len(g["log"]))),
 ]
 SPECIAL_NOTE = {
     "closest_win": "Sieg mit den wenigsten eigenen Lebenspunkten am Ende",
     "closest_loss": "Niederlage, bei der der Gegner am Ende die wenigsten Lebenspunkte hatte",
     "comeback_win": "Sieg nach dem größten Rückstand an Lebenspunkten",
     "comeback_loss": "Niederlage nach dem größten Vorsprung an Lebenspunkten",
+    "longest_game": "Spiel mit den meisten Runden – egal, ob Sieg, Niederlage oder Unentschieden an der Rundengrenze",
 }
+RESULT_LABEL = {"a": "Sieg", "b": "Niederlage", None: "Unentschieden"}
 MODE_KEY = {"On the Play": "play", "On the Draw": "draw"}
 
 GAMES_JS = """<script>
@@ -704,10 +709,12 @@ def render_battle_html(decks, args):
                 cands = [(b["results"][m][key], m) for m in MODES if b["results"][m].get(key)]
                 if cands:
                     game, mode = min(cands, key=lambda gm: order(gm[0]))
-                    body = _protocol(game, mode, label)
+                    head = f"{label} ({RESULT_LABEL[game['winner']]})" if key == "longest_game" else label
+                    body = _protocol(game, mode, head)
                 else:
+                    what = "kein Spiel" if key == "longest_game" else "kein Sieg" if "win" in key else "keine Niederlage"
                     body = (f'<div class="panel"><p class="muted">In keinem Spiel gegen {esc(b["enemy"])} '
-                            f'({"kein Sieg" if "win" in key else "keine Niederlage"}).</p></div>')
+                            f'({what}).</p></div>')
                 add(sid + tag, label + vs, body, SPECIAL_NOTE.get(key, ""), short=label, enemy=b["enemy"])
             add("spiele" + tag, "Alle Spiele" + vs, _games_list(i, e_idx, b), short="Alle Spiele", enemy=b["enemy"])
         if multi:

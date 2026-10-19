@@ -157,8 +157,11 @@ JACE_RULES = [
     "Friedhof (Campus Crier) ist modelliert, andere Kosten (Opfern, Ablegen) nicht.",
     "Modale Zauber zählen ihren Empower immer. Es wird nur die Vorderseite einer Karte simuliert, die Zählung "
     "berücksichtigt alle Seiten.",
+    "Variables Empower (X): beim Angriff X = Zahl der eigenen Kreaturen (Repurposed Enforcer), Jace, Reality "
+    "Sculptor nach den eigenen Islands; im Kampfmodell zusätzlich exilierte Kreaturen (Overwrite the Multiverse) und "
+    "überschüssiger Schaden (Violent Echoes). Andere X zählen als 0 und stehen unten.",
     "Die Einordnung stammt aus dem Kartentext von Scryfall und ist unten zur Kontrolle neben jeder Karte aufgeführt. "
-    "Karten mit weiteren Planeswalker-Bezügen werden nur gezählt und nicht simuliert.",
+    "Echte Planeswalker spielen ihre Loyalty-Fähigkeiten im Goldfish (ohne Gegner) und im Kampfmodell.",
 ]
 
 

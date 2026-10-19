@@ -1804,7 +1804,7 @@ def activation_tokens(p, step, e):
 # Echte Planeswalker (L2)
 # ---------------------------------------------------------------------------------------------------------------------
 
-PW_DEFER = {"team_pump", "attack_buff"}  # erst nach den Zaubern aus Main 1, direkt vor dem Kampf
+PW_DEFER = {"team_pump", "attack_buff", "mill_top"}  # erst nach den Zaubern aus Main 1 (Chandra: freies Mana steht fest)
 
 
 def pw_abilities(p, w):
@@ -2027,7 +2027,7 @@ def activate_pw(p, opp, w, ability, step, e, target=None):
         loyalty_triggers(p, real, e)
         bury((p, opp) if opp is not None else (p,), e)
         return mana
-    mana = []
+    mana, cast_top = [], False
     for a in atoms:
         kind = a[0]
         if kind == "token":
@@ -2106,12 +2106,11 @@ def activate_pw(p, opp, w, ability, step, e, target=None):
                 target.tapped = True
                 target.stun += -real
                 e["events"].append(f"{p.name}: {w.card.name} – {target.card.name} getappt, {-real} Stun-Marken")
-        elif kind == "mill_top":
-            if p.library:
-                top = p.library.pop(0)
-                e["events"].append(f"{p.name}: {w.card.name} exiliert {top.name}")
+        elif kind == "mill_top":  # Chandra, Torch of Defiance: wirken statt Schaden
+            cast_top = chandra_top(p, opp, w, step, e, sum(x[1] for x in atoms if x[0] == "face"))
         elif kind == "face":
-            deal_noncombat(p, opp, a[1], e)
+            if not cast_top:
+                deal_noncombat(p, opp, a[1], e)
         elif kind == "bolt_creature":
             if target is not None and target in alive_opp():
                 pay_ward(p, target, e)
@@ -2159,6 +2158,24 @@ def walker_check(p, e):
             if not w.card.is_token:
                 p.graveyard.append(w.card)
             walker_died(p, w.card.name, e)
+
+
+def chandra_top(p, opp, w, step, e, face):
+    """Chandra, Torch of Defiance +1: die oberste Karte ins Exil. Wir wirken sie mit dem freien Mana, wenn sie kein Land
+    ist (und ein Ziel hat) - ausser der Schaden (face) ist Lethal. Gibt True zurueck, wenn sie gewirkt wurde (dann kein
+    Schaden)."""
+    if not p.library:
+        return False
+    top = p.library.pop(0)
+    e["events"].append(f"{p.name}: {w.card.name} exiliert {top.name}")
+    if opp is None or opp.life <= face or top.is_land or not legend_ok(p, top) or not reanimate_ok(p, top)             or (top.removal and top.removal[4] != "etb" and not has_target(top, p, opp)):
+        return False
+    if not _pay_open(p, _alts(p, top), treasure=False):
+        return False
+    e["events"].append(f"{p.name}: wirkt {top.name} aus dem Exil ({w.card.name})")
+    p.cast_count += 1
+    _resolve(p, opp, top, step, e)
+    return True
 
 
 def pw_target(card, caster, victim, creature_target):
@@ -3397,6 +3414,9 @@ def _cast_removal(card, caster, victim, e, step, target=None):
             return
     if target is None:
         e["events"].append(f"{caster.name}: {card.name} ohne Ziel")
+        return
+    if target.dead or not any(target is c for c in victim.creatures):  # 608.2b: Ziel schon weg (z. B. Emblem)
+        e["events"].append(f"{caster.name}: {card.name} ohne Ziel ({target.card.name} ist nicht mehr da)")
         return
     if not ward_ok(caster, target):  # Ward nicht bezahlbar: anderes Ziel
         target = choose_target(spec, caster, victim)
@@ -5736,7 +5756,8 @@ def _max_gap(game, behind):
 
 def special_games(results):
     """Besondere Spiele: knappster Sieg (wenigste eigene Leben am Ende), knappste Niederlage (Gegner mit den wenigsten
-    Leben am Ende), gedrehter Sieg (groesster Rueckstand zwischendurch), gedrehte Niederlage (groesster Vorsprung)."""
+    Leben am Ende), gedrehter Sieg (groesster Rueckstand zwischendurch), gedrehte Niederlage (groesster Vorsprung),
+    laengstes Spiel (die meisten Runden, egal wie es ausging; bei Gleichstand die meisten Halbzuege)."""
     wins = [r for r in results if r["winner"] == "a"]
     losses = [r for r in results if r["winner"] == "b"]
     return {
@@ -5744,6 +5765,7 @@ def special_games(results):
         "closest_loss": min(losses, key=lambda r: (_end_life(r, "Gegner"), -r["round"])) if losses else None,
         "comeback_win": max(wins, key=lambda r: (_max_gap(r, "Wir"), -r["round"])) if wins else None,
         "comeback_loss": max(losses, key=lambda r: (_max_gap(r, "Gegner"), -r["round"])) if losses else None,
+        "longest_game": max(results, key=lambda r: (r["round"], len(r["log"]))) if results else None,
     }
 
 

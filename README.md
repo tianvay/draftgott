@@ -470,9 +470,10 @@ Diese Werte stehen im Skript und lassen sich nur dort ändern.
   modelliert: „whenever you cast …“ (alle, Kreatur, Nichtkreatur, Instant oder Sorcery), „whenever … enters“ (Kreatur,
   Land, Permanent), „whenever … attacks“ und „at the beginning of …“ (einmal pro Runde ab der Folgerunde). Bezahlbare
   Fähigkeiten nutzen das Mana, das nach dem Zaubern übrig ist, so oft es reicht (höchstens 10-mal pro Runde, mit {T} im
-  Preis einmal). Nicht modelliert und im Bericht aufgelistet sind unbekannte Auslöser, andere Kosten (Opfern, Ablegen)
-  und Sonderfälle wie „beim Sterben“. Ein variabler Wert (X) zählt in der Simulation als 0. Modale Zauber zählen ihren
-  Empower immer.
+  Preis einmal); Exil aus dem Friedhof (Campus Crier) ist modelliert. Nicht modelliert und im Bericht aufgelistet sind
+  unbekannte Auslöser, andere Kosten (Opfern, Ablegen) und Sonderfälle wie „beim Sterben“. Variables Empower (X): beim
+  Angriff X = eigene Kreaturen (Repurposed Enforcer), Jace, Reality Sculptor nach Islands, im Kampfmodell auch
+  exilierte Kreaturen und überschüssiger Schaden; andere X zählen als 0. Modale Zauber zählen ihren Empower immer.
 - **Jace-Statistik „bis die Hand leer ist“:** Gezählt wird bis zum ersten Rundenende ohne Karten auf der Hand (nach dem
   Zaubern und einer möglichen Aktivierung). Wird die Hand nie leer, zählt der ganze Beobachtungszeitraum
   (`--max-runden`). Jede Aktivierung zieht genau eine Karte, Aktivierungen und gezogene Karten sind also gleich viele.
@@ -569,8 +570,14 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
 - Way of the Cryomancer: die Kopie des ersten Instants/Sorcery wird in Main 1 eingeplant (Lethal, Removal mit
   zweitem Ziel, Ziehen; echte Planeswalker nur für Lethal oder Removal). Jace's Machinations am Ende des gegnerischen
   Zugs mit einer weiteren Aktivierung aller Jaces.
-- Nicht modelliert sind u. a. das Wirken der von Chandra, Torch of Defiance exilierten Karte, die Sieg-Fähigkeit von
-  Jace, Reality Sculptor, Convoke, Opfern als Kosten (außer Edgar, Ancient Bloodlord); solche Karten werden gespielt, wirken aber nur mit ihren modellierten Effekten.
+- Chandra, Torch of Defiance +1 (Kampfmodell): die exilierte Karte wird mit dem freien Mana gewirkt, wenn sie kein Land
+  ist, sonst bzw. bei Lethal 2 Schaden; im Goldfish immer 2 Schaden.
+- Nicht modelliert sind u. a. Convoke (Winter, Team
+  Player), Proliferate (Tam, the Possibility), Karten von außerhalb des Spiels (Extrapolate the Impossible) und Opfern
+  als Kosten außer bei den genannten Karten; solche Karten werden gespielt, wirken aber nur mit ihren modellierten
+  Effekten.
+- Kampfbericht: besondere Spiele mit Zugprotokoll – schnellster Sieg, schnellste Niederlage, knappster und gedrehter
+  Sieg bzw. Niederlage und das längste Spiel (die meisten Runden, egal wie es ausging).
 
 ## Details pro Variante
 

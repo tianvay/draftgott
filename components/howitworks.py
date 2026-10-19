@@ -95,8 +95,10 @@ def _sections():
              "Anführungszeichen.",
              "Ampel: grün ab 4, gelb ab 2,5 Punkten bei 40 Karten, bei anderer Kartenzahl anteilig. Richtwert für "
              "Limited: etwa 4 bis 6 Removal-Karten.",
-             "Die Tabelle zeigt jede erkannte Karte mit Art, Punkten je Karte, Summe und der erkannten Textstelle zur Kontrolle. Die "
-             "Simulation nutzt den Score nicht (es gibt keinen Gegner)."]))),
+             "Die Tabelle zeigt jede erkannte Karte mit Art, Punkten je Karte, Summe und der erkannten Textstelle zur "
+             "Kontrolle. Der Goldfish nutzt den Score nicht (es gibt keinen Gegner); im Kampfmodell wirken die "
+             "Removal-Effekte selbst, der Score dient dort nur bei Gleichstand (z. B. welche Karte aus der Hand des "
+             "Gegners gewählt wird)."]))),
         ("friedhof", "Friedhof", _panel("Friedhof-Score", _ul([
             "Jede Karte bekommt Punkte für ihre beste Nutzung des Friedhofs (aus dem Kartentext): <b>Zweitverwertung</b> "
             "1,0 (die Karte selbst noch einmal: Flashback, Escape, Unearth, Disturb, Jump-start, Retrace, „return this "
@@ -105,11 +107,13 @@ def _sections():
             "Friedhof ab, Threshold, Delve, andere Karten aus dem Friedhof exilieren).",
             "<b>Enabler</b> füllen den eigenen Friedhof (Mill, Surveil, Abwerfen, Cycling und Landcycling, „into your "
             "graveyard“); sie werden gezählt, haben aber keine Punkte.",
-            "Die Simulation wirkt Karten aus dem Friedhof (Flashback usw.) noch nicht; der Score bewertet nur."]))
+            "Der Goldfish wirkt keine Karten aus dem Friedhof (außer Campus Crier: Empower aus dem Friedhof); der Score "
+            "bewertet nur. Im Kampfmodell kommen Karten aus dem Friedhof zurück (Flashback, „return this card“, Phoenix, "
+            "Reanimation, Fähigkeiten aus dem Friedhof)."]))
          + _panel("Friedhof in der Simulation", _ul([
              "In den Friedhof kommen gewirkte Instants und Sorceries (Prepared-Kopien nicht), gelandcycelte Karten "
-             "und Karten, die Surveil ablegt (Karten oder Jace). Kreaturen sterben in der Simulation nicht (kein Kampf "
-             "mit Blockern).",
+             "und Karten, die Surveil oder Mill ablegt (Karten oder Jace). Kreaturen sterben im Goldfish nicht (kein Kampf "
+             "mit Blockern); im Kampfmodell kommen gestorbene Kreaturen in den Friedhof.",
              "Gezählt wird mit den Manakosten der Karte; eine gelandcycelte 6-Mana-Kreatur zählt also 6.",
              "„Ø höchster Manawert“ ist für Karten wie Hapatra wichtig: X = höchster Manawert im Friedhof, wenn sie ins "
              "Spiel kommt (Ø X und wie oft X ≥ 3 bzw. ≥ 5)."]))),
@@ -131,7 +135,13 @@ def _sections():
             "Loyalty (Tethermage), Kostensenkung (Geist of Saint Thalia, Ghalta, Wrath of the Bloodmane, Traxos) sowie "
             "Kampf-Schlüsselwörter ohne Gegner. Außerdem jede Zeile, die das Kartenmodell erkennt (Goldfish und/oder "
             "Kampfmodell, z. B. Removal, Token, Lebensgewinn, Planeswalker): Dafür wird die Karte nur mit dieser Zeile "
-            "geparst; bei teilweise erkannten Zeilen bleibt der offene Rest stehen.",
+            "geparst; bei teilweise erkannten Zeilen bleibt der offene Rest stehen. Zeilen, deren Modell erst aus der "
+            "ganzen Karte entsteht (z. B. der Bonus einer Ausrüstung zusammen mit ihren Equip-Kosten), gelten ebenfalls "
+            "als abgedeckt.",
+            "Bewusst nicht (vollständig) modelliert und deshalb nicht gemeldet: Theorist's Proxy (opfert sich nie), "
+            "Marwyn, the Preserver (Hexproof für Länder), Paradox Shaper ({2}: Karte unter die Bibliothek), Sphinx's "
+            "Approach (fünf Exemplare), Winter, Team Player (Convoke), Tam, the Possibility (Proliferate) und "
+            "Extrapolate the Impossible (Karten von außerhalb des Spiels).",
             "Kategorien: Tokens erzeugen, Direkter Schaden, Zählmarken / Stärkebonus, Haste verleihen, Mana außer "
             "Ländern, Kartenfluss, Kostensenkung / Convoke, Zweitverwertung (Friedhof), Timing (Flash), Zusatzkosten, "
             "Prepared-Zauberhälfte, Planeswalker-Fähigkeit, Defender-Ausnahme, Interaktion mit dem Gegner, "
@@ -255,8 +265,9 @@ def _sections():
             "Modelliert ist „Surveil N.“ als eigener Satz in Instants und Sorceries sowie „When this … enters, surveil "
             "N.“ bei Kreaturen, anderen bleibenden Karten und Ländern (N fest). Der Rest einer Zeile (z. B. Exil) bleibt "
             "in der Modell-Abdeckung.",
-            "Nicht modelliert: Auslöser wie „whenever another creature enters“, bezahlbare Fähigkeiten, modale Karten, "
-            "X-Werte und Prepared-Zauberhälften.",
+            "Surveil der Prepared-Kopie zählt wie bei anderen Zaubern. Nicht modelliert im Goldfish: Auslöser wie "
+            "„whenever another creature enters“, bezahlbare Fähigkeiten, modale Karten und X-Werte (das Kampfmodell "
+            "kennt die Auslöser).",
             "Zeitpunkt: nach dem Zaubern der Runde, zuerst das gelegte Land, dann die Zauber in der Reihenfolge des "
             "Wirkens.",
             "Entscheidung wie bei Jace: Ein Land bleibt oben, solange für die teuerste Karte auf der Hand Länder fehlen "
@@ -271,8 +282,8 @@ def _sections():
             "Zauber und als ausgegebenes Mana. Sie wird mit den übrigen Zaubern nach denselben Auswahlregeln gewählt; "
             "bei Gleichstand kommt zuerst die Handkarte (die Kopie bleibt verfügbar).",
             "Auch in der Runde, in der die Kreatur ins Spiel kommt, wird die Kopie mit dem übrigen Mana gewirkt.",
-            "Effekte der Kopie: Draw N, Surveil N und Empower Jace wie bei anderen Zaubern. Token, Schaden an den "
-            "Gegner, Marken, Mill und Loot sind nicht modelliert und stehen in der Modell-Abdeckung.",
+            "Effekte der Kopie wie bei anderen Zaubern: Draw N, Surveil N, Empower Jace, Schaden an den Gegner, Marken "
+            "und Pumps, Mill und Heartwood-Token. Kreatur-Token und Loot der Kopie wirken nur im Kampfmodell.",
             "Prepared-Karten mit anderem Wortlaut werden nicht als Kopie gewirkt und stehen in der Modell-Abdeckung als "
             "„Prepared-Zauberhälfte“."]))),
         ("ramp", "Ramp", _panel("Regeln", _ul([
@@ -286,8 +297,11 @@ def _sections():
             "Treasure (aus „When … enters, create a Treasure token“ oder einem Zauber): bleibt liegen und wird nur "
             "geopfert, wenn er in einer Runde mehr Mana in Zauber bringt; ein Treasure gibt einmal ein Mana "
             "beliebiger Farbe.",
-            "Nicht modelliert (Modell-Abdeckung): Fähigkeiten mit Zusatzkosten („{1}, {T}: Add …“), Mana durch Opfern, "
-            "Rituale, Treasure aus anderen Auslösern und Planeswalker-Mana.",
+            "Heartwood-Token (aus Zaubern und beim Betreten) sind Artefakte und liefern sofort Mana; Mana aus "
+            "verliehenen Jace-Fähigkeiten zählt in der Runde, in der es genutzt wird. Mana echter Planeswalker und "
+            "Heartwood beim Sterben gibt es nur im Kampfmodell.",
+            "Nicht modelliert im Goldfish: Fähigkeiten mit Zusatzkosten („{1}, {T}: Add …“), Mana durch Opfern außer "
+            "Treasure, Rituale und Treasure aus anderen Auslösern.",
             "„Spiele mit Ramp“: mindestens eine Runde mit Mana aus solchen Quellen; „Ø zusätzliches Mana“: Mana aus "
             "Manaquellen und genutzten Treasure je Runde; „Ø Angriffe ausgelassen“: Kreaturen, die für Mana getappt "
             "wurden und sonst hätten angreifen können.",
@@ -311,7 +325,9 @@ def _sections():
             "Blocker oder Removal.",
             "Landcycling, Empower Jace, Draw-Zauber, Surveil durch Karten und Prepared: Regeln in den jeweiligen "
             "Abschnitten.",
-            "Was die Simulation nicht abbildet, zeigt der Abschnitt Modell-Abdeckung je Deck."]))),
+            "Was die Simulation nicht abbildet, zeigt der Abschnitt Modell-Abdeckung je Deck.",
+            "Diese Annahmen gelten für den Goldfish (ohne Gegner). Das Kampfmodell spielt gegen ein Gegnerdeck mit "
+            "Blockern, Removal, Instants und Planeswalkern; seine Regeln stehen im Kampfbericht."]))),
         ("drafthelper", "Drafthelper", _drafthelper_help()),
     ]
 
