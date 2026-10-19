@@ -285,6 +285,16 @@ RULES = [
     "wurde); Hexhaven Invigorator sucht bei Schaden so viele Länder wie möglich (neue Farben zuerst); Puppet Crafting "
     "belebt ein Token-Artefakt bzw. das billigste Nichtkreatur-Artefakt als 5/5; Seasoned Cryomancer zieht "
     "aus dem Friedhof am Ende des gegnerischen Zugs mit freiem Mana zwei Karten.",
+    "FRA-Paket E: Emrakul, the Exigent Doom ist kostenlos, wenn die Länder allein sie bezahlen (das Wirken enttappt sie "
+    "wieder); sie wird in Main 2 für {3} aus der Hand exiliert, wenn das Mana sonst ungenutzt bliebe und sie auch mit zwei "
+    "weiteren Landdrops nicht normal gewirkt werden kann – das Land, das am wenigsten fehlt, liefert dann {C}{C}, bis "
+    "Emrakul aus dem Exil gewirkt wird. Ward „drei bleibende Karten opfern“ zahlt eine Seite nur, wenn sie sonst an der "
+    "Kreatur stirbt (Token, überzählige Länder, schwächste Kreaturen zuerst). Omnipresence macht Handkarten bis zur Zahl "
+    "der eigenen Kreaturen kostenlos (die teuersten zuerst) und wird nur mit mindestens zwei Kreaturen und einer dadurch "
+    "kostenlosen Karte gewirkt oder als letzte Nicht-Landkarte. Uldaros Theorix kopiert je Kartentyp eine Karte aus dem "
+    "Friedhof bis Manawert 6 (Removal mit Ziel zuerst, dann der höchste Manawert, dann Kreaturen; bleibende Karten werden "
+    "Token). Codie kopiert jeden gewirkten prepared-Zauber. Fblthp, Impossibly Lost zieht nach Kampfschaden im eigenen "
+    "Zug zwei, gewinnt bei leerer Bibliothek und wird in die Bibliothek gemischt.",
     "Echte Planeswalker (L2): kommen mit ihrer aufgedruckten Loyalty (306.5b), eine Loyalty-Fähigkeit pro Zug "
     "(606.3), Minus-Kosten nur mit genug Loyalty (606.6), −X so groß wie möglich ohne zu sterben, Tod bei 0 "
     "(704.5i, mit Sanctum Lurker nicht); aus dem Friedhof aufs Feld zurück als neues Objekt mit voller Loyalty "

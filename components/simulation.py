@@ -112,6 +112,48 @@ def original(card):
     return _REDUCED.get(card, (card,))[0]
 
 
+def free_version(card):
+    """Die Karte ohne Manakosten (Omnipresence, Emrakul mit Laendern bezahlt und wieder enttappt)."""
+    if not card.alts:
+        return card
+    base, before = _REDUCED[card][:2] if card in _REDUCED else (card, 0)
+    free = card._replace(alts=((0, ()),))
+    if free != card:
+        _REDUCED[free] = (base, base.mv, card)
+    return free
+
+
+def free_spells(hand, creatures, land_units, omni):
+    """Kostenlose Handkarten: Emrakul ("when you cast this spell, untap all lands you control"), wenn die Laender
+    allein die Kosten zahlen (danach sind sie wieder ungetappt); mit Omnipresence jede Karte mit Manawert hoechstens
+    der Zahl unserer Kreaturen, die teuersten zuerst (jede kostenlose Kreatur hebt die Grenze an). Keine X-Karten."""
+    out = list(hand)
+    for i, c in enumerate(out):
+        if c.cast_untap_lands and c.alts and pay_subsets(list(land_units), c.alts):
+            out[i] = free_version(c)
+    if not omni:
+        return out
+    n, done = creatures, set()
+    while True:
+        fits = [i for i, c in enumerate(out) if i not in done and not c.is_land and c.alts and c.mv <= n
+                and not c.x_counters and not c.x_search_basics and not c.is_copy and not c.impulse_mark]
+        if not fits:
+            return out
+        i = max(fits, key=lambda k: (out[k].mv, out[k].is_creature))
+        done.add(i)
+        out[i] = free_version(out[i])
+        n += out[i].is_creature
+
+
+def omni_ok(card, hand, creatures):
+    """Omnipresence wirken: als letzte Nicht-Landkarte der Hand oder mit mindestens zwei Kreaturen, wenn dadurch eine
+    andere Handkarte kostenlos wird."""
+    if not card.omni_free:
+        return True
+    others = [c for c in hand if not c.is_land and c is not card and original(c) != original(card)]
+    return not others or (creatures >= 2 and any(c.mv <= creatures for c in others))
+
+
 def paid_mv(card):
     """Tatsaechlich bezahltes Mana: Manawert minus Kostensenkung."""
     return max(0, card.mv - (_REDUCED[card][1] if card in _REDUCED else 0))
@@ -1056,7 +1098,8 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                         and (not c.twin or twin_host_index(board, bonus, dmg_target - dmg_total) is not None)
                         and (not c.entrust or goldfish_entrust_pick(library, walkers, jst) is not None)
                         and (not c.pw_tutor or goldfish_tutor_pick(library, hand, battlefield) is not None)
-                        and (not c.x_counters or len(board) >= 2)] \
+                        and (not c.x_counters or len(board) >= 2)
+                        and omni_ok(c, hand, len(board))] \
                     + copies_now()
 
             spells = castable()
@@ -1143,6 +1186,12 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                 copy_pending = copy_pending or wo["copy"]
                 pool = pool + wo["mana"]
                 avail_total += len(wo["mana"])
+                spells = castable()
+            if any(c.cast_untap_lands for c in hand) or any(c.omni_free for c in nperms):
+                lands_now = [c.land_colors for c in battlefield]
+                if land_played is not None and tapped_now:
+                    lands_now.remove(land_played.land_colors)
+                hand[:] = free_spells(hand, len(board), lands_now, any(c.omni_free for c in nperms))
                 spells = castable()
             key = land_key(pool)
             full_key = land_key([c.land_colors for c in battlefield])

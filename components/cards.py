@@ -259,6 +259,12 @@ class Card(NamedTuple):
     hall_copy: tuple = ()      # Land: Kosten "this land becomes a copy of target creature you control" (Hall of Echoes)
     damage_ramp: bool = False  # Hexhaven Invigorator: bekommt Schaden -> so viele Laender getappt suchen
     animate_artifact: tuple = ()  # Aura: verzaubertes Artefakt wird P/T-Kreatur (Puppet Crafting)
+    cast_untap_lands: bool = False  # "When you cast this spell, untap all lands you control" (Emrakul)
+    hand_exile_land: tuple = ()  # Kosten "Exile this card from your hand: Target land gains {T}: Add {C}{C}" (Emrakul)
+    omni_free: bool = False    # Omnipresence: Handkarten bis Manawert = Zahl der eigenen Kreaturen kostenlos
+    uldaros_cast: int = 0      # Uldaros Theorix: Kopien aus dem Friedhof bis zu diesem Gesamt-Manawert kostenlos
+    codie_copy: bool = False   # Codie: "Whenever you cast a prepared spell, copy it"
+    fblthp_lost: int = 0       # Fblthp, Impossibly Lost: Kampfschaden im eigenen Zug -> N ziehen, in die Bibliothek
 
 
 LANDCYCLE_RE = re.compile(
@@ -1171,7 +1177,7 @@ _PACKAGE_M2_RES = {
                                  r"damage to that player"),
     "opp_loyalty_ping": re.compile(r"^whenever an opponent activates a loyalty ability, (?:~|this creature|[a-z]+) deals (\d+) "
                                    r"damage to that player"),
-    "ward": re.compile(r"^ward(?: \{(\d+)\}|—discard a card)\.?$"),
+    "ward": re.compile(r"^ward(?: \{(\d+)\}|—discard a card|—sacrifice (two|three|four) permanents)\.?$"),
     "toughness_damage": re.compile(r"^each creature you control with toughness greater than its power assigns combat "
                                    r"damage equal to its toughness rather than its power"),
 }
@@ -1695,6 +1701,26 @@ def easy_traits(card, type_line):
         if re.match(r"^when ~ enters, you may discard a card\. if you do, search your library for an enchantment card",
                     low):
             out["etb_discard_enchant"] = True
+        if low == "when you cast this spell, untap all lands you control.":
+            out["cast_untap_lands"] = True
+        m = re.match(r'^((?:\{[^}]+\})+), exile this card from your hand: target land gains "\{t\}: add \{c\}\{c\}" '
+                     r"until this card is cast from exile\. you may cast this card for as long as it remains exiled", low)
+        if m:
+            out["hand_exile_land"] = cost_alternatives(m.group(1).upper())
+        if low.startswith("you may cast spells with mana value less than or equal to the number of creatures you "
+                          "control from your hand without paying their mana costs"):
+            out["omni_free"] = True
+        m = re.match(r"^when ~ enters, if you cast (?:him|her|it|them), exile up to one target nonland card of each "
+                     r"card type from your graveyard\. copy those cards\. you may cast any number of spells with total "
+                     r"mana value (\d+) or less from among the copies without paying their mana costs", low)
+        if m:
+            out["uldaros_cast"] = int(m.group(1))
+        if low.startswith("whenever you cast a prepared spell, copy it"):
+            out["codie_copy"] = True
+        m = re.match(r"^when one or more of your opponents are dealt combat damage during your turn, draw (a|one|two|"
+                     r"three) cards?\. if your library has no cards in it, you win the game\. ~'s owner shuffles", low)
+        if m:
+            out["fblthp_lost"] = _count(m.group(1))
     return out
 
 
@@ -1782,7 +1808,7 @@ def package_m2_traits(card):
         m = res["ward"].match(low) or next((res["ward"].match(t.strip()) for t in low.split(",")[1:]
                                              if res["ward"].match(t.strip())), None)  # Schluesselwortzeile
         if m:
-            out["ward"] = ("mana", int(m.group(1))) if m.group(1) else ("discard",)
+            out["ward"] = ("mana", int(m.group(1))) if m.group(1) else ("sac", _count(m.group(2))) if m.group(2)                 else ("discard",)
         if res["toughness_damage"].match(low):
             out["toughness_damage"] = True
     if draws:

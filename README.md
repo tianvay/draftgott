@@ -553,6 +553,9 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
   Bonus (Ferocity of the Hunt), Proctor of Potential, Hungering Puppetbeast, Identity Echo, Hexhaven Dueling Arena,
   Codie, Flickering Hound, Rescue Girl, Hall of Echoes, Hexhaven Invigorator, Puppet Crafting, Seasoned Cryomancer
   (Ziehen aus dem Friedhof).
+- FRA-Paket E: Emrakul, the Exigent Doom (Enttappen beim Wirken, Exil aus der Hand mit {C}{C}-Land, Ward durch
+  Opfern), Omnipresence (Goldfish und Kampfmodell), Uldaros Theorix, Codie (Kopie prepared-Zauber), Fblthp, Impossibly
+  Lost.
 - Tomik: höchstens ein Angreifer je Planeswalker. Entrust the Spark opfert nur einen Jace-Token und holt den
   teuersten Planeswalker; Loyal Tutor legt einen Planeswalker oben auf die Bibliothek (auch im Goldfish).
 - Way of the Cryomancer: die Kopie des ersten Instants/Sorcery wird in Main 1 eingeplant (Lethal, Removal mit

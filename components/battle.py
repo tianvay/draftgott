@@ -24,7 +24,8 @@ from components.jace import (JaceState, cast_filter_matches, enter_filter_matche
 from components.simulation import walker_rank
 from components.cards import HEARTWOOD, token_card
 from components.simulation import (ANY_COLOR, apply_effects, apply_surveils, best_cast_reduced, choose_land,
-                                   cost_reduction, do_cycle, enter_value, enters_prepared, hand_form,
+                                   cost_reduction, do_cycle, enter_value, enters_prepared, free_spells, hand_form,
+                                   omni_ok,
                                    landfall_effects, pay_subsets,
                                    plan_cycle, reduced, resolve_draws, tapped_for_mana, usable_now, use_treasures)
 from components.landadvice import colors_of_alts
@@ -576,6 +577,7 @@ class Player:
         self.discards_turn = 0  # in diesem Zug abgeworfene Karten (Jiang Yanggu, Alone)
         self.no_legend_step = None  # Hall of Echoes: in diesem Schritt gilt die Legend-Regel nicht
         self.land_now = None  # in diesem Zug gelegtes Land (Hall of Echoes: noch nicht angriffsbereit)
+        self.cc_land = None   # Land mit "{T}: Add {C}{C}", bis Emrakul aus dem Exil gewirkt wird
         self.x_values = []    # X gewirkter Kreaturen mit "enters with X counters": [(Karte, X)] (Guiding Hydra)
         self.max_deck_mv = max((c.mv for c in cards if not c.is_land), default=0)  # teuerste Karte des Decks (Pia)
         self.noncombat_step = None  # Schritt, in dem dieser Spieler zuletzt Schaden ausserhalb des Kampfs bekam
@@ -592,7 +594,13 @@ class Player:
 
 def _mana(me, step):
     """Mana zu Rundenbeginn: Laender, Manaquellen-Permanents, Kreaturen mit Mana-Faehigkeit (nicht frisch, ungetappt)."""
-    pool = [land.land_colors for land in me.lands]
+    pool, cc = [], me.cc_land
+    for land in me.lands:  # Emrakul: ein Land liefert {C}{C} statt seiner Farbe
+        if cc is not None and land == cc:
+            pool += [("C",), ("C",)]
+            cc = None
+        else:
+            pool.append(land.land_colors)
     pool += [u for card in me.perms for u in card.mana_src]
     creature_units = [(u, i) for i, c in enumerate(me.creatures)
                       if c.card.mana_src and not c.tapped and (c.entered < step or c.card.haste or c.has("haste"))
@@ -762,6 +770,8 @@ def ward_ok(caster, c):
         return True
     if w[0] == "discard":
         return bool(caster.hand)
+    if w[0] == "sac":  # nur gegen drohendes Lethal und mit genug bleibenden Karten
+        return c.power >= caster.life and len(sac_order(caster)) >= w[1]
     have = len(caster.ward_pool) if caster.ward_pool is not None else len(caster.open) + caster.ward_budget
     return w[1] <= have
 
@@ -779,6 +789,10 @@ def pay_ward(caster, c, e):
         caster.graveyard.append(gone)
         e["events"].append(f"{caster.name}: wirft {gone.name} ab (Ward von {c.card.name})")
         discarded(caster, e)
+        return True
+    if w[0] == "sac":
+        gone = sacrifice_permanents(caster, w[1], e)
+        e["events"].append(f"{caster.name}: opfert {', '.join(gone)} (Ward von {c.card.name})")
         return True
     n = w[1]
     use = min(n, caster.ward_budget)
@@ -810,9 +824,54 @@ def ward_plan(me, opp, card, pool):
             if len(me.hand) > 1:
                 return 0
             continue
+        if w[0] == "sac":
+            if ward_ok(me, t):
+                return 0
+            continue
         if w[1] <= len(rest):
             return w[1]
     return 0 if spec[3] else 99
+
+
+def sac_order(p):
+    """Reihenfolge beim Opfern bleibender Karten (Ward von Emrakul): Token, ueberzaehlige Laender (mehr als der hoechste
+    Manawert der Hand), die schwaechsten Kreaturen, dann der Rest."""
+    out = [("c", c) for c in sorted((c for c in p.creatures if not c.dead and c.card.is_token), key=danger)]
+    out += [("p", c) for c in p.perms if c.is_token]
+    need = max((c.mv for c in p.hand if not c.is_land), default=0)
+    lands = list(p.lands)
+    while len(lands) > need:
+        land = _redundant_land(p, lands)
+        lands.remove(land)
+        out.append(("l", land))
+    out += [("c", c) for c in sorted((c for c in p.creatures if not c.dead and not c.card.is_token), key=danger)]
+    out += [("l", land) for land in lands]
+    out += [("p", c) for c in p.perms if not c.is_token] + [("w", w) for w in p.walkers]
+    return out
+
+
+def sacrifice_permanents(p, n, e):
+    """p opfert n bleibende Karten nach sac_order. Gibt die Namen zurueck."""
+    gone = []
+    for kind, obj in sac_order(p)[:n]:
+        if kind == "c":
+            obj.dead = True
+            gone.append(obj.card.name)
+            continue
+        if kind == "l":
+            if not _tapped_lands(p)[obj.land_colors] and obj.land_colors in p.open:
+                p.open.remove(obj.land_colors)  # ungetapptes Land: sein Mana fehlt jetzt
+            p.lands.remove(obj)
+            p.graveyard.append(obj)
+        elif kind == "p":
+            p.perms.remove(obj)
+            if not obj.is_token:
+                p.graveyard.append(obj)
+        else:
+            p.walkers.remove(obj)
+            p.graveyard.append(obj.card)
+        gone.append(obj.name if kind != "w" else obj.card.name)
+    return gone
 
 
 def valid_targets(spec, caster, victim, ward=True):
@@ -1219,6 +1278,86 @@ def prepare_abilities(p, step, e):
         for c in cands:
             c.prepared = True
         e["events"].append(f"{p.name}: {codie.card.name} – alle Kreaturen prepared")
+
+
+def emrakul_exile(p, step, e):
+    """Main 2: Emrakul fuer {3} aus der Hand exilieren, wenn das Mana sonst ungenutzt bliebe und wir sie auch mit zwei
+    weiteren Landdrops nicht normal wirken koennten. Das Land, das am wenigsten fehlt, liefert {C}{C}, bis Emrakul aus
+    dem Exil gewirkt wird; Emrakul ist so lange aus dem Exil spielbar."""
+    if p.cc_land is not None or not p.lands:
+        return
+    for card in [c for c in p.hand if c.hand_exile_land]:
+        pool, units = _mana(p, step)
+        if len(pool) + len(units) + 2 >= card.mv or not _pay_open(p, card.hand_exile_land, treasure=False):
+            continue
+        p.hand.remove(card)
+        p.impulse.append((card, 10 ** 9))
+        p.cc_land = _redundant_land(p)
+        e["events"].append(f"{p.name}: exiliert {card.name} – {p.cc_land.name} liefert {{C}}{{C}}")
+        return
+
+
+def fblthp_lost(p, opp, e):
+    """Fblthp, Impossibly Lost: der Gegner bekam in unserem Zug Kampfschaden -> N ziehen; ist die Bibliothek dann
+    leer, gewinnen wir; Fblthp wird in die Bibliothek gemischt."""
+    for f in [c for c in p.creatures if c.card.fblthp_lost]:
+        _draw(p, f.card.fblthp_lost)
+        e["events"].append(f"{p.name}: {f.card.name} zieht {f.card.fblthp_lost}")
+        if not p.library:
+            opp.lost = True
+            e["events"].append(f"{p.name}: gewinnt durch {f.card.name} (Bibliothek leer)")
+        if not f.dead:
+            p.creatures.remove(f)
+            p.library.insert(random.randrange(len(p.library) + 1), f.card)
+
+
+CARD_TYPES = (("artifact", lambda c: c.is_artifact), ("creature", lambda c: c.is_creature),
+              ("enchantment", lambda c: c.is_enchantment), ("instant", lambda c: c.is_instant),
+              ("sorcery", lambda c: c.is_instant_sorcery and not c.is_instant),
+              ("planeswalker", lambda c: c.is_planeswalker))
+
+
+def uldaros_pick(p, opp, budget):
+    """Uldaros Theorix: je Kartentyp hoechstens eine Nichtland-Karte aus dem Friedhof, zusammen Manawert <= budget.
+    Zuerst Removal mit lohnendem Ziel, dann der hoechste Gesamt-Manawert, dann die meisten Kreaturen."""
+    alive = any(not c.dead for c in p.creatures)
+    cands = [c for c in dict.fromkeys(p.graveyard) if not c.is_land and c.mv <= budget and c.alts
+             and not c.x_counters and not c.x_search_basics and legend_ok(p, c)
+             and (not c.removal or c.removal[4] == "etb" or has_target(c, p, opp))
+             and (not c.is_aura or c.removal or alive)]
+    best = ((0, 0, 0), [])
+
+    def search(k, chosen, mv):
+        nonlocal best
+        if k == len(CARD_TYPES):
+            score = (sum(1 for c in chosen if c.removal and c.removal[4] != "etb"), mv,
+                     sum(c.is_creature for c in chosen))
+            if score > best[0]:
+                best = (score, list(chosen))
+            return
+        search(k + 1, chosen, mv)
+        for c in cands:
+            if CARD_TYPES[k][1](c) and c not in chosen and mv + c.mv <= budget:
+                chosen.append(c)
+                search(k + 1, chosen, mv + c.mv)
+                chosen.pop()
+    search(0, [], 0)
+    return sorted(best[1], key=lambda c: (not c.removal, -c.mv))
+
+
+def uldaros_copies(p, opp, card, step, e):
+    """Uldaros Theorix (nur gewirkt): die gewaehlten Karten werden exiliert, ihre Kopien kostenlos gewirkt; bleibende
+    Karten werden Token, Instants und Sorceries verschwinden danach."""
+    for c in uldaros_pick(p, opp, card.uldaros_cast):
+        if c not in p.graveyard:
+            continue
+        p.graveyard.remove(c)
+        e["events"].append(f"{p.name}: {card.name} wirkt eine Kopie von {c.name}")
+        p.cast_count += 1
+        if c.is_instant_sorcery:
+            _resolve(p, opp, c, step, e, to_exile=True)
+        else:
+            _resolve(p, opp, c._replace(is_token=True), step, e)
 
 
 def combat_locked(me, opp):
@@ -2164,6 +2303,8 @@ def emblem_cast(p, step, e):
 def on_cast(p, card, step, e):
     """Ein Zauber wurde gewirkt: Jace-Ausloeser, Marken fuer Zauber mit Ziel beim Gegner (Danitha)."""
     _jace_on_cast(p, card, step, e)
+    if card.hand_exile_land and p.cc_land is not None and not any(c == card for c, _l in p.impulse):
+        p.cc_land = None  # aus dem Exil gewirkt: das Land liefert wieder nur sein Mana
     if p.emblems:
         emblem_cast(p, step, e)
     if card.is_creature:  # Flickering Hound: eine andere eigene Kreatur blinken (wertvollster Betreten-Effekt)
@@ -2258,12 +2399,13 @@ def free_units(p):
     return n
 
 
-def _redundant_land(p):
+def _redundant_land(p, lands=None):
     """Land, das am wenigsten fehlt: farblos zuerst, sonst das Land, dessen Farben am haeufigsten vorkommen; bei
     Gleichstand ein getapptes Land, dann ein Basic Land."""
-    count = Counter(col for land in p.lands for col in set(land.land_colors))
+    lands = p.lands if lands is None else lands
+    count = Counter(col for land in lands for col in set(land.land_colors))
     tapped = _tapped_lands(p)
-    return max(p.lands, key=lambda land: (min((count[c] for c in land.land_colors), default=99),
+    return max(lands, key=lambda land: (min((count[c] for c in land.land_colors), default=99),
                                           tapped[land.land_colors] > 0, land.is_basic))
 
 
@@ -2287,6 +2429,8 @@ def creature_enters(p, new, step, e, opp=None, cast=True):
         return
     if card.x_search_basics and x:
         search_basics(p, x, e, card.name)
+    if card.uldaros_cast and cast and opp is not None:
+        uldaros_copies(p, opp, card, step, e)
     gain_life(p, card.etb_life)
     if card.land_to_tokens and p.lands:
         n, token = card.land_to_tokens
@@ -3300,6 +3444,7 @@ def _resolve(me, opp, card, step, entry, owner=None, to_exile=False, modes=None)
         on_cast(me, card, step, entry)
         if copy:
             _resolve_copy(me, opp, card, step, entry, modes)
+        codie_copies(me, opp, card, step, entry, modes)
         bury((me, opp), entry)
         return
     if card.is_copy:  # Prepared-Kopie: eine passende Kreatur ist nicht mehr prepared, kein Friedhof
@@ -3323,12 +3468,21 @@ def _resolve(me, opp, card, step, entry, owner=None, to_exile=False, modes=None)
     elif card.is_instant_sorcery or card.is_copy:
         if copy:
             _resolve_copy(me, opp, card, step, entry, modes)
+        codie_copies(me, opp, card, step, entry, modes)
         card_effects(me, opp, card, step, entry, modes)
     else:
         permanent_enters(me, opp, card, step, entry)
     if card.jace_instant and me.turn_start != step:
         jace_instant_turn(me, opp, step, entry)
     bury((me, opp), entry)
+
+
+def codie_copies(me, opp, card, step, entry, modes):
+    """Codie: ein gewirkter prepared-Zauber wird kopiert (je Codie eine Kopie, neue Ziele, 707.10c)."""
+    if not (card.is_copy and card.is_instant_sorcery):
+        return
+    for c in [c for c in me.creatures if c.card.codie_copy and not c.dead]:
+        _resolve_copy(me, opp, card, step, entry, modes)
 
 
 def _resolve_copy(me, opp, card, step, entry, modes):
@@ -3667,6 +3821,7 @@ def main_phase_spells(me, opp):
             and (not c.cast_threshold or threshold(me))
             and (not c.entrust or entrust_pick(me) is not None)
             and (not c.x_counters or sum(1 for x in me.creatures if not x.dead) >= 2)
+            and omni_ok(c, me.hand, sum(1 for x in me.creatures if not x.dead))
             and (any(mode_value(me, opp, s, 0) > (0,) for s in c.choices[1]) if c.choices and not c.is_creature
                  else not c.removal or c.removal[4] == "etb" or has_target(c, me, opp))]
 
@@ -4899,6 +5054,23 @@ def take_turn(me, opp, step, rnd, skip_draw):
         spells = phase_spells()
         if opp.life <= 0:
             return e
+    omni = any(c.omni_free for c in me.perms)
+    if omni or any(c.cast_untap_lands for c in me.hand):  # Omnipresence, Emrakul mit den Laendern bezahlt
+        lands_now = _mana(me, step)[0][:len(me.lands) + (me.cc_land is not None)]
+        if land is not None and tapped and land.land_colors in lands_now:
+            lands_now.remove(land.land_colors)
+        temp = set(ex_map) | set(fb_map)
+        real = [c for c in me.hand if c not in temp]
+        free = free_spells(real, sum(1 for c in me.creatures if not c.dead), lands_now, omni)
+        free = iter(free)
+        for i, c in enumerate(me.hand):
+            if c in temp:
+                continue
+            f = next(free)
+            if f != c:
+                orig[f] = orig.get(c, c)
+                me.hand[i] = f
+        spells = phase_spells()
     ward_of = {}  # Ward-Kosten wie Zusatzkosten einplanen (702.21)
     me.ward_pool = pool_all
     for i, c in enumerate(me.hand):
@@ -5217,11 +5389,13 @@ def take_turn(me, opp, step, rnd, skip_draw):
                 pick = _best_from_gy(me, lands)
                 me.graveyard.remove(pick)
                 put_back(me, pick, "hand", step, e)
+    if res["player"] > 0:
+        fblthp_lost(me, opp, e)
     e["attacks"] = [{"attacker": lab, "blockers": blabs, "attacker_dies": a.dead, "blockers_die": [b.dead for b in bs],
                      "jace": a.at_jace, "walker": a.at_pw.card.name if a.at_pw is not None else None}
                     for (lab, blabs), (a, bs) in zip(before, blocks)]
     bury((me, opp), e)
-    if opp.life <= 0:
+    if opp.life <= 0 or opp.lost:
         return e
     # Main 2
     for c in main2:
@@ -5234,6 +5408,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     rescue_girl(me, opp, step, e)
     identity_echo(me, opp, step, e)
     prepare_abilities(me, step, e)
+    emrakul_exile(me, step, e)
     if me.walkers:
         pw_phase(me, opp, step, e, "after")
     if walker_engine(me):
@@ -5329,7 +5504,7 @@ def play_game(cards_a, cards_b, a_starts, max_turns=20, mulligan=True, min_hand=
             _finish(entry, me, opp)
             result["log"].append(entry)
             result["round"] = rnd
-            if me.lost or opp.life <= 0 or me.life <= 0:
+            if me.lost or opp.lost or opp.life <= 0 or me.life <= 0:
                 loser = me if (me.lost or me.life <= 0) else opp
                 result["winner"] = "b" if loser is a else "a"
                 break
