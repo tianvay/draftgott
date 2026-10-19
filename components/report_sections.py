@@ -153,8 +153,8 @@ JACE_RULES = [
     "bei Defender) und „at the beginning of …“ (einmal pro Runde ab der Folgerunde). Karten reagieren nur auf "
     "Ereignisse, nachdem sie im Spiel sind.",
     "Bezahlbare Fähigkeiten werden mit dem Mana benutzt, das nach dem Zaubern übrig ist, so oft es reicht (höchstens "
-    "10-mal pro Runde). Mit {T} im Preis nur einmal pro Runde und bei Kreaturen erst ab der Folgerunde. Andere Kosten "
-    "(Opfern, Ablegen) sind nicht modelliert.",
+    "10-mal pro Runde). Mit {T} im Preis nur einmal pro Runde und bei Kreaturen erst ab der Folgerunde. Exil aus dem "
+    "Friedhof (Campus Crier) ist modelliert, andere Kosten (Opfern, Ablegen) nicht.",
     "Modale Zauber zählen ihren Empower immer. Es wird nur die Vorderseite einer Karte simuliert, die Zählung "
     "berücksichtigt alle Seiten.",
     "Die Einordnung stammt aus dem Kartentext von Scryfall und ist unten zur Kontrolle neben jeder Karte aufgeführt. "
@@ -327,7 +327,7 @@ def render_jace_section(ctx):
 
     notes = []
     if ja["x_cards"]:
-        notes.append("Variabler Wert (X) wird in der Simulation als 0 gezählt: " + ", ".join(ja["x_cards"]))
+        notes.append("Variabler Wert (X) wird nicht berechnet und zählt als 0: " + ", ".join(ja["x_cards"]))
     if ja["unmodeled"]:
         notes.append("Wirkt in der Simulation nicht (Auslöser oder Kosten nicht modelliert, zählt aber in der Statistik): "
                      + ", ".join(ja["unmodeled"]))

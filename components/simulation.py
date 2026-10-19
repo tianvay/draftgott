@@ -145,6 +145,23 @@ def free_spells(hand, creatures, land_units, omni):
         n += out[i].is_creature
 
 
+def goldfish_gy_empower(gy, paid, key, jst):
+    """Empower aus dem Friedhof (Campus Crier: "{1}, Exile this card from your graveyard: Empower Jace 2") mit dem Mana,
+    das nach den Zaubern und Faehigkeiten der Runde uebrig ist. Gibt die bezahlten Kosten zurueck."""
+    for card in [c for c in gy if c.gy_ability and all(a[0] == "empower" for a in c.gy_ability[1])]:
+        alts = card.gy_ability[0]
+        if card in gy and can_cast_all(tuple(sorted(paid + [alts])), key):
+            paid = paid + [alts]
+            gy.remove(card)
+            jst.add(sum(a[1] for a in card.gy_ability[1]))
+    return paid
+
+
+def attack_empower(ef, creatures):
+    """Empower beim Angriff: X = Zahl der eigenen Kreaturen (Repurposed Enforcer), sonst der feste Wert."""
+    return creatures if ef[7] else ef[2]
+
+
 def omni_ok(card, hand, creatures):
     """Omnipresence wirken: als letzte Nicht-Landkarte der Hand oder mit mindestens zwei Kreaturen, wenn dadurch eine
     andere Handkarte kostenlos wird."""
@@ -1476,7 +1493,7 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                 for pc, t_in in perms:
                     for e in recurring_effects(pc):
                         if e[1] == "trigger" and e[3] == "attack" and pc.is_creature and (t_in < turn or pc.haste):
-                            jst.add(e[2])
+                            jst.add(attack_empower(e, len(board)))
                 # bezahlbare Faehigkeiten mit dem uebrigen Mana
                 paid = [c.alts for c in chosen]
                 for pc, t_in in perms:
@@ -1488,6 +1505,7 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                                 break
                             paid.append(e[4])
                             jst.add(e[2])
+                paid = goldfish_gy_empower(gy, paid, key, jst)  # Campus Crier aus dem Friedhof
                 # Loyalty aus dieser Runde: ab 3 ziehen, sonst Surveil 1 (auch bis 0); mit Way of the ... (L2a)
                 sources = nperms + [c for c, _t in board]
                 if jst.zero_alive or any(c.walker_grants or c.walker_no_death or c.loyalty_draw or c.loyalty_paradox

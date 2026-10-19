@@ -128,6 +128,9 @@ ON_PURPOSE = {
     "Marwyn, the Preserver": re.compile(r"^lands you control have hexproof"),  # nichts im Modell zielt auf Laender
     "Paradox Shaper": re.compile(r"^\{2\}: put target card from your graveyard on the bottom of your library"),
     "Sphinx's Approach": re.compile(r"exile this spell and four cards named sphinx's approach"),  # Ziehen modelliert
+    "Winter, Team Player": re.compile(r"^convoke$"),  # FRA abgeschlossen: nicht vollstaendig modelliert
+    "Tam, the Possibility": re.compile(r"proliferate x times"),
+    "Extrapolate the Impossible": re.compile(r"from outside the game"),
 }
 KEYWORD_SPLIT = re.compile(r"[,;]")
 

@@ -324,7 +324,7 @@ RULES = [
     "alles nicht, greift alles Übrige ihn an); Lethal auf den Spieler geht vor; Schaden nimmt Loyalty (120.3c). "
     "Removal „creature or planeswalker“: ein echter Planeswalker, wenn es ihn tötet und der Gegner keine Kreatur mit "
     "Power 4+ hat; der Jace-Token nur ab 5 Loyalty und ohne Kreatur als Ziel. Nicht modelliert: das Wirken der von "
-    "Chandra exilierten Karte, Jace, Reality Sculptors Sieg-Fähigkeit, Garruk, Veiled Butchers Exil statt Sterben. "
+    "Chandra exilierten Karte. "
     "Im Goldfish ohne Token und Removal (Schaden, Ziehen, Mana, Marken, Embleme, Empower).",
     "Heartwood-Token (111.10x, Artefakt mit {T}: {R} oder {G}) aus Soul Tether, Aerid Konstrari, Hungering "
     "Puppetbeast: sofort Mana (Artefakt, keine Einsatzverzögerung, 302.6 gilt nur für Kreaturen), auch für weitere "

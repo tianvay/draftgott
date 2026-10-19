@@ -118,6 +118,17 @@ def enter_filter_matches(filt, card):
     return True
 
 
+def x_computed(card, kind, trig):
+    """Wird das X dieses Empower berechnet? Angriff mit X = eigene Kreaturen (Repurposed Enforcer), Islands (Jace,
+    Reality Sculptor), exilierte Kreaturen bzw. ueberschuessiger Schaden (Overwrite the Multiverse, Violent Echoes)."""
+    if card.empower_x:
+        return True
+    if any(a == ("empower_islands",) for _cost, atoms in card.pw_abilities for a in atoms):
+        return True
+    return kind == "trigger" and trig == "attack" and \
+        "where x is the number of creatures you control" in card.empower_text.lower()
+
+
 def analyze_jace(rows):
     """Zaehlt Empower-Jace-Karten und weitere Jace-/Planeswalker-Bezuege (aus den Kartentexten)."""
     kinds = ["spell", "etb", "other_once", "trigger", "activated", "unknown"]
@@ -140,7 +151,7 @@ def analyze_jace(rows):
             elif kind in EMPOWER_RECURRING:
                 rec_n += n
             rec["values"].append(f"{n}{'+X' if xval and n else ''}" if (n or not xval) else "X")
-            if xval and name not in out["x_cards"]:
+            if xval and not x_computed(card, kind, trig) and name not in out["x_cards"]:
                 out["x_cards"].append(name)
             if unmod and name not in out["unmodeled"]:
                 out["unmodeled"].append(name)

@@ -2067,8 +2067,11 @@ def parse_empower(card):
             n = sum(int(v) for v in found if v.lower() != "x")
             xval = any(v.lower() == "x" for v in found)
             texts.append(raw.strip())
+            low = line.lower()
+            known = "exile this card from your graveyard" in low or re.match(  # Campus Crier, Jace +1 (modelliert)
+                r"^[+−-]?\d+: empower jace x, where x is the number of islands you control", low)
             for kind, trig, cost, tap, unmod in classify_empower_line(line, spell_face):
-                effects.append((fi, kind, n, trig, cost, tap, unmod, xval))
+                effects.append((fi, kind, n, trig, cost, tap, unmod and not known, xval))
     return tuple(effects), " / ".join(texts)[:240]
 
 
