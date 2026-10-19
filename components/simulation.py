@@ -173,14 +173,15 @@ def take_from(cards, card):
     return card
 
 
-def discounted_hand(hand, board, bonus):
-    """Goldfish: Handkarten mit Kostensenkung nach den Kreaturen auf dem Feld (board: (Karte, Runde), bonus: Marken).
-    Gibt (neue Hand, {verbilligte Karte: Original}) zurueck."""
+def discounted_hand(hand, board, bonus, perms=()):
+    """Goldfish: Handkarten mit Kostensenkung nach den Kreaturen auf dem Feld (board: (Karte, Runde), bonus: Marken)
+    und den Nichtkreatur-Permanents (perms: Gideon's Memorial fuer Planeswalker). Gibt (neue Hand, {verbilligte Karte:
+    Original}) zurueck."""
     powers = [c.power + bonus[i] for i, (c, _t) in enumerate(board)]
     toughs = [c.toughness + bonus[i] for i, (c, _t) in enumerate(board)]
     legendary = any(c.legendary for c, _t in board)
     spell_discount = sum(c.spell_discount for c, _t in board)
-    pw_discount = sum(c.pw_discount for c, _t in board)
+    pw_discount = sum(c.pw_discount for c, _t in board) + sum(c.memorial_pw_mana for c in perms)
     out, back = [], {}
     for c in hand:
         cheap = reduced(c, cost_reduction(c, powers, toughs, legendary, False, spell_discount, pw_discount)) \
@@ -1088,7 +1089,7 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
             cycle_spent = 0
             cycled_log = []
             # Kostensenkung nach den Kreaturen auf dem Feld (Geist, Ghalta, Wrath of the Bloodmane)
-            hand[:] = discounted_hand([original(c) for c in hand], board, bonus)[0]
+            hand[:] = discounted_hand([original(c) for c in hand], board, bonus, nperms)[0]
 
             def copies_now():
                 return discounted_hand([p_[0].prepared[1] for p_ in prep if p_[1]], board, bonus)[0]

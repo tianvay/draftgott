@@ -556,6 +556,12 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
 - FRA-Paket E: Emrakul, the Exigent Doom (Enttappen beim Wirken, Exil aus der Hand mit {C}{C}-Land, Ward durch
   Opfern), Omnipresence (Goldfish und Kampfmodell), Uldaros Theorix, Codie (Kopie prepared-Zauber), Fblthp, Impossibly
   Lost.
+- FRA-Paket F: Konstrari Charm/Tam's Resistance („It gains …“), Tethermage's Advantage („Untap it“), Overwrite the
+  Multiverse und Violent Echoes (Empower X), Avatar of Burgeoning Echoes (Landfall-Empower), Heartwood Crafter (Mana nur
+  für Kopien), Gideon's Memorial (Mana nur für Planeswalker). Abdeckung: Zeilen, die erst die ganze Karte modelliert
+  (Ausrüstungs-Bonus, Null Summoner, Dueling Arena, Campus Crier, Repurposed Enforcer, Jace +1, Tether Technician),
+  gelten als abgedeckt; bewusst nicht modelliert: Theorist's Proxy (opfert sich nie), Marwyn (Hexproof für Länder),
+  Paradox Shaper ({2}: Karte unter die Bibliothek), Sphinx's Approach (fünf Exemplare).
 - Tomik: höchstens ein Angreifer je Planeswalker. Entrust the Spark opfert nur einen Jace-Token und holt den
   teuersten Planeswalker; Loyal Tutor legt einen Planeswalker oben auf die Bibliothek (auch im Goldfish).
 - Way of the Cryomancer: die Kopie des ersten Instants/Sorcery wird in Main 1 eingeplant (Lethal, Removal mit

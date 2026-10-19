@@ -265,6 +265,10 @@ class Card(NamedTuple):
     uldaros_cast: int = 0      # Uldaros Theorix: Kopien aus dem Friedhof bis zu diesem Gesamt-Manawert kostenlos
     codie_copy: bool = False   # Codie: "Whenever you cast a prepared spell, copy it"
     fblthp_lost: int = 0       # Fblthp, Impossibly Lost: Kampfschaden im eigenen Zug -> N ziehen, in die Bibliothek
+    untap_target: bool = False  # Kampftrick: "Untap it" (Tethermage's Advantage)
+    empower_x: str = ""        # Empower X: "exiled" (exilierte Kreaturen) bzw. "excess" (ueberschuessiger Schaden)
+    memorial_pw_mana: int = 0  # Gideon's Memorial: Mana nur fuer Planeswalker-Zauber (wie {1} Kostensenkung)
+    restricted_mana: tuple = ()  # "{T}: Add {C}. This mana can't be spent to cast spells from your hand" (Crafter)
 
 
 LANDCYCLE_RE = re.compile(
@@ -976,7 +980,8 @@ _COMBAT_LAND_RE = re.compile(r"^whenever (?:~|this creature) deals combat damage
 _EXTRA_COST_RE = re.compile(r"^as an additional cost to cast this spell, [^.]*\bpay \{(\d+)\}")
 
 
-_GRANT_KW_RE = re.compile(r"\btarget creature(?: you control)? (?:gets [^.]*? and )?gains ([a-z ,]+?) until end of turn")
+_GRANT_KW_RE = re.compile(r"\btarget creature(?: you control)? (?:gets [^.]*? and )?gains ([a-z ,]+?) until end of turn"
+                          r"|\btarget creature[^.]*\. it gains ([a-z ,]+?) until end of turn")
 _CHOOSE_RE = re.compile(r"^(?:when (?:~|this creature) enters, )?choose (one|two|three) —$")
 _YOU_DRAW_LIFE_RE = re.compile(r"^you draw (a|an|one|two|three) cards? and gain (\d+) life\.", re.I)
 
@@ -990,7 +995,7 @@ def grant_keywords(card, type_line):
         if re.match(r"^(when|whenever|at the beginning)\b", low):
             continue
         for m in _GRANT_KW_RE.finditer(low):
-            for k in re.split(r",\s*(?:and\s+)?|\s+and\s+", m.group(1)):
+            for k in re.split(r",\s*(?:and\s+)?|\s+and\s+", m.group(1) or m.group(2)):
                 if k.strip() in COMBAT_KEYWORDS and k.strip() not in found:
                     found.append(k.strip())
     return tuple(found)
@@ -1721,6 +1726,17 @@ def easy_traits(card, type_line):
                      r"three) cards?\. if your library has no cards in it, you win the game\. ~'s owner shuffles", low)
         if m:
             out["fblthp_lost"] = _count(m.group(1))
+        if spell_face and "target creature" in low and re.search(r"\. untap it\.?$", low):
+            out["untap_target"] = True
+        if re.search(r"empower jace x, where x is the number of creatures exiled this way", low):
+            out["empower_x"] = "exiled"
+        if re.search(r"if excess damage was dealt to that permanent this way, empower jace x, where x is that excess "
+                     r"damage", low):
+            out["empower_x"] = "excess"
+        if low.startswith("{t}: add one mana of any color. spend this mana only to cast a planeswalker spell"):
+            out["memorial_pw_mana"] = 1
+        if low.startswith("{t}: add {c}. this mana can't be spent to cast spells from your hand"):
+            out["restricted_mana"] = (("C",),)
     return out
 
 
@@ -1960,7 +1976,7 @@ EMPOWER_RECURRING = ("trigger", "activated")
 
 def classify_empower_line(line, spell_face):
     """Ordnet eine Textzeile mit 'empower Jace' ein. Gibt Liste (Art, Ausloeser, Kosten, Tap, unmodelliert) zurueck."""
-    low = line.lower()
+    low = re.sub(r"^landfall — ", "", line.lower())  # Faehigkeitswort ohne eigene Regel (207.2c)
     m = re.match(r"^([^:]+):\s*(.*empower jace.*)$", low)
     if m and "{" in m.group(1) and not re.match(r"^(when|whenever|at )", m.group(1).strip()):
         cost_txt = line.split(":", 1)[0]

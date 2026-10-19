@@ -96,6 +96,37 @@ COST_REDUCTION_MODELLED = re.compile(
     r"turn)|^this spell costs \{x\} less to cast, where x is the greatest (?:power|toughness) among creatures you "
     r"control|^noncreature spells you cast cost \{\d+\} less to cast")
 DECK_RULE = re.compile(r"^a deck can have|\bany number of cards named\b")
+# Zeilen, die das Modell abbildet, obwohl die Zeile allein kein Modellfeld setzt (das Feld entsteht erst aus der ganzen
+# Karte): (Muster, Pruefung an der ganzen Karte)
+COVERED_BY_CARD = (
+    (re.compile(r"^equipped creature gets \+\d+/\+\d+\.?$"), lambda c: bool(c.equip)),
+    (re.compile(r"^equip \{\d+\}\. this ability costs \{1\} less to activate for each \+1/\+1 counter"),
+     lambda c: bool(c.equip) and c.equip[3]),
+    (re.compile(r"^threshold — as long as there are seven or more cards in your graveyard, you may cast the exiled "
+                r"card"), lambda c: c.null_summoner),
+    (re.compile(r"^\{\d+\}, \{t\}: target creature becomes prepared"), lambda c: bool(c.arena_prepare)),
+    (re.compile(r"exile this card from your graveyard: empower jace \d+"),
+     lambda c: any(a[0] == "empower" for a in (c.gy_ability[1] if c.gy_ability else ()))),
+    (re.compile(r"attacks, empower jace x, where x is the number of creatures you control"),
+     lambda c: any(e[1] == "trigger" and e[3] == "attack" and e[7] for e in c.empower)),
+    (re.compile(r"^\+1: empower jace x, where x is the number of islands you control"),
+     lambda c: any(a == ("empower_islands",) for _cost, atoms in c.pw_abilities for a in atoms)),
+    (re.compile(r"^when (?:~|this creature) enters, you may discard a card\. when you do, "),
+     lambda c: bool(c.removal) and c.removal[5]),
+    (re.compile(r"empower jace x, where x is the number of creatures exiled this way"),
+     lambda c: c.empower_x == "exiled"),
+    (re.compile(r"empower jace x, where x is that excess damage"), lambda c: c.empower_x == "excess"),
+    (re.compile(r"^untap it\.?$"), lambda c: c.untap_target),
+    (re.compile(r"^it gains [a-z ,]+ until end of turn\.?$"),  # Rest nach Marken/Pump eines Modus
+     lambda c: bool(c.grant_kw) or any(s.grant_kw for s in (c.choices[1] if c.choices else ()))),
+)
+# Bewusst nicht modelliert (Nutzer-Entscheidung): Kartenname -> Muster der Zeile
+ON_PURPOSE = {
+    "Theorist's Proxy": re.compile(r"sacrifice this creature: the next spell you cast this turn can't be countered"),
+    "Marwyn, the Preserver": re.compile(r"^lands you control have hexproof"),  # nichts im Modell zielt auf Laender
+    "Paradox Shaper": re.compile(r"^\{2\}: put target card from your graveyard on the bottom of your library"),
+    "Sphinx's Approach": re.compile(r"exile this spell and four cards named sphinx's approach"),  # Ziehen modelliert
+}
 KEYWORD_SPLIT = re.compile(r"[,;]")
 
 
@@ -173,6 +204,13 @@ def analyze_card(card):
     prepare = card.get("layout") == "prepare" and len(faces) > 1
     prepare_modelled = bool(prepared_mode(card))  # Zauberhaelfte wird als Kopie gewirkt (siehe cards.prepared_spell)
     items = []
+    name = (card.get("name") or "").split(" // ")[0]
+    purpose = ON_PURPOSE.get(name)
+    try:
+        from components.cards import card_info
+        full = card_info(card)[0]
+    except Exception:  # unvollstaendige Testkarten
+        full = None
     for fi, face in enumerate(faces):
         type_line = face.get("type_line") or card.get("type_line") or ""
         is_land = "Land" in type_line.split("—")[0]
@@ -189,6 +227,10 @@ def analyze_card(card):
             low = line.lower()
             if MODAL_HEADER.search(low) or DECK_RULE.search(low) or COST_REDUCTION_MODELLED.match(low):
                 continue
+            if purpose is not None and purpose.search(low):
+                continue  # bewusst nicht modelliert
+            if full is not None and any(rx.search(low) and ok(full) for rx, ok in COVERED_BY_CARD):
+                continue  # vom Kartenmodell aus der ganzen Karte erkannt
             if prepare and "prepared" in low:
                 continue
             if LANDCYCLE_RE.search(line) and len(line) < 40:
@@ -241,6 +283,8 @@ def analyze_card(card):
                         modelled_face and line_modelled(card, face, EMPOWER_RE.sub(" ", raw))):  # Rest ohne Empower
                     face_items += [(c, m, line) for c, m in _classify(rest, False)]
                 continue
+            if full is not None and line != original and any(rx.search(low) and ok(full) for rx, ok in COVERED_BY_CARD):
+                continue  # Rest der Zeile (nach Marken/Pump) aus der ganzen Karte erkannt
             if modelled_face and line_modelled(card, face, (header + "\n" + raw if raw.strip().startswith("•") else raw)
                                          if line == original else line):
                 continue  # vom Kartenmodell erkannt (Goldfish und/oder Kampfmodell)

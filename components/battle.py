@@ -655,7 +655,8 @@ def _discounted(card, d, p=None):
     extra = 0 if card.behold_jace and has_jace(p) else card.extra_cost  # Countersculpt: "behold a Jace or pay {1}"
     change = (0 if card.is_creature else d) - extra
     if card.is_planeswalker and p is not None:  # Tam, the Possibility
-        change += sum(c.card.pw_discount for c in p.creatures if not c.dead) + sum(c.pw_discount for c in p.perms)
+        change += sum(c.card.pw_discount for c in p.creatures if not c.dead) + sum(c.pw_discount + c.memorial_pw_mana
+                                                                                    for c in p.perms)
     if not change:
         return card
     if change > 0:
@@ -3178,7 +3179,30 @@ def discard(p, n, e):
 
 
 def cast_removal(card, caster, victim, e, step, target=None):
-    """Wirkung des Removals von card (Card.removal) gegen victim. Gestorbene Kreaturen kommen in den Friedhof."""
+    """Wirkung des Removals von card (Card.removal) gegen victim. Gestorbene Kreaturen kommen in den Friedhof.
+    Empower X: Overwrite the Multiverse zaehlt die exilierten Kreaturen beider Seiten, Violent Echoes den Schaden
+    ueber die restliche Toughness bzw. Loyalty hinaus (120.4a)."""
+    if not card.empower_x:
+        return _cast_removal(card, caster, victim, e, step, target)
+    sides = (caster, victim)
+    alive = [c for p in sides for c in p.creatures if not c.dead]
+    left = {id(c): (c.toughness - c.damage, c.damage) for c in victim.creatures if not c.dead}
+    loyal = {id(w): w.loyalty for w in victim.walkers}
+    out = _cast_removal(card, caster, victim, e, step, target)
+    gone = [c for c in alive if c.dead or not any(c is x for p in sides for x in p.creatures)]
+    if card.empower_x == "exiled":
+        x = len(gone)
+    else:
+        amount = _amount(card.removal, caster)
+        x = max([amount - left[id(c)][0] for c in victim.creatures + gone
+                 if id(c) in left and (c.damage != left[id(c)][1] or c in gone)]
+                + [amount - loyal[id(w)] for w in victim.walkers if id(w) in loyal and w.loyalty != loyal[id(w)]]
+                + [0])
+    _jace_add(caster, x, e)
+    return out
+
+
+def _cast_removal(card, caster, victim, e, step, target=None):
     spec = card.removal
     if not spec:
         return
@@ -3684,8 +3708,14 @@ def card_effects(me, opp, card, step, entry, modes=None):
     if effects.modes:
         board, bonus, pump = me.board()
         before = [c.pump for c in me.creatures]
+        marks = [c.bonus for c in me.creatures]
         gain = apply_effects(effects, board, bonus, pump, step)
         me.write_back(bonus, pump)
+        if card.grant_kw or card.untap_target:  # "It gains ... / Untap it": die Kreatur mit Marken bzw. Pump
+            hit = next((c for c, p_, b_ in zip(me.creatures, before, marks) if c.pump > p_ or c.bonus > b_), None)
+            if hit is not None:
+                hit.extra |= set(card.grant_kw)
+                hit.tapped = hit.tapped and not card.untap_target
         ratio = _tough_ratio(card)
         for c, old in zip(me.creatures, before):  # Pumps +P/+T: Toughness im Verhaeltnis T/P
             if c.pump > old:
@@ -3921,6 +3951,8 @@ def combat_tricks(p, pairs, opp, e, step, attacking):
             on_cast(p, card, step, e)
             continue
         _apply_trick(best[1], own[best[2]], own, best[3], best[4])
+        if card.untap_target:  # Tethermage's Advantage: "Untap it"
+            own[best[2]].tapped = False
         if card.is_creature:
             p.creatures.append(Creature(card, step))
             creature_enters(p, p.creatures[-1], step, e, opp)
@@ -5150,6 +5182,23 @@ def take_turn(me, opp, step, rnd, skip_draw):
     for u, _i in creature_units:
         if u in rest:
             rest.remove(u)
+    crafters = [c for c in me.creatures if c.card.restricted_mana and not c.tapped and not c.dead
+                and (c.entered < step or c.has("haste"))]
+    if crafters:  # Heartwood Crafter: sein {C} nur fuer Kopien (nicht fuer Zauber aus der Hand)
+        left = Counter(cost(c) for c in copies(me)) - Counter(c for c in chosen if c.is_copy)
+        for cp in left.elements():
+            for k in range(1, len(crafters) + 1):
+                paid = pay(rest + [u for c in crafters[:k] for u in c.card.restricted_mana], cp.alts)
+                if paid is not None:
+                    for c in crafters[:k]:
+                        c.tapped = True
+                    crafters = crafters[k:]
+                    rest = paid  # k ist minimal: das Crafter-Mana ist verbraucht
+                    chosen.append(cp)
+                    e["events"].append(f"{me.name}: {cp.name} mit dem Mana von Heartwood Crafter")
+                    break
+            if not crafters:
+                break
     me.open = rest
     me.ward_budget = sum(ward_of.get(c, 0) for c in chosen if ward_of.get(c, 0) < 99)
     chosen = [c if c.is_copy else hand_form(c, me.hand) if c not in me.hand else c for c in chosen]

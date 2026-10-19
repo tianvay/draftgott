@@ -153,8 +153,8 @@ class CategoryTests(unittest.TestCase):
         self.assertEqual(metrics_of(found), {M_LETHAL})
 
     def test_empower_with_variable_amount_is_flagged(self):
-        card = sc(text="Whenever this creature attacks, empower Jace X, where X is the number of creatures you control.",
-                  keywords=["Empower Jace"])
+        card = sc(text="Whenever this creature attacks, empower Jace X, where X is the number of cards in your hand.",
+                  keywords=["Empower Jace"])  # X nach eigenen Kreaturen (Repurposed Enforcer) ist modelliert
         self.assertIn("Empower Jace (Wert nicht modelliert)", cats(card))
 
     def test_conditional_land_with_unparsed_condition_is_flagged(self):

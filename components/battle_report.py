@@ -295,6 +295,12 @@ RULES = [
     "Friedhof bis Manawert 6 (Removal mit Ziel zuerst, dann der höchste Manawert, dann Kreaturen; bleibende Karten werden "
     "Token). Codie kopiert jeden gewirkten prepared-Zauber. Fblthp, Impossibly Lost zieht nach Kampfschaden im eigenen "
     "Zug zwei, gewinnt bei leerer Bibliothek und wird in die Bibliothek gemischt.",
+    "FRA-Paket F: „It gains …“ nach Marken (Konstrari Charm: Trample, Tam's Resistance: Vigilance) und „Untap it“ "
+    "(Tethermage's Advantage) wirken auf die Kreatur, die die Marken bzw. den Pump bekommt; Overwrite the Multiverse "
+    "gibt Empower X für alle exilierten Kreaturen, Violent Echoes für den Schaden über die restliche Toughness bzw. "
+    "Loyalty hinaus; Avatar of Burgeoning Echoes gibt bei jedem eigenen Landdrop Empower 2; das {C} von Heartwood "
+    "Crafter bezahlt nur Prepared-Kopien; Gideon's Memorial macht Planeswalker-Zauber um {1} billiger (sein Mana zählt "
+    "nur für sie).",
     "Echte Planeswalker (L2): kommen mit ihrer aufgedruckten Loyalty (306.5b), eine Loyalty-Fähigkeit pro Zug "
     "(606.3), Minus-Kosten nur mit genug Loyalty (606.6), −X so groß wie möglich ohne zu sterben, Tod bei 0 "
     "(704.5i, mit Sanctum Lurker nicht); aus dem Friedhof aufs Feld zurück als neues Objekt mit voller Loyalty "
