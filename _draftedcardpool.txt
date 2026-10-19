@@ -1,40 +1,42 @@
 Deck
-1 Curse-Marred Demon (FRA) 79
-1 Extended Absence (FRA) 54
-1 Vindictive Triumph (FRA) 162
-2 Silence the Echo (FRA) 66
-1 Screeching Soulbreaker (FRA) 65
-1 Way of the Warlord (FRA) 255
-3 Hallway Heckler (FRA) 85
-1 Proft, Sinister Mastermind (FRA) 235
-2 Archive Arbiter (FRA) 167
-1 Apex Witchstalker (FRA) 48
-1 Way of the Pyromancer (FRA) 254
-1 Twisted Fates (FRA) 158
-1 Face Yourself (FRA) 83
-1 Rewrite Regrets (FRA) 62
-1 Winter, Tormented Loner (FRA) 240
-1 Gallia, Tragic Host (FRA) 228
-1 Lich's Relic (FRA) 57
-2 Wrath of the Bloodmane (FRA) 96
-1 Break Under Pressure (FRA) 50
-1 Grim Repriser (FRA) 136
-1 Warrior's Blades (FRA) 163
-3 Plains (SPM) 194
-7 Swamp (SPM) 196
-7 Mountain (SPM) 197
+1 No Admittance (FRA) 89
+1 Gallia, the Merrymaker (FRA) 245
+2 Fulminous Forte (FRA) 84
+1 Infinite Coursework (FRA) 31
+2 Mindseeker Oculus (FRA) 33
+1 Craftwork Crusher (FRA) 127
+1 Innovative Commons (FRA) 182
+1 Fblthp, Impossibly Lost (FRA) 213
+1 Way of the Mind Sculptor (FRA) 224
+1 Sphinx of False Conclusions (FRA) 40
+1 Prudent Fateseer (FRA) 146
+1 Plan for All Outcomes (FRA) 35
+1 Konstrari Improviser (FRA) 139
+1 Woodwork Prodigy (FRA) 165
+1 Room of Refuge (FRA) 188
+1 Konstrari Annex (FRA) 183
+1 Wrath of the Bloodmane (FRA) 96
+1 Surveillance Phantasm (FRA) 42
+1 Twinned Vision (FRA) 157
+1 Cryotheory Adept (FRA) 27
+1 Koth, the Geomancer (FRA) 248
+6 Island (SPM) 195
+5 Mountain (SPM) 197
+3 Forest (SPM) 198
+1 Vinelasher Adept (FRA) 119
+1 Inspired Tethermage (FRA) 109
+1 Theorix Metamage (FRA) 156
 
 Sideboard
-1 Rank Rat (FRA) 61
-1 Graft Surgeon (FRA) 10
-1 Terminal Criticism (FRA) 68
-1 Aerid Konstrari (FRA) 121
-1 Mind Meanderer (FRA) 141
-1 Way of the Cryomancer (FRA) 223
+1 Surgical Precision (FRA) 22
+2 Something Worth Saving (FRA) 114
+1 Budding Insurgent (FRA) 99
+1 Rampart Hunter (FRA) 60
+1 Cast Away Doubt (FRA) 51
+1 Ferocity of the Hunt (FRA) 134
+1 Multiply by Zero (FRA) 58
+1 Blessed Ghoul (FRA) 123
+1 Necrodominance (SPG) 0
 1 Blazing Crescendo (FRA) 75
-1 Koth, the Geomancer (FRA) 248
-1 Void Extrapolator (FRA) 70
-2 Tomik, Izzet Sparkmage (FRA) 253
-1 Marwyn, the Clearcutter (FRA) 249
-1 Unflinching Hortimancer (FRA) 23
-1 Unsummon (FRA) 46
+2 Artifist Acumen (FRA) 73
+1 Danitha, Spear of Agony (FRA) 227
