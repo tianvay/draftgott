@@ -139,7 +139,7 @@ Eine andere Datei geht so: `python mtg_sim.py --drafthelper meinpool.txt`.
   Nicht-Standardland passt nur, wenn alle seine Farben im Deck sind; mindestens 3 Quellen je verlangter Farbe, der Rest
   nach Hypergeometrie; Länder = Zielgröße minus Zauber, begrenzt auf 15 bis 17.
 - **Kampf simulieren:** Nach dem Simulieren lassen sich die Varianten gegen ein Gegnerdeck aus dem Projektordner
-  (`_enemydeck*.txt`) antreten lassen; der Kampfbericht erscheint auf der Seite (siehe „Kampf gegen Gegnerdecks“).
+  (`_enemydeck*.txt`) antreten lassen, mit wählbarer Zahl der Kämpfe; der Kampfbericht erscheint auf der Seite (siehe „Kampf gegen Gegnerdecks“).
 - **Deckliste exportieren:** Der Button in der Kopfleiste zeigt beide Varianten im Arena/MTGO-Importformat
   (`Deck` und `Sideboard`, mit Set und Nummer), zum Kopieren oder Speichern als `draftgott_splash.txt` bzw.
   `draftgott_nosplash.txt`. Deck = Core + Gruppe der Variante + Standardländer, Sideboard = alle übrigen Karten.
@@ -495,7 +495,8 @@ und die Erklärung jedes Abschnitts stehen auf der Erklärseite „So funktionie
 stehen oben im Bericht und in der Seitenleiste.
 
 Mit `--bericht-server` (bzw. Analyse über `draftgott.bat`) hat der Bericht oben die Leiste **Kampf simulieren**:
-Gegnerdeck wählen, Kämpfe starten, der Kampfbericht öffnet sich danach.
+Gegnerdeck und Zahl der Kämpfe wählen (50, 100, 250, 500 oder 1000 je Deck und Modus; vorgewählt 500, die
+letzte Wahl merkt sich der Browser), Kämpfe starten, der Kampfbericht öffnet sich danach.
 
 ## Kampf gegen Gegnerdecks
 

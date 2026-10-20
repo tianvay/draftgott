@@ -3,6 +3,7 @@ import datetime
 import re
 from collections import Counter
 
+from components.battle_server import FIGHT_COUNTS
 from components.howitworks import render_help_view
 from components.html_base import HTML_CSS, LAYOUT_JS, LABEL_CLASS, esc, h_bar_cell, h_legend, h_level_pill, h_level_td, h_mode, h_pct, h_section, h_table, html_cost, html_mana, svg_bars, svg_lines
 from components import symbols
@@ -54,6 +55,8 @@ FIGHT_JS = """<script>
     var list=d.enemies||[];
     if(!list.length){$('fbnote').textContent='Kein Gegnerdeck gefunden (Dateien _enemydeck*.txt im Projektordner).';return}
     list.forEach(function(e){var o=document.createElement('option');o.value=e.file;o.textContent=e.name;$('fbenemy').appendChild(o)});
+    try{var n=localStorage.getItem('fbcount');if(n&&$('fbcount').querySelector('option[value="'+n+'"]'))$('fbcount').value=n}
+    catch(e){}
     $('fbnote').style.display='none';$('fbctl').style.display='inline-flex';
     if(d.quit)$('fbquit').style.display='';
   }).catch(function(){});
@@ -64,7 +67,8 @@ FIGHT_JS = """<script>
   }).catch(function(){setTimeout(poll,1500)})}
   $('fbgo').addEventListener('click',function(){
     $('fbgo').disabled=true;$('fbstatus').textContent='Kampf startet ...';
-    json('api/battle',{enemy:$('fbenemy').value}).then(function(r){
+    try{localStorage.setItem('fbcount',$('fbcount').value)}catch(e){}
+    json('api/battle',{enemy:$('fbenemy').value,games:parseInt($('fbcount').value,10)}).then(function(r){
       if(!r.ok){$('fbgo').disabled=false;$('fbstatus').textContent=r.error||'Fehler';return}
       poll()});
   });
@@ -76,6 +80,10 @@ FIGHT_BAR = ('<div class="fightbar" id="fightbar"><span id="fbnote" class="muted
              'nur möglich, solange draftgott läuft (Analyse oder Drafthelper).">Kampf: nur solange draftgott läuft</span>'
              '<span id="fbctl" style="display:none;gap:8px;align-items:center">Kampf gegen '
              '<select id="fbenemy" title="Gegnerdecks im Projektordner (_enemydeck*.txt)"></select>'
+             '<select id="fbcount" title="Kämpfe je Deck und Modus (On the Play und On the Draw); mehr Kämpfe sind '
+             'genauer, dauern aber länger">'
+             + "".join(f'<option value="{n}"' + (" selected" if n == 500 else "") + f'>{n} Kämpfe</option>'
+                       for n in FIGHT_COUNTS) + '</select>'
              '<button type="button" id="fbgo">Kampf simulieren</button><span id="fbstatus" class="muted"></span>'
              '<button type="button" id="fbquit" style="display:none">Beenden</button></span></div>')
 

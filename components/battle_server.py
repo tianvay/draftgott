@@ -6,8 +6,12 @@ start_battle(app, body, folder)   -> (HTTP-Status, Antwort): startet den Kampf d
                                      das Ergebnis steht danach in app["battle_html"], alle Spiele in app["battle_games"].
 game_fragment(app, query)         -> Protokoll eines einzelnen Spiels (Spieleliste im Kampfbericht)
 """
+import copy
 from urllib.parse import parse_qs
 from components.deckfile import parse_deck_name
+
+FIGHT_COUNTS = (50, 100, 250, 500, 1000)  # Auswahl in der Kampf-Leiste (Spiele je Modus)
+MAX_FIGHTS = 5000
 
 
 def enemy_decks(folder):
@@ -36,6 +40,16 @@ def start_battle(app, body, folder):
     if not app.get("battle"):
         return 400, {"ok": False, "error": "Kampf ist nicht verfuegbar"}
     entries, run_args = app["last_entries"], app["last_args"]
+    games = (body or {}).get("games")
+    if games is not None:  # gewaehlte Kampfzahl; die Einstellung des Berichts bleibt unveraendert
+        try:
+            games = int(games)
+        except (TypeError, ValueError):
+            games = 0
+        if not 0 < games <= MAX_FIGHTS:
+            return 400, {"ok": False, "error": f"Ungueltige Zahl der Kaempfe (1 bis {MAX_FIGHTS})"}
+        run_args = copy.copy(run_args)
+        run_args.kaempfe = games
 
     def work(progress):
         result = app["battle"](entries, str(folder / enemy), run_args, progress)
