@@ -30,7 +30,8 @@ class StartTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.folder = pathlib.Path(self.tmp.name)
-        (self.folder / "_enemydeck_walls.txt").write_text("Deck\n17 Plains\n", encoding="utf-8")
+        (self.folder / "enemydecks").mkdir()
+        (self.folder / "enemydecks" / "walls.txt").write_text("Deck\n17 Plains\n", encoding="utf-8")
         self.seen = []
         self.args = args_for(["deck.txt", "--kaempfe", "500"])
         self.app = {"last_entries": [{"name": "Wir"}], "last_args": self.args, "job": Job(),
@@ -40,21 +41,21 @@ class StartTests(unittest.TestCase):
         self.tmp.cleanup()
 
     def test_chosen_count_is_used(self):
-        code, _answer = start_battle(self.app, {"enemy": "_enemydeck_walls.txt", "games": 100}, self.folder)
+        code, _answer = start_battle(self.app, {"enemy": "walls.txt", "games": 100}, self.folder)
         self.assertEqual((code, self.seen), (200, [100]))
         self.assertEqual(self.args.kaempfe, 500)  # die Einstellung des Berichts bleibt
 
     def test_count_as_text(self):
-        start_battle(self.app, {"enemy": "_enemydeck_walls.txt", "games": "250"}, self.folder)
+        start_battle(self.app, {"enemy": "walls.txt", "games": "250"}, self.folder)
         self.assertEqual(self.seen, [250])
 
     def test_without_count_uses_the_setting(self):
-        start_battle(self.app, {"enemy": "_enemydeck_walls.txt"}, self.folder)
+        start_battle(self.app, {"enemy": "walls.txt"}, self.folder)
         self.assertEqual(self.seen, [500])
 
     def test_invalid_count(self):
         for bad in (0, -5, "viele", 100000):
-            code, answer = start_battle(self.app, {"enemy": "_enemydeck_walls.txt", "games": bad}, self.folder)
+            code, answer = start_battle(self.app, {"enemy": "walls.txt", "games": bad}, self.folder)
             self.assertEqual((code, answer["ok"]), (400, False), bad)
         self.assertEqual(self.seen, [])
 

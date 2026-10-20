@@ -1,6 +1,6 @@
 """Gemeinsame Kampf-Schnittstelle fuer Drafthelper und Berichts-Server (Analyse).
 
-enemy_decks(folder)               -> [{"file", "name"}] fuer alle _enemydeck*.txt im Ordner
+enemy_decks(folder)               -> [{"file", "name"}] fuer alle *.txt im Unterordner enemydecks
 start_battle(app, body, folder)   -> (HTTP-Status, Antwort): startet den Kampf der Varianten des letzten Berichts
                                      (app["last_entries"], app["last_args"]) als Hintergrund-Job (app["job"]);
                                      das Ergebnis steht danach in app["battle_html"], alle Spiele in app["battle_games"].
@@ -12,17 +12,13 @@ from components.deckfile import parse_deck_name
 
 FIGHT_COUNTS = (50, 100, 250, 500, 1000)  # Auswahl in der Kampf-Leiste (Spiele je Modus)
 MAX_FIGHTS = 5000
+ENEMY_DIR = "enemydecks"  # Gegnerdecks liegen im Unterordner enemydecks des Projektordners
 
 
 def enemy_decks(folder):
     out = []
-    for p in sorted(folder.glob("_enemydeck*.txt")):
-        stem = p.stem
-        for prefix in ("_enemydeck_", "_enemydeck"):
-            if stem.startswith(prefix):
-                stem = stem[len(prefix):]
-                break
-        fallback = stem.replace("_", " ").strip() or p.stem
+    for p in sorted((folder / ENEMY_DIR).glob("*.txt")):
+        fallback = p.stem.replace("_", " ").strip() or p.stem
         try:
             name = parse_deck_name(p.read_text(encoding="utf-8"), fallback)
         except OSError:
@@ -52,7 +48,7 @@ def start_battle(app, body, folder):
         run_args.kaempfe = games
 
     def work(progress):
-        result = app["battle"](entries, str(folder / enemy), run_args, progress)
+        result = app["battle"](entries, str(folder / ENEMY_DIR / enemy), run_args, progress)
         html, games = result if isinstance(result, tuple) else (result, {})
         app["battle_html"], app["battle_games"] = html, games
         if app.get("save_battle"):

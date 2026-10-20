@@ -110,7 +110,7 @@ def load_pool(path, refresh=False):
 
 
 def enemy_decks():
-    """Gegnerdecks im Projektordner (_enemydeck*.txt): [{"file", "name"}] (siehe battle_server)."""
+    """Gegnerdecks im Ordner enemydecks: [{"file", "name"}] (siehe battle_server)."""
     return _enemy_decks(SCRIPT_DIR)
 
 

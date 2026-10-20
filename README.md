@@ -7,7 +7,7 @@ Es gibt drei Teile:
 
 - **Goldfish-Simulation und Bericht:** Das Deck spielt allein (ohne Gegner) und wird nach Mana, Tempo, Schaden,
   Mulligans und vielem mehr ausgewertet (siehe „Was im Bericht steht“).
-- **Kampfmodell und Kampfbericht:** Das Deck spielt gegen Gegnerdecks (`_enemydeck*.txt`) mit Leben, Angriff,
+- **Kampfmodell und Kampfbericht:** Das Deck spielt gegen Gegnerdecks (Ordner `enemydecks`) mit Leben, Angriff,
   Blocks, Removal, Instants und vielen Kartenmechaniken. Ergebnis ist die Siegquote mit Protokollen einzelner
   Spiele (siehe „Kampf gegen Gegnerdecks“).
 - **Drafthelper:** Eine Kartenseite für den Draft-Pool, auf der Varianten zusammengestellt, simuliert und gegen
@@ -140,7 +140,7 @@ Eine andere Datei geht so: `python mtg_sim.py --drafthelper meinpool.txt`.
   Nicht-Standardland passt nur, wenn alle seine Farben im Deck sind; mindestens 3 Quellen je verlangter Farbe, der Rest
   nach Hypergeometrie; Länder = Zielgröße minus Zauber, begrenzt auf 15 bis 17.
 - **Kampf simulieren:** Nach dem Simulieren lassen sich die Varianten gegen ein Gegnerdeck aus dem Projektordner
-  (`_enemydeck*.txt`) antreten lassen, mit wählbarer Zahl der Kämpfe; der Kampfbericht erscheint auf der Seite (siehe „Kampf gegen Gegnerdecks“).
+  (Ordner `enemydecks`) antreten lassen, mit wählbarer Zahl der Kämpfe; der Kampfbericht erscheint auf der Seite (siehe „Kampf gegen Gegnerdecks“).
 - **Deckliste exportieren:** Der Button in der Kopfleiste zeigt beide Varianten im Arena/MTGO-Importformat
   (`Deck` und `Sideboard`, mit Set und Nummer), zum Kopieren oder Speichern als `draftgott_splash.txt` bzw.
   `draftgott_nosplash.txt`. Deck = Core + Gruppe der Variante + Standardländer, Sideboard = alle übrigen Karten.
@@ -295,7 +295,7 @@ Aktivierung pro Runde sind fest im Skript (siehe „Feste Annahmen“).
 
 | Parameter | Standard | Wirkung |
 |---|---|---|
-| `--gegner DATEI` | keiner | Kampf gegen dieses Gegnerdeck simulieren (z. B. `_enemydeck_bad_creatures.txt`), mehrfach angeben möglich. Der Goldfish-Bericht bleibt unverändert, der Kampf kommt in einen eigenen Bericht. |
+| `--gegner DATEI` | keiner | Kampf gegen dieses Gegnerdeck simulieren (z. B. `bad_creatures.txt` aus dem Ordner `enemydecks`), mehrfach angeben möglich. Der Goldfish-Bericht bleibt unverändert, der Kampf kommt in einen eigenen Bericht. |
 | `--bericht-server` | aus | Zeigt den Bericht über einen lokalen Server statt nur als Datei, damit „Kampf simulieren“ im Bericht funktioniert. Das Programm läuft, bis es im Bericht beendet wird. |
 | `--kampf-ausgabe DATEI` | `mtg_kampf.html` | Name des Kampfberichts. |
 | `--kaempfe N` | `500` | Kämpfe je Deck und Modus (On the Play / On the Draw) gegen jedes Gegnerdeck. |
@@ -333,7 +333,7 @@ python mtg_sim.py deck.txt --schaden 15 --flood 10
 python mtg_sim.py deck.txt --turns 4 --curve-runden 8
 
 # Kampf gegen zwei Gegnerdecks mit je 1000 Kämpfen pro Modus
-python mtg_sim.py deck.txt --gegner _enemydeck_bad_creatures.txt --gegner _enemydeck_hard_whiteblue_creatures.txt --kaempfe 1000
+python mtg_sim.py deck.txt --gegner bad_creatures.txt --gegner hard_whiteblue_creatures.txt --kaempfe 1000
 
 # Was bringt Jace? Zwei Berichte vergleichen
 python mtg_sim.py deck.txt --sims 5000 --ausgabe mit_jace.html
@@ -501,9 +501,9 @@ letzte Wahl merkt sich der Browser), Kämpfe starten, der Kampfbericht öffnet s
 
 ## Kampf gegen Gegnerdecks
 
-Gegnerdecks sind Deckdateien im Projektordner, deren Name mit `_enemydeck` beginnt (z. B.
-`_enemydeck_bad_creatures.txt`, `_enemydeck_hard_whiteblue_creatures.txt`). Angezeigt wird die Zeile `Name` aus der
-Datei, sonst der Dateiname ohne `_enemydeck_`. Gestartet wird der Kampf mit `--gegner`, über „Kampf simulieren“ im
+Gegnerdecks sind Deckdateien im Ordner `enemydecks` des Projektordners (z. B. `enemydecks/bad_creatures.txt`,
+`enemydecks/hard_whiteblue_creatures.txt`). Angezeigt wird die Zeile `Name` aus der Datei, sonst der Dateiname. Bei
+`--gegner` reicht der Dateiname (auch ohne `.txt`). Gestartet wird der Kampf mit `--gegner`, über „Kampf simulieren“ im
 Bericht (mit `--bericht-server`) oder im Drafthelper.
 
 **Kampfbericht:** Siegquote je Gegner und Variante (Play / Draw) als Kacheln und in der Seitenleiste, eine Übersicht

@@ -54,7 +54,8 @@ class ServerTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         folder = pathlib.Path(self.tmp.name)
-        (folder / "_enemydeck_walls.txt").write_text("Deck\n17 Plains\n", encoding="utf-8")
+        (folder / "enemydecks").mkdir()
+        (folder / "enemydecks" / "walls.txt").write_text("Deck\n17 Plains\n", encoding="utf-8")
         self.calls = []
 
         def fake_battle(entries, enemy_path, args, progress):
@@ -88,17 +89,17 @@ class ServerTests(unittest.TestCase):
         self.assertIn("BERICHT", self.get("/"))
         self.assertIn("BERICHT", self.get("/report"))
         answer = json.loads(self.get("/api/enemies"))
-        self.assertEqual([e["file"] for e in answer["enemies"]], ["_enemydeck_walls.txt"])
+        self.assertEqual([e["file"] for e in answer["enemies"]], ["walls.txt"])
         self.assertTrue(answer["quit"])  # Analyse-Server: Knopf "Beenden" im Bericht
 
     def test_battle(self):
-        self.assertTrue(self.post("/api/battle", {"enemy": "_enemydeck_walls.txt"})["ok"])
+        self.assertTrue(self.post("/api/battle", {"enemy": "walls.txt"})["ok"])
         for _ in range(100):
             if json.loads(self.get("/api/status"))["state"] != "running":
                 break
             time.sleep(0.05)
         self.assertIn("KAMPFBERICHT", self.get("/battle"))
-        self.assertEqual(self.calls[0][1], "_enemydeck_walls.txt")
+        self.assertEqual(self.calls[0][1], "walls.txt")
 
 
 class CliAndLauncherTests(unittest.TestCase):

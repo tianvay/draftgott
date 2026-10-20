@@ -135,7 +135,8 @@ class GameEndpointTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         folder = pathlib.Path(self.tmp.name)
-        (folder / "_enemydeck_walls.txt").write_text("Deck\n17 Plains\n", encoding="utf-8")
+        (folder / "enemydecks").mkdir()
+        (folder / "enemydecks" / "walls.txt").write_text("Deck\n17 Plains\n", encoding="utf-8")
         random.seed(7)
         games = {(0, 0, "play"): bt.battle(ME, THEM, 5, on_draw=False)["results_all"]}
 
@@ -160,7 +161,7 @@ class GameEndpointTests(unittest.TestCase):
             return r.read().decode("utf-8")
 
     def test_protocol_on_demand(self):
-        req = urllib.request.Request(self.base + "/api/battle", data=json.dumps({"enemy": "_enemydeck_walls.txt"})
+        req = urllib.request.Request(self.base + "/api/battle", data=json.dumps({"enemy": "walls.txt"})
                                      .encode(), headers={"Content-Type": "application/json"})
         urllib.request.urlopen(req, timeout=10).read()
         for _ in range(100):

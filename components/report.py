@@ -53,7 +53,7 @@ FIGHT_JS = """<script>
   if(location.protocol.indexOf('http')!==0)return;  // direkt geoeffnete Datei: nur der Hinweis
   json('api/enemies').then(function(d){
     var list=d.enemies||[];
-    if(!list.length){$('fbnote').textContent='Kein Gegnerdeck gefunden (Dateien _enemydeck*.txt im Projektordner).';return}
+    if(!list.length){$('fbnote').textContent='Kein Gegnerdeck gefunden (Dateien *.txt im Ordner enemydecks).';return}
     list.forEach(function(e){var o=document.createElement('option');o.value=e.file;o.textContent=e.name;$('fbenemy').appendChild(o)});
     try{var n=localStorage.getItem('fbcount');if(n&&$('fbcount').querySelector('option[value="'+n+'"]'))$('fbcount').value=n}
     catch(e){}
@@ -79,7 +79,7 @@ FIGHT_JS = """<script>
 FIGHT_BAR = ('<div class="fightbar" id="fightbar"><span id="fbnote" class="muted" title="Kampf gegen ein Gegnerdeck ist '
              'nur möglich, solange draftgott läuft (Analyse oder Drafthelper).">Kampf: nur solange draftgott läuft</span>'
              '<span id="fbctl" style="display:none;gap:8px;align-items:center">Kampf gegen '
-             '<select id="fbenemy" title="Gegnerdecks im Projektordner (_enemydeck*.txt)"></select>'
+             '<select id="fbenemy" title="Gegnerdecks im Ordner enemydecks"></select>'
              '<select id="fbcount" title="Kämpfe je Deck und Modus (On the Play und On the Draw); mehr Kämpfe sind '
              'genauer, dauern aber länger">'
              + "".join(f'<option value="{n}"' + (" selected" if n == 500 else "") + f'>{n} Kämpfe</option>'

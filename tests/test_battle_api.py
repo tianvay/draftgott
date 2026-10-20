@@ -20,8 +20,9 @@ class BattleApiTests(unittest.TestCase):
         cards, basics, sig = load()
         self.tmp = tempfile.TemporaryDirectory()
         folder = pathlib.Path(self.tmp.name)
-        (folder / "_enemydeck_test_walls.txt").write_text("Deck\n17 Plains\n23 Test Bear\n", encoding="utf-8")
-        (folder / "_enemydeck_other.txt").write_text("Name Andere\nDeck\n17 Plains\n", encoding="utf-8")
+        (folder / "enemydecks").mkdir()
+        (folder / "enemydecks" / "test_walls.txt").write_text("Deck\n17 Plains\n23 Test Bear\n", encoding="utf-8")
+        (folder / "enemydecks" / "other.txt").write_text("Name Andere\nDeck\n17 Plains\n", encoding="utf-8")
         (folder / "notes.txt").write_text("kein Gegner", encoding="utf-8")
         self.calls = []
 
@@ -72,13 +73,13 @@ class BattleApiTests(unittest.TestCase):
 
     def test_enemy_decks_are_listed(self):
         enemies = json.loads(self.get("/api/enemies"))["enemies"]
-        self.assertEqual({e["file"] for e in enemies}, {"_enemydeck_test_walls.txt", "_enemydeck_other.txt"})
+        self.assertEqual({e["file"] for e in enemies}, {"test_walls.txt", "other.txt"})
         names = {e["file"]: e["name"] for e in enemies}
-        self.assertEqual(names["_enemydeck_test_walls.txt"], "test walls")
-        self.assertEqual(names["_enemydeck_other.txt"], "Andere")
+        self.assertEqual(names["test_walls.txt"], "test walls")
+        self.assertEqual(names["other.txt"], "Andere")
 
     def test_battle_needs_a_report_first(self):
-        status, answer = self.post("/api/battle", {"enemy": "_enemydeck_test_walls.txt"})
+        status, answer = self.post("/api/battle", {"enemy": "test_walls.txt"})
         self.assertEqual(status, 400)
         self.assertIn("zuerst", answer["error"])
 
@@ -91,14 +92,14 @@ class BattleApiTests(unittest.TestCase):
         entries = [{"name": "Splash", "deck": {"Plains": 17}}, {"name": "NoSplash", "deck": {"Plains": 17}}]
         self.app["last_entries"], self.app["last_args"] = entries, self.app["args"]
         self.app["report_html"] = "<p>GOLDFISH</p>"
-        status, answer = self.post("/api/battle", {"enemy": "_enemydeck_test_walls.txt"})
+        status, answer = self.post("/api/battle", {"enemy": "test_walls.txt"})
         self.assertEqual((status, answer["ok"]), (200, True))
         self.assertEqual(self.wait()["state"], "done")
         self.assertIn("KAMPFBERICHT", self.get("/battle"))
         self.assertIn("GOLDFISH", self.get("/report"))  # der normale Bericht bleibt
         used_entries, enemy_file, _args = self.calls[0]
         self.assertEqual([e["name"] for e in used_entries], ["Splash", "NoSplash"])
-        self.assertEqual(enemy_file, "_enemydeck_test_walls.txt")
+        self.assertEqual(enemy_file, "test_walls.txt")
 
     def test_battle_controls_are_in_the_report_not_in_the_page(self):
         page = self.get("/")

@@ -46,7 +46,7 @@ def parse_args(argv=None):
     ap.add_argument("--flood", type=int, default=11,
                     help="Ab wie vielen gezogenen Laendern (bis zur Maximalrunde) gilt man als geflutet")
     ap.add_argument("--gegner", action="append", metavar="DATEI", default=None,
-                    help="Kampf simulieren gegen dieses Gegnerdeck (z. B. _enemydeck_bad_creatures.txt); mehrfach "
+                    help="Kampf simulieren gegen dieses Gegnerdeck (z. B. bad_creatures.txt aus dem Ordner enemydecks); mehrfach "
                          "angeben moeglich. Der Goldfish-Bericht bleibt unveraendert, der Kampf kommt in einen eigenen "
                          "Bericht (--kampf-ausgabe)")
     ap.add_argument("--bericht-server", action="store_true",

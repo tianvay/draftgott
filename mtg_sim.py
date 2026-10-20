@@ -26,6 +26,7 @@ from components.symbols import fetch_symbols
 from components.cards import card_info
 from components.cardkinds import card_colors, empower_points, flow_kinds, type_kinds
 from components.coverage import analyze_card
+from components.battle_server import ENEMY_DIR
 from components.deckfile import parse_deck, parse_deck_name, split_label
 from components.jace import analyze_jace
 from components.mana import double_pip_colors, pip_checks, required_colors
@@ -137,21 +138,20 @@ def entries_from_files(args):
 
 
 def enemy_name(path):
-    """Anzeigename eines Gegnerdecks: 'Name' aus der Datei, sonst Dateiname ohne '_enemydeck_'."""
+    """Anzeigename eines Gegnerdecks: 'Name' aus der Datei, sonst der Dateiname."""
     p = pathlib.Path(path)
-    stem = p.stem
-    for prefix in ("_enemydeck_", "_enemydeck", "enemydeck_"):
-        if stem.startswith(prefix):
-            stem = stem[len(prefix):]
-    fallback = stem.replace("_", " ").strip() or p.stem
+    fallback = p.stem.replace("_", " ").strip() or p.stem
     return parse_deck_name(p.read_text(encoding="utf-8"), fallback)
 
 
 def load_enemy(path):
-    """Ein Gegnerdeck: {"name", "deck"}."""
+    """Ein Gegnerdeck: {"name", "deck"}. Gesucht wird der Pfad wie angegeben, dann im Projektordner und im Ordner
+    enemydecks (dort reicht der Dateiname, auch ohne .txt)."""
     p = pathlib.Path(path)
-    if not p.exists() and (pathlib.Path(__file__).resolve().parent / p).exists():
-        p = pathlib.Path(__file__).resolve().parent / p
+    here = pathlib.Path(__file__).resolve().parent
+    for cand in (here / p, here / ENEMY_DIR / p, here / ENEMY_DIR / (p.name + ".txt")):
+        if not p.exists() and cand.exists():
+            p = cand
     if not p.exists():
         sys.exit(f"Gegnerdeck nicht gefunden: {path}")
     return {"name": enemy_name(p), "deck": parse_deck(p.read_text(encoding="utf-8"))}
