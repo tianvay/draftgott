@@ -22,7 +22,7 @@ from components.mulligan import deal_opening
 from components.jace import (JaceState, cast_filter_matches, enter_filter_matches, once_effects,
                              recurring_effects, surveil)
 from components.simulation import walker_rank
-from components.cards import HEARTWOOD, token_card
+from components.cards import HEARTWOOD, Card, token_card
 from components.simulation import (ANY_COLOR, apply_effects, apply_surveils, best_cast_reduced, choose_land,
                                    cost_reduction, do_cycle, enter_value, enters_prepared, free_spells, hand_form,
                                    omni_ok,
@@ -117,15 +117,40 @@ class Creature:
             base += sum(1 for g in self.gy if any(getattr(g, _GY_TYPES[t], False) for t in self.card.gy_power))
         if self.card.domain_power and self.ctl is not None:
             base += len({t for land in self.ctl.lands for t in land.land_types} & BASIC_TYPES)
-        return base + self._threshold() + sum(g.equip[1] for g in self.gear) + self._emblem(1) \
+        base += self._threshold() + sum(g.equip[1] for g in self.gear) + self._emblem(1) \
             - sum(d[0] for d in self.lasting) + self._gy_power() + self._token_bonus() + self._goyf() \
             + sum(a.aura_pump[0] for a in self.auras if a.aura_pump)
+        p = self.ctl
+        if p is not None and (self.card.cond_static or (p.statics or _statics(p))[0]):  # selten: nur dann rechnen
+            base += sum(s[2] for s in self._cond())
+        return base
 
     @property
     def toughness(self):
-        return self.card.toughness + self.bonus + self.tpump + self._threshold() + sum(g.equip[2] for g in self.gear) \
+        out = self.card.toughness + self.bonus + self.tpump + self._threshold() + sum(g.equip[2] for g in self.gear) \
             + self._emblem(2) - sum(d[1] for d in self.lasting) + (self._goyf() + 1 if self.card.goyf else 0) \
             + sum(a.aura_pump[1] for a in self.auras if a.aura_pump)
+        p = self.ctl
+        if p is not None and (self.card.cond_static or (p.statics or _statics(p))[0]):
+            out += sum(s[3] for s in self._cond())
+        return out
+
+    def _cond(self):
+        """Bedingte statische Faehigkeiten, die gerade fuer diese Kreatur gelten: eigene ("self") und von eigenen
+        Kreaturen und Permanents ("team", Thornfist Striker), z. B. Infusion oder "as long as you control another
+        Goblin"."""
+        p = getattr(self, "ctl", None)
+        if p is None:
+            return ()
+        own = self.card.cond_static
+        team = (p.statics or _statics(p))[0]
+        if not own and not team:
+            return ()
+        out = [s for s in own if s[1] == "self" and _cond_met(p, s[0], self)]
+        for src, card in team:
+            if src is None or not src.dead:
+                out += [s for s in card.cond_static if s[1] == "team" and _cond_met(p, s[0], src)]
+        return out
 
     def _gy_power(self):
         """Threshold +N/+0 (Theorix Metamage) und +N/+0 je volle 7 Karten im Friedhof (Dark Matter Manipulator)."""
@@ -208,6 +233,12 @@ class Creature:
             return True
         if keyword in card.noncombat_kw and p.dealt_direct > p.direct_mark:
             return True
+        st = p.statics or _statics(p)
+        if (card.cond_static or st[0]) and any(keyword in s[4] for s in self._cond()):  # Bolg's Company, Thornfist
+            return True
+        if self.bonus > 0 and st[1] and any(keyword in kws for src, kws in st[1]
+                                            if src is None or not src.dead):  # Training Regimen
+            return True
         if any(keyword in card.team_kw_all for card in p.perms):  # Ajani's Anguish
             return True
         for c in p.creatures:
@@ -247,6 +278,67 @@ class Creature:
 
     def label(self):
         return f"{self.card.name} ({self.power}/{self.toughness})"
+
+
+class TrackedList(list):
+    """Liste, die bei jeder Aenderung den Zwischenspeicher ihres Spielers (Player.statics) loescht."""
+    __slots__ = ("owner",)
+
+    def __init__(self, items=(), owner=None):
+        super().__init__(items)
+        self.owner = owner
+
+
+def _tracked(name):
+    base = getattr(list, name)
+
+    def method(self, *args):
+        if self.owner is not None:
+            self.owner.statics = None
+        return base(self, *args)
+    method.__name__ = name
+    return method
+
+
+for _name in ("append", "extend", "insert", "remove", "pop", "clear", "sort", "reverse", "__setitem__",
+              "__delitem__", "__iadd__", "__imul__"):
+    setattr(TrackedList, _name, _tracked(_name))
+
+
+def _statics(p):
+    """Zwischengespeichert in p.statics, bis sich Kreaturen oder Permanents aendern (TrackedList): (Quellen mit
+    Team-Statik [(Kreatur oder None, Karte)], Quellen mit Schluesselwoertern fuer Kreaturen mit Marke
+    [(Kreatur oder None, kw)])."""
+    cards = [(c, c.card) for c in p.creatures] + [(None, x) for x in p.perms if isinstance(x, Card)]
+    p.statics = ([(c, card) for c, card in cards if any(st[1] == "team" for st in card.cond_static)],
+                 [(c, card.counter_kw) for c, card in cards if card.counter_kw])
+    return p.statics
+
+
+def static_sources(p):
+    """(Kreatur oder None, Karte) fuer alle lebenden eigenen Kreaturen und Nichtkreatur-Permanents mit Karte."""
+    out = [(c, c.card) for c in p.creatures if not c.dead]
+    return out + [(None, x) for x in p.perms if isinstance(x, Card)]
+
+
+def _cond_met(p, cond, src):
+    """Bedingung einer bedingten Statik fuer die Quelle src (Kreatur oder None)."""
+    kind = cond[0]
+    if kind == "gained":  # Infusion: in diesem Zug Leben gewonnen
+        return p.gained > 0
+    if kind == "another":  # "as long as you control another Goblin"
+        return any(c is not src and not c.dead and cond[1] in c.card.creature_types for c in p.creatures)
+    if kind == "gy_creatures":
+        return sum(1 for c in p.graveyard if c.is_creature) >= cond[1]
+    return False
+
+
+def ward_of(c):
+    """Ward der Kreatur (702.21): eigenes oder von Ausruestung/Aura verliehenes ("has ward {N}")."""
+    if c.card.ward:
+        return c.card.ward
+    n = max([g.grant_ward for g in c.gear] + [a.grant_ward for a in c.auras] + [0])
+    return ("mana", n) if n else ()
 
 
 def _defender_ok(c):
@@ -323,7 +415,8 @@ def resolve_combat(pairs):
             target.touched = target.touched or dt
         for att, blockers in pairs:
             for c in [att] + list(blockers):
-                if not c.dead and (c.damage >= c.toughness or (c.touched and c.damage > 0)):
+                if not c.dead and (c.damage >= c.toughness or (c.touched and c.damage > 0)) \
+                        and not c.has("indestructible"):  # 702.12b
                     c.dead = True
     return out
 
@@ -528,7 +621,18 @@ class Walker:
         return f"{self.card.name} (Loyalty {self.loyalty})"
 
 
+def _set_tracked(attr):
+    def setter(self, value):
+        self.statics = None
+        setattr(self, attr, TrackedList(value, self))
+    return setter
+
+
 class Player:
+    creatures = property(lambda self: self._creatures, _set_tracked("_creatures"))
+    perms = property(lambda self: self._perms, _set_tracked("_perms"))
+    statics = None  # Zwischenspeicher fuer _statics
+
     def __init__(self, name, cards, mulligan=True, min_hand=5, never_concede=False):
         self.name = name
         hand, library, mulls, _reasons = deal_opening(cards, mulligan, min_hand, keep_at_min=never_concede)
@@ -767,7 +871,7 @@ def hexproof(c):
 def ward_ok(caster, c):
     """Kann caster die Ward-Kosten von c zahlen (702.21)? Mana aus dem offenen Mana (plus eingeplantem Ward-Mana)
     bzw. beim Planen aus dem Mana des Zugs; "Discard a card" mit einer Handkarte."""
-    w = c.card.ward
+    w = ward_of(c)
     if not w:
         return True
     if w[0] == "discard":
@@ -780,7 +884,7 @@ def ward_ok(caster, c):
 
 def pay_ward(caster, c, e):
     """Zahlt die Ward-Kosten von c (vorher mit ward_ok geprueft)."""
-    w = c.card.ward
+    w = ward_of(c)
     if not w:
         return True
     if w[0] == "discard":
@@ -819,7 +923,7 @@ def ward_plan(me, opp, card, pool):
     if rest is None:
         return 0
     for t in cands:
-        w = t.card.ward
+        w = ward_of(t)
         if not w:
             return 0
         if w[0] == "discard":
@@ -920,6 +1024,8 @@ def valid_targets(spec, caster, victim, ward=True):
     kind = spec[0]
     out = [c for c in victim.creatures if not c.dead and (kind != "lock" or not c.locked) and _matches(spec[2], c)
            and not hexproof(c) and (not ward or ward_ok(caster, c))]
+    if kind in ("destroy", "damage", "fight"):  # 702.12b: zerstoeren und toedlicher Schaden wirken nicht
+        out = [c for c in out if not c.has("indestructible")]
     if kind in ("damage", "minus", "counters"):
         amount = _amount(spec, caster)
         out = [c for c in out if c.toughness - c.damage <= amount or (c.touched and amount > 0)]
@@ -1671,7 +1777,8 @@ def walker_options(p, opp, step, phase, pool=None, spells=None):
                                 any(not c.dead for c in p.creatures), tokens=True)
         if "bolt" in kinds and opp is not None:
             cdmg, fdmg = next(a[1:] for a in atoms if a[0] == "bolt")
-            kill = [c for c in alive_opp if not hexproof(c) and ward_ok(p, c) and c.toughness - c.damage <= cdmg]
+            kill = [c for c in alive_opp if not hexproof(c) and ward_ok(p, c) and c.toughness - c.damage <= cdmg
+                    and not c.has("indestructible")]
             if rank < 7 and phase in ("start", "main1"):  # vor dem Kampf (Feld wie in Main 1)
                 for t in kill:  # tötet den Blocker, der Lethal verhindert
                     t.dead = True
@@ -2505,6 +2612,130 @@ def on_cast(p, card, step, e):
                 c.bonus += c.card.target_cast_counter
                 e["events"].append(f"{p.name}: {c.card.name} +{c.card.target_cast_counter}/+"
                                    f"{c.card.target_cast_counter}")
+    cast_triggers(p, card, step, e)
+
+
+def targets_creature(card):
+    """Hat der Zauber eine Kreatur als Ziel (Repartee)? Removal mit Kreatur-Ziel (nicht "any target", kein Edikt
+    oder Massenremoval), Pumps, Marken, -N/-0 und verliehene Schluesselwoerter auf "target creature"."""
+    spec = card.removal
+    if spec and spec[0] not in ("sweep", "sweep_damage", "edict") and not spec[3]:
+        return True
+    return targets_own_creature(card) or bool(card.debuff)
+
+
+def targets_own_creature(card):
+    """Zauber, den wir auf eine eigene Kreatur wirken: Pump, Marke oder Schluesselwort auf "target creature"."""
+    if card.removal or not (card.is_instant_sorcery or card.is_aura):
+        return False
+    return bool(card.grant_kw) or any(a[0] in ("pump", "counter") for m in card.modes for a in m)
+
+
+_COLOR_WORDS = {"white": "W", "blue": "U", "black": "B", "red": "R", "green": "G"}
+_TYPE_FLAGS = {"artifact": "is_artifact", "enchantment": "is_enchantment", "instant": "is_instant",
+               "planeswalker": "is_planeswalker", "legendary": "legendary", "creature": "is_creature"}
+
+
+def cast_matches(kind, card):
+    """Passt der gewirkte Zauber zum Filter eines Ausloesers? "type:<Wort>": Farbe, Kartentyp oder Kreaturtyp
+    ("Whenever you cast a Villain spell")."""
+    if kind.startswith("type:"):
+        word = kind[5:]
+        if word in _COLOR_WORDS:
+            return _COLOR_WORDS[word] in colors_of_alts(card.alts)
+        if word in _TYPE_FLAGS:
+            return bool(getattr(card, _TYPE_FLAGS[word]))
+        return word in card.creature_types
+    return _CAST_FILTERS[kind](card)
+
+
+_CAST_FILTERS = {
+    "instsorc": lambda c: c.is_instant_sorcery,
+    "instsorc_creature": lambda c: c.is_instant_sorcery and targets_creature(c),
+    "noncreature": lambda c: not c.is_creature,
+    "creature": lambda c: c.is_creature,
+    "own_creature": targets_own_creature,
+    "multicolor": lambda c: len(colors_of_alts(c.alts)) >= 2,
+    "spell": lambda c: True,
+}
+
+
+def mana_spent(p, card):
+    """Fuer den Zauber ausgegebenes Mana (Opus): die billigste Bezahlung nach Kostensenkung."""
+    alts = _alts(p, card) or card.alts
+    return min((g + sum(n for _c, n in cols) for g, cols in alts), default=0)
+
+
+def cast_triggers(p, card, step, e):
+    """Ausloeser "Whenever you cast ..." eigener Kreaturen und Permanents (Card.cast_trig). Opus: ab 5 ausgegebenem
+    Mana die grossen Effekte statt ("instead") bzw. zusaetzlich ("also")."""
+    spent = None
+    for src, source in static_sources(p):
+        for kind, atoms, big, mode in source.cast_trig:
+            if not cast_matches(kind, card):
+                continue
+            if big or any("spent" in a for a in atoms):
+                spent = mana_spent(p, card) if spent is None else spent
+            if big and spent >= 5:
+                atoms = big if mode == "instead" else atoms + big
+            atoms = tuple(tuple(spent if x == "spent" else card.mv if x == "mv" else x for x in a) for a in atoms)
+            cast_effects(p, src, source, atoms, step, e)
+
+
+def cast_effects(p, src, source, atoms, step, e):
+    """Effekte eines Ausloesers beim Wirken; src: die ausloesende Kreatur (None bei Nichtkreatur-Permanents)."""
+    opp = p.opponent
+    alive = [c for c in p.creatures if not c.dead]
+    for atom in atoms:
+        kind = atom[0]
+        if kind in ("pump", "kw", "counter", "unblockable") and src is None:
+            continue
+        if kind == "pump":
+            src.pump += atom[1]
+            src.tpump += atom[2]
+        elif kind == "kw":
+            src.extra |= set(atom[1])
+        elif kind == "unblockable":
+            src.extra.add("unblockable")
+        elif kind == "counter":
+            src.bonus += atom[1]
+        elif kind == "counter_all":
+            for c in alive:
+                c.bonus += atom[1]
+        elif kind == "counter_others":
+            for c in alive:
+                if c is not src:
+                    c.bonus += atom[1]
+        elif kind == "target_counter":
+            pick = buff_target(p, step)
+            if pick is not None:
+                pick.bonus += atom[1]
+        elif kind == "team_pump":
+            for c in alive:
+                c.pump += atom[1]
+                c.tpump += atom[2]
+        elif kind == "face" and opp is not None:
+            deal_noncombat(p, opp, atom[1], e)
+        elif kind == "bolt" and opp is not None and atom[1] > 0:  # "any target": Regel wie bei Removal-Schaden
+            cast_removal(source._replace(removal=("damage", atom[1], (), True, "spell", False), empower_x=""),
+                         p, opp, e, step)
+        elif kind == "drain" and opp is not None:
+            opp.life -= atom[1]
+            gain_life(p, atom[2])
+        elif kind == "draw":
+            _draw(p, atom[1])
+        elif kind == "discard":
+            for _k in range(atom[1]):
+                gone = choose_discard(p)
+                if gone is not None:
+                    p.hand.remove(gone)
+                    p.graveyard.append(gone)
+                    discarded(p, e, [gone])
+        elif kind == "token":
+            make_tokens(p, [(atom[1], atom[2])], step, e, opp, source.name)
+        elif kind == "surveil":
+            surveil_cards(p, [atom[1]], e, source.name)
+    e["events"].append(f"{p.name}: {source.name} – Auslöser beim Wirken")
 
 
 def _tapped_lands(p):
@@ -2580,6 +2811,13 @@ def creature_enters(p, new, step, e, opp=None, cast=True):
         search_basics(p, x, e, card.name)
     if card.uldaros_cast and cast and opp is not None:
         uldaros_copies(p, opp, card, step, e)
+    if card.equip_token:  # Equipment-Token (Iron Hills Blacksmith, U.S.Agent, Dain Ironfoot)
+        token, attach = card.equip_token
+        p.perms.append(token)
+        e["events"].append(f"{p.name}: {card.name} – Equipment-Token {token.name}")
+        host = new if attach == "self" else gear_host(p, step) if attach == "target" else None
+        if host is not None and not host.dead:
+            attach_gear(p, token, host, e)
     if card.etb_grant:  # Teyo: Ziel vorgegeben (Antwort, Kampf) oder die gefaehrlichste eigene Kreatur, auch er selbst
         t, p.grant_target = p.grant_target, None
         if t != "done":
@@ -2897,6 +3135,14 @@ def legend_ok(p, card):
                 or any(c.name == card.name for c in p.perms) or any(w.card.name == card.name for w in p.walkers))
 
 
+def is_dying(c):
+    """Stirbt die Kreatur (704.5f/g/h)? Indestructible (702.12b): toedlicher Schaden und Deathtouch zerstoeren sie
+    nicht; Toughness 0 oder weniger, Opfern und Zerstoeren-Effekte, die sie schon markiert haben, schon."""
+    if c.dead or c.toughness <= 0:
+        return True
+    return (c.damage >= c.toughness or (c.touched and c.damage > 0)) and not c.has("indestructible")
+
+
 def bury(players, e):
     """Gestorbene Kreaturen in den Friedhof (Schaden, Deathtouch, Toughness 0) und Legend-Regel. Danach Ausloeser fuer
     gestorbene eigene Kreaturen (Massacre Girl; sie sieht auch Tode im selben Moment wie ihren eigenen, 603.10a)."""
@@ -2914,7 +3160,7 @@ def bury(players, e):
             continue  # Garruk, Veiled Butcher: nichts stirbt
         watchers = [c for c in p.creatures if c.card.ally_death_ping or c.card.ally_death_life]
         dying = [c for c in p.creatures
-                 if c.dead or c.toughness <= 0 or c.damage >= c.toughness or (c.touched and c.damage > 0)]
+                 if is_dying(c)]
         triggers += [(p, w.card.ally_death_ping or (0, 0), w.card.ally_death_life) for w in watchers for d in dying
                      if d is not w]
         loyalty = sum(c.death_loyalty for c in p.perms) + sum(c.card.death_loyalty for c in p.creatures)
@@ -2924,13 +3170,12 @@ def bury(players, e):
     for p in players:
         exile_instead = p.opponent is not None and any(w.card.opp_exile_instead for w in p.opponent.walkers)
         for c in list(p.creatures):
-            if exile_instead and (c.dead or c.toughness <= 0 or c.damage >= c.toughness
-                                  or (c.touched and c.damage > 0)):
+            if exile_instead and is_dying(c):
                 p.creatures.remove(c)  # Garruk, Veiled Butcher: exiliert statt zu sterben, kein "dies" (614.6)
                 _leave(p, c.card)
                 e["events"].append(f"{p.name}: {c.card.name} ins Exil (statt zu sterben)")
                 continue
-            if c.dead or c.toughness <= 0 or c.damage >= c.toughness or (c.touched and c.damage > 0):
+            if is_dying(c):
                 if c.card.death_counters_move and c.bonus > 0:
                     moves.append((p, c.bonus, c.card.name))
                 p.deaths += 1
@@ -3131,7 +3376,7 @@ def perm_abilities(me, opp, step, e):
             continue
         destroy_permanent(me, card, e, exile=True)
         for c in me.creatures + opp.creatures:
-            c.dead = True
+            c.dead = c.dead or not c.has("indestructible")  # 702.12b
         e["events"].append(f"{me.name}: {card.name} – alle Kreaturen zerstört")
         bury((me, opp), e)
 
@@ -3378,7 +3623,7 @@ def _cast_removal(card, caster, victim, e, step, target=None):
             hit += caster.creatures
         for c in hit:
             if kind == "sweep":
-                c.dead = True
+                c.dead = c.dead or not c.has("indestructible")  # 702.12b
             else:
                 c.damage += amount
         e["events"].append(f"{caster.name}: {card.name} trifft alle Kreaturen")
@@ -3446,7 +3691,13 @@ def _cast_removal(card, caster, victim, e, step, target=None):
         bury((caster, victim), e)
         return
     if kind == "destroy":
-        target.dead = True
+        if target.has("indestructible"):  # 702.12b
+            e["events"].append(f"{caster.name}: {card.name} – {label} ist unzerstörbar")
+        else:
+            target.dead = True
+    elif kind == "minus" and target.has("indestructible"):  # -X/-X wirkt: Toughness 0 (704.5f)
+        target.pump -= amount
+        target.tpump -= amount
     elif kind == "shuffle":  # Living Library: in die Bibliothek mischen
         victim.creatures.remove(target)
         _leave(victim, target.card)
@@ -3757,6 +4008,20 @@ def permanent_enters(p, opp, card, step, e):
             pick = max(alive, key=lambda c: (can_attack(c, step), danger(c)))
             pick.auras.append(card)
             e["events"].append(f"{p.name}: {card.name} an {pick.card.name}")
+    if card.equip_etb and card in p.perms:  # Ausruestung: beim Betreten anlegen
+        kws, untap, kind = card.equip_etb
+        host = None
+        if kind == "token" and card.equip_carrier is not None:  # Dwarven Shortsword: erst das Token
+            before = len(p.creatures)
+            make_tokens(p, [(1, card.equip_carrier)], step, e, opp, card.name)
+            host = p.creatures[-1] if len(p.creatures) > before else None
+        elif kind != "token":
+            host = gear_host(p, step, kind)
+        if host is not None:
+            attach_gear(p, card, host, e)
+            host.extra |= set(kws)
+            if untap:
+                host.tapped = False
     if card.animate_artifact:  # Puppet Crafting: Artefakt wird 5/5-Construct
         target = animate_target(p)
         if target is not None:
@@ -4882,6 +5147,30 @@ def stun_from_graveyard(me, opp, step, e):
         e["events"].append(f"{me.name}: {card.name} (aus dem Friedhof) – {pick.card.name} getappt mit Stun-Marke")
 
 
+def _may_equip(g, c):
+    """Darf die Ausruestung g an c? Nur "Equip <Typ>" (ohne allgemeines Equip): nur Kreaturen dieses Typs."""
+    return not (g.equip_typed and len(g.equip_typed) > 2) or g.equip_typed[0] in c.card.creature_types
+
+
+def gear_host(p, step, kind=""):
+    """Kreatur fuer kostenloses Anlegen (beim Betreten), Regel wie beim Equip: der staerkste Angreifer, sonst die
+    gefaehrlichste eigene Kreatur. kind: nur Kreaturen dieses Typs ("target Dwarf you control")."""
+    alive = [c for c in p.creatures if not c.dead and (not kind or kind in c.card.creature_types)]
+    attackers = [c for c in alive if can_attack(c, step)]
+    if attackers:
+        return max(attackers, key=lambda c: (c.dmg, c.bonus))
+    return max(alive, key=danger) if alive else None
+
+
+def attach_gear(p, g, host, e):
+    """Legt die Ausruestung g an host an (vorher von einer anderen Kreatur ab)."""
+    for c in p.creatures:
+        if g in c.gear:
+            c.gear.remove(g)
+    host.gear.append(g)
+    e["events"].append(f"{p.name}: {g.name} an {host.card.name}")
+
+
 def equip_gear(me, step, e):
     """Ausruestung anlegen (Sorcery-Zeit, freies Mana): an den staerksten Angreifer (bei Gleichstand der mit den meisten
     Marken, das macht Warrior's Blades billiger); umgehaengt nur, wenn die bisherige Kreatur nicht angreifen kann."""
@@ -4889,11 +5178,13 @@ def equip_gear(me, step, e):
         host = next((c for c in me.creatures if g in c.gear and not c.dead), None)
         if host is not None and can_attack(host, step):
             continue
-        cands = [c for c in me.creatures if can_attack(c, step) and c is not host]
+        cands = [c for c in me.creatures if can_attack(c, step) and c is not host and _may_equip(g, c)]
         if not cands:
             continue
         pick = max(cands, key=lambda c: (c.dmg, c.bonus))
         alts, _p, _t, per_counter = g.equip
+        if g.equip_typed and g.equip_typed[0] in pick.card.creature_types:  # "Equip Wizard {1}"
+            alts = g.equip_typed[1]
         cut = pick.bonus if per_counter else 0
         cost = tuple(sorted({(max(0, gen - cut), cols) for gen, cols in alts}))
         if not _pay_ability(me, cost, "free"):
@@ -5002,6 +5293,60 @@ def combat_buffs(me, step, e):
             pick.pump += n
             pick.tpump += n
             e["events"].append(f"{me.name}: {c.card.name} – {pick.card.name} +{n}/+{n}")
+
+
+def buff_target(p, step, others_of=None):
+    """Ziel fuer "target creature you control" bei Marken und Pumps (Regel wie combat_buffs): die eigene Kreatur, die
+    angreifen kann, davon die gefaehrlichste. others_of: diese Kreatur ausnehmen ("another target creature")."""
+    alive = [x for x in p.creatures if not x.dead and x is not others_of]
+    return max(alive, key=lambda x: (can_attack(x, step), danger(x))) if alive else None
+
+
+def combat_counters(me, step, e):
+    """Zu Beginn des eigenen Kampfs: N +1/+1-Marken auf eine eigene Kreatur, dazu Schluesselwoerter bis Rundenende
+    (Training Regimen, Additive Evolution)."""
+    for _src, card in static_sources(me):
+        if not card.combat_counter:
+            continue
+        pick = buff_target(me, step)
+        if pick is None:
+            continue
+        n, kws = card.combat_counter
+        pick.bonus += n
+        pick.extra |= set(kws)
+        e["events"].append(f"{me.name}: {card.name} – {n} Marke(n) auf {pick.card.name}"
+                           + (f", {', '.join(kws)}" if kws else ""))
+
+
+def attack_keywords(me, attackers, alone, e):
+    """Angriffs-Ausloeser mit Pump und Schluesselwoertern bis Rundenende: die Kreatur selbst ("Whenever ~ attacks
+    [alone], ~ gets +P/+T and gains ..."), jede eigene Kreatur, die allein angreift (Black Widow), und jede
+    ausgeruestete Angreiferin (Dain Ironfoot)."""
+    for a in attackers:
+        if a.card.attack_self and (not a.card.attack_self[3] or a is alone):
+            pw, tw, kws, _alone = a.card.attack_self
+            a.pump += pw
+            a.tpump += tw
+            a.extra |= set(kws)
+            e["events"].append(f"{me.name}: {a.card.name} greift an: +{pw}/+{tw}" + (f", {', '.join(kws)}" if kws else ""))
+        if a.card.attack_target:  # Nori: Ziel nach der Regel fuer Buffs, der gefaehrlichste Angreifer
+            pw, tw, kws = a.card.attack_target
+            pick = max((b for b in attackers if not b.dead), key=danger)
+            pick.pump += pw
+            pick.tpump += tw
+            pick.extra |= set(kws)
+            e["events"].append(f"{me.name}: {a.card.name} – {pick.card.name}" + (f" +{pw}/+{tw}" if pw or tw else "")
+                               + (f" {', '.join(kws)}" if kws else ""))
+        if a.card.equipped_attack_kw:
+            for b in attackers:
+                if b.gear:
+                    b.extra |= set(a.card.equipped_attack_kw)
+    if alone is not None:
+        for _src, card in static_sources(me):
+            if card.alone_kw:
+                alone.extra |= set(card.alone_kw)
+                e["events"].append(f"{me.name}: {card.name} – {alone.card.name} greift allein an: "
+                                   f"{', '.join(card.alone_kw)}")
 
 
 def expire_impulse(p):
@@ -5485,6 +5830,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     phoenix_check(me, opp, step, e)
     hydra_spread(me, e)
     combat_buffs(me, step, e)
+    combat_counters(me, step, e)
     twin_for_lethal(me, opp, step, e)
     sacrifice_for_lethal(me, opp, step, e)
     anomaly_for_lethal(me, opp, step, e)
@@ -5537,6 +5883,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
                 if me.discards_turn:
                     alone.bonus += me.discards_turn
                 e["events"].append(f"{me.name}: {c.card.name} – {alone.card.name} greift allein an")
+    attack_keywords(me, attackers, alone, e)
     for a in attackers:  # Angriffs-Ausloeser der Kreatur selbst
         a.attacked = step
         for g in a.gear:  # Medic's Kitesail

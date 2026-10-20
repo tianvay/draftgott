@@ -274,6 +274,21 @@ class Card(NamedTuple):
     hapatra_untap: tuple = ()  # Hapatra: Kosten "Untap target creature"
     etb_grant: tuple = ()      # Teyo: beim Betreten bekommt ein eigenes Permanent das Schluesselwort und eine Marke
     liliana_hexproof: tuple = ()  # Liliana the Faultless: Kosten (dazu Tap, abwerfen) "andere Kreatur Hexproof"
+    # Grundlagen fuer kommende Sets (foundation_traits)
+    cond_static: tuple = ()    # bedingte Statik: ((Bedingung, "self"/"team", +P, +T, Schluesselwoerter), ...)
+    #                            Bedingung: ("another", Typ), ("gained",), ("gy_creatures", N)
+    counter_kw: tuple = ()     # eigene Kreaturen mit +1/+1-Marke haben diese Schluesselwoerter (auch die Quelle)
+    combat_counter: tuple = ()  # Beginn des eigenen Kampfs: (N Marken auf eine eigene Kreatur, Schluesselwoerter)
+    attack_self: tuple = ()    # greift sie an: (+P, +T bis Rundenende, Schluesselwoerter, nur wenn allein)
+    attack_target: tuple = ()  # greift sie an: eine angreifende Kreatur bekommt (+P, +T, Schluesselwoerter) (Nori)
+    alone_kw: tuple = ()       # eine eigene Kreatur greift allein an: sie bekommt diese Schluesselwoerter
+    equipped_attack_kw: tuple = ()  # greift sie an: jede ausgeruestete Angreiferin bekommt diese Schluesselwoerter
+    grant_ward: int = 0        # Ausruestung/Aura: die Kreatur hat Ward {N}
+    equip_etb: tuple = ()      # Ausruestung: beim Betreten anlegen: (Schluesselwoerter, enttappen, Typ oder "token")
+    equip_token: tuple = ()    # beim Betreten ein Equipment-Token: (Token-Card, anlegen: ""/"self"/"target")
+    equip_carrier: object = None  # Ausruestung: beim Betreten dieses Kreatur-Token, sie wird daran angelegt
+    equip_typed: tuple = ()    # "Equip <Typ> {N}": (Typ, Zahlungswege) fuer Kreaturen dieses Typs
+    cast_trig: tuple = ()      # "Whenever you cast ...": ((Filter, Effekte, Effekte ab 5 Mana, "instead"/"also"/""),)
 
 
 LANDCYCLE_RE = re.compile(
@@ -635,7 +650,27 @@ def modelled_effect_rest(line, spell_face, name=""):
 
 
 COMBAT_KEYWORDS = ("flying", "reach", "first strike", "double strike", "deathtouch", "trample", "menace",
-                   "lifelink", "vigilance", "hexproof")
+                   "lifelink", "vigilance", "hexproof", "indestructible")
+GRANTABLE = COMBAT_KEYWORDS + ("haste",)  # verleihbar (Haste hat die Karte selbst als eigenes Feld)
+
+
+def grant_list(text):
+    """Liste verliehener Faehigkeiten ("flying, trample and ward {1}", "hexproof and can't be blocked"):
+    (Schluesselwoerter, Ward-Kosten) oder None, wenn etwas davon nicht modelliert ist. "Can't be blocked" wird zu
+    "unblockable"."""
+    kws, ward = [], 0
+    for k in re.split(r",\s*(?:and\s+)?|\s+and\s+", text.strip().rstrip(".")):
+        k = k.strip()
+        m = re.fullmatch(r"ward \{(\d+)\}", k)
+        if m:
+            ward = int(m.group(1))
+        elif k == "can't be blocked":
+            kws.append("unblockable")
+        elif k in GRANTABLE:
+            kws.append(k)
+        else:
+            return None
+    return tuple(kws), ward
 
 
 def combat_keywords(card):
@@ -1204,6 +1239,8 @@ _PACKAGE_M3_RES = {
     "equip_pump": re.compile(r"^equipped creature gets \+(\d+)/\+(\d+)(?: and has (.+?))?\.?$"),
     "equip_cost": re.compile(r"^equip ((?:\{[^}]+\})+)\.?( this ability costs \{1\} less to activate for each "
                              r"\+1/\+1 counter on the creature it targets\.?)?$"),
+    "equip_has": re.compile(r"^equipped creature has (.+?)\.?$"),
+    "equip_typed": re.compile(r"^equip ([a-z]+) ((?:\{[^}]+\})+)\.?$"),
     "etb_gain": re.compile(r"^when (?:this [a-z]+|~) enters,[^.]* you gain (\d+) life"),
 }
 
@@ -1225,24 +1262,39 @@ def package_m3_traits(card, type_line):
         m = res["combat_draw_ability"].match(low)
         if m:
             out["combat_draw_ability"] = (cost_alternatives(m.group(1).upper()), _count(m.group(2)))
-        m = res["equip_pump"].match(low)
+        m = res["equip_pump"].match(low) or res["equip_has"].match(low)
+        if m and m.re is res["equip_has"] and grant_list(m.group(1)) is None:
+            m = None  # z. B. "Equipped creature has prowess" (nicht modelliert)
         if m:
-            pump = (int(m.group(1)), int(m.group(2)))
-            rest = m.group(3) or ""
-            kws = tuple(k for k in re.findall(r"^([a-z ]+?)(?: and \"|$)", rest)[:1] if k in COMBAT_KEYWORDS)
-            if kws:
-                out["equip_kw"] = kws
+            pump = (int(m.group(1)), int(m.group(2))) if m.re is res["equip_pump"] else (0, 0)
+            rest = m.group(m.re.groups) or ""
+            granted = grant_list(rest) if rest else None
+            if granted is not None:  # "has flying and ward {1}", "has hexproof and can't be blocked"
+                if granted[0]:
+                    out["equip_kw"] = granted[0]
+                if granted[1]:
+                    out["grant_ward"] = granted[1]
+            else:
+                kws = tuple(k for k in re.findall(r"^([a-z ]+?)(?: and \"|$)", rest)[:1] if k in COMBAT_KEYWORDS)
+                if kws:
+                    out["equip_kw"] = kws
             ml = re.search(r"whenever this creature attacks, you gain (\d+) life", rest)
             if ml:
                 out["equip_attack_life"] = int(ml.group(1))
         m = res["equip_cost"].match(low)
         if m:
             cost = (cost_alternatives(m.group(1).upper()), bool(m.group(2)))
+        m = res["equip_typed"].match(low)
+        if m:  # "Equip Wizard {1}": nur fuer Kreaturen dieses Typs
+            out["equip_typed"] = (m.group(1), cost_alternatives(m.group(2).upper()))
         m = res["etb_gain"].match(low)
         if m and "Creature" not in type_line:
             out["etb_life"] = int(m.group(1))
     if pump and cost:
         out["equip"] = (cost[0], pump[0], pump[1], cost[1])
+    elif pump and out.get("equip_typed"):  # nur "Equip <Typ> {N}": nur an Kreaturen dieses Typs
+        out["equip"] = (out["equip_typed"][1], pump[0], pump[1], False)
+        out["equip_typed"] += (True,)
     return out
 
 
@@ -1664,12 +1716,15 @@ def easy_traits(card, type_line):
             out["hand_combat_bolt"] = (cost_alternatives(m.group(1).upper()), int(m.group(2)))
         if re.match(r"^threshold — sacrifice another creature or planeswalker: ~ gets -2/-0 until end of turn", low):
             out["threshold_sac_minus"] = True
-        m = re.match(r"^enchanted creature gets \+(\d+)/\+(\d+)(?: and has ([a-z ,]+?))?\.?$", low)
+        m = re.match(r"^enchanted creature gets \+(\d+)/\+(\d+)(?: and has ([a-z ,{}0-9']+?))?\.?$", low)
         if m and "Aura" in type_line:
             out["aura_pump"] = (int(m.group(1)), int(m.group(2)))
-            kws = tuple(k.strip() for k in re.split(r",\s*(?:and\s+)?|\s+and\s+", m.group(3) or "") if k.strip())
-            if kws and all(k in COMBAT_KEYWORDS for k in kws):
-                out["aura_kw"] = kws
+            granted = grant_list(m.group(3)) if m.group(3) else None
+            if granted is not None:  # auch "trample and ward {1}"
+                if granted[0]:
+                    out["aura_kw"] = granted[0]
+                if granted[1]:
+                    out["grant_ward"] = granted[1]
         if low.startswith("when enchanted creature dies, return that card to the battlefield tapped under its "
                           "owner's control"):
             out["aura_return"] = True
@@ -2108,6 +2163,188 @@ def empower_tags_text(effects):
     return "".join(dict.fromkeys(out))
 
 
+_S = r"(?:~|this creature|it|he|she)"
+_N = r"(a|an|one|two|three|four|five|\d+)"
+_PREFIX = r"(?:[a-z' ]+ — )?"  # Faehigkeitswort wie "Infusion —", "Repartee —"
+_F_RES = {
+    "cond_another": re.compile(r"^(?:~|this creature) has (.+?) as long as you control another ([a-z]+)\.$"),
+    "cond_another_pump": re.compile(r"^as long as you control another ([a-z]+), (~|this creature) gets \+(\d+)/\+(\d+)"
+                                    r"(?: and has (.+?))?\.$"),
+    "cond_gained": re.compile(_PREFIX + r"(~|this creature|creatures you control) gets? \+(\d+)/\+(\d+)"
+                              r"(?: and ha(?:s|ve) (.+?))? as long as you gained life this turn\.$"),
+    "cond_gy": re.compile(r"^as long as there are " + _N + r" or more creature cards in your graveyard, "
+                          r"(?:~|this creature) gets \+(\d+)/\+(\d+)\.$"),
+    "counter_kw": re.compile(r"^(?:creatures you control with \+1/\+1 counters on them have|each creature you control "
+                             r"with a \+1/\+1 counter on it has) (.+?)\.$"),
+    "combat_counter": re.compile(r"^at the beginning of combat on your turn, put " + _N + r" \+1/\+1 counters? on "
+                                 r"target creature you control\.(?: it gains (.+?) until end of turn\.)?$"),
+    "attack_self": re.compile(_PREFIX + r"whenever (?:~|this creature) attacks( alone)?, " + _S +
+                              r" (?:gets \+(\d+)/\+(\d+)(?: and gains (.+?))?|gains (.+?)) until end of turn\.$"),
+    "alone_kw": re.compile(r"^whenever a creature you control attacks alone, it gains (.+?) until end of turn\.$"),
+    "attack_target": re.compile(r"^whenever (?:~|this creature) attacks, target attacking creature (?:gets "
+                                r"\+(\d+)/\+(\d+)(?: and gains (.+?))?|gains (.+?)) until end of turn\.$"),
+    "equipped_attack_kw": re.compile(r"^whenever (?:~|this creature) attacks, each equipped attacking creature gains "
+                                     r"(.+?) until end of turn\.$"),
+    "equip_etb": re.compile(r"^when this equipment enters, attach it to target ([a-z]+) you control\.(?: (that "
+                            r"creature gains (.+?) until end of turn|untap that creature)\.)?$"),
+    "equip_etb_token": re.compile(r"^when this equipment enters, (create [^,]+ token), then attach this equipment "
+                                  r"to it\.$"),
+    "equip_token": re.compile(r"^when (?:~|this creature) enters, create a colorless equipment artifact token named "
+                              r"([a-z' ]+) with \"equipped creature gets \+(\d+)/\+(\d+)\" and equip "
+                              r"((?:\{[^}]+\})+)\.(?: (when you do, attach it to target creature you control|attach "
+                              r"it to ~)\.)?$"),
+    "cast": re.compile(_PREFIX + r"whenever you cast (an instant or sorcery spell that targets a creature|an instant "
+                       r"or sorcery spell|a noncreature spell|a creature spell|a spell that targets a creature you "
+                       r"control|a multicolored spell|a spell|an? [a-z]+ spell), (.+)$"),
+}
+_CAST_FILTER = {"an instant or sorcery spell that targets a creature": "instsorc_creature",
+                "an instant or sorcery spell": "instsorc", "a noncreature spell": "noncreature",
+                "a creature spell": "creature", "a spell that targets a creature you control": "own_creature",
+                "a multicolored spell": "multicolor", "a spell": "spell"}
+_CAST_ATOM_RES = (
+    (re.compile(rf"^{_S} gets \+(\d+)/\+(\d+) until end of turn and deals (\d+) damage to each opponent$"),
+     lambda m: (("pump", int(m.group(1)), int(m.group(2))), ("face", int(m.group(3))))),
+    (re.compile(rf"^{_S} gets \+(\d+)/\+(\d+)(?: and gains (.+?))? until end of turn$"),
+     lambda m: (("pump", int(m.group(1)), int(m.group(2))),) + ((("kw", _kw_only(m.group(3))),) if m.group(3)
+                                                                else ())),
+    (re.compile(rf"^{_S} (?:also )?gains (.+?) until end of turn$"), lambda m: (("kw", _kw_only(m.group(1))),)),
+    (re.compile(rf"^put {_N} \+1/\+1 counters? on {_S}$"), lambda m: (("counter", _count(m.group(1))),)),
+    (re.compile(rf"^put {_N} \+1/\+1 counters? on each creature you control$"),
+     lambda m: (("counter_all", _count(m.group(1))),)),
+    (re.compile(rf"^put {_N} \+1/\+1 counters? on each other creature you control$"),
+     lambda m: (("counter_others", _count(m.group(1))),)),
+    (re.compile(rf"^put {_N} \+1/\+1 counters? on target creature you control$"),
+     lambda m: (("target_counter", _count(m.group(1))),)),
+    (re.compile(r"^creatures you control get \+(\d+)/\+(\d+) until end of turn$"),
+     lambda m: (("team_pump", int(m.group(1)), int(m.group(2))),)),
+    (re.compile(rf"^{_S} deals (\d+) damage to each opponent$"), lambda m: (("face", int(m.group(1))),)),
+    (re.compile(rf"^{_S} deals (\d+) damage to any target$"), lambda m: (("bolt", int(m.group(1))),)),
+    (re.compile(rf"^{_S} deals damage equal to that spell's mana value to any target$"), lambda m: (("bolt", "mv"),)),
+    (re.compile(rf"^{_S} gets \+x/\+0 until end of turn, where x is the amount of mana spent to cast that spell$"),
+     lambda m: (("pump", "spent", 0),)),
+    (re.compile(r"^put x \+1/\+1 counters on target creature you control, where x is that spell's mana value$"),
+     lambda m: (("target_counter", "mv"),)),
+    (re.compile(r"^each opponent loses (\d+) life and you gain (\d+) life$"),
+     lambda m: (("drain", int(m.group(1)), int(m.group(2))),)),
+    (re.compile(rf"^(?:you )?draw {_N} cards?$"), lambda m: (("draw", _count(m.group(1))),)),
+    (re.compile(rf"^{_S} can't be blocked this turn$"), lambda m: (("unblockable",),)),
+    (re.compile(r"^surveil (\d+)$"), lambda m: (("surveil", int(m.group(1))),)),
+    (re.compile(r"^(create .+ tokens?(?: with [a-z ,]+)?)$"),
+     lambda m: tuple(("token", n, t) for n, t in _tokens_in(m.group(1) + ".")) or None),
+)
+
+
+def _kw_only(text):
+    """Nur Schluesselwoerter (ohne Ward), sonst None."""
+    granted = grant_list(text or "")
+    return granted[0] if granted is not None and granted[0] and not granted[1] else None
+
+
+def _cast_atoms(text):
+    """Effekte eines Ausloesers beim Wirken (Saetze nacheinander) oder None, wenn ein Satz nicht modelliert ist."""
+    atoms = []
+    for sentence in re.split(r"\.\s+", text.strip().rstrip(".")):
+        for rx, build in _CAST_ATOM_RES:
+            m = rx.match(sentence.strip())
+            if m:
+                got = build(m)
+                if got is None or any(a[0] == "kw" and a[1] is None for a in got):
+                    return None
+                atoms += got
+                break
+        else:
+            return None
+    return tuple(atoms)
+
+
+def _cast_trigger(body):
+    """(Effekte, Effekte ab 5 Mana, "instead"/"also"/"") fuer den Text nach "Whenever you cast ..., " oder None."""
+    if body == "draw a card. then discard a card unless five or more mana was spent to cast that spell.":
+        return (("draw", 1), ("discard", 1)), (("draw", 1),), "instead"  # Muse Seeker
+    m = re.match(r"^(.*?)\. if five or more mana was spent to cast that spell, (.*?)( instead)?\.$", body)
+    if not m:
+        atoms = _cast_atoms(body)
+        return (atoms, (), "") if atoms else None
+    atoms, big = _cast_atoms(m.group(1)), _cast_atoms(m.group(2))
+    if not atoms or not big:
+        return None
+    return atoms, big, "instead" if m.group(3) else "also"
+
+
+def foundation_traits(card, type_line):
+    """Grundlagen fuer kommende Sets: bedingte Statik, Schluesselwoerter mit Marke, Marken zu Kampfbeginn,
+    Angriffs-Ausloeser, Ausruestung beim Betreten und als Token, Ausloeser beim Wirken (als dict mit den Card-Feldern)."""
+    out, cond, casts = {}, [], []
+    res = _F_RES
+    for _raw, low in _clean_lines(card):
+        m = res["cond_another"].match(low)
+        if m and _kw_only(m.group(1)):
+            cond.append((("another", m.group(2)), "self", 0, 0, _kw_only(m.group(1))))
+        m = res["cond_another_pump"].match(low)
+        if m and (not m.group(5) or _kw_only(m.group(5))):
+            cond.append((("another", m.group(1)), "self", int(m.group(3)), int(m.group(4)),
+                         _kw_only(m.group(5)) if m.group(5) else ()))
+        m = res["cond_gained"].match(low)
+        if m and (not m.group(4) or _kw_only(m.group(4))):
+            cond.append((("gained",), "team" if m.group(1) == "creatures you control" else "self", int(m.group(2)),
+                         int(m.group(3)), _kw_only(m.group(4)) if m.group(4) else ()))
+        m = res["cond_gy"].match(low)
+        if m:
+            cond.append((("gy_creatures", _count(m.group(1))), "self", int(m.group(2)), int(m.group(3)), ()))
+        m = res["counter_kw"].match(low)
+        if m and _kw_only(m.group(1)):
+            out["counter_kw"] = _kw_only(m.group(1))
+        m = res["combat_counter"].match(low)
+        if m and (not m.group(2) or _kw_only(m.group(2))):
+            out["combat_counter"] = (_count(m.group(1)), _kw_only(m.group(2)) if m.group(2) else ())
+        m = res["attack_self"].match(low)
+        if m:
+            kws = m.group(4) or m.group(5)
+            if not kws or _kw_only(kws):
+                out["attack_self"] = (int(m.group(2) or 0), int(m.group(3) or 0), _kw_only(kws) if kws else (),
+                                      bool(m.group(1)))
+        m = res["alone_kw"].match(low)
+        if m and _kw_only(m.group(1)):
+            out["alone_kw"] = _kw_only(m.group(1))
+        m = res["attack_target"].match(low)
+        if m:
+            kws = m.group(3) or m.group(4)
+            if not kws or _kw_only(kws):
+                out["attack_target"] = (int(m.group(1) or 0), int(m.group(2) or 0), _kw_only(kws) if kws else ())
+        m = res["equipped_attack_kw"].match(low)
+        if m and _kw_only(m.group(1)):
+            out["equipped_attack_kw"] = _kw_only(m.group(1))
+        if "Equipment" in type_line:
+            m = res["equip_etb"].match(low)
+            if m and (not m.group(3) or _kw_only(m.group(3))):
+                out["equip_etb"] = (_kw_only(m.group(3)) if m.group(3) else (),
+                                    m.group(2) == "untap that creature",
+                                    "" if m.group(1) == "creature" else m.group(1))
+            m = res["equip_etb_token"].match(low)
+            tokens = _tokens_in(m.group(1) + ".") if m else []
+            if len(tokens) == 1 and tokens[0][0] == 1:  # "create a 2/2 ... token, then attach this Equipment to it"
+                out["equip_etb"] = ((), False, "token")
+                out["equip_carrier"] = tokens[0][1]
+        m = res["equip_token"].match(low)
+        if m:
+            token = token_card(m.group(1).title())._replace(
+                equip=(cost_alternatives(m.group(4).upper()), int(m.group(2)), int(m.group(3)), False))
+            attach = "target" if m.group(5) and m.group(5).startswith("when") else "self" if m.group(5) else ""
+            out["equip_token"] = (token, attach)
+        m = res["cast"].match(low)
+        if m and not any(rx.match(low) for rx in (_PACKAGE_S_RES["cast_counter"], _PACKAGE_S_RES["cast_team_pump"],
+                                                  _CAST_TOKEN_RE)):  # schon eigene Felder (Paket S, Vraska)
+            trig = _cast_trigger(m.group(2))
+            if trig:
+                kind = _CAST_FILTER.get(m.group(1)) or "type:" + m.group(1).split()[1]  # "a Villain spell"
+                casts.append((kind,) + trig)
+    if cond:
+        out["cond_static"] = tuple(cond)
+    if casts:
+        out["cast_trig"] = tuple(casts)
+    return out
+
+
 def card_info(card):
     """Wandelt eine Scryfall-Karte in (Card, Anzeigetext) um."""
     faces = card.get("card_faces") or [card]
@@ -2207,7 +2444,7 @@ def card_info(card):
                 **package_m2_traits(card), **package_m3_traits(card, type_line),
                 **counter_traits(card), **walker_traits(card), **package_a_traits(card, type_line),
                 **b1_traits(card, type_line), **walker_card_traits(card, type_line, removal_spec(card)),
-                **easy_traits(card, type_line),
+                **easy_traits(card, type_line), **foundation_traits(card, type_line),
                 removal_points=(removal_info(card) or {}).get("points", 0.0),
                 creature_types=(tuple(t.lower() for t in type_line.split("—", 1)[1].split())
                                 if is_creature and "—" in type_line else ())), shown

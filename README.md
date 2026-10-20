@@ -520,7 +520,12 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
 - Angriff: alles bei sicherem Lethal, sonst nur Kreaturen, die kein Blocker tötet und dabei überlebt. Block:
   Blocker tötet und überlebt, Tausch bei mindestens gleichem Manawert, Doppel-Block, Chump nur gegen Lethal.
 - Kampf-Schlüsselwörter: Flying, Reach, First Strike, Double Strike, Deathtouch, Trample, Lifelink, Menace,
-  Vigilance, Haste, Defender, Hexproof (auch bedingt, z. B. nur im eigenen Zug).
+  Vigilance, Haste, Defender, Hexproof, Indestructible (auch bedingt, z. B. nur im eigenen Zug).
+- Grundlagen für kommende Sets (Kampfmodell, getestet mit Karten aus SOS, HOB und MSH): bedingte Fähigkeiten
+  („as long as you control another …“, Infusion, Kreaturenkarten im Friedhof), Schlüsselwörter für Kreaturen mit
+  Marke, verliehenes Ward/Hexproof/Unblockbar, Ausrüstung beim Betreten und als Token, „Equip <Typ>“, Marken zu
+  Kampfbeginn, Angriffs-Auslöser mit Schlüsselwörtern und allgemeine Auslöser „Whenever you cast …“ (Repartee, Opus,
+  Nichtkreatur-, Typ- und Farbzauber). Crew/Fahrzeuge sind noch nicht modelliert.
 - Removal (Destroy/Exile, Schaden, −X/−X, Edikt, Fight, Biss, Bounce, Lock, zurück in die Bibliothek,
   Massenremoval) trifft die gefährlichste passende Kreatur; Removal-Instants vor dem Angriff, gegen Angreifer oder am
   Ende des gegnerischen Zugs.

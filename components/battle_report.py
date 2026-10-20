@@ -351,6 +351,25 @@ RULES = [
     "the Cutting Glare ab 6 Ländern (der Gegner bekommt ein Treasure); Living Library mit 6 offenem Mana gegen die "
     "gefährlichste Kreatur (in die Bibliothek gemischt); The Echoverse Fulcrum, wenn die gegnerischen Kreaturen "
     "(Manawert + Power) mindestens doppelt so viel wert sind wie unsere.",
+    "Indestructible (702.12b): tödlicher Schaden, Deathtouch und „destroy“ (auch Massen-Destroy) töten die Kreatur "
+    "nicht; Toughness 0 (−X/−X), Opfern, Exil und Bounce schon. Removal mit „destroy“ oder Schaden wählt kein "
+    "unzerstörbares Ziel. Bedingte Fähigkeiten gelten, solange die Bedingung erfüllt ist: „as long as you control "
+    "another <Typ>“, Infusion („if you gained life this turn“), Kreaturenkarten im Friedhof; Schlüsselwörter für "
+    "eigene Kreaturen mit +1/+1-Marke. Ausrüstung und Auras verleihen auch Ward, Hexproof, Indestructible und "
+    "Unblockbarkeit.",
+    "Ausrüstung beim Betreten („attach it to target creature you control“, auch nur an einen Typ oder an ein neues "
+    "Token) und Equipment-Token (Axe): kostenlos an den stärksten Angreifer, sonst an die gefährlichste eigene "
+    "Kreatur (Regel wie beim Equip). „Equip <Typ> {N}“ nur für Kreaturen dieses Typs bzw. billiger für sie. Zu Beginn "
+    "des eigenen Kampfs kommen Marken auf die eigene Kreatur, die angreifen kann (die gefährlichste); „target "
+    "attacking creature gains …“ trifft den gefährlichsten Angreifer. Angriffs-Auslöser mit Pump und Schlüsselwörtern "
+    "(auch „attacks alone“ und „each equipped attacking creature“).",
+    "Auslöser „Whenever you cast …“ (Nichtkreatur-, Instant/Sorcery-, Kreatur-, mehrfarbige Zauber, Zauber eines "
+    "Typs oder einer Farbe, Zauber mit Kreatur als Ziel (Repartee) bzw. mit eigener Kreatur als Ziel): Pump, "
+    "Schlüsselwörter, Marken (auf sich, alle, alle anderen, eine eigene Kreatur wie zu Kampfbeginn), Schaden an "
+    "jedem Gegner, Schaden an „any target“ (Regel wie bei Removal-Schaden), Leben, Ziehen, Abwerfen, Token, Surveil, "
+    "unblockbar; X nach ausgegebenem Mana bzw. Manawert. Opus: ab 5 ausgegebenem Mana (billigste Bezahlung nach "
+    "Kostensenkung) die großen Effekte statt bzw. zusätzlich. Als Ziel zählen Removal auf eine Kreatur (nicht „any "
+    "target“), Pumps, Marken, −N/−0 und verliehene Schlüsselwörter.",
     "Noch nicht im Kampf: weitere Auslöser und Fähigkeiten (siehe Modell-Abdeckung). Solche Karten werden gewirkt, "
     "wirken aber nur mit den schon modellierten Effekten.",
 ]
