@@ -289,6 +289,9 @@ class Card(NamedTuple):
     equip_carrier: object = None  # Ausruestung: beim Betreten dieses Kreatur-Token, sie wird daran angelegt
     equip_typed: tuple = ()    # "Equip <Typ> {N}": (Typ, Zahlungswege) fuer Kreaturen dieses Typs
     cast_trig: tuple = ()      # "Whenever you cast ...": ((Filter, Effekte, Effekte ab 5 Mana, "instead"/"also"/""),)
+    vehicle: tuple = ()        # Fahrzeug: (Crew N, Power, Toughness, Kampf-Schluesselwoerter)
+    attack_tap: bool = False   # greift sie an: eine Kreatur des Verteidigers tappen
+    equip_attack_tap: bool = False  # Ausruestung: greift die Kreatur an, eine Kreatur des Verteidigers tappen
 
 
 LANDCYCLE_RE = re.compile(
@@ -2193,6 +2196,9 @@ _F_RES = {
                               r"([a-z' ]+) with \"equipped creature gets \+(\d+)/\+(\d+)\" and equip "
                               r"((?:\{[^}]+\})+)\.(?: (when you do, attach it to target creature you control|attach "
                               r"it to ~)\.)?$"),
+    "crew": re.compile(r"^crew (\d+)$"),
+    "attack_tap": re.compile(r"^whenever (~|this creature|equipped creature) attacks, tap target creature defending "
+                             r"player controls\.$"),
     "cast": re.compile(_PREFIX + r"whenever you cast (an instant or sorcery spell that targets a creature|an instant "
                        r"or sorcery spell|a noncreature spell|a creature spell|a spell that targets a creature you "
                        r"control|a multicolored spell|a spell|an? [a-z]+ spell), (.+)$"),
@@ -2331,6 +2337,16 @@ def foundation_traits(card, type_line):
                 equip=(cost_alternatives(m.group(4).upper()), int(m.group(2)), int(m.group(3)), False))
             attach = "target" if m.group(5) and m.group(5).startswith("when") else "self" if m.group(5) else ""
             out["equip_token"] = (token, attach)
+        m = res["crew"].match(low)
+        if m and "Vehicle" in type_line:  # 702.122: wird mit Crew bis Rundenende zur Kreatur
+            face = (card.get("card_faces") or [card])[0]
+            pw, tg = str(face.get("power", card.get("power")) or "0"), str(face.get("toughness", card.get("toughness"))
+                                                                          or "0")
+            out["vehicle"] = (int(m.group(1)), int(pw) if pw.isdigit() else 0, int(tg) if tg.isdigit() else 0,
+                              combat_keywords(card))
+        m = res["attack_tap"].match(low)
+        if m:
+            out["equip_attack_tap" if m.group(1) == "equipped creature" else "attack_tap"] = True
         m = res["cast"].match(low)
         if m and not any(rx.match(low) for rx in (_PACKAGE_S_RES["cast_counter"], _PACKAGE_S_RES["cast_team_pump"],
                                                   _CAST_TOKEN_RE)):  # schon eigene Felder (Paket S, Vraska)

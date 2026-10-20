@@ -47,7 +47,7 @@ class Creature:
     __slots__ = ("card", "entered", "tapped", "_damage", "_bonus", "pump", "land_source", "attacked", "ramp_pending",
                  "base_card", "dead", "touched", "locked", "prepared",
                  "tpump", "extra", "lifted", "owner", "at_jace", "gy", "dealt", "finality", "ctl", "once", "stun", "gear",
-                 "tdraw", "auras", "exile_step", "at_pw", "lasting")
+                 "tdraw", "auras", "exile_step", "at_pw", "lasting", "crew")
 
     def __init__(self, card, entered=0):
         self.card = card
@@ -81,6 +81,7 @@ class Creature:
         self.base_card = None  # Puppet Crafting: die Artefakt-Karte hinter der belebten Kreatur
         self.at_pw = None     # greift in diesem Kampf diesen echten Planeswalker (Walker) an
         self.lasting = []     # -P/-T bis zum naechsten Zug des Verursachers: (P, T, Verursacher, Schritt)
+        self.crew = []        # gecrewtes Fahrzeug: die Kreaturen, die dafuer getappt wurden
 
     @property
     def damage(self):
@@ -641,6 +642,7 @@ class Player:
         self.opening = list(self.hand)
         self.mulls = mulls
         self.lands, self.creatures, self.perms, self.graveyard = [], [], [], []
+        self.vehicles = []  # Fahrzeuge: {"card", "since" (Schritt), "crewed" (Creature oder None), "tapped"}
         self.life = LIFE
         self.open = []        # ungetapptes Mana nach dem eigenen Zug (fuer Instants und Flash im Zug des Gegners)
         self.dealt_combat = 0  # Kampfschaden am Gegner
@@ -2144,7 +2146,7 @@ def activate_pw(p, opp, w, ability, step, e, target=None):
                 pay_ward(p, target, e)
                 opp.creatures.remove(target)
                 if not target.card.is_token:
-                    (target.owner or opp).hand.append(target.card)
+                    (target.owner or opp).hand.append(target.base_card or target.card)
                 _leave(opp, target.card)
                 check_auras(opp, e)
                 e["events"].append(f"{p.name}: {w.card.name} – {target.label()} zurück auf die Hand")
@@ -3721,7 +3723,7 @@ def _cast_removal(card, caster, victim, e, step, target=None):
     elif kind == "bounce":
         victim.creatures.remove(target)
         if not target.card.is_token:
-            (target.owner or victim).hand.append(target.card)
+            (target.owner or victim).hand.append(target.base_card or target.card)
         _leave(victim, target.card)
         check_auras(victim, e)
         e["events"].append(f"{caster.name}: {card.name} – {label} zurück auf die Hand")
@@ -4008,6 +4010,8 @@ def permanent_enters(p, opp, card, step, e):
             pick = max(alive, key=lambda c: (can_attack(c, step), danger(c)))
             pick.auras.append(card)
             e["events"].append(f"{p.name}: {card.name} an {pick.card.name}")
+    if card.vehicle:  # Fahrzeug: seit wann unter unserer Kontrolle (fuer den Angriff, 302.6)
+        p.vehicles.append({"card": card, "since": step, "crewed": None, "tapped": False})
     if card.equip_etb and card in p.perms:  # Ausruestung: beim Betreten anlegen
         kws, untap, kind = card.equip_etb
         host = None
@@ -5349,6 +5353,129 @@ def attack_keywords(me, attackers, alone, e):
                                    f"{', '.join(card.alone_kw)}")
 
 
+def _crew_ready(p):
+    """Fahrzeuge, die noch nicht gecrewt sind und noch auf dem Feld liegen (je Karte hoechstens so viele Eintraege wie
+    Exemplare in p.perms; zerstoerte fallen weg)."""
+    seen = Counter()
+    out = []
+    for v in list(p.vehicles):
+        if v["crewed"] is not None:
+            continue
+        seen[v["card"]] += 1
+        if seen[v["card"]] > sum(1 for x in p.perms if x == v["card"]):
+            p.vehicles.remove(v)
+            continue
+        out.append(v)
+    return out
+
+
+def _crew_sets(p, need, members):
+    """Moegliche Crews: Teilmengen von members mit Power zusammen mindestens need (702.122a: auch Kreaturen ohne
+    Einsatzverzoegerung-Pause, Tappen ist keine {T}-Kosten)."""
+    members = sorted(members, key=lambda c: -c.power)[:10]
+    out = []
+    for k in range(1, len(members) + 1):
+        for combo in itertools.combinations(members, k):
+            if sum(max(0, c.power) for c in combo) >= need:
+                out.append(combo)
+    return out
+
+
+def crew(p, v, members, step, e):
+    """Crew: members tappen, das Fahrzeug wird bis Rundenende zur Artefaktkreatur (Creature mit base_card)."""
+    n, pw, tw, kws = v["card"].vehicle
+    for c in members:
+        c.tapped = True
+    p.perms.remove(v["card"])
+    car = Creature(v["card"]._replace(is_creature=True, power=pw, toughness=tw, kw=kws), v["since"])
+    car.base_card = v["card"]
+    car.gy, car.ctl = p.graveyard, p
+    car.crew = list(members)
+    p.creatures.append(car)
+    v["crewed"] = car
+    if e is not None:
+        e["events"].append(f"{p.name}: Crew {n} – {v['card'].name} mit {', '.join(c.card.name for c in members)}")
+
+
+def uncrew(p, v, e, untap=True):
+    """Crew zuruecknehmen (Fahrzeug greift doch nicht an bzw. blockt nicht) oder am Rundenende beenden."""
+    car = v["crewed"]
+    v["crewed"] = None
+    if car in p.creatures:
+        p.creatures.remove(car)
+        p.perms.append(v["card"])
+    if e is not None and untap:  # nur beim Zuruecknehmen: die Crew war nie wirklich getappt
+        for c in car.crew:
+            c.tapped = False
+
+
+def crew_to_attack(me, opp, step, e):
+    """Crew fuer den Angriff (Nutzer 2026-10-20): mit Kreaturen, die in diesem Zug nicht angreifen koennen, oder wenn
+    das Fahrzeug mehr Schaden macht als die Kreaturen, die dafuer tappen. Nur Fahrzeuge, die seit Beginn des Zugs
+    da sind. Gibt die gecrewten Eintraege zurueck."""
+    done = []
+    for v in sorted(_crew_ready(me), key=lambda v: -v["card"].vehicle[1]):
+        if v["tapped"] or v["since"] >= step:
+            continue
+        n, pw, _tw, _kws = v["card"].vehicle
+        members = [c for c in me.creatures if not c.dead and not c.tapped and c.base_card is None]
+        best = None
+        for combo in _crew_sets(me, n, members):
+            lost = sum(c.dmg for c in combo if can_attack(c, step))
+            key = (lost, len(combo), sorted(_value(c) for c in combo))
+            if best is None or key < best[0]:
+                best = (key, combo)
+        if best is None or not (best[0][0] == 0 or pw > best[0][0]):
+            continue
+        crew(me, v, best[1], step, e)
+        done.append(v)
+    return done
+
+
+def crew_to_block(p, attackers, step, e):
+    """Crew im Zug des Gegners zum Blocken (Nutzer 2026-10-20): mit Kreaturen, die nach den normalen Block-Regeln
+    nicht blocken; das Fahrzeug bleibt gecrewt, wenn es nach denselben Regeln blockt (toetet und ueberlebt, Tausch,
+    Chump gegen Lethal), sonst wird die Crew zurueckgenommen. Gibt die Blocks zurueck."""
+    blocks = choose_blocks(attackers, p.creatures, p.life)
+    for v in _crew_ready(p):
+        if v["tapped"]:
+            continue
+        used = {id(b) for _a, bs in blocks for b in bs}
+        members = [c for c in p.creatures if not c.dead and not c.tapped and id(c) not in used and c.base_card is None]
+        sets = _crew_sets(p, v["card"].vehicle[0], members)
+        if not sets:
+            continue
+        combo = min(sets, key=lambda s: (len(s), sorted(_value(c) for c in s)))
+        crew(p, v, combo, step, None)
+        trial = choose_blocks(attackers, p.creatures, p.life)
+        if any(b is v["crewed"] for _a, bs in trial for b in bs):
+            blocks = trial
+            e["events"].append(f"{p.name}: Crew {v['card'].vehicle[0]} – {v['card'].name} blockt")
+        else:
+            uncrew(p, v, e)
+    return blocks
+
+
+def attack_taps(me, opp, attackers, e):
+    """"Whenever ~ / equipped creature attacks, tap target creature defending player controls" (Nutzer 2026-10-20):
+    der gefaehrlichste Blocker, der unseren staerksten Angreifer aufhalten wuerde; kann ihn keiner blocken, der
+    naechststaerkere Angreifer. Kein Ziel mit Hexproof; Ward nur, wenn wir zahlen koennen."""
+    n = sum(1 for a in attackers if a.card.attack_tap) + sum(1 for a in attackers for g in a.gear if g.equip_attack_tap)
+    for _k in range(n):
+        target = None
+        for a in sorted(attackers, key=danger, reverse=True):
+            cands = [b for b in opp.creatures if not b.dead and not b.tapped and can_block(b, a) and not hexproof(b)
+                     and ward_ok(me, b)]
+            if cands:  # zuerst Blocker, die ihn wirklich aufhalten (toeten oder ueberleben)
+                stop = [b for b in cands if outcome(a, [b])[0] or not outcome(a, [b])[1][0]]
+                target = max(stop or cands, key=danger)
+                break
+        if target is None or not pay_ward(me, target, e):
+            return
+        target.tapped = True
+        e["events"].append(f"{me.name}: Angriffs-Auslöser tappt {target.card.name}")
+
+
 def expire_impulse(p):
     """Ende des eigenen Zugs: Karten im Exil, deren Frist ("until the end of your next turn") abgelaufen ist, bleiben
     dort und sind nicht mehr spielbar."""
@@ -5484,6 +5611,8 @@ def take_turn(me, opp, step, rnd, skip_draw):
     expire_until_next_turn(me, step)
     for w in me.walkers:
         w.used = False
+    for v in me.vehicles:  # Fahrzeuge enttappen
+        v["tapped"] = False
     for c in me.creatures:  # Untap (gesperrte Kreaturen bleiben gesperrt; Stun-Marke statt Enttappen, 122.1g)
         if c.stun and c.tapped:
             c.stun -= 1
@@ -5834,7 +5963,13 @@ def take_turn(me, opp, step, rnd, skip_draw):
     twin_for_lethal(me, opp, step, e)
     sacrifice_for_lethal(me, opp, step, e)
     anomaly_for_lethal(me, opp, step, e)
+    crewed = crew_to_attack(me, opp, step, e)
     attackers = choose_attackers(me.creatures, opp.creatures, opp.life, me.life, step)
+    if any(v["crewed"] not in attackers for v in crewed):  # Fahrzeug greift doch nicht an: Crew zuruecknehmen
+        for v in crewed:
+            if v["crewed"] not in attackers:
+                uncrew(me, v, e)
+        attackers = choose_attackers(me.creatures, opp.creatures, opp.life, me.life, step)
     art_vigilance = any(c.card.artifact_vigilance for c in me.creatures if not c.dead)
     for a in attackers:
         if not (a.has("vigilance") or (art_vigilance and a.card.is_artifact)):
@@ -5884,6 +6019,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
                     alone.bonus += me.discards_turn
                 e["events"].append(f"{me.name}: {c.card.name} – {alone.card.name} greift allein an")
     attack_keywords(me, attackers, alone, e)
+    attack_taps(me, opp, attackers, e)
     for a in attackers:  # Angriffs-Ausloeser der Kreatur selbst
         a.attacked = step
         for g in a.gear:  # Medic's Kitesail
@@ -5922,7 +6058,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     if not locked:
         attackers = respond_to_attack(opp, me, attackers, e, step)
         pre_block_abilities(opp, me, attackers, e, step)
-    blocks = choose_blocks(attackers, opp.creatures, opp.life)
+    blocks = crew_to_block(opp, attackers, step, e)
     if not locked:
         combat_abilities(me, blocks, opp, e, step, attacking=True)
         combat_abilities(opp, blocks, me, e, step, attacking=False)
@@ -6041,6 +6177,13 @@ def hand_limit(p, e, size=7):
 def cleanup(players):
     """Rundenende: Schaden, Pumps und verliehene Schluesselwoerter verfallen."""
     for p in players:
+        for v in list(p.vehicles):  # Crew endet: wieder ein Artefakt (gestorbene Fahrzeuge sind weg)
+            if v["crewed"] is not None:
+                if any(c is v["crewed"] for c in p.creatures):
+                    v["tapped"] = v["crewed"].tapped
+                    uncrew(p, v, None)
+                else:
+                    p.vehicles.remove(v)
         p.creatures[:] = [c for c in p.creatures if c.land_source is None]  # Hall of Echoes: wieder ein Land
         for c in p.creatures:
             c.damage, c.pump, c.tpump, c.touched, c.lifted, c.at_jace = 0, 0, 0, False, False, False

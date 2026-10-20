@@ -370,6 +370,14 @@ RULES = [
     "unblockbar; X nach ausgegebenem Mana bzw. Manawert. Opus: ab 5 ausgegebenem Mana (billigste Bezahlung nach "
     "Kostensenkung) die großen Effekte statt bzw. zusätzlich. Als Ziel zählen Removal auf eine Kreatur (nicht „any "
     "target“), Pumps, Marken, −N/−0 und verliehene Schlüsselwörter.",
+    "Fahrzeuge und Crew (702.122): Tappen für Crew ist keine {T}-Kosten, auch frische Kreaturen crewen. Angriff: "
+    "nur Fahrzeuge, die seit Beginn des Zugs da sind; gecrewt wird mit Kreaturen, die in diesem Zug nicht angreifen "
+    "können (frisch, Defender), oder wenn das Fahrzeug mehr Schaden macht als die Kreaturen, die dafür tappen; greift "
+    "es dann doch nicht an, wird die Crew zurückgenommen. Im Zug des Gegners crewen Kreaturen, die nach den "
+    "Block-Regeln nicht blocken, wenn das Fahrzeug danach nach denselben Regeln blockt. Am Rundenende ist es wieder "
+    "ein Artefakt (getappt, wenn es angegriffen hat). „Tap target creature defending player controls“ beim Angriff: "
+    "der gefährlichste Blocker, der unseren stärksten Angreifer aufhalten würde (tötet oder überlebt ihn), sonst der "
+    "gefährlichste, der ihn blocken kann; nie mit Hexproof, Ward nur, wenn wir zahlen können.",
     "Noch nicht im Kampf: weitere Auslöser und Fähigkeiten (siehe Modell-Abdeckung). Solche Karten werden gewirkt, "
     "wirken aber nur mit den schon modellierten Effekten.",
 ]

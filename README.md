@@ -525,7 +525,8 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
   („as long as you control another …“, Infusion, Kreaturenkarten im Friedhof), Schlüsselwörter für Kreaturen mit
   Marke, verliehenes Ward/Hexproof/Unblockbar, Ausrüstung beim Betreten und als Token, „Equip <Typ>“, Marken zu
   Kampfbeginn, Angriffs-Auslöser mit Schlüsselwörtern und allgemeine Auslöser „Whenever you cast …“ (Repartee, Opus,
-  Nichtkreatur-, Typ- und Farbzauber). Crew/Fahrzeuge sind noch nicht modelliert.
+  Nichtkreatur-, Typ- und Farbzauber), Fahrzeuge mit Crew (Angriff und Block) und „tap target creature defending
+  player controls“ beim Angriff.
 - Removal (Destroy/Exile, Schaden, −X/−X, Edikt, Fight, Biss, Bounce, Lock, zurück in die Bibliothek,
   Massenremoval) trifft die gefährlichste passende Kreatur; Removal-Instants vor dem Angriff, gegen Angreifer oder am
   Ende des gegnerischen Zugs.
