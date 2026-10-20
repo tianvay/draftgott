@@ -378,6 +378,16 @@ RULES = [
     "ein Artefakt (getappt, wenn es angegriffen hat). „Tap target creature defending player controls“ beim Angriff: "
     "der gefährlichste Blocker, der unseren stärksten Angreifer aufhalten würde (tötet oder überlebt ihn), sonst der "
     "gefährlichste, der ihn blocken kann; nie mit Hexproof, Ward nur, wenn wir zahlen können.",
+    "Alchemy (YFRA): „perpetually“ ändert die Karte selbst (bleibt in Friedhof und Hand). Conjure benannter Karten "
+    "(Kraken Hatchling, Mind Stone, Aria of Flame) mit ihren Texten von Scryfall. Avoided Stairwurm −1/−1 je "
+    "Kreaturenkarte in der Bibliothek; Zimone macht Schaden wie mit positiver Power und wird prepared, sobald Karten "
+    "aus der Bibliothek in den Friedhof kommen (Mill, Surveil), Simple Subtraction wie andere −N/−0-Kampftricks, aber "
+    "perpetuell; Dina wächst bei jedem Lebensgewinn; Asymmetry Sage gibt Grund-Power 3 der eigenen Kreatur, die am "
+    "meisten gewinnt (angriffsbereite zuerst; Kopien lösen nicht aus); Sparks Ablaze verbilligt den nächsten "
+    "Planeswalker; Paradox Kraken gibt Kraken Hatchling, egal wie er in den Friedhof kommt; Boisterous Clique "
+    "exiliert wie beim Abwerfen-Lassen gewählt, der Gegner bekommt Mind Stone; Searing Soloist: rote Quellen 1 Schaden "
+    "mehr (Kampf, Removal, Aria), Aria trifft immer den Gegner; Killian: Seek nach Schaden ausserhalb des Kampfs, "
+    "abgeworfen im nächsten Endsegment, wenn nicht gewirkt.",
     "Noch nicht im Kampf: weitere Auslöser und Fähigkeiten (siehe Modell-Abdeckung). Solche Karten werden gewirkt, "
     "wirken aber nur mit den schon modellierten Effekten.",
 ]

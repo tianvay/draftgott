@@ -50,6 +50,7 @@ Projektordner geklärt; Abweichungen davon stehen mit Regelnummer im Code bzw. i
 | `components/scryfall.py` | Kartendaten von Scryfall holen und zwischenspeichern |
 | `components/mana.py` | Kosten, Hybrid/Phyrexian, Bezahlbarkeit durch Länder |
 | `components/cards.py` | Kartenmodell `Card` und alle Parser aus dem Kartentext (Länder, Landcycling, Empower Jace, Draw, Surveil, Prepared, Mana, Kampf-Schlüsselwörter, Fähigkeiten, Auslöser, Token, modale Karten, Kostensenkung …) |
+| `components/conjure.py` | Alchemy: benannte Karten zum Beschwören (Conjure) mit ihren Scryfall-Texten |
 | `components/removal.py` | Removal-Erkennung und Removal-Score, Flash/Deathtouch, Abwerfen |
 | `components/graveyard.py` | Friedhof-Score (Zweitverwertung, Zurückholen, Ressource) |
 | `components/cardkinds.py` | Kartentypen und Kartenfluss für Seitenleiste und Bericht |
@@ -528,6 +529,9 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
   Kampfbeginn, Angriffs-Auslöser mit Schlüsselwörtern und allgemeine Auslöser „Whenever you cast …“ (Repartee, Opus,
   Nichtkreatur-, Typ- und Farbzauber), Fahrzeuge mit Crew (Angriff und Block) und „tap target creature defending
   player controls“ beim Angriff.
+- Alchemy: Reality Fracture (YFRA), Paket A: Perpetual, Conjure benannter Karten, Seek (Killian), Avoided
+  Stairwurm, Zimone, Dina, Asymmetry Sage, Sparks Ablaze, Paradox Kraken, Boisterous Clique, Searing Soloist
+  (Karten zum Beschwören in `components/conjure.py`).
 - Removal (Destroy/Exile, Schaden, −X/−X, Edikt, Fight, Biss, Bounce, Lock, zurück in die Bibliothek,
   Massenremoval) trifft die gefährlichste passende Kreatur; Removal-Instants vor dem Angriff, gegen Angreifer oder am
   Ende des gegnerischen Zugs.

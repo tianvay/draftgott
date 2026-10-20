@@ -23,6 +23,7 @@ from components.jace import (JaceState, cast_filter_matches, enter_filter_matche
                              recurring_effects, surveil)
 from components.simulation import walker_rank
 from components.cards import HEARTWOOD, Card, token_card
+from components.conjure import conjure
 from components.simulation import (ANY_COLOR, apply_effects, apply_surveils, best_cast_reduced, choose_land,
                                    cost_reduction, do_cycle, enter_value, enters_prepared, free_spells, hand_form,
                                    omni_ok,
@@ -124,6 +125,8 @@ class Creature:
         p = self.ctl
         if p is not None and (self.card.cond_static or (p.statics or _statics(p))[0]):  # selten: nur dann rechnen
             base += sum(s[2] for s in self._cond())
+        if self.card.lib_creature_minus and p is not None:  # Avoided Stairwurm
+            base -= sum(1 for c in p.library if c.is_creature)
         return base
 
     @property
@@ -134,6 +137,8 @@ class Creature:
         p = self.ctl
         if p is not None and (self.card.cond_static or (p.statics or _statics(p))[0]):
             out += sum(s[3] for s in self._cond())
+        if self.card.lib_creature_minus and p is not None:
+            out -= sum(1 for c in p.library if c.is_creature)
         return out
 
     def _cond(self):
@@ -199,7 +204,9 @@ class Creature:
             power = -power
         if tough > power and self.ctl is not None and any(c.card.toughness_damage and not c.dead
                                                           for c in self.ctl.creatures):
-            return tough
+            power = tough
+        if power > 0 and self.ctl is not None and red_bonus(self.ctl, self.card):  # Searing Soloist
+            power += 1
         return power
 
     def _threshold(self):
@@ -314,6 +321,38 @@ def _statics(p):
     p.statics = ([(c, card) for c, card in cards if any(st[1] == "team" for st in card.cond_static)],
                  [(c, card.counter_kw) for c, card in cards if card.counter_kw])
     return p.statics
+
+
+def red_bonus(p, card):
+    """Searing Soloist (614.1a): eine rote Quelle von p macht 1 Schaden mehr."""
+    return "R" in colors_of_alts(card.alts) and any(c.card.red_plus_one and not c.dead for c in p.creatures)
+
+
+def perpetual_pump(c, pw, tw):
+    """Perpetuell +P/+T (Alchemy): die Karte selbst aendert sich, auch in Friedhof und Hand."""
+    c.card = c.card._replace(power=c.card.power + pw, toughness=c.card.toughness + tw)
+
+
+def library_to_graveyard(p):
+    """Karten kamen aus der Bibliothek in den Friedhof (Mill, Surveil): Zimone wird prepared."""
+    for c in p.creatures:
+        if not c.dead and c.card.prepared and c.card.prepared[0] == "mill":
+            c.prepared = True
+
+
+def end_step_discards(players, e):
+    """Beginn des Endsegments: mit Seek geholte Karten (Killian) werden abgeworfen, wenn sie noch auf der Hand sind."""
+    for p in players:
+        gone = []
+        for card in p.seek_discard:
+            if any(h is card for h in p.hand):
+                p.hand.remove(card)
+                p.graveyard.append(card)
+                gone.append(card)
+        p.seek_discard = []
+        if gone:
+            e["events"].append(f"{p.name}: wirft ab (Seek): {', '.join(c.name for c in gone)}")
+            discarded(p, e, gone)
 
 
 def static_sources(p):
@@ -622,6 +661,46 @@ class Walker:
         return f"{self.card.name} (Loyalty {self.loyalty})"
 
 
+class Graveyard(list):
+    """Friedhof eines Spielers: kommt eine Karte wie Paradox Kraken hinein (egal woher), beschwoert sie ihre Karte
+    auf die Hand des Besitzers."""
+    __slots__ = ("owner",)
+
+    def __init__(self, items=(), owner=None):
+        super().__init__(items)
+        self.owner = owner
+
+    def _arrived(self, cards):
+        if self.owner is None:
+            return
+        for c in cards:
+            if getattr(c, "gy_conjure", ""):
+                new = conjure(c.gy_conjure)
+                if new is not None:
+                    self.owner.hand.append(new)
+
+    def append(self, card):
+        super().append(card)
+        self._arrived([card])
+
+    def extend(self, cards):
+        cards = list(cards)
+        super().extend(cards)
+        self._arrived(cards)
+
+    def insert(self, i, card):
+        super().insert(i, card)
+        self._arrived([card])
+
+    def __iadd__(self, cards):
+        self.extend(cards)
+        return self
+
+
+def _set_graveyard(self, value):
+    self._graveyard = Graveyard(value, self)
+
+
 def _set_tracked(attr):
     def setter(self, value):
         self.statics = None
@@ -633,6 +712,7 @@ class Player:
     creatures = property(lambda self: self._creatures, _set_tracked("_creatures"))
     perms = property(lambda self: self._perms, _set_tracked("_perms"))
     statics = None  # Zwischenspeicher fuer _statics
+    graveyard = property(lambda self: self._graveyard, _set_graveyard)
 
     def __init__(self, name, cards, mulligan=True, min_hand=5, never_concede=False):
         self.name = name
@@ -655,6 +735,9 @@ class Player:
         self.jace_perms = []  # Permanents mit wiederkehrendem Empower: (Karte, Schritt des Eintritts)
         self.surveilled = False  # in diesem Zug gesurveilt (Surveillance Phantasm)
         self.gained = 0       # in diesem Zug gewonnenes Leben (Enlightened Confidant)
+        self.next_pw = 0      # der naechste Planeswalker-Zauber kostet {N} weniger (Sparks Ablaze)
+        self.seek_discard = []  # mit Seek geholte Karten, die im naechsten Endsegment abgeworfen werden (Killian)
+        self.verse = {}       # Vers-Marken je Aria of Flame (id der Karte)
         self.exiled = []      # vom Gegner exilierte Karten, die wir ab Threshold wirken duerfen (Null Summoner)
         self.exiled_from = None  # Besitzer dieser Karten (der Gegner)
         self.opponent = None  # der andere Spieler (Thalia: Steuer auf unsere Zauber)
@@ -763,7 +846,7 @@ def _discounted(card, d, p=None):
     change = (0 if card.is_creature else d) - extra
     if card.is_planeswalker and p is not None:  # Tam, the Possibility
         change += sum(c.card.pw_discount for c in p.creatures if not c.dead) + sum(c.pw_discount + c.memorial_pw_mana
-                                                                                    for c in p.perms)
+                                                                                    for c in p.perms) + p.next_pw
     if not change:
         return card
     if change > 0:
@@ -1077,6 +1160,8 @@ def _mill(p, n, e=None, source=""):
     milled = p.library[:n]
     del p.library[:n]
     p.graveyard.extend(milled)
+    if milled:
+        library_to_graveyard(p)
     if e is not None and milled:
         e["events"].append(f"{p.name}: {source} – Mill {len(milled)}")
 
@@ -1845,6 +1930,8 @@ def _grant_atoms(p, opp, atoms, step, e, target, jace=False):
         if kind == "surveil":
             binned = surveil(p.library, a[1], p.hand, p.lands)
             p.graveyard.extend(binned)
+            if binned:
+                library_to_graveyard(p)
             if jace:
                 p.jace.surveils += 1
                 p.jace.surveil_lands += len(binned)
@@ -2452,6 +2539,15 @@ def deal_noncombat(src, victim, amount, e):
     victim.life -= amount
     victim.noncombat_step = victim.now
     src.dealt_direct += amount
+    for c in src.creatures:  # Killian: Seek eine Karte mit Manawert = Schaden, im naechsten Endsegment abwerfen
+        if c.card.noncombat_seek and not c.dead:
+            cands = [x for x in src.library if x.mv == amount]
+            if cands:
+                pick = random.choice(cands)
+                src.library.remove(pick)
+                src.hand.append(pick)
+                src.seek_discard.append(pick)
+                e["events"].append(f"{src.name}: {c.card.name} – Seek {pick.name}")
     e["face"] = e.get("face", 0) + amount
     for c in src.creatures:
         if c.card.noncombat_counter and not c.dead:
@@ -2471,6 +2567,9 @@ def gain_life(p, n, events=1):
     p.life += n
     p.gained += n
     for _ in range(events):
+        for c in p.creatures:  # Dina, Flesh Sower
+            if c.card.lifegain_perpetual and not c.dead:
+                perpetual_pump(c, c.card.lifegain_perpetual, c.card.lifegain_perpetual)
         for c in p.creatures:  # auch eine im selben Kampf gestorbene Lyra loest aus (gleichzeitig mit dem Schaden)
             if c.card.lifegain_counter:
                 k, typ = c.card.lifegain_counter
@@ -2561,6 +2660,8 @@ def emblem_cast(p, step, e):
 def on_cast(p, card, step, e):
     """Ein Zauber wurde gewirkt: Jace-Ausloeser, Marken fuer Zauber mit Ziel beim Gegner (Danitha)."""
     _jace_on_cast(p, card, step, e)
+    if card.is_planeswalker:  # Sparks Ablaze: der Rabatt gilt nur fuer den naechsten Planeswalker
+        p.next_pw = 0
     if card.hand_exile_land and p.cc_land is not None and not any(c == card for c, _l in p.impulse):
         p.cc_land = None  # aus dem Exil gewirkt: das Land liefert wieder nur sein Mana
     if p.emblems:
@@ -2672,6 +2773,11 @@ def cast_triggers(p, card, step, e):
     """Ausloeser "Whenever you cast ..." eigener Kreaturen und Permanents (Card.cast_trig). Opus: ab 5 ausgegebenem
     Mana die grossen Effekte statt ("instead") bzw. zusaetzlich ("also")."""
     spent = None
+    if card.is_instant_sorcery:
+        for x in p.perms:  # Aria of Flame: Vers-Marke, dann Schaden in Hoehe der Marken an den Gegner
+            if isinstance(x, Card) and x.verse and p.opponent is not None:
+                p.verse[id(x)] = p.verse.get(id(x), 0) + 1
+                deal_noncombat(p, p.opponent, p.verse[id(x)] + (1 if red_bonus(p, x) else 0), e)
     for src, source in static_sources(p):
         for kind, atoms, big, mode in source.cast_trig:
             if not cast_matches(kind, card):
@@ -2737,6 +2843,13 @@ def cast_effects(p, src, source, atoms, step, e):
             make_tokens(p, [(atom[1], atom[2])], step, e, opp, source.name)
         elif kind == "surveil":
             surveil_cards(p, [atom[1]], e, source.name)
+        elif kind == "base_power":  # Asymmetry Sage: die eigene Kreatur, die am meisten gewinnt (Angreifer zuerst)
+            gain = [c for c in alive if c.card.power < atom[1]]
+            ready = lambda c: not c.tapped and not c.card.defender and (c.entered < step or c.has("haste"))
+            pick = (max(gain, key=lambda c: (ready(c), atom[1] - c.card.power)) if gain
+                    else max(alive, key=lambda c: atom[1] - c.card.power, default=None))
+            if pick is not None:
+                pick.pump += atom[1] - pick.card.power
     e["events"].append(f"{p.name}: {source.name} – Auslöser beim Wirken")
 
 
@@ -2813,6 +2926,17 @@ def creature_enters(p, new, step, e, opp=None, cast=True):
         search_basics(p, x, e, card.name)
     if card.uldaros_cast and cast and opp is not None:
         uldaros_copies(p, opp, card, step, e)
+    if card.etb_conjure:  # Searing Soloist: Aria of Flame aufs Feld
+        made = conjure(card.etb_conjure)
+        if made is not None:
+            e["events"].append(f"{p.name}: {card.name} – {made.name} beschworen")
+            if made.is_creature:
+                fresh = Creature(made, step)
+                p.creatures.append(fresh)
+                creature_enters(p, fresh, step, e, opp, cast=False)
+            else:
+                p.perms.append(made)
+                permanent_enters(p, opp if opp is not None else p.opponent, made, step, e)
     if card.equip_token:  # Equipment-Token (Iron Hills Blacksmith, U.S.Agent, Dain Ironfoot)
         token, attach = card.equip_token
         p.perms.append(token)
@@ -3047,6 +3171,8 @@ def surveil_cards(p, amounts, e, source):
     before = len(p.graveyard)
     events, _lands = apply_surveils(amounts, p.library, p.hand, p.lands, graveyard=p.graveyard)
     binned = len(p.graveyard) - before
+    if binned:
+        library_to_graveyard(p)
     e["events"].append(f"{p.name}: {source} – Surveil {sum(amounts)}" + (f" ({binned} abgelegt)" if binned else ""))
     mark_surveil(p, e, max(1, events))
 
@@ -3619,6 +3745,8 @@ def _cast_removal(card, caster, victim, e, step, target=None):
         e["events"].append(f"{caster.name} wirft ab: {choice.name}")
         discarded(caster, e)
     amount = _amount(spec, caster)
+    if kind in ("damage", "sweep_damage") and amount > 0 and red_bonus(caster, card):  # Searing Soloist
+        amount += 1
     if kind in ("sweep", "sweep_damage"):
         hit = list(victim.creatures)
         if not ("chosen_type",) in spec[2] and not ("opponents",) in spec[2]:
@@ -4090,6 +4218,9 @@ def card_effects(me, opp, card, step, entry, modes=None):
         make_tokens(me, [(1, card.stage_token)], step, entry, opp, card.name)
         for c in others:
             c.bonus += card.wizard_token_counters
+    me.next_pw += card.next_pw_discount  # Sparks Ablaze
+    if card.opp_etb_life and opp is not None:  # Aria of Flame
+        gain_life(opp, card.opp_etb_life)
     if card.mill_self:  # Dark Matter Manipulator, Omit Variables
         _mill(me, card.mill_self, entry, card.name)
     if card.team_grant:  # Artifist Acumen
@@ -4130,7 +4261,14 @@ def card_effects(me, opp, card, step, entry, modes=None):
             discarded(me, entry)
             _draw(me)
             entry["events"].append(f"{me.name}: {card.name} – wirft {gone.name} ab und zieht")
-    if card.hand_pick and opp is not None:
+    if card.hand_pick and card.hand_pick_gift and opp is not None:  # Boisterous Clique: Exil, dafuer Mind Stone
+        pick = choose_from_hand(opp, card.hand_pick)
+        gift = conjure(card.hand_pick_gift)
+        if pick is not None and gift is not None:
+            opp.hand.remove(pick)
+            opp.hand.append(gift)
+            entry["events"].append(f"{me.name}: {card.name} – {pick.name} ins Exil, {opp.name} bekommt {gift.name}")
+    elif card.hand_pick and opp is not None:
         pick = choose_from_hand(opp, card.hand_pick)
         if pick is not None:
             opp.hand.remove(pick)
@@ -4975,6 +5113,8 @@ def _gy_return_ok(p, card):
         return False
     if cond == "surveilled" and not p.surveilled:  # Proctor of Potential
         return False
+    if cond == "gy_gt_lib" and not len(p.graveyard) > len(p.library):  # Paradox Kraken
+        return False
     if extra == "exile_creature" and not gy_candidates(p, "creature", exclude=card):
         return False
     return legend_ok(p, card) if _dest == "battlefield" else True
@@ -5275,7 +5415,10 @@ def debuff_tricks(p, pairs, opp, e, step, attacking):
         if try_counter(p, card, step, e):
             continue
         pay_ward(p, target, e)
-        target.pump -= n
+        if _debuff_card(card).debuff_perpetual:  # Simple Subtraction
+            perpetual_pump(target, -n, 0)
+        else:
+            target.pump -= n
         e["events"].append(f"{p.name}: {card.name} – {target.card.name} −{n}/−0")
 
 
@@ -6147,6 +6290,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
             if c.exile_step is not None and c.exile_step <= step:
                 p_.creatures.remove(c)
                 e["events"].append(f"{p_.name}: Kopie von {c.card.name} exiliert")
+    end_step_discards((me, opp), e)
     for p_ in (me, opp):  # "At the beginning of the end step, sacrifice this creature"
         for c in p_.creatures:
             if c.card.end_sacrifice:

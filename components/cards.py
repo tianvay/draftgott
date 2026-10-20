@@ -292,6 +292,19 @@ class Card(NamedTuple):
     vehicle: tuple = ()        # Fahrzeug: (Crew N, Power, Toughness, Kampf-Schluesselwoerter)
     attack_tap: bool = False   # greift sie an: eine Kreatur des Verteidigers tappen
     equip_attack_tap: bool = False  # Ausruestung: greift die Kreatur an, eine Kreatur des Verteidigers tappen
+    # Alchemy (YFRA)
+    conjured: bool = False     # beschworene Karte (nicht aus dem Startdeck)
+    lib_creature_minus: bool = False  # -1/-1 je Kreaturenkarte in der eigenen Bibliothek (Avoided Stairwurm)
+    debuff_perpetual: bool = False  # -N/-0 perpetuell statt bis Rundenende (Simple Subtraction)
+    lifegain_perpetual: int = 0  # Lebensgewinn: perpetuell +N/+N auf sich (Dina, Flesh Sower)
+    next_pw_discount: int = 0  # der naechste Planeswalker-Zauber kostet {N} weniger (Sparks Ablaze)
+    gy_conjure: str = ""       # kommt sie von irgendwo in den Friedhof: diese Karte auf die Hand (Paradox Kraken)
+    hand_pick_gift: str = ""   # hand_pick exiliert, der Gegner bekommt diese Karte auf die Hand (Boisterous Clique)
+    etb_conjure: str = ""      # beim Betreten diese Karte aufs Feld beschwoeren (Searing Soloist)
+    red_plus_one: bool = False  # eigene rote Quellen machen 1 Schaden mehr (Searing Soloist)
+    noncombat_seek: bool = False  # Schaden ausserhalb des Kampfs am Gegner: Seek MW = Schaden, Endsegment abwerfen
+    opp_etb_life: int = 0      # beim Betreten bekommt jeder Gegner N Leben (Aria of Flame)
+    verse: bool = False        # Aria of Flame: Instant/Sorcery -> Vers-Marke, Schaden = Vers-Marken
 
 
 LANDCYCLE_RE = re.compile(
@@ -1007,7 +1020,8 @@ _REANIMATE_RE = re.compile(r"\breturn (target|all) (creature or planeswalker|non
 _GY_RETURN_RE = re.compile(r"^((?:\{[^}]+\})+)(, exile another creature card from your graveyard)?: return this card "
                            r"from your graveyard to (the battlefield|your hand)( tapped)?(?: with (?:a|an) "
                            r"(\+1/\+1|finality) counter on (?:it|her|him|them))?\.( activate only if (?:an opponent "
-                           r"has been dealt noncombat damage|you've scried or surveilled) this turn\.)?$")
+                           r"has been dealt noncombat damage|you've scried or surveilled) this turn\.| activate only "
+                           r"if there are more cards in your graveyard than your library and only as a sorcery\.)?$")
 _PHOENIX_RE = re.compile(r"^at the beginning of combat on your turn, if two or more creatures died this turn, return "
                          r"this card from your graveyard to the battlefield")
 _DOMAIN_POWER_RE = re.compile(r"^domain — (?:~|this creature)'s power is equal to the number of basic land types among "
@@ -1131,7 +1145,8 @@ def life_and_costs(card, type_line, keywords):
             out["gy_return"] = (cost_alternatives(mana), "battlefield" if m.group(3) == "the battlefield" else "hand",
                                 bool(m.group(4)), 1 if m.group(5) == "+1/+1" else 0,
                                 "exile_creature" if m.group(2) else "",
-                                "" if not m.group(6) else "surveilled" if "surveilled" in m.group(6) else "noncombat")
+                                "" if not m.group(6) else "surveilled" if "surveilled" in m.group(6)
+                                else "gy_gt_lib" if "more cards in your graveyard" in m.group(6) else "noncombat")
             if m.group(5) == "finality":
                 out["finality"] = True
         if _PHOENIX_RE.match(low):
@@ -1700,7 +1715,8 @@ def easy_traits(card, type_line):
             out["nexus_mana"] = True
         if low.startswith("~'s power is equal to the number of card types among cards in all graveyards"):
             out["goyf"] = True
-        if low.startswith("if ~'s power is negative, he assigns combat damage as though his power were positive"):
+        if low.startswith("if ~'s power is negative, he assigns combat damage as though his power were positive") \
+                or re.match(r"^~ assigns combat damage as though (?:her|his|its) power were positive", low):
             out["abs_damage"] = True
         if low.startswith("~ doesn't untap during your untap step"):
             out["no_untap"] = True
@@ -2036,6 +2052,9 @@ def prepared_mode(card):
     low = re.sub(r"\([^)]*\)", " ", faces[0].get("oracle_text") or "").lower()
     enters = bool(re.search(r"\benters prepared\b", low))
     upkeep = bool(re.search(r"\bupkeep\b[^.]*\bbecomes prepared\b", low))
+    if not enters and not upkeep and re.search(r"whenever one or more cards are put into your graveyard from your "
+                                               r"library, [^.]*becomes prepared", low):
+        return "mill"  # Zimone the Calculating
     if not enters and not upkeep and re.search(r"at the beginning of each end step, if three or more creatures died "
                                                r"this turn, this creature becomes prepared", low):
         return "deaths3"  # Bloodline Recollector
@@ -2197,13 +2216,33 @@ _F_RES = {
                               r"((?:\{[^}]+\})+)\.(?: (when you do, attach it to target creature you control|attach "
                               r"it to ~)\.)?$"),
     "crew": re.compile(r"^crew (\d+)$"),
+    "lib_creature_minus": re.compile(r"^(?:~|this creature) gets -1/-1 for each creature card in your library\.$"),
+    "debuff_perpetual": re.compile(r"^target creature perpetually gets -(\d+)/-0\.$"),
+    "lifegain_perpetual": re.compile(r"^whenever you gain life, (?:~|this creature) perpetually gets \+(\d+)/\+(\d+)\.$"),
+    "next_pw_discount": re.compile(r"^the next planeswalker spell you cast costs \{(\d+)\} less to cast\.$"),
+    "gy_conjure": re.compile(r"^when this card is put into your graveyard from anywhere, conjure a card named .+ into "
+                             r"your hand\.$"),
+    "hand_pick_gift": re.compile(r"^when (?:~|this creature) enters, look at all nonland cards in target player's "
+                                 r"hand\. you may exile one of those cards\. if you do, that player conjures a card "
+                                 r"named .+ into their hand\.$"),
+    "etb_conjure": re.compile(r"^when (?:~|this creature) enters, conjure a card named .+ onto the battlefield\.$"),
+    "red_plus_one": re.compile(r"^if a red source you control would deal damage to a permanent or player, it deals "
+                               r"that much damage plus 1 instead\.$"),
+    "noncombat_seek": re.compile(r"^whenever a source you control deals noncombat damage to an opponent, seek a card "
+                                 r"with mana value equal to the damage dealt\. discard that card at the beginning of "
+                                 r"the next end step\.$"),
+    "opp_etb_life": re.compile(r"^when this enchantment enters, each opponent gains (\d+) life\.$"),
+    "verse": re.compile(r"^whenever you cast an instant or sorcery spell, put a verse counter on this enchantment, then "
+                        r"it deals damage equal to the number of verse counters on it to target player or "
+                        r"planeswalker\.$"),
     "attack_tap": re.compile(r"^whenever (~|this creature|equipped creature) attacks, tap target creature defending "
                              r"player controls\.$"),
-    "cast": re.compile(_PREFIX + r"whenever you cast (an instant or sorcery spell that targets a creature|an instant "
+    "cast": re.compile(_PREFIX + r"whenever you cast (or copy an instant or sorcery spell|an instant or sorcery spell that targets a creature|an instant "
                        r"or sorcery spell|a noncreature spell|a creature spell|a spell that targets a creature you "
                        r"control|a multicolored spell|a spell|an? [a-z]+ spell), (.+)$"),
 }
-_CAST_FILTER = {"an instant or sorcery spell that targets a creature": "instsorc_creature",
+_CAST_FILTER = {"or copy an instant or sorcery spell": "instsorc",  # Magecraft (Kopien loesen nicht aus)
+                "an instant or sorcery spell that targets a creature": "instsorc_creature",
                 "an instant or sorcery spell": "instsorc", "a noncreature spell": "noncreature",
                 "a creature spell": "creature", "a spell that targets a creature you control": "own_creature",
                 "a multicolored spell": "multicolor", "a spell": "spell"}
@@ -2225,6 +2264,8 @@ _CAST_ATOM_RES = (
      lambda m: (("team_pump", int(m.group(1)), int(m.group(2))),)),
     (re.compile(rf"^{_S} deals (\d+) damage to each opponent$"), lambda m: (("face", int(m.group(1))),)),
     (re.compile(rf"^{_S} deals (\d+) damage to any target$"), lambda m: (("bolt", int(m.group(1))),)),
+    (re.compile(r"^target creature you control has base power (\d+) until end of turn$"),
+     lambda m: (("base_power", int(m.group(1))),)),
     (re.compile(rf"^{_S} deals damage equal to that spell's mana value to any target$"), lambda m: (("bolt", "mv"),)),
     (re.compile(rf"^{_S} gets \+x/\+0 until end of turn, where x is the amount of mana spent to cast that spell$"),
      lambda m: (("pump", "spent", 0),)),
@@ -2282,7 +2323,28 @@ def foundation_traits(card, type_line):
     Angriffs-Ausloeser, Ausruestung beim Betreten und als Token, Ausloeser beim Wirken (als dict mit den Card-Feldern)."""
     out, cond, casts = {}, [], []
     res = _F_RES
-    for _raw, low in _clean_lines(card):
+    for raw, low in _clean_lines(card):
+        named = re.search(r"named ([A-Z][^.]*?) (?:into|onto)", raw)  # Name mit Gross-/Kleinschreibung
+        for key in ("gy_conjure", "hand_pick_gift", "etb_conjure"):
+            if res[key].match(low) and named:
+                out[key] = named.group(1)
+                if key == "hand_pick_gift":
+                    out["hand_pick"] = "nonland"
+        for key in ("lib_creature_minus", "red_plus_one", "noncombat_seek", "verse"):
+            if res[key].match(low):
+                out[key] = True
+        m = res["debuff_perpetual"].match(low)
+        if m:
+            out["debuff"], out["debuff_perpetual"] = int(m.group(1)), True
+        m = res["lifegain_perpetual"].match(low)
+        if m and m.group(1) == m.group(2):
+            out["lifegain_perpetual"] = int(m.group(1))
+        m = res["next_pw_discount"].match(low)
+        if m:
+            out["next_pw_discount"] = int(m.group(1))
+        m = res["opp_etb_life"].match(low)
+        if m:
+            out["opp_etb_life"] = int(m.group(1))
         m = res["cond_another"].match(low)
         if m and _kw_only(m.group(1)):
             cond.append((("another", m.group(2)), "self", 0, 0, _kw_only(m.group(1))))
