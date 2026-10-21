@@ -532,6 +532,8 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
 - Alchemy: Reality Fracture (YFRA), Paket A: Perpetual, Conjure benannter Karten, Seek (Killian), Avoided
   Stairwurm, Zimone, Dina, Asymmetry Sage, Sparks Ablaze, Paradox Kraken, Boisterous Clique, Searing Soloist
   (Karten zum Beschwören in `components/conjure.py`).
+- Station (EOE, TRK): Raumschiffe bekommen in Main 2 Charge-Marken von Kreaturen, die nicht gegen einen tödlichen
+  Gegenangriff fehlen; Stufen mit Schlüsselwörtern, Team-Pumps und P/T (dann Artefaktkreatur). Planeten nicht.
 - Removal (Destroy/Exile, Schaden, −X/−X, Edikt, Fight, Biss, Bounce, Lock, zurück in die Bibliothek,
   Massenremoval) trifft die gefährlichste passende Kreatur; Removal-Instants vor dem Angriff, gegen Angreifer oder am
   Ende des gegnerischen Zugs.

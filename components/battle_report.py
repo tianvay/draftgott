@@ -378,6 +378,12 @@ RULES = [
     "ein Artefakt (getappt, wenn es angegriffen hat). „Tap target creature defending player controls“ beim Angriff: "
     "der gefährlichste Blocker, der unseren stärksten Angreifer aufhalten würde (tötet oder überlebt ihn), sonst der "
     "gefährlichste, der ihn blocken kann; nie mit Hexproof, Ward nur, wenn wir zahlen können.",
+    "Station (702.184, 721): Charge-Marken durch Tappen einer anderen eigenen Kreatur (ihre Power, auch frische "
+    "Kreaturen), nur in Main 2: Kreaturen, die danach nicht gegen einen tödlichen Gegenangriff fehlen, die stärksten "
+    "zuerst, bis die höchste Stufe erreicht ist; zuerst das Raumschiff, das seiner nächsten Stufe am nächsten ist. Ab "
+    "{N+} gelten Schlüsselwörter und „(Other) creatures you control get +N/+N“; ab der Stufe mit P/T ist das "
+    "Raumschiff eine Artefaktkreatur (greift an, wenn es seit Beginn des Zugs da ist). Die Marken bleiben, bis es das "
+    "Spielfeld verlässt. Planeten (Länder mit Station) werden nicht gestationt.",
     "Alchemy (YFRA): „perpetually“ ändert die Karte selbst (bleibt in Friedhof und Hand). Conjure benannter Karten "
     "(Kraken Hatchling, Mind Stone, Aria of Flame) mit ihren Texten von Scryfall. Avoided Stairwurm −1/−1 je "
     "Kreaturenkarte in der Bibliothek; Zimone macht Schaden wie mit positiver Power und wird prepared, sobald Karten "

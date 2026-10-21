@@ -305,6 +305,8 @@ class Card(NamedTuple):
     noncombat_seek: bool = False  # Schaden ausserhalb des Kampfs am Gegner: Seek MW = Schaden, Endsegment abwerfen
     opp_etb_life: int = 0      # beim Betreten bekommt jeder Gegner N Leben (Aria of Flame)
     verse: bool = False        # Aria of Flame: Instant/Sorcery -> Vers-Marke, Schaden = Vers-Marken
+    station: tuple = ()        # Station (702.184, 721): (Kreatur ab N Marken oder 0, P, T,
+    #                            ((N, Schluesselwoerter, Team-Pump (P, T, "others"/"all") oder None), ...))
 
 
 LANDCYCLE_RE = re.compile(
@@ -2216,6 +2218,8 @@ _F_RES = {
                               r"((?:\{[^}]+\})+)\.(?: (when you do, attach it to target creature you control|attach "
                               r"it to ~)\.)?$"),
     "crew": re.compile(r"^crew (\d+)$"),
+    "station_tier": re.compile(r"^(\d+)\+ \| (.+)$"),
+    "station_team": re.compile(r"^(other )?creatures you control get \+(\d+)/\+(\d+)\.$"),
     "lib_creature_minus": re.compile(r"^(?:~|this creature) gets -1/-1 for each creature card in your library\.$"),
     "debuff_perpetual": re.compile(r"^target creature perpetually gets -(\d+)/-0\.$"),
     "lifegain_perpetual": re.compile(r"^whenever you gain life, (?:~|this creature) perpetually gets \+(\d+)/\+(\d+)\.$"),
@@ -2323,7 +2327,19 @@ def foundation_traits(card, type_line):
     Angriffs-Ausloeser, Ausruestung beim Betreten und als Token, Ausloeser beim Wirken (als dict mit den Card-Feldern)."""
     out, cond, casts = {}, [], []
     res = _F_RES
+    station_kw, tiers, all_tiers = False, [], []
     for raw, low in _clean_lines(card):
+        if low == "station":
+            station_kw = True
+        m = res["station_tier"].match(low)
+        if m:  # 721.2a/b: "{N+} | Faehigkeiten"
+            all_tiers.append(int(m.group(1)))
+            team = res["station_team"].match(m.group(2))
+            if _kw_only(m.group(2)):
+                tiers.append((int(m.group(1)), _kw_only(m.group(2)), None))
+            elif team:
+                tiers.append((int(m.group(1)), (), (int(team.group(2)), int(team.group(3)),
+                                                    "others" if team.group(1) else "all")))
         named = re.search(r"named ([A-Z][^.]*?) (?:into|onto)", raw)  # Name mit Gross-/Kleinschreibung
         for key in ("gy_conjure", "hand_pick_gift", "etb_conjure"):
             if res[key].match(low) and named:
@@ -2416,6 +2432,12 @@ def foundation_traits(card, type_line):
             if trig:
                 kind = _CAST_FILTER.get(m.group(1)) or "type:" + m.group(1).split()[1]  # "a Villain spell"
                 casts.append((kind,) + trig)
+    if station_kw or tiers:
+        face = (card.get("card_faces") or [card])[0]
+        pw, tg = (str(face.get(k, card.get(k)) or "") for k in ("power", "toughness"))
+        has_pt = pw.isdigit() and tg.isdigit()
+        out["station"] = (max(all_tiers) if has_pt and all_tiers and station_kw else 0,
+                          int(pw) if has_pt else 0, int(tg) if has_pt else 0, tuple(tiers))
     if cond:
         out["cond_static"] = tuple(cond)
     if casts:

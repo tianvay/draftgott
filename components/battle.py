@@ -155,7 +155,8 @@ class Creature:
         out = [s for s in own if s[1] == "self" and _cond_met(p, s[0], self)]
         for src, card in team:
             if src is None or not src.dead:
-                out += [s for s in card.cond_static if s[1] == "team" and _cond_met(p, s[0], src)]
+                out += [s for s in card.cond_static if (s[1] == "team" or (s[1] == "others" and src is not self))
+                        and _cond_met(p, s[0], src)]
         return out
 
     def _gy_power(self):
@@ -318,7 +319,7 @@ def _statics(p):
     Team-Statik [(Kreatur oder None, Karte)], Quellen mit Schluesselwoertern fuer Kreaturen mit Marke
     [(Kreatur oder None, kw)])."""
     cards = [(c, c.card) for c in p.creatures] + [(None, x) for x in p.perms if isinstance(x, Card)]
-    p.statics = ([(c, card) for c, card in cards if any(st[1] == "team" for st in card.cond_static)],
+    p.statics = ([(c, card) for c, card in cards if any(st[1] in ("team", "others") for st in card.cond_static)],
                  [(c, card.counter_kw) for c, card in cards if card.counter_kw])
     return p.statics
 
@@ -366,6 +367,8 @@ def _cond_met(p, cond, src):
     kind = cond[0]
     if kind == "gained":  # Infusion: in diesem Zug Leben gewonnen
         return p.gained > 0
+    if kind == "always":  # Station-Stufe erreicht (Lumen-Class Frigate)
+        return True
     if kind == "another":  # "as long as you control another Goblin"
         return any(c is not src and not c.dead and cond[1] in c.card.creature_types for c in p.creatures)
     if kind == "gy_creatures":
@@ -723,6 +726,7 @@ class Player:
         self.mulls = mulls
         self.lands, self.creatures, self.perms, self.graveyard = [], [], [], []
         self.vehicles = []  # Fahrzeuge: {"card", "since" (Schritt), "crewed" (Creature oder None), "tapped"}
+        self.stations = []  # Station-Karten: {"card", "live" (Karte im Spiel), "since", "charge", "creature"}
         self.life = LIFE
         self.open = []        # ungetapptes Mana nach dem eigenen Zug (fuer Instants und Flash im Zug des Gegners)
         self.dealt_combat = 0  # Kampfschaden am Gegner
@@ -4138,6 +4142,13 @@ def permanent_enters(p, opp, card, step, e):
             pick = max(alive, key=lambda c: (can_attack(c, step), danger(c)))
             pick.auras.append(card)
             e["events"].append(f"{p.name}: {card.name} an {pick.card.name}")
+    if card.station:  # Station-Karte: eigenes Objekt im Spiel, Charge-Marken bleiben, bis sie das Spielfeld verlaesst
+        live = card._replace()
+        for i in range(len(p.perms) - 1, -1, -1):
+            if p.perms[i] is card:
+                p.perms[i] = live
+                break
+        p.stations.append({"card": card, "live": live, "since": step, "charge": 0, "creature": None})
     if card.vehicle:  # Fahrzeug: seit wann unter unserer Kontrolle (fuer den Angriff, 302.6)
         p.vehicles.append({"card": card, "since": step, "crewed": None, "tapped": False})
     if card.equip_etb and card in p.perms:  # Ausruestung: beim Betreten anlegen
@@ -5496,6 +5507,91 @@ def attack_keywords(me, attackers, alone, e):
                                    f"{', '.join(card.alone_kw)}")
 
 
+def _station_ready(p):
+    """Station-Karten, die noch im Spiel sind (als Permanent oder als Kreatur); weggefallene werden entfernt."""
+    out = []
+    for st in list(p.stations):
+        st.setdefault("live", st["card"])
+        car = st["creature"]
+        here = (any(c is car for c in p.creatures) if car is not None
+                else any(x is st["live"] for x in p.perms))
+        if here:
+            out.append(st)
+        else:
+            p.stations.remove(st)
+    return out
+
+
+def update_stations(p, step, e):
+    """721.2: Stufen nach Charge-Marken. Erreichte Schluesselwoerter und Team-Pumps gelten; ab der Stufe mit P/T-Box
+    ist die Karte eine Artefaktkreatur (seit ihrem Betreten unter unserer Kontrolle, 302.6)."""
+    for st in _station_ready(p):
+        card = st["card"]
+        at, pw, tw, tiers = card.station
+        reached = [t for t in tiers if st["charge"] >= t[0]]
+        kws = tuple(dict.fromkeys(k for t in reached for k in t[1]))
+        conds = tuple((("always",), t[2][2] if t[2][2] == "others" else "team", t[2][0], t[2][1], ())
+                      for t in reached if t[2])
+        if at and st["charge"] >= at:
+            if st["creature"] is None:
+                p.perms.remove(st["live"])
+                car = Creature(card._replace(is_creature=True, power=pw, toughness=tw, kw=card.kw + kws,
+                                             cond_static=card.cond_static + conds), st["since"])
+                car.base_card = card
+                car.gy, car.ctl = p.graveyard, p
+                p.creatures.append(car)
+                st["creature"] = car
+                e["events"].append(f"{p.name}: {card.name} ist ab {at} Marken eine {pw}/{tw}-Kreatur")
+            else:
+                car = st["creature"]
+                new = car.card._replace(kw=card.kw + kws, cond_static=card.cond_static + conds)
+                if new != car.card:
+                    car.card = new
+        elif st["creature"] is None:
+            new = card._replace(cond_static=card.cond_static + conds)
+            if new != st["live"]:
+                i = next(i for i, x in enumerate(p.perms) if x is st["live"])
+                p.perms[i] = new
+                st["live"] = new
+
+
+def station_phase(me, opp, step, e):
+    """Station in Main 2 (Nutzer 2026-10-21, wie Crew): Kreaturen tappen, die nicht gegen einen toedlichen
+    Gegenangriff fehlen, die staerksten zuerst, bis die hoechste Stufe erreicht ist; zuerst das Raumschiff, das seiner
+    naechsten Stufe am naechsten ist. Auch frische Kreaturen (702.184a: Tappen ist keine {T}-Kosten der Kreatur)."""
+    ready = _station_ready(me)
+    if not ready:
+        return
+    their = [t for t in opp.creatures if not t.dead and (not t.card.defender or _defender_ok(t)) and t.dmg > 0]
+
+    def top(st):
+        at, _pw, _tw, tiers = st["card"].station
+        return max([at] + [t[0] for t in tiers])
+
+    def gap(st):
+        steps = sorted({st["card"].station[0]} | {t[0] for t in st["card"].station[3]} - {0})
+        return min((n - st["charge"] for n in steps if n > st["charge"]), default=99)
+
+    for st in sorted(ready, key=gap):
+        while st["charge"] < top(st):
+            ships = {id(s["creature"]) for s in me.stations if s["creature"] is not None}
+            cands = sorted((c for c in me.creatures if not c.dead and not c.tapped and c.power > 0
+                            and id(c) not in ships), key=lambda c: -c.power)
+            pick = None
+            for c in cands:
+                home = [h for h in me.creatures if not h.dead and not h.tapped and h is not c]
+                if max_through(their, home) < me.life:
+                    pick = c
+                    break
+            if pick is None:
+                break
+            pick.tapped = True
+            st["charge"] += pick.power
+            e["events"].append(f"{me.name}: Station – {pick.card.name} tappt, {st['card'].name} hat {st['charge']} "
+                               f"Marken")
+            update_stations(me, step, e)
+
+
 def _crew_ready(p):
     """Fahrzeuge, die noch nicht gecrewt sind und noch auf dem Feld liegen (je Karte hoechstens so viele Eintraege wie
     Exemplare in p.perms; zerstoerte fallen weg)."""
@@ -6262,6 +6358,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     prepare_abilities(me, step, e)
     emrakul_exile(me, step, e)
     hapatra_untap(me, step, e)
+    station_phase(me, opp, step, e)
     if me.walkers:
         pw_phase(me, opp, step, e, "after")
     if walker_engine(me):
