@@ -8,3 +8,7 @@ scryfall_symbols.json
 
 # Python
 __pycache__/
+
+# Kartenbewertung des Drafthelpers (je Nutzer)
+kartenbewertung*.json
+kartenbewertung*.json.tmp

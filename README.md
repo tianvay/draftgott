@@ -65,6 +65,7 @@ Projektordner geklärt; Abweichungen davon stehen mit Regelnummer im Code bzw. i
 | `components/landadvice.py` | Land-Empfehlung und „Farben und Quellen“ |
 | `components/mana.py` | Kosten, Hybrid/Phyrexian, Bezahlbarkeit, Farbprüfungen (`pip_checks`) |
 | `components/suggest.py` | Deckvorschlag und Zuordnung nach Kategorien im Drafthelper |
+| `components/ratings.py` | Kartenbewertung des Drafthelpers (`kartenbewertung.json`, je Kartenname) |
 | `components/symbols.py` | Original-Manasymbole von Scryfall (Cache `scryfall_symbols.json`) |
 | `components/stats.py` | Ampel-Schwellen, Zeitkennzahlen, Signifikanz-Rechnung |
 | `components/html_base.py` | Gemeinsames Design (CSS im Stil des Drafthelpers), Seitenlayout, Tabellen, SVG-Diagramme |
@@ -91,7 +92,12 @@ Eine andere Datei geht so: `python mtg_sim.py --drafthelper meinpool.txt`.
   (wird gespielt, wenn wir diese Farbe spielen), **Filler** (füllt auf, wenn wir die Farbe spielen und nicht
   splashen) und **NeverPlay** (zu schlecht oder zu situativ). Die Kategorie ist unabhängig von
   Core/Splash/NoSplash/Aus und beeinflusst die Simulation nicht. Die Kopfleiste zählt je Kategorie und hat einen
-  Filter „Karten zeigen“.
+  Filter „Karten zeigen“. Die Kategorien stehen je Kartenname in `kartenbewertung.json` im Projektordner (nicht im
+  Git, jeder Nutzer bewertet selbst) und gelten für jeden Kartenpool: ändert sich der Pool, sind bewertete Karten
+  schon eingestuft. Gespeichert wird bei jedem Klick; die Datei ist alphabetisch sortiert und von Hand
+  bearbeitbar. Mit `--bewertung DATEI` gilt eine andere Datei (z. B. je Nutzer). Kategorien aus älteren
+  Browser-Speicherständen werden beim ersten Start einmal übernommen. Zuordnung, Standardländer, Zielgröße und
+  Farben merkt sich weiter der Browser je Pool.
 - **Deckvorschlag (eigenes drittes Deck):** Über den Karten stehen **Zielgröße** (Standard 40, wählbar 10 bis 200,
   alle Länder zählen mit), die **Farben** (W U B R G, vorbelegt mit den Farben des Cores) und der Button
   **Deckvorschlag erstellen**. Der Vorschlag baut aus den Kategorien ein eigenes Deck und lässt deine Zuordnung
@@ -305,6 +311,7 @@ Aktivierung pro Runde sind fest im Skript (siehe „Feste Annahmen“).
 
 | Parameter | Standard | Wirkung |
 |---|---|---|
+| `--bewertung DATEI` | `kartenbewertung.json` | Drafthelper: Datei mit der Kategorie je Kartenname (nicht im Git). |
 | `--neu-laden` | aus | Kartendaten werden in `scryfall_cache.json` neben dem Script gespeichert, bei späteren Läufen werden nur unbekannte Karten nachgeladen. Mit `--neu-laden` wird alles frisch von Scryfall geholt. |
 | `--ausgabe DATEI` (auch `--html DATEI`) | `mtg_bericht.html` | Name und Ort des HTML-Berichts. Eine vorhandene Datei wird überschrieben. |
 | `--nicht-oeffnen` | aus (Bericht wird geöffnet) | Der Bericht wird nur gespeichert, der Browser öffnet sich nicht. |

@@ -33,6 +33,7 @@ from components.removal import keyword_flags, removal_info
 from components.symbols import active as active_symbols, symbol_css
 from components.scryfall import card_image_url, fetch_cards_cached, fetch_printing_images
 from components.suggest import WUBRG, propose, suggest
+from components import ratings as card_ratings
 
 PORT = 8765
 MARKS = ("core", "splash", "nosplash", "off")
@@ -261,6 +262,8 @@ def make_handler(app):
                 self._send(app.get("battle_html") or "<p>Noch kein Kampfbericht vorhanden.</p>")
             elif path == "/api/enemies":
                 self._json({"enemies": enemy_decks(), "quit": False})
+            elif path == "/api/ratings":
+                self._json({"ratings": self._pool_ratings()})
             else:
                 self._send("Nicht gefunden", "text/plain; charset=utf-8", 404)
 
@@ -272,6 +275,9 @@ def make_handler(app):
                 return
             if path == "/api/battle":
                 self._battle()
+                return
+            if path in ("/api/rating", "/api/ratings/import"):
+                self._rating(path)
                 return
             if path not in ("/api/simulate", "/api/suggest", "/api/propose", "/api/lands", "/api/colors"):
                 self._send("Nicht gefunden", "text/plain; charset=utf-8", 404)
@@ -340,6 +346,33 @@ def make_handler(app):
                 return
             self._json({"ok": True})
 
+        def _pool_ratings(self, data=None):
+            """Kartenbewertung fuer die Karten des Pools (aus der Bewertungsdatei)."""
+            if data is None:
+                data = card_ratings.load_ratings(app["ratings"]) if app.get("ratings") else {}
+            names = {c["name"] for c in app["pool"]}
+            return {n: c for n, c in data.items() if n in names}
+
+        def _rating(self, path):
+            """Kategorie einer Karte speichern (/api/rating) bzw. alte Browser-Speicherstaende uebernehmen
+            (/api/ratings/import, nur fuer Karten ohne Bewertung)."""
+            try:
+                body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
+                if not app.get("ratings"):
+                    raise ValueError("Keine Bewertungsdatei")
+                if path == "/api/rating":
+                    name, cat = body.get("name"), body.get("cat") or ""
+                    if name not in {c["name"] for c in app["pool"]}:
+                        raise ValueError("Unbekannte Karte")
+                    data = card_ratings.set_rating(app["ratings"], name, cat)
+                else:
+                    cats = body.get("cats") if isinstance(body.get("cats"), dict) else {}
+                    data = card_ratings.merge_ratings(app["ratings"], cats)
+            except (ValueError, TypeError, OSError) as exc:
+                self._json({"ok": False, "error": str(exc)}, 400)
+                return
+            self._json({"ok": True, "ratings": self._pool_ratings(data)})
+
         def _battle(self):
             """Kampf der Varianten des letzten Berichts gegen ein Gegnerdeck (Hintergrund-Job, battle_server)."""
             try:
@@ -352,12 +385,19 @@ def make_handler(app):
     return Handler
 
 
+def ratings_path(args):
+    """Bewertungsdatei: wie angegeben, ein relativer Name liegt im Projektordner."""
+    path = pathlib.Path(getattr(args, "bewertung", None) or "kartenbewertung.json")
+    return path if path.is_absolute() else SCRIPT_DIR / path
+
+
 def serve(args, simulate, save, battle=None, save_battle=None):
     pool, basics, signature = load_pool(args.drafthelper, args.neu_laden)
     options = sorted(set(SIM_OPTIONS) | {args.sims})
     app = {"pool": pool, "basics": basics, "args": args, "simulate": simulate, "save": save, "job": Job(), "options": options,
            "battle": battle, "save_battle": save_battle,
-           "file": pathlib.Path(args.drafthelper).name, "signature": signature}
+           "file": pathlib.Path(args.drafthelper).name, "signature": signature,
+           "ratings": ratings_path(args)}
     try:
         server = LocalServer(("127.0.0.1", PORT), make_handler(app))
     except OSError:  # Port belegt: freien Port waehlen lassen
@@ -648,13 +688,25 @@ const CATS=[
 let cats={};  // Kartenname -> Kategorie
 const catOf=name=>cats[name]||"";
 function save(){try{localStorage.setItem(storeKey,JSON.stringify({marks:state.map(t=>t.mark),
-  basics:basics.map(b=>GROUPS.map(g=>b[g])),cats,target:+$("target").value||40,colors:chosenColors()}))}catch(e){}}
+  basics:basics.map(b=>GROUPS.map(g=>b[g])),target:+$("target").value||40,colors:chosenColors()}))}catch(e){}}
+// Kategorien je Kartenname in der Bewertungsdatei (kartenbewertung.json), fuer jeden Pool gleich
+function oldCats(){const out={};try{Object.keys(localStorage).filter(k=>/^draft3:/.test(k)).forEach(k=>{
+  const s=JSON.parse(localStorage.getItem(k)||"null");
+  if(s&&s.cats&&typeof s.cats==="object")Object.assign(out,s.cats);
+  if(s&&s.tags&&typeof s.tags==="object")for(const [n,v] of Object.entries(s.tags))if(Array.isArray(v)&&!out[n])out[n]=v[0]})}
+  catch(e){}return out}
+async function loadRatings(){const keys=new Set(CATS.map(c=>c.key));
+  let r=null;const old=oldCats();
+  try{r=Object.keys(old).length?await api("/api/ratings/import",{cats:old}):await (await fetch("/api/ratings")).json()}
+  catch(e){}
+  if(r&&r.ok&&Object.keys(old).length)try{Object.keys(localStorage).filter(k=>/^draft3:/.test(k)).forEach(k=>{
+    const s=JSON.parse(localStorage.getItem(k)||"null");if(!s)return;delete s.cats;delete s.tags;
+    localStorage.setItem(k,JSON.stringify(s))})}catch(e){}  // einmal uebernommen, danach gilt nur die Datei
+  cats={};if(r&&r.ratings)for(const [n,k] of Object.entries(r.ratings))if(keys.has(k))cats[n]=k}
+function storeRating(name,key){api("/api/rating",{name,cat:key||""}).then(r=>{
+  if(!r||!r.ok)showErr("Bewertung nicht gespeichert: "+((r&&r.error)||"Fehler"))}).catch(()=>{})}
 function restore(){try{const s=JSON.parse(localStorage.getItem(storeKey)||"null");if(!s)return;
   if(Array.isArray(s.marks)&&s.marks.length===state.length&&s.marks.every(m=>m in LABEL))s.marks.forEach((m,i)=>state[i].mark=m);
-  const names=new Set(pool.map(c=>c.name)),keys=new Set(CATS.map(c=>c.key));
-  if(s.cats&&typeof s.cats==="object")for(const [n,k] of Object.entries(s.cats))if(names.has(n)&&keys.has(k))cats[n]=k;
-  if(s.tags&&typeof s.tags==="object")for(const [n,v] of Object.entries(s.tags))  // aelterer Speicherstand
-    if(names.has(n)&&!cats[n]&&Array.isArray(v)&&keys.has(v[0]))cats[n]=v[0];
   if(Number.isInteger(+s.target)&&s.target>=10&&s.target<=200)$("target").value=s.target;
   if(Array.isArray(s.colors)){setColors(s.colors);colorsFromSave=true}
   if(Array.isArray(s.basics)&&s.basics.length===basics.length)
@@ -728,7 +780,7 @@ function paint(t){
   t.node.style.display=hidden?"none":""}
 function setCat(name,key){
   if(key)cats[name]=key;else delete cats[name];
-  state.filter(t=>t.card.name===name).forEach(paint);summary();save()}
+  state.filter(t=>t.card.name===name).forEach(paint);summary();save();storeRating(name,key)}
 function refresh(){state.forEach(paint);summary()}
 function summary(){
   const n={core:0,splash:0,nosplash:0,off:0};state.forEach(t=>n[t.mark]++);
@@ -1254,6 +1306,7 @@ $("quit").onclick=async()=>{if(!confirm("Draft-Helper beenden?"))return;
     const o=el("option",null,t);o.value=v;cf.appendChild(o)}
   const sel=$("sims");d.options.forEach(o=>{const op=el("option",null,o.toLocaleString("de-DE"));op.value=o;
     if(o===d.sims)op.selected=true;sel.appendChild(op)});
+  await loadRatings();
   build();fixBar();
   if(!colorsFromSave)setColors(defaultColors());
 })();

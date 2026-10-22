@@ -13,6 +13,9 @@ def parse_args(argv=None):
                          "(Standard: _draftedcardpool.txt)")
     ap.add_argument("--core", metavar="DATEI", default=None,
                     help="Kern-Deckliste, die zu jeder Variante (deckfile / --deckalt) hinzugefuegt wird")
+    ap.add_argument("--bewertung", default="kartenbewertung.json", metavar="DATEI",
+                    help="Drafthelper: Datei mit der Kartenbewertung (Splashworthy, MustPlay, Filler, NeverPlay) je "
+                         "Kartenname, gilt fuer jeden Kartenpool (Standard: kartenbewertung.json, nicht im Git)")
     ap.add_argument("--neu-laden", action="store_true",
                     help="Kartendaten neu von Scryfall laden und den lokalen Cache (scryfall_cache.json) ueberschreiben")
     ap.add_argument("--sims", type=int, default=10000)
