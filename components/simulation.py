@@ -183,6 +183,12 @@ def hand_form(card, cards):
     return card
 
 
+def resolve_order(chosen):
+    """Reihenfolge, in der die Zauber eines Zugs aufloesen: Karten, die beim Betreten zufaellig abwerfen (Curse-Marred
+    Demon), zuletzt - sonst traefe das Abwerfen eine Karte, die wir in diesem Zug noch wirken wollen."""
+    return [c for c in chosen if not c.etb_tutor_any] + [c for c in chosen if c.etb_tutor_any]
+
+
 def take_from(cards, card):
     """Entfernt card aus cards; liegt dort eine weniger verbilligte Fassung, wird diese entfernt. Gibt sie zurueck."""
     card = hand_form(card, cards)
@@ -1317,8 +1323,12 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                     perms.append((land_played, turn))
 
             free_x = avail_total - sum(paid_mv(c) for c in chosen) - cycle_spent  # Guiding Hydra: X = freies Mana
-            for c in chosen:
+            chosen = resolve_order(chosen)
+            for c in list(chosen):
                 if c.is_copy:
+                    continue
+                if hand_form(c, hand) not in hand:  # von einem anderen Curse-Marred Demon abgeworfen: nicht gewirkt
+                    chosen.remove(c)
                     continue
                 take_from(hand, c)
                 if c.is_creature and not (c.x_counters and free_x < 1):  # X = 0: die Hydra stirbt als 1/0
