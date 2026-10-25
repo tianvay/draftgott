@@ -84,6 +84,9 @@ python mtg_sim.py --drafthelper
 Liest den Kartenpool aus `_draftedcardpool.txt` (Abschnitte `Deck` und `Sideboard`, Zeilen wie in den Deckdateien,
 mit Setcode und Nummer) und öffnet im Browser eine Seite mit allen Karten als Bild (Daten und Bilder von Scryfall).
 Eine andere Datei geht so: `python mtg_sim.py --drafthelper meinpool.txt`.
+`_draftedcardpool.txt` liegt nicht im Git (steht in `.gitignore`): Jeder legt seinen eigenen Pool an, z. B. mit dem
+Deck-Export aus MTG Arena, und `git pull` überschreibt ihn nie. Fehlt die Datei, bricht der Drafthelper sofort mit
+einer Meldung ab, die beschreibt, wie die Datei aussehen muss.
 
 - Jede Kopie einer Karte (außer Standardländern) wird einzeln als **Core**, **Splash**, **NoSplash** oder **Aus** markiert. Vorbelegung:
   Deck = Core, Sideboard = Aus.

@@ -46,16 +46,29 @@ SIM_OPTIONS = (1000, 5000, 10000)
 SCRIPT_DIR = pathlib.Path(__file__).resolve().parent.parent
 
 
+def pool_path(path):
+    """Pfad der Kartenpool-Datei (auch relativ zum Projektordner); fehlt sie, Abbruch mit Erklaerung. Die Datei
+    gehoert jedem Nutzer selbst und liegt nicht im Git."""
+    p = pathlib.Path(path)
+    if not p.exists() and (SCRIPT_DIR / p).exists():
+        p = SCRIPT_DIR / p
+    if not p.exists():
+        sys.exit(f"Kartenpool-Datei nicht gefunden: {path}\n"
+                 f"Der Drafthelper braucht deinen gedrafteten Kartenpool als Textdatei im Projektordner "
+                 f"({SCRIPT_DIR}).\n"
+                 f"Lege die Datei {pathlib.Path(path).name} an, z. B. mit dem Deck-Export aus MTG Arena: "
+                 f"ein Abschnitt 'Deck' und ein Abschnitt 'Sideboard', darunter Zeilen wie\n"
+                 f"  1 Curse-Marred Demon (FRA) 79\n"
+                 f"Die Datei liegt nicht im Git, jeder hat seine eigene.")
+    return p
+
+
 def load_pool(path, refresh=False):
     """Liest die Pool-Datei und ergaenzt Typ, Manawert und Bild-URL von Scryfall.
     Gibt (cards, basics, signature) zurueck: cards ohne Standardlaender (Reihenfolge Deck, Sideboard), basics mit
     allen fuenf Standardlaendern (Startwert Core = Anzahl im Deck der Datei, 'pool' = Anzahl in Deck und Sideboard)
     und eine Signatur des Dateiinhalts (die Seite speichert ihren Stand je Signatur, nicht je Dateiname)."""
-    p = pathlib.Path(path)
-    if not p.exists() and (SCRIPT_DIR / p).exists():
-        p = SCRIPT_DIR / p
-    if not p.exists():
-        sys.exit(f"Kartenpool-Datei nicht gefunden: {path}")
+    p = pool_path(path)
     rows = parse_pool(p.read_text(encoding="utf-8"))
     if not rows:
         sys.exit(f"Keine Karten in {p} gefunden (erwartet: Abschnitte 'Deck' und 'Sideboard').")

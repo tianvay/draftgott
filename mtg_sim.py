@@ -235,6 +235,9 @@ def save_report(html, args):
 
 
 def run(args):
+    if args.drafthelper is not None:
+        from components.drafthelper import pool_path
+        pool_path(args.drafthelper)  # fehlt der Kartenpool: sofort abbrechen, noch vor Scryfall
     fetch_symbols(args.neu_laden)  # Original-Manasymbole (einmalig von Scryfall, danach aus dem Cache)
     if args.drafthelper is not None:
         from components.drafthelper import serve
