@@ -1,42 +1,43 @@
 Deck
-1 Fulminous Forte (FRA) 84
-2 No Admittance (FRA) 89
 1 Mindseeker Oculus (FRA) 33
-2 Fatehold Chronologist (FRA) 133
-1 Room of Refuge (FRA) 188
-1 Archive Arbiter (FRA) 167
-1 Saheeli, Jewel of Avishkar (FRA) 275
-1 Variable Chaser (FRA) 47
-1 Samut, Hazoret's Champion (FRA) 251
-1 Wrath of the Bloodmane (FRA) 96
-1 Jiang Yanggu, Alone (FRA) 246
-2 Undulating Witness (FRA) 45
-1 Chandra's Emberling (FRA) 76
-1 Tam's Resistance (FRA) 153
-1 Protege's Awakening (FRA) 37
-1 Tetsuko Umezawa, Fugitive (FRA) 221
-1 Prudent Fateseer (FRA) 146
-1 Pia, Determined Rebuilder (FRA) 250
-1 Artifist Acumen (FRA) 73
+1 Plan for All Outcomes (FRA) 35
+1 Traxos, Academy Guardian (FRA) 222
+1 Fatehold Chronologist (FRA) 133
+1 Proctor of Potential (FRA) 145
+1 Way of the Mind Sculptor (FRA) 224
+2 Prudent Fateseer (FRA) 146
+2 Tam's Resistance (FRA) 153
+1 Generous Revival (FRA) 8
+1 Rescue Girl, First Responder (FRA) 202
+1 Desperate Futurescribe (FRA) 129
+1 Semester Foreseer (FRA) 39
+1 Teyo, Lightshield Expert (FRA) 204
+1 Fatehold Annex (FRA) 177
+1 Saheeli, Consul of Oversight (FRA) 203
+1 Unsummon (FRA) 46
+1 Sanctum Lurker (FRA) 64
+1 Last Gasp (FRA) 56
+6 Island (SPM) 195
+5 Swamp (SPM) 196
+5 Plains (SPM) 194
+1 Extended Absence (FRA) 54
+1 Mind Twist (SPG) 0
 1 Keeper of the Quiet Hour (FRA) 171
-8 Island (SPM) 195
-8 Mountain (SPM) 197
-1 Divining Duelist (FRA) 29
+1 Massacre Girl, Most Wanted (FRA) 234
 
 Sideboard
-2 Fatehold Annex (FRA) 177
-1 Generous Revival (FRA) 8
-1 Surgical Precision (FRA) 22
-1 Hapatra, the Desert Fang (FRA) 271
-1 Paradox Shaper (FRA) 143
-1 Precise Redaction (FRA) 36
+1 Something Worth Saving (FRA) 114
+1 Dedicated Commons (FRA) 175
+1 Tam, the Possibility (FRA) 276
+1 Compel Brutality (FRA) 101
+1 Chandra's Emberling (FRA) 76
+2 Danitha, Sword of Hope (FRA) 196
 1 Solve for Disappointment (FRA) 67
-1 Way of the Necromancer (FRA) 239
-1 Way of the Healer (FRA) 207
-1 Arcane Amphisbaena (FRA) 97
-1 Living Library (FRA) 172
-1 Fatehold Charm (FRA) 132
-1 Theorix Metamage (FRA) 156
-1 Konstrari Annex (FRA) 183
-1 Warrior's Blades (FRA) 163
-1 Stingerquill Annex (FRA) 190
+1 Academic Ascent (FRA) 2
+1 Screeching Soulbreaker (FRA) 65
+1 Entrust the Spark (FRA) 131
+1 Blessed Ghoul (FRA) 123
+1 Heartwood Crafter (FRA) 105
+1 Whiplash Wordsmith (FRA) 164
+1 Marwyn, the Clearcutter (FRA) 249
+1 Charge the Sanctum (FRA) 125

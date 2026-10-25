@@ -541,6 +541,8 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
   (Karten zum Beschwören in `components/conjure.py`).
 - Station (EOE, TRK): Raumschiffe bekommen in Main 2 Charge-Marken von Kreaturen, die nicht gegen einen tödlichen
   Gegenangriff fehlen; Stufen mit Schlüsselwörtern, Team-Pumps und P/T (dann Artefaktkreatur). Planeten nicht.
+- Face a dilemma (TRK): modale Zauber (beim Wirken) und modale Betreten-Auslöser lösen „Whenever you face a
+  dilemma“ eigener Karten aus, einmal je Zauber bzw. Auslöser (Elim Garak, Obsidian Order Operative, Seven of Nine).
 - Removal (Destroy/Exile, Schaden, −X/−X, Edikt, Fight, Biss, Bounce, Lock, zurück in die Bibliothek,
   Massenremoval) trifft die gefährlichste passende Kreatur; Removal-Instants vor dem Angriff, gegen Angreifer oder am
   Ende des gegnerischen Zugs.

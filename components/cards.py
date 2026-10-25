@@ -289,6 +289,7 @@ class Card(NamedTuple):
     equip_carrier: object = None  # Ausruestung: beim Betreten dieses Kreatur-Token, sie wird daran angelegt
     equip_typed: tuple = ()    # "Equip <Typ> {N}": (Typ, Zahlungswege) fuer Kreaturen dieses Typs
     cast_trig: tuple = ()      # "Whenever you cast ...": ((Filter, Effekte, Effekte ab 5 Mana, "instead"/"also"/""),)
+    dilemma_trig: tuple = ()   # "Whenever you face a dilemma, ...": Effekte wie bei cast_trig (nur Kampfmodell)
     vehicle: tuple = ()        # Fahrzeug: (Crew N, Power, Toughness, Kampf-Schluesselwoerter)
     attack_tap: bool = False   # greift sie an: eine Kreatur des Verteidigers tappen
     equip_attack_tap: bool = False  # Ausruestung: greift die Kreatur an, eine Kreatur des Verteidigers tappen
@@ -2244,6 +2245,7 @@ _F_RES = {
     "cast": re.compile(_PREFIX + r"whenever you cast (or copy an instant or sorcery spell|an instant or sorcery spell that targets a creature|an instant "
                        r"or sorcery spell|a noncreature spell|a creature spell|a spell that targets a creature you "
                        r"control|a multicolored spell|a spell|an? [a-z]+ spell), (.+)$"),
+    "dilemma": re.compile(_PREFIX + r"whenever you face a dilemma, (.+)$"),
 }
 _CAST_FILTER = {"or copy an instant or sorcery spell": "instsorc",  # Magecraft (Kopien loesen nicht aus)
                 "an instant or sorcery spell that targets a creature": "instsorc_creature",
@@ -2432,6 +2434,11 @@ def foundation_traits(card, type_line):
             if trig:
                 kind = _CAST_FILTER.get(m.group(1)) or "type:" + m.group(1).split()[1]  # "a Villain spell"
                 casts.append((kind,) + trig)
+        m = res["dilemma"].match(low)
+        if m:  # TRK: "Whenever you face a dilemma" - beim Waehlen der Modi eines Zaubers oder einer Faehigkeit
+            atoms = _cast_atoms(m.group(1))
+            if atoms:
+                out["dilemma_trig"] = atoms
     if station_kw or tiers:
         face = (card.get("card_faces") or [card])[0]
         pw, tg = (str(face.get(k, card.get(k)) or "") for k in ("power", "toughness"))

@@ -2664,6 +2664,8 @@ def emblem_cast(p, step, e):
 def on_cast(p, card, step, e):
     """Ein Zauber wurde gewirkt: Jace-Ausloeser, Marken fuer Zauber mit Ziel beim Gegner (Danitha)."""
     _jace_on_cast(p, card, step, e)
+    if card.choices and card.is_instant_sorcery:  # 700.2a: Modi beim Wirken gewaehlt (Permanents: card_effects)
+        face_dilemma(p, step, e)
     if card.is_planeswalker:  # Sparks Ablaze: der Rabatt gilt nur fuer den naechsten Planeswalker
         p.next_pw = 0
     if card.hand_exile_land and p.cc_land is not None and not any(c == card for c, _l in p.impulse):
@@ -2794,7 +2796,15 @@ def cast_triggers(p, card, step, e):
             cast_effects(p, src, source, atoms, step, e)
 
 
-def cast_effects(p, src, source, atoms, step, e):
+def face_dilemma(p, step, e):
+    """TRK: p waehlt Modi fuer einen Zauber oder eine Faehigkeit (700.2a/b) - "Whenever you face a dilemma"-Ausloeser
+    eigener Kreaturen und Permanents, einmal je Zauber bzw. Faehigkeit, egal wie viele Modi."""
+    for src, source in static_sources(p):
+        if source.dilemma_trig:
+            cast_effects(p, src, source, source.dilemma_trig, step, e, "Dilemma")
+
+
+def cast_effects(p, src, source, atoms, step, e, label="Auslöser beim Wirken"):
     """Effekte eines Ausloesers beim Wirken; src: die ausloesende Kreatur (None bei Nichtkreatur-Permanents)."""
     opp = p.opponent
     alive = [c for c in p.creatures if not c.dead]
@@ -2854,7 +2864,7 @@ def cast_effects(p, src, source, atoms, step, e):
                     else max(alive, key=lambda c: atom[1] - c.card.power, default=None))
             if pick is not None:
                 pick.pump += atom[1] - pick.card.power
-    e["events"].append(f"{p.name}: {source.name} – Auslöser beim Wirken")
+    e["events"].append(f"{p.name}: {source.name} – {label}")
 
 
 def _tapped_lands(p):
@@ -4193,6 +4203,8 @@ def card_effects(me, opp, card, step, entry, modes=None):
     if opp is None:
         opp = me.opponent
     if card.choices:  # modale Karte: nur die gewaehlten Modi wirken
+        if not card.is_instant_sorcery:  # 700.2b: Modi des Betreten-Ausloesers (Zauber: schon in on_cast)
+            face_dilemma(me, step, entry)
         for sub in (modes if modes is not None else choose_modes(me, opp, card, step)):
             entry["events"].append(f"{me.name}: {card.name} – Modus: {_mode_label(sub)}")
             card_effects(me, opp, sub, step, entry)

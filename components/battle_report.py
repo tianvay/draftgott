@@ -384,6 +384,10 @@ RULES = [
     "{N+} gelten Schlüsselwörter und „(Other) creatures you control get +N/+N“; ab der Stufe mit P/T ist das "
     "Raumschiff eine Artefaktkreatur (greift an, wenn es seit Beginn des Zugs da ist). Die Marken bleiben, bis es das "
     "Spielfeld verlässt. Planeten (Länder mit Station) werden nicht gestationt.",
+    "Face a dilemma (TRK): wer Modi wählt, steht vor einem Dilemma – bei modalen Zaubern beim Wirken (700.2a, auch "
+    "wenn sie gekontert werden), bei modalen Betreten-Auslösern bei jedem Betreten (700.2b, 603.6a); einmal je Zauber "
+    "bzw. Auslöser, egal wie viele Modi. Dann lösen eigene „Whenever you face a dilemma“-Auslöser aus (Leben, "
+    "Ziehen, Marken usw. wie bei „Whenever you cast …“). Nur im Kampfmodell, der Goldfish wählt keine Modi.",
     "Alchemy (YFRA): „perpetually“ ändert die Karte selbst (bleibt in Friedhof und Hand). Conjure benannter Karten "
     "(Kraken Hatchling, Mind Stone, Aria of Flame) mit ihren Texten von Scryfall. Avoided Stairwurm −1/−1 je "
     "Kreaturenkarte in der Bibliothek; Zimone macht Schaden wie mit positiver Power und wird prepared, sobald Karten "
