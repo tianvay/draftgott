@@ -546,6 +546,12 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
   Gegenangriff fehlen; Stufen mit Schlüsselwörtern, Team-Pumps und P/T (dann Artefaktkreatur). Planeten nicht.
 - Face a dilemma (TRK): modale Zauber (beim Wirken) und modale Betreten-Auslöser lösen „Whenever you face a
   dilemma“ eigener Karten aus, einmal je Zauber bzw. Auslöser (Elim Garak, Obsidian Order Operative, Seven of Nine).
+- Strange new worlds (TRK): X = eigene Länder mit verschiedenen Namen (Stärke/Widerstand, Token, Leben, Ziehen,
+  Kostensenkung für Zauber und Fähigkeiten, Massen-−X/−X, Angriffs-Pump); dazu Warp Speed. Chekov und Branching
+  Timeline bewusst nicht.
+- Beam me up (TRK): Sorceries aus dem Friedhof wie Flashback, dazu geht eine eigene Kreatur zurück auf die Hand
+  (wertvollster Betreten-Effekt, sonst die billigste, nie gegen einen tödlichen Gegenangriff); Scotty.
+- Sagas (714, TRK): Kapitel nach jedem eigenen Draw Step, danach geopfert; Investigate mit Clue-Token.
 - Removal (Destroy/Exile, Schaden, −X/−X, Edikt, Fight, Biss, Bounce, Lock, zurück in die Bibliothek,
   Massenremoval) trifft die gefährlichste passende Kreatur; Removal-Instants vor dem Angriff, gegen Angreifer oder am
   Ende des gegnerischen Zugs.

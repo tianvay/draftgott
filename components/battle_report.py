@@ -388,6 +388,25 @@ RULES = [
     "wenn sie gekontert werden), bei modalen Betreten-Auslösern bei jedem Betreten (700.2b, 603.6a); einmal je Zauber "
     "bzw. Auslöser, egal wie viele Modi. Dann lösen eigene „Whenever you face a dilemma“-Auslöser aus (Leben, "
     "Ziehen, Marken usw. wie bei „Whenever you cast …“). Nur im Kampfmodell, der Goldfish wählt keine Modi.",
+    "Strange new worlds (TRK): X = Zahl der eigenen Länder mit verschiedenen Namen, immer im Moment der Wirkung "
+    "gezählt (Stärke/Widerstand laufend). Token, Leben und Ziehen beim Betreten bzw. Auflösen, Kosten {X} weniger "
+    "für Zauber und Fähigkeiten, „+X/+0“ beim Angriff. The Destruction of Praxis nur, wenn es nach Manawert mehr "
+    "gegnerische als eigene Kreaturen tötet (oder ab X = 6 die Token bringt, ohne eigene zu töten). Suus Mahna "
+    "tappt zu Beginn des eigenen Kampfs den Blocker, der unseren stärksten Angreifer aufhalten würde (wie „tap target "
+    "creature defending player controls“). Warp Speed: Länder kommen ungetappt, beim Betreten ein Basic Land auf die "
+    "Hand, Opfern zum Ziehen am Ende des gegnerischen Zugs mit übrigem Mana. Ensign Pavel Chekov und Branching "
+    "Timeline bewusst nicht.",
+    "Beam me up (TRK): Sorceries aus dem Friedhof in der eigenen Main Phase wie Flashback, zusätzlich geht eine "
+    "eigene Kreatur auf die Hand: die mit dem wertvollsten Betreten-Effekt, sonst die billigste, Token zuletzt; nie "
+    "eine, ohne die ein tödlicher Gegenangriff möglich wird. Scotty: jede Sorcery im Friedhof hat Beam me up zu ihren "
+    "Manakosten, Scotty selbst geht dafür nicht zurück (Instants über Scotty nicht).",
+    "Sagas (714): beim Betreten Kapitel I, nach jedem eigenen Draw Step das nächste, nach dem letzten wird die Saga "
+    "geopfert. Kapitel wirken wie kleine Zauber (Removal, Ziehen, Leben, Token, Zurückholen). Investigate: Clue-Token "
+    "({2}, opfern: ziehen) am Ende des gegnerischen Zugs mit übrigem Mana. „Sacrifices a nontoken creature“: die "
+    "schwächste; „nontoken permanent“: ab 6 Ländern ein Land, sonst die schwächste Kreatur, sonst das billigste "
+    "Permanent. „You may sacrifice an artifact or creature“ für zwei 2/2: Clue, Treasure, sonst eine Kreatur unter "
+    "4 Stärke+Widerstand. „You may exile a card from your hand“: nur ein überzähliges Land. Bewusst nicht: City on "
+    "the Edge of Forever I (Phasing), Inner Light II, Those Old Scientists III, Wrath of Khan I nur der Schaden.",
     "Alchemy (YFRA): „perpetually“ ändert die Karte selbst (bleibt in Friedhof und Hand). Conjure benannter Karten "
     "(Kraken Hatchling, Mind Stone, Aria of Flame) mit ihren Texten von Scryfall. Avoided Stairwurm −1/−1 je "
     "Kreaturenkarte in der Bibliothek; Zimone macht Schaden wie mit positiver Power und wird prepared, sobald Karten "

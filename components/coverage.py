@@ -131,6 +131,12 @@ ON_PURPOSE = {
     "Winter, Team Player": re.compile(r"^convoke$"),  # FRA abgeschlossen: nicht vollstaendig modelliert
     "Tam, the Possibility": re.compile(r"proliferate x times"),
     "Extrapolate the Impossible": re.compile(r"from outside the game"),
+    # TRK (Nutzer 2026-10-30): Strange-new-worlds-Sonderfaelle vorerst nicht; Saga-Kapitel ohne Gegenstueck im Modell
+    "Ensign Pavel Chekov": re.compile(r"each opponent exiles the top x cards of their library"),
+    "Branching Timeline": re.compile(r"reveal the top x cards of your library"),
+    "The City on the Edge of Forever": re.compile(r"^i — all artifacts and creatures phase out"),
+    "The Inner Light": re.compile(r"^ii — choose target creature\. whenever it deals combat damage"),
+    "Those Old Scientists": re.compile(r"^iii — choose up to two target cards in graveyards"),
 }
 KEYWORD_SPLIT = re.compile(r"[,;]")
 
@@ -222,7 +228,8 @@ def analyze_card(card):
         is_walker = "Planeswalker" in type_line
         face_items = []
         header = ""
-        for raw in (face.get("oracle_text") or "").split("\n"):
+        text = re.sub(r"\([^)]*\)", lambda mm: mm.group(0).replace("\n", " "), face.get("oracle_text") or "")
+        for raw in text.split("\n"):  # Erinnerungstext mit Zeilenumbruch (Those Old Scientists) bleibt eine Zeile
             line = _strip(raw)
             if not line:
                 continue

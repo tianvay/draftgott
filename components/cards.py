@@ -290,6 +290,10 @@ class Card(NamedTuple):
     equip_typed: tuple = ()    # "Equip <Typ> {N}": (Typ, Zahlungswege) fuer Kreaturen dieses Typs
     cast_trig: tuple = ()      # "Whenever you cast ...": ((Filter, Effekte, Effekte ab 5 Mana, "instead"/"also"/""),)
     dilemma_trig: tuple = ()   # "Whenever you face a dilemma, ...": Effekte wie bei cast_trig (nur Kampfmodell)
+    snw: tuple = ()            # TRK Strange new worlds (X = verschieden benannte Laender) und Warp Speed, siehe snw_traits
+    beam: tuple = ()           # TRK Beam me up: Kosten (Zahlungswege) fuer das Wirken aus dem Friedhof (+ Kreatur zurueck)
+    scotty: bool = False       # Scotty, Miracle Worker: Sorceries im Friedhof haben Beam me up zu ihren Manakosten
+    saga: tuple = ()           # Saga (714): (letztes Kapitel, ((Kapitel, Kapitel als Card oder None, Bausteine), ...))
     vehicle: tuple = ()        # Fahrzeug: (Crew N, Power, Toughness, Kampf-Schluesselwoerter)
     attack_tap: bool = False   # greift sie an: eine Kreatur des Verteidigers tappen
     equip_attack_tap: bool = False  # Ausruestung: greift die Kreatur an, eine Kreatur des Verteidigers tappen
@@ -875,7 +879,8 @@ def _tokens_in(text):
                     if k.strip() in COMBAT_KEYWORDS)
         name = m.group(5).capitalize() if m.group(5) else " ".join(t.capitalize() for t in types)
         token = token_card(name, True, int(m.group(2)), int(m.group(3)), artifact, kw=kws, types=types)
-        if "it gains haste" in text[m.end():m.end() + 40]:
+        if "it gains haste" in text[m.end():m.end() + 40] or "haste" in re.split(r",\s*(?:and\s+)?|\s+and\s+",
+                                                                                 m.group(6) or ""):
             token = token._replace(haste=True)
         out.append((_count(m.group(1)), token))
     return out
@@ -2434,6 +2439,12 @@ def foundation_traits(card, type_line):
             if trig:
                 kind = _CAST_FILTER.get(m.group(1)) or "type:" + m.group(1).split()[1]  # "a Villain spell"
                 casts.append((kind,) + trig)
+        m = re.match(r"^beam me up ((?:\{[^}]+\})+)$", low)
+        if m and ("Sorcery" in type_line or "Instant" in type_line):  # TRK, wie Flashback mit Zusatzkosten
+            out["beam"] = cost_alternatives(m.group(1).upper())
+        if low.startswith("during your main phase, each card in your graveyard has beam me up. the beam me up cost is "
+                          "equal to that spell's mana cost."):
+            out["scotty"] = True
         m = res["dilemma"].match(low)
         if m:  # TRK: "Whenever you face a dilemma" - beim Waehlen der Modi eines Zaubers oder einer Faehigkeit
             atoms = _cast_atoms(m.group(1))
@@ -2452,8 +2463,161 @@ def foundation_traits(card, type_line):
     return out
 
 
+_SNW_PREFIX = "strange new worlds — "
+_SNW_WHERE = r", where x is the number of differently named lands you control"
+_SNW_ABILITY_RE = re.compile(r"^((?:\{[^}]+\})+)(, \{t\}|, sacrifice this enchantment)?: (.+?)\. this ability costs \{x\} "
+                             r"less to activate" + _SNW_WHERE + r"\.( activate only once each turn\.)?$")
+_SNW_RES = (
+    (re.compile(r"^~'s power is equal to the number of differently named lands you control\.$"),
+     lambda m: ("pt", 1, 0)),
+    (re.compile(r"^~'s power and toughness are each equal to the number of differently named lands you control\.$"),
+     lambda m: ("pt", 1, 1)),
+    (re.compile(r"^when (?:~|this creature) enters, create x (.+?) creature tokens" + _SNW_WHERE + r"\.$"),
+     lambda m: ("etb_tokens", _tokens_in(f"create a {m.group(1)} creature token.")[0][1])),
+    (re.compile(r"^when (?:~|this creature) enters, you gain life equal to the number of differently named lands you "
+                r"control\.$"), lambda m: ("etb_life",)),
+    (re.compile(r"^draw x cards" + _SNW_WHERE + r"\. you have no maximum hand size until your next turn\.$"),
+     lambda m: ("draw",)),
+    (re.compile(r"^this spell costs \{x\} less to cast" + _SNW_WHERE + r"\.$"), lambda m: ("discount",)),
+    (re.compile(r"^all creatures get [-−]x/[-−]x until end of turn" + _SNW_WHERE + r"\. if x is (\d+) or more, "
+                r"(create .+ tokens?(?: with [a-z ,]+)?)\.$"),
+     lambda m: ("sweep", int(m.group(1)), tuple(_tokens_in(m.group(2) + ".")))),
+    (re.compile(r"^whenever (?:~|this creature) attacks, creatures you control get \+x/\+0 until end of turn"
+                + _SNW_WHERE + r"\.$"), lambda m: ("attack_team",)),
+)
+_WARP_RES = (  # Warp Speed (TRK), kein Strange new worlds
+    (re.compile(r"^lands you control enter untapped\.$"), lambda m: ("lands_untapped",)),
+    (re.compile(r"^when this enchantment enters, search your library for a basic land card or planet card, reveal "
+                r"it, put it into your hand, then shuffle\.$"), lambda m: ("etb_basic",)),
+)
+
+
+def snw_traits(card):
+    """TRK Strange new worlds: X ist die Zahl der verschieden benannten Laender, die wir kontrollieren (im Kampfmodell
+    beim Wirken bzw. laufend gezaehlt). ("pt", P, T): Stärke/Widerstand = X; ("etb_tokens", Token)/("etb_life",):
+    beim Betreten X Token bzw. X Leben; ("draw",): X Karten, kein Handlimit bis zum naechsten Zug; ("discount",):
+    kostet {X} weniger; ("sweep", ab, Token): alle Kreaturen -X/-X, ab X >= ab die Token; ("attack_team",): beim
+    Angriff eigene Kreaturen +X/+0; ("ability_discount", einmal je Zug): Faehigkeit kostet {X} weniger;
+    ("tap_ability", Kosten): "Tap target creature"; ("sac_draw", Kosten, N): opfern und N ziehen. Dazu Warp Speed:
+    ("lands_untapped",), ("etb_basic",)."""
+    if card.get("card_faces"):
+        return ()
+    out = []
+    for _raw, low in _clean_lines(card):
+        for rx, build in _WARP_RES:
+            m = rx.match(low)
+            if m:
+                out.append(build(m))
+        if not low.startswith(_SNW_PREFIX):
+            continue
+        low = low[len(_SNW_PREFIX):]
+        m = _SNW_ABILITY_RE.match(low)
+        if m:
+            costs = cost_alternatives(m.group(1).upper())
+            if m.group(2) == ", {t}" and m.group(3) == "tap target creature":
+                out.append(("tap_ability", costs))
+            elif m.group(2) == ", sacrifice this enchantment" and re.fullmatch(rf"draw {_N} cards?", m.group(3)):
+                out.append(("sac_draw", costs, _count(m.group(3).split()[1])))
+            elif not m.group(2):
+                out.append(("ability_discount", bool(m.group(4))))
+            continue
+        for rx, build in _SNW_RES:
+            m = rx.match(low)
+            if m:
+                out.append(build(m))
+                break
+    return tuple(out)
+
+
+def snw_stripped(card):
+    """Die Karte ohne die Zeilen, die snw_traits abbildet; bei Faehigkeiten mit Kostensenkung bleibt die Faehigkeit
+    selbst stehen (Astute Terraformer), damit parse_abilities sie liest."""
+    keep = []
+    for raw in (card.get("oracle_text") or "").split("\n"):
+        low = raw.lower()
+        if low.startswith(_SNW_PREFIX):
+            m = re.match(r"^((?:\{[^}]+\})+: .+?\.) this ability costs \{x\} less", low[len(_SNW_PREFIX):])
+            if m:
+                keep.append(raw[len(_SNW_PREFIX):len(_SNW_PREFIX) + len(m.group(1))])
+            continue
+        if any(rx.match(re.sub(r"\([^)]*\)", "", low).strip()) for rx, _b in _WARP_RES):
+            continue
+        keep.append(raw)
+    return dict(card, oracle_text="\n".join(keep))
+
+
+_ROMAN = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5, "VI": 6}
+_CHAPTER_RE = re.compile(r"^((?:I|II|III|IV|V|VI)(?:, (?:I|II|III|IV|V|VI))*) — (.+)$")
+_CHAPTER_RES = (  # Kapitel, die der Zauber-Parser nicht liest (TRK)
+    (r"investigate\.", lambda m: (("clue", 1),)),
+    (r"each opponent sacrifices a nontoken (creature|permanent) of their choice\.", lambda m: (("edict", m.group(1)),)),
+    (r"you may exile a card from your hand\. if you do, draw a card\.", lambda m: (("exile_draw",),)),
+    (r"draw two cards, then exile a card from your hand\.", lambda m: (("draw", 2), ("exile_hand",))),
+    (r"if all cards exiled with this saga share a card type, you gain (\d+) life\.",
+     lambda m: (("share_life", int(m.group(1))),)),
+    (r"each player draws a card\. this saga deals (\d+) damage to each player\.",
+     lambda m: (("each_draw", 1), ("each_damage", int(m.group(1))))),
+    (r"you draw two cards and each player loses (\d+) life\.", lambda m: (("draw", 2), ("each_lose", int(m.group(1))))),
+    (r"sacrifice a creature token\. if you do, you gain (\d+) life\.", lambda m: (("sac_token_life", int(m.group(1))),)),
+    (r"return target green or white creature card from your graveyard to the battlefield\.",
+     lambda m: (("reanimate_colors", ("G", "W")),)),
+    (r"you gain life equal to the greatest power among creatures you control\. create a treasure token\.",
+     lambda m: (("power_life",), ("treasure", 1))),
+    (r"draw two cards, then discard two cards\.", lambda m: (("draw", 2), ("discard", 2))),
+    (r"return up to one target artifact, instant, or sorcery card from your graveyard to your hand\.",
+     lambda m: (("gy_to_hand", ("artifact", "instant", "sorcery")),)),
+    (r"exile up to one target nontoken artifact or creature\.", lambda m: (("temp_exile",),)),
+    (r"return the exiled card to the battlefield under its owner's control\. you gain (\d+) life\.",
+     lambda m: (("return_exiled",), ("life", int(m.group(1))))),
+    (r"you may sacrifice an artifact or creature\. if you do, (create .+ tokens?)\.",
+     lambda m: (("sac_for_tokens", tuple(_tokens_in(m.group(1) + "."))),)),
+)
+
+
+def saga_traits(card):
+    """Saga (714): jedes Kapitel ("I, II — ...") wie ein Zauber gelesen bzw. mit eigenen Bausteinen (_CHAPTER_RES);
+    nur Kapitel mit Wirkung. Letztes Kapitel aus "Sacrifice after N", sonst das hoechste."""
+    type_line = card.get("type_line") or ""
+    if "Saga" not in type_line or card.get("card_faces"):
+        return ()
+    text = card.get("oracle_text") or ""
+    chapters, last = [], 0
+    empty = card_info({"name": card["name"], "type_line": "Sorcery", "oracle_text": "", "layout": "normal"})[0]
+    for line in text.split("\n"):
+        m = _CHAPTER_RE.match(line.strip())
+        if not m:
+            continue
+        nums = tuple(_ROMAN[n] for n in m.group(1).split(", "))
+        last = max(last + 0, *nums)
+        body = re.sub(r"\([^)]*\)", "", m.group(2)).strip()
+        low = body.lower()
+        atoms = next((build(mm) for rx, build in _CHAPTER_RES for mm in [re.fullmatch(rx, low)] if mm), None)
+        if atoms is not None:
+            chapters.append((nums, None, atoms))
+            continue
+        sub = card_info({"name": card["name"], "type_line": "Sorcery", "mana_cost": "", "cmc": 0, "colors": [],
+                         "oracle_text": re.sub(r"\bthis saga\b", card["name"], body, flags=re.I), "keywords": [],
+                         "layout": "normal"})[0]
+        if any(getattr(sub, f) != getattr(empty, f) for f in sub._fields if f != "removal_points"):
+            chapters.append((nums, sub, ()))
+    m = re.search(r"Sacrifice after ((?:I|II|III|IV|V|VI))\.", text)
+    return ((_ROMAN[m.group(1)] if m else last), tuple(chapters)) if chapters else ()
+
+
 def card_info(card):
     """Wandelt eine Scryfall-Karte in (Card, Anzeigetext) um."""
+    saga = saga_traits(card)
+    if saga:
+        out, shown = _card_info(card)
+        return out._replace(saga=saga), shown + f"   [Saga {saga[0]} Kapitel]"
+    snw = snw_traits(card)
+    if snw:  # TRK: die Zeilen mit X = verschieden benannte Laender liest snw_traits, der Rest wie sonst
+        out, shown = _card_info(snw_stripped(card))
+        return out._replace(snw=snw), shown + "   [Strange new worlds]"
+    return _card_info(card)
+
+
+def _card_info(card):
     faces = card.get("card_faces") or [card]
     front = faces[0]
     type_line = (front.get("type_line") or card.get("type_line", "")).split(" // ")[0]

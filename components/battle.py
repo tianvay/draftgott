@@ -119,6 +119,8 @@ class Creature:
             base += sum(1 for g in self.gy if any(getattr(g, _GY_TYPES[t], False) for t in self.card.gy_power))
         if self.card.domain_power and self.ctl is not None:
             base += len({t for land in self.ctl.lands for t in land.land_types} & BASIC_TYPES)
+        if self.card.snw and self.ctl is not None:  # Strange new worlds: Power = verschieden benannte Laender
+            base += sum(a[1] for a in self.card.snw if a[0] == "pt") * snw_x(self.ctl)
         base += self._threshold() + sum(g.equip[1] for g in self.gear) + self._emblem(1) \
             - sum(d[0] for d in self.lasting) + self._gy_power() + self._token_bonus() + self._goyf() \
             + sum(a.aura_pump[0] for a in self.auras if a.aura_pump)
@@ -135,6 +137,8 @@ class Creature:
             + self._emblem(2) - sum(d[1] for d in self.lasting) + (self._goyf() + 1 if self.card.goyf else 0) \
             + sum(a.aura_pump[1] for a in self.auras if a.aura_pump)
         p = self.ctl
+        if self.card.snw and p is not None:
+            out += sum(a[2] for a in self.card.snw if a[0] == "pt") * snw_x(p)
         if p is not None and (self.card.cond_static or (p.statics or _statics(p))[0]):
             out += sum(s[3] for s in self._cond())
         if self.card.lib_creature_minus and p is not None:
@@ -738,6 +742,9 @@ class Player:
         self.jace.graveyard = self.graveyard
         self.jace_perms = []  # Permanents mit wiederkehrendem Empower: (Karte, Schritt des Eintritts)
         self.surveilled = False  # in diesem Zug gesurveilt (Surveillance Phantasm)
+        self.no_hand_limit = False  # Deep Space Scan: kein Handlimit am Ende dieses Zugs
+        self.sagas = []       # Sagas im Spiel: {"card", "lore", "exiled" (All Good Things), "temp" (Measure of a Man)}
+        self.clues = 0        # Clue-Token (Investigate): {2}, opfern: eine Karte ziehen
         self.gained = 0       # in diesem Zug gewonnenes Leben (Enlightened Confidant)
         self.next_pw = 0      # der naechste Planeswalker-Zauber kostet {N} weniger (Sparks Ablaze)
         self.seek_discard = []  # mit Seek geholte Karten, die im naechsten Endsegment abgeworfen werden (Killian)
@@ -831,6 +838,8 @@ def discount(p):
 def own_reduction(p, card):
     """Eigene Kostensenkung der Karte nach dem Feld von p (Ghalta, Wrath of the Bloodmane, Traxos), siehe
     simulation.cost_reduction."""
+    if p is not None and card.snw and snw_atom(card, "discount"):  # Cloak and Phaser: {X} weniger
+        return snw_x(p)
     if p is None or not card.self_discount:
         return 0
     alive = [c for c in p.creatures if not c.dead]
@@ -4191,9 +4200,334 @@ def permanent_enters(p, opp, card, step, e):
         return
     if card.twin:
         attach_twin(p, opp, card, e)
+    if card.saga:
+        saga_enters(p, opp, card, step, e)
     _jace_etb(p, card, step, e)
     gain_life(p, card.etb_life)
     card_effects(p, opp, card, step, e)
+
+
+def snw_x(p):
+    """TRK Strange new worlds: Zahl der Laender mit verschiedenen Namen, die p kontrolliert."""
+    return len({land.name for land in p.lands}) if p is not None else 0
+
+
+def snw_atom(card, kind):
+    return next((a for a in card.snw if a[0] == kind), None)
+
+
+def snw_effects(me, opp, card, step, entry):
+    """Strange new worlds beim Betreten bzw. Aufloesen (X jetzt gezaehlt) und Warp Speed beim Betreten."""
+    x = snw_x(me)
+    for atom in card.snw:
+        kind = atom[0]
+        if kind == "etb_tokens" and x:
+            make_tokens(me, [(x, atom[1])], step, entry, opp, card.name)
+        elif kind == "etb_life":
+            gain_life(me, x)
+        elif kind == "draw":  # Deep Space Scan: kein Handlimit bis zu unserem naechsten Zug
+            _draw(me, x)
+            me.no_hand_limit = True
+            entry["events"].append(f"{me.name}: {card.name} zieht {x}")
+        elif kind == "sweep":  # The Destruction of Praxis: -X/-X bis Rundenende, ab X >= N Token
+            for c in [c for pl in (me, opp) if pl is not None for c in pl.creatures if not c.dead]:
+                c.pump -= x
+                c.tpump -= x
+            entry["events"].append(f"{me.name}: {card.name} – alle Kreaturen −{x}/−{x}")
+            bury((me, opp) if opp is not None else (me,), entry)
+            if x >= atom[1]:
+                make_tokens(me, list(atom[2]), step, entry, opp, card.name)
+        elif kind == "etb_basic":  # Warp Speed: Basic Land (oder Planet) auf die Hand
+            search_basics(me, 1, entry, card.name)
+
+
+def praxis_ok(me, opp, card):
+    """The Destruction of Praxis nur, wenn es mehr gegnerische als eigene Kreaturen toetet (nach Manawert), mindestens
+    eine gegnerische, oder X die Token bringt und keine eigene stirbt."""
+    atom = snw_atom(card, "sweep")
+    if atom is None:
+        return True
+    x = snw_x(me)
+    dies = lambda c: c.toughness - c.damage <= x
+    theirs = sum(c.card.mv + 1 for c in opp.creatures if not c.dead and dies(c)) if opp is not None else 0
+    mine = sum(c.card.mv + 1 for c in me.creatures if not c.dead and dies(c))
+    return (theirs > mine) or (x >= atom[1] and not mine and theirs > 0)
+
+
+def snw_tap_blocker(me, opp, step, e):
+    """Suus Mahna Practitioner ({4}{U}, {T}, {X} weniger: tap target creature) zu Beginn des eigenen Kampfs: wie der
+    Angriffs-Ausloeser "tap target creature defending player controls" der gefaehrlichste Blocker, der unseren
+    staerksten moeglichen Angreifer aufhalten wuerde."""
+    for src in [c for c in me.creatures if not c.dead and snw_atom(c.card, "tap_ability")]:
+        if not tap_ready(me, src) or src.tapped:
+            continue
+        attackers = [c for c in me.creatures if c is not src and not c.dead and can_attack(c, step)]
+        target = None
+        for a in sorted(attackers, key=danger, reverse=True):
+            cands = [b for b in opp.creatures if not b.dead and not b.tapped and can_block(b, a) and not hexproof(b)
+                     and ward_ok(me, b)]
+            if cands:
+                stop = [b for b in cands if outcome(a, [b])[0] or not outcome(a, [b])[1][0]]
+                target = max(stop or cands, key=danger)
+                break
+        if target is None:
+            continue
+        costs = reduce_costs(snw_atom(src.card, "tap_ability")[1], snw_x(me))
+        if not _pay_open(me, costs, treasure=False) or not pay_ward(me, target, e):
+            continue
+        src.tapped = target.tapped = True
+        e["events"].append(f"{me.name}: {src.card.name} tappt {target.card.name}")
+
+
+def snw_sac_draw(p, e):
+    """Warp Speed ({7}{U}{U}, {X} weniger, opfern: zwei Karten ziehen) am Ende des gegnerischen Zugs mit offenem
+    Mana, das sonst ungenutzt bliebe."""
+    for card in [x for x in p.perms if isinstance(x, Card) and snw_atom(x, "sac_draw")]:
+        _kind, costs, n = snw_atom(card, "sac_draw")
+        if not _pay_open(p, reduce_costs(costs, snw_x(p)), treasure=False):
+            continue
+        p.perms.remove(card)
+        p.graveyard.append(card)
+        _draw(p, n)
+        e["events"].append(f"{p.name}: opfert {card.name} und zieht {n}")
+
+
+def beam_pick(p, opp, scotty=False):
+    """Beam me up (Nutzer 2026-10-30): die eigene Kreatur mit dem wertvollsten Betreten-Effekt, sonst die billigste;
+    Token zuletzt (sie verschwinden); nie eine, ohne die ein toedlicher Gegenangriff moeglich wird. scotty: per Scotty
+    gewirkt, Scotty selbst geht nicht zurueck."""
+    their = [t for t in opp.creatures if not t.dead and (not t.card.defender or _defender_ok(t)) and t.dmg > 0] \
+        if opp is not None else []
+    cands = [c for c in p.creatures if not c.dead and not c.crew and not (scotty and c.card.scotty)]
+    for c in sorted(cands, key=lambda c: (c.card.is_token, -etb_rank(c.card), c.card.mv, danger(c))):
+        home = [h for h in p.creatures if not h.dead and not h.tapped and h is not c]
+        if max_through(their, home) < p.life:
+            return c
+    return None
+
+
+def beam_versions(p, opp):
+    """Sorceries im Friedhof, die per Beam me up gewirkt werden koennen: [(Karte mit den Beam-Kosten, Original)].
+    Eigene Beam-Kosten, sonst mit Scotty die Manakosten; nur wenn eine Kreatur zurueckgegeben werden kann."""
+    scotty = any(c.card.scotty for c in p.creatures if not c.dead)
+    out = []
+    for c in p.graveyard:
+        if c.is_instant or not c.is_instant_sorcery or not (c.beam or scotty):
+            continue
+        if beam_pick(p, opp, scotty=not c.beam) is None:
+            continue
+        out.append((_discounted(c._replace(alts=c.beam or c.alts), discount(p), p), c))
+    return out
+
+
+def beam_up(p, opp, card, e):
+    """Zusatzkosten von Beam me up: die Kreatur nach beam_pick auf die Hand (Token verschwinden). False: keine da."""
+    c = beam_pick(p, opp, scotty=not card.beam)
+    if c is None:
+        return False
+    p.creatures.remove(c)
+    if not c.card.is_token:
+        (c.owner or p).hand.append(c.base_card or c.card)
+    _leave(p, c.card)
+    check_auras(p, e)
+    e["events"].append(f"{p.name}: Beam me up – {c.card.name} zurück auf die Hand, {card.name} aus dem Friedhof")
+    return True
+
+
+def saga_enters(p, opp, card, step, e):
+    """714.3a: die Saga kommt mit einer Lore-Marke ins Spiel, Kapitel I loest aus."""
+    st = {"card": card, "lore": 0, "exiled": [], "temp": None}
+    p.sagas.append(st)
+    saga_lore(p, opp, st, step, e)
+
+
+def saga_after_draw(p, opp, step, e):
+    """714.3b: zu Beginn der ersten Main Phase (nach dem Draw Step) eine Lore-Marke auf jede eigene Saga."""
+    p.sagas = [st for st in p.sagas if any(x is st["card"] for x in p.perms)]  # zerstoert/zurueck: vergessen
+    for st in list(p.sagas):
+        saga_lore(p, opp, st, step, e)
+
+
+def saga_lore(p, opp, st, step, e):
+    """Eine Lore-Marke: das Kapitel mit dieser Zahl wirkt; ab dem letzten Kapitel wird die Saga geopfert (714.4)."""
+    card = st["card"]
+    st["lore"] += 1
+    final, chapters = card.saga
+    for nums, sub, atoms in chapters:
+        if st["lore"] in nums:
+            e["events"].append(f"{p.name}: {card.name} – Kapitel {st['lore']}")
+            if sub is not None:
+                card_effects(p, opp, sub, step, e)
+                bury((p, opp) if opp is not None else (p,), e)
+            for atom in atoms:
+                saga_atom(p, opp, st, atom, step, e)
+    if st["lore"] >= final:
+        for i, x in enumerate(p.perms):
+            if x is card:
+                del p.perms[i]
+                p.graveyard.append(card)
+                _leave(p, card)
+                e["events"].append(f"{p.name}: {card.name} geopfert (letztes Kapitel)")
+                break
+        p.sagas = [s for s in p.sagas if s is not st]
+
+
+def _card_types(card):
+    return {t for t, flag in (("land", card.is_land), ("creature", card.is_creature), ("artifact", card.is_artifact),
+                              ("enchantment", card.is_enchantment), ("planeswalker", card.is_planeswalker),
+                              ("instant", card.is_instant), ("sorcery", card.is_instant_sorcery and not card.is_instant))
+            if flag}
+
+
+def edict_permanent(victim):
+    """Opfer waehlt fuer "sacrifices a nontoken permanent": ab 6 Laendern ein Land (das am wenigsten fehlt), sonst die
+    schwaechste Nicht-Token-Kreatur, sonst das billigste andere Permanent, sonst ein Land."""
+    alive = [c for c in victim.creatures if not c.dead and not c.card.is_token]
+    others = [x for x in victim.perms if isinstance(x, Card)]
+    if len(victim.lands) >= 6 or not (alive or others):
+        return ("land", _redundant_land(victim)) if victim.lands else None
+    if alive:
+        return ("creature", min(alive, key=_value))
+    return ("perm", min(others, key=lambda x: (x.mv, x.name)))
+
+
+def saga_atom(p, opp, st, atom, step, e):
+    """Bausteine der Saga-Kapitel (cards._CHAPTER_RES)."""
+    kind = atom[0]
+    card = st["card"]
+    if kind == "clue":
+        p.clues += atom[1]
+        e["events"].append(f"{p.name}: {card.name} – Clue")
+    elif kind == "draw":
+        _draw(p, atom[1])
+    elif kind == "discard":
+        for _k in range(atom[1]):
+            gone = choose_discard(p)
+            if gone is not None:
+                p.hand.remove(gone)
+                p.graveyard.append(gone)
+                discarded(p, e, [gone])
+    elif kind == "life":
+        gain_life(p, atom[1])
+    elif kind == "edict" and opp is not None:
+        if atom[1] == "creature":
+            alive = [c for c in opp.creatures if not c.dead and not c.card.is_token]
+            if alive:
+                pick = min(alive, key=_value)
+                pick.dead = True
+                e["events"].append(f"{p.name}: {card.name} – {opp.name} opfert {pick.card.name}")
+        else:
+            pick = edict_permanent(opp)
+            if pick is not None:
+                what, obj = pick
+                if what == "creature":
+                    obj.dead = True
+                    name = obj.card.name
+                elif what == "land":
+                    opp.lands.remove(obj)
+                    opp.graveyard.append(obj)
+                    name = obj.name
+                else:
+                    destroy_permanent(opp, obj, e)
+                    name = obj.name
+                e["events"].append(f"{p.name}: {card.name} – {opp.name} opfert {name}")
+        bury((opp,), e)
+    elif kind == "exile_draw":  # "You may exile a card from your hand": nur ein ueberzaehliges Land
+        gone = surplus_land(p)
+        if gone is not None:
+            p.hand.remove(gone)
+            _draw(p)
+            e["events"].append(f"{p.name}: {card.name} – {gone.name} ins Exil, zieht")
+    elif kind == "exile_hand":  # All Good Things: Pflicht, Auswahl wie beim Abwerfen
+        gone = choose_discard(p)
+        if gone is not None:
+            p.hand.remove(gone)
+            st["exiled"].append(gone)
+            e["events"].append(f"{p.name}: {card.name} – {gone.name} ins Exil")
+    elif kind == "share_life":
+        types = [_card_types(c) for c in st["exiled"]]
+        if types and set.intersection(*types):
+            gain_life(p, atom[1])
+    elif kind == "each_draw":
+        for pl in (p, opp):
+            if pl is not None:
+                _draw(pl, atom[1])
+    elif kind == "each_damage":
+        if opp is not None:
+            deal_noncombat(p, opp, atom[1], e)
+        p.life -= atom[1]
+    elif kind == "each_lose":
+        for pl in (p, opp):
+            if pl is not None:
+                pl.life -= atom[1]
+    elif kind == "sac_token_life":
+        tokens = [c for c in p.creatures if not c.dead and c.card.is_token]
+        if tokens:
+            min(tokens, key=_value).dead = True
+            bury((p,), e)
+            gain_life(p, atom[1])
+    elif kind == "reanimate_colors":
+        cands = [c for c in p.graveyard if c.is_creature and set(colors_of_alts(c.alts)) & set(atom[1])]
+        if cands:
+            pick = max(cands, key=lambda c: (c.mv, c.power, c.name))
+            p.graveyard.remove(pick)
+            put_back(p, pick, "battlefield", step, e, opp)
+    elif kind == "power_life":
+        gain_life(p, max((c.power for c in p.creatures if not c.dead), default=0))
+    elif kind == "treasure":
+        artifact_tokens(p, "treasure", atom[1], step, e)
+    elif kind == "gy_to_hand":
+        cands = [c for c in p.graveyard if _card_types(c) & set(atom[1])]
+        if cands:
+            pick = _best_from_gy(p, cands)
+            p.graveyard.remove(pick)
+            p.hand.append(pick)
+            e["events"].append(f"{p.name}: {card.name} – {pick.name} aus dem Friedhof auf die Hand")
+    elif kind == "temp_exile" and opp is not None:  # The Measure of a Man: bis Kapitel III
+        cands = [c for c in opp.creatures if not c.dead and not c.card.is_token and not hexproof(c) and ward_ok(p, c)]
+        if cands:
+            t = max(cands, key=danger)
+            pay_ward(p, t, e)
+            opp.creatures.remove(t)
+            _leave(opp, t.card)
+            check_auras(opp, e)
+            st["temp"] = (t.owner or opp, t.base_card or t.card)
+            e["events"].append(f"{p.name}: {card.name} – {t.card.name} ins Exil")
+    elif kind == "return_exiled" and st["temp"] is not None:
+        owner, back = st["temp"]
+        st["temp"] = None
+        put_back(owner, back, "battlefield", step, e, p)
+    elif kind == "sac_for_tokens":  # erst Clue/Treasure, dann ein Token bzw. eine Kreatur unter 2/2 + 2/2
+        small = sorted((c for c in p.creatures if not c.dead and c.power + c.toughness < 4),
+                       key=lambda c: (not c.card.is_token, _value(c)))
+        if p.clues:
+            p.clues -= 1
+        elif p.treasures:
+            p.treasures -= 1
+        elif small:
+            small[0].dead = True
+            bury((p,), e)
+        else:
+            return
+        make_tokens(p, list(atom[1]), step, e, opp, card.name)
+
+
+def use_clues(p, e):
+    """Clue-Token ({2}, opfern: ziehen) am Ende des gegnerischen Zugs mit offenem Mana, das sonst ungenutzt bliebe."""
+    while p.clues and _pay_open(p, ((2, ()),), treasure=False):
+        p.clues -= 1
+        _draw(p)
+        e["events"].append(f"{p.name}: Clue – zieht")
+
+
+def land_tapped(p, tapped):
+    """Kommt das Land getappt ins Spiel? Warp Speed: "Lands you control enter untapped"."""
+    return tapped and not any(isinstance(x, Card) and snw_atom(x, "lands_untapped") for x in p.perms)
+
+
+def reduce_costs(costs, n):
+    """Kosten (Zahlungswege) um n generisches Mana gesenkt."""
+    return tuple(sorted({(max(0, g - n), cols) for g, cols in costs}))
 
 
 def card_effects(me, opp, card, step, entry, modes=None):
@@ -4202,6 +4536,8 @@ def card_effects(me, opp, card, step, entry, modes=None):
     Zurueckholen aus dem Friedhof, Token."""
     if opp is None:
         opp = me.opponent
+    if card.snw:
+        snw_effects(me, opp, card, step, entry)
     if card.choices:  # modale Karte: nur die gewaehlten Modi wirken
         if not card.is_instant_sorcery:  # 700.2b: Modi des Betreten-Ausloesers (Zauber: schon in on_cast)
             face_dilemma(me, step, entry)
@@ -4444,6 +4780,7 @@ def main_phase_spells(me, opp):
             and (not c.cast_threshold or threshold(me))
             and (not c.entrust or entrust_pick(me) is not None)
             and (not c.x_counters or sum(1 for x in me.creatures if not x.dead) >= 2)
+            and (not c.snw or praxis_ok(me, opp, c))
             and omni_ok(c, me.hand, sum(1 for x in me.creatures if not x.dead))
             and (any(mode_value(me, opp, s, 0) > (0,) for s in c.choices[1]) if c.choices and not c.is_creature
                  else not c.removal or c.removal[4] == "etb" or has_target(c, me, opp))]
@@ -4872,11 +5209,16 @@ def ability_sources(p, step, own_turn, main=False):
     for c in p.creatures:
         if c.dead:
             continue
+        snw = snw_atom(c.card, "ability_discount") if c.card.snw else None
+        if snw and snw[1] and c.once.get("snw_ability") == p.now:  # "Activate only once each turn"
+            continue
         for ab in c.card.abilities:
             if not _speed_ok(ab, own_turn, main):
                 continue
             if ab[2] and not tap_ready(p, c):  # 302.6
                 continue
+            if snw:  # Strange new worlds: kostet {X} weniger
+                ab = (reduce_costs(ab[0], snw_x(p)),) + tuple(ab[1:])
             out.append((c, ab))
     for card in p.perms:
         for ab in card.abilities:
@@ -4915,7 +5257,7 @@ def _targets(p, src, ab, pool=None):
 def artifact_count(p):
     """Artefakte unter unserer Kontrolle: Artefaktkreaturen, Artefakt-Permanents (Heartwood ...) und Treasure."""
     return (sum(1 for c in p.creatures if c.card.is_artifact and not c.dead)
-            + sum(1 for c in p.perms if c.is_artifact) + p.treasures)
+            + sum(1 for c in p.perms if c.is_artifact) + p.treasures + p.clues)
 
 
 def _snapshot(p):
@@ -5021,6 +5363,8 @@ def _activate(p, src, ab, target, e, mode, gy=None):
         return False
     if ab[2] and src is not None:
         src.tapped = True
+    if src is not None and src.card.snw:
+        src.once["snw_ability"] = p.now
     if gy is not None:
         p.graveyard.remove(gy)
     who = src.card.name if src is not None else (f"{gy.name} (aus dem Friedhof)" if gy is not None else "Permanent")
@@ -5499,6 +5843,12 @@ def attack_keywords(me, attackers, alone, e):
             a.tpump += tw
             a.extra |= set(kws)
             e["events"].append(f"{me.name}: {a.card.name} greift an: +{pw}/+{tw}" + (f", {', '.join(kws)}" if kws else ""))
+        if a.card.snw and snw_atom(a.card, "attack_team"):  # Pah-Wraith: eigene Kreaturen +X/+0
+            x = snw_x(me)
+            for c in me.creatures:
+                if not c.dead:
+                    c.pump += x
+            e["events"].append(f"{me.name}: {a.card.name} greift an: Kreaturen +{x}/+0")
         if a.card.attack_target:  # Nori: Ziel nach der Regel fuer Buffs, der gefaehrlichste Angreifer
             pw, tw, kws = a.card.attack_target
             pick = max((b for b in attackers if not b.dead), key=danger)
@@ -5888,6 +6238,10 @@ def take_turn(me, opp, step, rnd, skip_draw):
                 _draw(opp)
                 e["events"].append(f"{opp.name}: {w.card.name} – zieht eine Karte")
     jace_turn_start(me, step, e)
+    if me.sagas:  # 714.3b: Lore-Marke nach dem Draw Step
+        saga_after_draw(me, opp, step, e)
+        if opp.life <= 0 or me.life <= 0:
+            return e
     disc, orig = discount(me), {}  # Kostensenkung, Steuer, Zusatzkosten: angepasste Handkarten fuer die Main Phase
     for i, c in enumerate(me.hand):
         cheap = _discounted(c, disc, me)
@@ -5913,6 +6267,11 @@ def take_turn(me, opp, step, rnd, skip_draw):
         if c.flashback and not c.is_instant and not c.flashback_discard:
             cheap = _flashback_version(me, c)
             fb_map[cheap] = c
+            me.hand.append(cheap)
+    beam_map = {}  # Beam me up (TRK): wie Flashback, dazu eine eigene Kreatur zurueck auf die Hand
+    for cheap, c in beam_versions(me, opp):
+        if cheap not in fb_map:
+            fb_map[cheap] = beam_map[cheap] = c
             me.hand.append(cheap)
 
     def cost(c):  # Prepared-Kopien mit Kostensenkung bzw. Steuer (Handkarten sind schon angepasst)
@@ -5950,6 +6309,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     # Land
     walker_bf, jace_bf = walker_flags(me)
     land, tapped, forced = choose_land(me.hand, spells, pool_all, me.lands, walker_bf, jace_bf, has_creature, True)
+    tapped = land_tapped(me, tapped)
     if land is not None:
         me.hand.remove(land)
         if land in im_map:  # Land aus dem Exil (Blazing Crescendo)
@@ -5964,6 +6324,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     while me.extra_lands > 0 and any(c.is_land for c in me.hand):  # Way of the Paradox: weiterer Landdrop
         me.extra_lands -= 1
         land2, tapped2, _f = choose_land(me.hand, spells, pool_all, me.lands, *walker_flags(me), has_creature, True)
+        tapped2 = land_tapped(me, tapped2)
         if land2 is None:
             break
         me.hand.remove(land2)
@@ -6129,7 +6490,10 @@ def take_turn(me, opp, step, rnd, skip_draw):
                     use_draw_ability(me, c, ab, e)
     from_graveyard = Counter()  # per Flashback gewirkt: danach ins Exil
     if fb_map:
-        for c in chosen:
+        for c in list(chosen):
+            if c in beam_map and not beam_up(me, opp, beam_map[c], e):
+                chosen.remove(c)  # keine Kreatur mehr zum Zurueckgeben: bleibt im Friedhof
+                continue
             if c in fb_map:
                 me.graveyard.remove(fb_map[c])
                 from_graveyard[fb_map[c]] += 1
@@ -6214,6 +6578,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     twin_for_lethal(me, opp, step, e)
     sacrifice_for_lethal(me, opp, step, e)
     anomaly_for_lethal(me, opp, step, e)
+    snw_tap_blocker(me, opp, step, e)
     crewed = crew_to_attack(me, opp, step, e)
     attackers = choose_attackers(me.creatures, opp.creatures, opp.life, me.life, step)
     if any(v["crewed"] not in attackers for v in crewed):  # Fahrzeug greift doch nicht an: Crew zuruecknehmen
@@ -6407,6 +6772,8 @@ def take_turn(me, opp, step, rnd, skip_draw):
                 e["events"].append(f"{p_.name}: opfert {c.card.name}")
     bury((me, opp), e)
     end_step_instants(opp, me, e, step)
+    snw_sac_draw(opp, e)  # Warp Speed mit dem Rest des offenen Manas
+    use_clues(opp, e)
     hand_limit(me, e)
     expire_impulse(me)
     cleanup((me, opp))
@@ -6415,6 +6782,9 @@ def take_turn(me, opp, step, rnd, skip_draw):
 
 def hand_limit(p, e, size=7):
     """514.1: am Ende des eigenen Zugs auf die Handgroesse abwerfen (Auswahl wie beim Abwerfen)."""
+    if p.no_hand_limit:  # "no maximum hand size until your next turn"
+        p.no_hand_limit = False
+        return
     over = len(p.hand) > size
     gone = []
     while len(p.hand) > size:
