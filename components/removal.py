@@ -34,7 +34,8 @@ _DAMAGE = re.compile(r"\bdeals? (\d+|x|damage equal to[^.]*?)(?: damage)? to (" 
 _BITE_THAT = re.compile(r"\btarget creature(?: or planeswalker)? an opponent controls (that's [a-z ]+?) (?:loses|gets|gains)[^.]*\. target "
                         r"creature you control deals damage equal to its power to that (?:permanent|creature)")
 # Zurueck in die Bibliothek, der Besitzer waehlt oben oder unten (Plan for All Outcomes)
-_TUCK = re.compile(r"\bthe owner of (?:up to one )?(?:other )?target (nonland permanent|creature|permanent)[^.]* puts "
+_TUCK = re.compile(r"\btarget creature or spacecraft's owner puts it on their choice of the top or bottom of their "
+                   r"library|\bthe owner of (?:up to one )?(?:other )?target (nonland permanent|creature|permanent)[^.]* puts "
                    r"it on (?:their choice of )?the top or bottom of their library|\bchoose target nonland permanent\. "
                    r"its owner may put it on top of their library")
 _DAMAGE_EACH = re.compile(r"\bdeals? (\d+) damage to each (creature|other creature)")
@@ -51,8 +52,13 @@ _LOYALTY = re.compile(r"^[+−\-]?(\d+|x):")
 _TRIGGER = re.compile(r"^(when|whenever|at the beginning)\b")
 
 
+# TRK: das New-Planet-Token steht in Anfuehrungszeichen, ist aber kein verliehener Text (Genesis Effect)
+_PLANET_TOKEN = re.compile(r'\s*Create a tapped Planet land token named New Planet with "\{T\}: Add one mana of any '
+                           r'color\."')
+
+
 def _strip(text):
-    return re.sub(r"\([^)]*\)", " ", text or "")
+    return _PLANET_TOKEN.sub("", re.sub(r"\([^)]*\)", " ", text or ""))
 
 
 def _faces(card):

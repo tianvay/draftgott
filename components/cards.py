@@ -312,6 +312,32 @@ class Card(NamedTuple):
     verse: bool = False        # Aria of Flame: Instant/Sorcery -> Vers-Marke, Schaden = Vers-Marken
     station: tuple = ()        # Station (702.184, 721): (Kreatur ab N Marken oder 0, P, T,
     #                            ((N, Schluesselwoerter, Team-Pump (P, T, "others"/"all") oder None), ...))
+    # TRK Pakete A und B (Nutzer 2026-11-01)
+    modes_untapped: bool = False  # Land: die Modi ("choose one") nur, wenn es ungetappt ins Spiel kommt
+    gy_top_creature: bool = False  # Kreaturenkarte aus dem eigenen Friedhof oben auf die Bibliothek (The Unicomplex)
+    food: int = 0              # Food-Token beim Betreten ({2}, {T}, opfern: 3 Leben)
+    cant_block: bool = False   # "This creature can't block"
+    cant_attack_alone: bool = False  # "This creature can't attack alone" (506.5)
+    evade_power: int = 0       # kann nicht von Kreaturen mit Power <= N geblockt werden
+    evade_artifact: bool = False  # kann nicht von Artefaktkreaturen geblockt werden
+    etb_grant_plain: bool = False  # etb_grant fuer eine andere eigene Kreatur, ohne Marke (Saru)
+    protect_spell: tuple = ()  # Instant: eigene Kreatur bekommt diese Schluesselwoerter (Antwort auf Removal)
+    protect_counter: int = 0   # ... und so viele +1/+1-Marken (Shields Up!)
+    aura_etb_kw: tuple = ()    # Aura: beim Betreten bekommt die Kreatur diese Schluesselwoerter bis Rundenende
+    attack_choices: tuple = ()  # greift sie an, "choose one": (Anzahl, (Modus als Card, ...)) (Tal Shiar Operative)
+    death_bolt: int = 0        # stirbt sie: N Schaden an ein beliebiges Ziel
+    death_tokens: tuple = ()   # stirbt sie: diese Token ((Anzahl, Token-Card), ...)
+    planet_tokens: int = 0     # New-Planet-Token beim Wirken bzw. Betreten (getappt, Mana jeder Farbe)
+    attack_planet: bool = False  # "Whenever you attack": ein New-Planet-Token (Stable Wormhole)
+    planet_ability: tuple = ()  # "{N}: New-Planet-Token, nur als Hexerei": Zahlungswege (Saurian Explorer)
+    land_swap: bool = False    # "Destroy target land you control" (Genesis Effect): ein eigenes Land weg
+    land_sac_ability: tuple = ()  # Land "{K}, {T}, Sacrifice this land: Effekt": (Zahlungswege, Effekt als Card,
+    #                               New-Planet-Token ja/nein) (Anomalien, Unexplored Territory)
+    mill_take: str = ""        # nach dem Mill eine Karte dieser Art aus den gemillten auf die Hand ("permanent")
+    opp_loss: int = 0          # jeder Gegner verliert N Leben (kein Schaden)
+    basic_type: str = ""       # Landsuche aufs Feld (etb_basic_tapped) nur mit diesem Landtyp (z. B. "mountain")
+    basic_planet: bool = False  # Landsuche aufs Feld: auch Planet-Karten ("basic land card or Planet card")
+    etb_basic_hand: str = ""   # beim Betreten Basic Land ("basic") bzw. eines Typs ("plains") auf die Hand
 
 
 LANDCYCLE_RE = re.compile(
@@ -511,6 +537,10 @@ _LANDFALL_LIFE_RE = re.compile(r"^(?:landfall — )?whenever a land you control 
                                r"life")
 _TYPE_COUNTER_RE = re.compile(r"^whenever an? (plains|island|swamp|mountain|forest) you control enters, put a \+1/\+1 "
                               r"counter on target creature\.$")
+_LANDFALL_PUMP_RE = re.compile(r"^(?:landfall — )?whenever a land you control enters, (?:~|this creature) gets "
+                               r"\+(\d+)/\+(\d+) until end of turn\.?$")
+_LANDFALL_TOKEN_RE = re.compile(r"^(?:landfall — )?whenever a land you control enters, (create (?:a|an|one|two) \d+/\d+ "
+                                r"[a-z ]+? creature tokens?)( with \"this token can't block\.\")?\.?$")
 _ENDSTEP_RE = re.compile(r"^at the beginning of your end step, if you didn't cast a spell this turn, put "
                          r"(a|an|one|two|three|\d+) \+1/\+1 counters? on (?:~|this creature)\.$")
 _LOYALTY_COUNTER_RE = re.compile(r"^whenever you put one or more loyalty counters on a planeswalker, put "
@@ -635,6 +665,14 @@ def board_triggers(card):
         m = _TYPE_COUNTER_RE.match(low)
         if m:
             landfall.append(("type_counter", m.group(1), 1))
+        m = _LANDFALL_PUMP_RE.match(low)
+        if m:  # TRK Planetary Patrol: bis Rundenende
+            landfall.append(("self_pump", int(m.group(1)), int(m.group(2))))
+        m = _LANDFALL_TOKEN_RE.match(low)
+        if m:  # TRK Cleveland Booker: Token, auf Wunsch mit "This token can't block."
+            tokens = _tokens_in(m.group(1) + ".")
+            if tokens:
+                landfall.append(("tokens", tuple((n, t._replace(cant_block=bool(m.group(2)))) for n, t in tokens)))
 
         m = _ENDSTEP_RE.match(low)
         if m:
@@ -1047,7 +1085,7 @@ _EXTRA_COST_RE = re.compile(r"^as an additional cost to cast this spell, [^.]*\b
 
 _GRANT_KW_RE = re.compile(r"\btarget creature(?: you control)? (?:gets [^.]*? and )?gains ([a-z ,]+?) until end of turn"
                           r"|\btarget creature[^.]*\. it gains ([a-z ,]+?) until end of turn")
-_CHOOSE_RE = re.compile(r"^(?:when (?:~|this creature) enters, )?choose (one|two|three) —$")
+_CHOOSE_RE = re.compile(r"^(?:when (?:~|this creature|this land) enters(?: untapped)?, )?choose (one|two|three) —$")
 _YOU_DRAW_LIFE_RE = re.compile(r"^you draw (a|an|one|two|three) cards? and gain (\d+) life\.", re.I)
 
 
@@ -1087,9 +1125,13 @@ def modal_choices(card, type_line):
             text = bullet.strip().lstrip("•").strip()
             text = _YOU_DRAW_LIFE_RE.sub(lambda mm: f"Draw {mm.group(1)} card{'s' if mm.group(1) not in ('a', 'an', 'one') else ''}. "
                                          f"You gain {mm.group(2)} life.", text)
+            sub_type = front.get("type_line") or card.get("type_line", "")
+            subject = "this creature"
+            if "Land" in sub_type.split("—")[0]:  # Modus eines Landes: wie ein Permanent lesen (kein Land-Parser)
+                sub_type, subject = "Enchantment", "this enchantment"
             if etb:
-                text = "When this creature enters, " + text[0].lower() + text[1:]
-            raw_sub = {"name": card["name"], "type_line": front.get("type_line") or card.get("type_line", ""),
+                text = f"When {subject} enters, " + text[0].lower() + text[1:]
+            raw_sub = {"name": card["name"], "type_line": sub_type,
                        "mana_cost": front.get("mana_cost") or card.get("mana_cost", ""), "cmc": card.get("cmc", 0),
                        "colors": card.get("colors", []), "oracle_text": text, "keywords": [], "layout": "normal",
                        "power": front.get("power") or card.get("power"),
@@ -2347,6 +2389,10 @@ def foundation_traits(card, type_line):
             elif team:
                 tiers.append((int(m.group(1)), (), (int(team.group(2)), int(team.group(3)),
                                                     "others" if team.group(1) else "all")))
+        m = re.match(r"^(other creatures|creatures|artifact creatures) you control get \+(\d+)/\+(\d+)\.$", low)
+        if m:  # Anthem (613.4c): immer an; "artifact" nur fuer Artefaktkreaturen (auch die Quelle)
+            cond.append((("always",), {"other creatures": "others", "creatures": "team"}.get(m.group(1), "artifact"),
+                         int(m.group(2)), int(m.group(3)), ()))
         named = re.search(r"named ([A-Z][^.]*?) (?:into|onto)", raw)  # Name mit Gross-/Kleinschreibung
         for key in ("gy_conjure", "hand_pick_gift", "etb_conjure"):
             if res[key].match(low) and named:
@@ -2604,6 +2650,165 @@ def saga_traits(card):
     return ((_ROMAN[m.group(1)] if m else last), tuple(chapters)) if chapters else ()
 
 
+NEW_PLANET = Card(True, 0, (), ANY_COLOR, False, False, 0, 0, name="New Planet", land_types=("planet",),
+                  is_token=True)  # TRK: getappt, "{T}: Add one mana of any color."
+_PLANET = r"create a tapped planet land token named new planet with \"\{t\}: add one mana of any color\.\""
+_BASIC_SEARCH = (r"search your library for an? basic (land|plains|island|swamp|mountain|forest) card( or planet card)?, "
+                 r"put it onto the battlefield tapped, then shuffle\.?$")
+_TRK_RES = {
+    "etb_life_land": re.compile(r"^when this land enters, you gain (\d+) life\.?$"),
+    "gy_top": re.compile(r"^(?:when this [a-z]+ enters, )?put target creature card from your graveyard on top of your "
+                         r"library\.?$"),
+    "etb_target_kw": re.compile(r"^when this enchantment enters, target creature (?:gets \+\d+/\+\d+ and )?gains "
+                                r"([a-z ,]+?) until end of turn\.?$"),
+    "food": re.compile(r"^when (?:~|this [a-z]+) enters, create (a|one|two) food tokens?\.?$"),
+    "cant_block": re.compile(r"^(?:~|this creature) can't block\.?$"),
+    "cant_attack_alone": re.compile(r"^(?:~|this creature) can't attack alone\.?$"),
+    "evade_power": re.compile(r"^(?:~|this creature) can't be blocked by creatures with power (\d+) or less\.?$"),
+    "evade_artifact": re.compile(r"^(?:~|this creature) can't be blocked by artifact creatures\.?$"),
+    "saru": re.compile(r"^when ~ enters, another target creature you control gains (hexproof) until end of turn\.?$"),
+    "protect": re.compile(r"^target (?:artifact or )?creature you control gains ([a-z ,]+?) until end of turn\.(?: if "
+                          r"it's a creature, put (a|one|two) \+1/\+1 counters? on it\.)?$"),
+    "aura_etb_kw": re.compile(r"^when this aura enters, enchanted creature gains ([a-z ]+?) until end of turn\.?$"),
+    "attack_choose": re.compile(r"^whenever (?:~|this creature) attacks, choose one —$"),
+    "discount_attacked": re.compile(r"^this spell costs \{(\d+)\} less to cast if (?:a creature is attacking you|it "
+                                    r"targets an attacking creature)\.?$"),
+    "death_bolt": re.compile(r"^when (?:~|this creature) dies?, (?:it|~|they) deals? (\d+) damage to any target\.?$"),
+    "death_tokens": re.compile(r"^when (?:~|this creature) dies?, (create .+ tokens?(?: with [a-z ,]+)?)\.$"),
+    "planet_etb": re.compile(r"^when (?:~|this [a-z]+) enters?, " + _PLANET + r"$"),
+    "planet_attack": re.compile(r"^whenever you attack, " + _PLANET + r"$"),
+    "planet_ability": re.compile(r"^((?:\{[^}]+\})+): " + _PLANET + r" activate only as a sorcery\.$"),
+    "land_sac": re.compile(r"^((?:\{[^}]+\})+), \{t\}, sacrifice this land: (.+?)(?: " + _PLANET + r")?$"),
+    "mill_take": re.compile(r"^mill (two|three|four|five|\d+) cards\. you may put an? (permanent) card from among them "
+                            r"into your hand\.$"),
+    "opp_loss": re.compile(r"(?:^|\. )each opponent loses (\d+) life\b"),
+    "basic_spell": re.compile(r"^" + _BASIC_SEARCH),
+    "basic_etb": re.compile(r"^when (?:~|this [a-z]+) enters, (?:you may )?" + _BASIC_SEARCH),
+    "basic_hand": re.compile(r"^when (?:~|this [a-z]+) enters, (?:you may )?search your library for a basic (land|plains|"
+                             r"island|swamp|mountain|forest) card, reveal it, put it into your hand, then shuffle\.?$"),
+}
+
+
+def land_produced(card):
+    """Farben, die ein Land selbst erzeugt. Scryfall zaehlt in produced_mana auch das Mana erschaffener Token mit
+    (Anomalien: New Planet "any color"); dann zaehlen nur die eigenen "{T}: Add"-Zeilen."""
+    front = (card.get("card_faces") or [card])[0]
+    produced = card.get("produced_mana") or front.get("produced_mana") or []
+    text = front.get("oracle_text") or card.get("oracle_text") or ""
+    if '"{T}: Add' not in text:
+        return produced
+    own = set()
+    for line in text.split("\n"):
+        for unit in mana_ability_units(line.strip()) or ():
+            own |= set(unit)
+    return [c for c in produced if c in own]
+
+
+def _sub_card(name, text, type_line="Sorcery"):
+    return card_info({"name": name, "type_line": type_line, "mana_cost": "", "cmc": 0, "colors": [],
+                      "oracle_text": text, "keywords": [], "layout": "normal"})[0]
+
+
+def _kw_words(text):
+    words = tuple(w.strip() for w in re.split(r",? and |, ", text) if w.strip())
+    return words if all(w in GRANTABLE + ("hexproof", "indestructible", "vigilance", "lifelink") for w in words) \
+        else None
+
+
+def trk_land_token_traits(card, type_line):
+    """TRK Pakete A und B: Felder fuer Card._replace (ueberschreiben die anderen Parser). Laender: Leben beim
+    Betreten, Modi beim ungetappten Betreten, "Sacrifice this land"-Faehigkeiten; sonst Food, Block-/Angriffs-
+    Beschraenkungen, Ausweichen, Schutz, Angriffs-Modus, Kostensenkung gegen Angreifer, Sterbe-Ausloeser, New-Planet-
+    Token und Landsuche."""
+    out = {}
+    res = _TRK_RES
+    is_land = "Land" in type_line.split("—")[0]
+    spell = "Instant" in type_line or "Sorcery" in type_line
+    lines = list(_clean_lines(card))
+    for i, (raw, low) in enumerate(lines):
+        m = res["etb_life_land"].match(low)
+        if m and is_land:
+            out["etb_life"] = int(m.group(1))
+        if is_land and "enters untapped, choose" in low:
+            out["choices"] = modal_choices(card, type_line)
+            out["modes_untapped"] = bool(out["choices"])
+        if res["gy_top"].match(low):
+            out["gy_top_creature"] = True
+        m = res["etb_target_kw"].match(low)
+        if m and _kw_words(m.group(1)) and not is_land:  # Modus eines Landes (Ni'Var, Q Continuum)
+            out["grant_kw"] = _kw_words(m.group(1))
+        m = res["land_sac"].match(low)
+        if m and is_land and "+1/+1 counter" not in low:  # Room of Refuge hat eigene Regeln (land_sac_counters)
+            effect = raw.split(": ", 1)[1]
+            effect = re.sub(r"\s*Create a tapped Planet land token named New Planet with \"\{T\}: Add one mana of "
+                            r"any color\.\"", "", effect).strip()
+            sub = _sub_card(card.get("name", ""), effect)
+            out["land_sac_ability"] = (cost_alternatives(m.group(1).upper()), sub, "new planet" in low)
+        if is_land:
+            continue
+        m = res["food"].match(low)
+        if m:
+            out["food"] = _count(m.group(1))
+        for key in ("cant_block", "cant_attack_alone", "evade_artifact"):
+            if res[key].match(low):
+                out[key] = True
+        m = res["evade_power"].match(low)
+        if m:
+            out["evade_power"] = int(m.group(1))
+        m = res["saru"].match(low)
+        if m:
+            out["etb_grant"], out["etb_grant_plain"] = (m.group(1),), True
+        m = res["protect"].match(low)
+        if m and spell and _kw_words(m.group(1)):
+            out["protect_spell"] = _kw_words(m.group(1))
+            out["protect_counter"] = _count(m.group(2)) if m.group(2) else 0
+        m = res["aura_etb_kw"].match(low)
+        if m and _kw_words(m.group(1)):
+            out["aura_etb_kw"] = _kw_words(m.group(1))
+        if res["attack_choose"].match(low):
+            subs = []
+            for braw, _blow in lines[i + 1:]:
+                if not braw.strip().startswith("•"):
+                    break
+                subs.append(_sub_card(card.get("name", ""), re.sub(r"\([^)]*\)", "", braw.strip().lstrip("•")).strip(),
+                                      "Instant")._replace(is_mode=True))
+            if subs:
+                out["attack_choices"] = (1, tuple(subs))
+        m = res["discount_attacked"].match(low)
+        if m:
+            out["self_discount"] = ("attacked", int(m.group(1)))
+        m = res["death_bolt"].match(low)
+        if m:
+            out["death_bolt"] = int(m.group(1))
+        m = res["death_tokens"].match(low)
+        if m and _tokens_in(m.group(1) + "."):
+            out["death_tokens"] = tuple(_tokens_in(m.group(1) + "."))
+        if res["planet_etb"].match(low) or (spell and re.search(_PLANET, low)):
+            out["planet_tokens"] = 1
+        if spell and re.search(r"(?:^|\. )destroy target land you control\.", low):
+            out["land_swap"] = True
+        if res["planet_attack"].match(low):
+            out["attack_planet"] = True
+        m = res["planet_ability"].match(low)
+        if m:
+            out["planet_ability"] = cost_alternatives(m.group(1).upper())
+        m = res["mill_take"].match(low)
+        if m and spell:
+            out["mill_self"], out["mill_take"] = _NUM_WORDS.get(m.group(1)) or int(m.group(1)), m.group(2)
+        m = res["opp_loss"].search(low)
+        if m and spell:
+            out["opp_loss"] = int(m.group(1))
+        m = res["basic_spell"].match(low) if spell else res["basic_etb"].match(low)
+        if m:
+            out["etb_basic_tapped"] = True
+            out["basic_type"] = "" if m.group(1) == "land" else m.group(1)
+            out["basic_planet"] = bool(m.group(2))
+        m = res["basic_hand"].match(low)
+        if m:
+            out["etb_basic_hand"] = "basic" if m.group(1) == "land" else m.group(1)
+    return out
+
+
 def card_info(card):
     """Wandelt eine Scryfall-Karte in (Card, Anzeigetext) um."""
     saga = saga_traits(card)
@@ -2618,11 +2823,18 @@ def card_info(card):
 
 
 def _card_info(card):
+    out, shown = _card_info_base(card)
+    front = (card.get("card_faces") or [card])[0]
+    trk = trk_land_token_traits(card, (front.get("type_line") or card.get("type_line", "")).split(" // ")[0])
+    return (out._replace(**trk) if trk else out), shown
+
+
+def _card_info_base(card):
     faces = card.get("card_faces") or [card]
     front = faces[0]
     type_line = (front.get("type_line") or card.get("type_line", "")).split(" // ")[0]
     if "Land" in type_line:
-        produced = card.get("produced_mana") or front.get("produced_mana") or []
+        produced = land_produced(card)
         colors = tuple(sorted(set(produced)))
         tap_mode, tap_arg = land_tap_info(card, front)
         subtypes = tuple(sorted(t.lower() for t in type_line.split("—", 1)[1].split())) \

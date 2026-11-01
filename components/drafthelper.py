@@ -21,7 +21,7 @@ import urllib.error
 import webbrowser
 from collections import Counter
 
-from components.cards import card_info
+from components.cards import card_info, land_produced
 from components.cardkinds import (FLOW_ORDER, empower_points, flow_kinds,  # noqa: F401 (auch von Tests benutzt)
                                   type_kinds)
 from components.battle_server import enemy_decks as _enemy_decks, game_fragment, start_battle
@@ -104,7 +104,8 @@ def load_pool(path, refresh=False):
             "cost": sc.get("mana_cost") or (faces[0].get("mana_cost") if faces else "") or "",
             "large": image.replace("/normal/", "/large/") if image else None,
             "land": "Land" in type_line.split("—")[0], "mv": sc.get("cmc") or 0, "found": bool(sc),
-            "produces": sc.get("produced_mana") or (faces[0].get("produced_mana") if faces else None) or [],
+            "produces": (land_produced(sc) if "Land" in type_line.split("—")[0]  # ohne Token-Mana (TRK)
+                         else sc.get("produced_mana") or (faces[0].get("produced_mana") if faces else None) or []),
             "kinds": type_kinds(type_line), "empower": bool(empower), "flow": flow_kinds(sc),
             # Loyalty, die beim Wirken bzw. Betreten sofort dazukommt (ohne X und ohne wiederkehrende Ausloeser)
             "empower_points": empower_points(empower),

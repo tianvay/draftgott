@@ -736,6 +736,22 @@ def apply_effects(card, board, bonus, pump, turn):
     return {"damage": gain, "face": face, "counters": counters}
 
 
+def fetch_basic_tapped(card, library, battlefield):
+    """Landsuche aufs Feld (getappt) wie im Kampf (battle.fetch_land_tapped): Basic Land, nur des Landtyps
+    card.basic_type, mit card.basic_planet auch Planet-Karten; zuerst neue Farben, dann der haeufigste Name."""
+    have = set().union(*(x.land_colors for x in battlefield)) if battlefield else set()
+    cands = [x for x in library if (x.is_basic and (not card.basic_type or card.basic_type in x.land_types))
+             or (card.basic_planet and x.is_land and "planet" in x.land_types)]
+    if not cands:
+        return None
+    count = Counter(x.name for x in cands)
+    pick = max(cands, key=lambda x: (len(set(x.land_colors) - have), count[x.name], x.name))
+    library.remove(pick)
+    random.shuffle(library)
+    battlefield.append(pick)
+    return pick
+
+
 def landfall_effects(land, board, bonus, turn, with_mana=True):
     """Landfall der Kreaturen auf dem Feld (Card.landfall): Schaden an den Gegner, Mana (Mountain, nur wenn with_mana)
     und Marken bei bestimmten Landtypen. Gibt (Schaden an den Gegner, [Farbtupel], Marken) zurueck."""
@@ -1449,15 +1465,8 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                         library.remove(pick)
                         random.shuffle(library)
                         gy.append(pick)
-                if c.etb_basic_tapped:  # Simulacrum Shaper: Basic Land getappt aufs Feld
-                    have = set().union(*(x.land_colors for x in battlefield)) if battlefield else set()
-                    basics = [x for x in library if x.is_basic]
-                    if basics:
-                        count = Counter(x.name for x in basics)
-                        pick = max(basics, key=lambda x: (len(set(x.land_colors) - have), count[x.name], x.name))
-                        library.remove(pick)
-                        random.shuffle(library)
-                        battlefield.append(pick)
+                if c.etb_basic_tapped:  # Simulacrum Shaper, Final Frontier: Land getappt aufs Feld
+                    fetch_basic_tapped(c, library, battlefield)
                 if c.etb_artifact_colors_draw:  # Karn, Gilded Guardian
                     arts = [x for x in nperms if x.is_artifact] + [x for x, _t in board if x.is_artifact and x is not c]
                     for _k in range(len(set().union(*(colors_of_alts(x.alts) for x in arts))) if arts else 0):

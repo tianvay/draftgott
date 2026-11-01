@@ -22,7 +22,7 @@ from components.mulligan import deal_opening
 from components.jace import (JaceState, cast_filter_matches, enter_filter_matches, once_effects,
                              recurring_effects, surveil)
 from components.simulation import walker_rank
-from components.cards import HEARTWOOD, Card, token_card
+from components.cards import HEARTWOOD, NEW_PLANET, Card, token_card
 from components.conjure import conjure
 from components.simulation import (ANY_COLOR, apply_effects, apply_surveils, best_cast_reduced, choose_land,
                                    cost_reduction, do_cycle, enter_value, enters_prepared, free_spells, hand_form,
@@ -159,7 +159,8 @@ class Creature:
         out = [s for s in own if s[1] == "self" and _cond_met(p, s[0], self)]
         for src, card in team:
             if src is None or not src.dead:
-                out += [s for s in card.cond_static if (s[1] == "team" or (s[1] == "others" and src is not self))
+                out += [s for s in card.cond_static if (s[1] == "team" or (s[1] == "others" and src is not self)
+                                                        or (s[1] == "artifact" and self.card.is_artifact))
                         and _cond_met(p, s[0], src)]
         return out
 
@@ -323,7 +324,8 @@ def _statics(p):
     Team-Statik [(Kreatur oder None, Karte)], Quellen mit Schluesselwoertern fuer Kreaturen mit Marke
     [(Kreatur oder None, kw)])."""
     cards = [(c, c.card) for c in p.creatures] + [(None, x) for x in p.perms if isinstance(x, Card)]
-    p.statics = ([(c, card) for c, card in cards if any(st[1] in ("team", "others") for st in card.cond_static)],
+    p.statics = ([(c, card) for c, card in cards if any(st[1] in ("team", "others", "artifact")
+                                                         for st in card.cond_static)],
                  [(c, card.counter_kw) for c, card in cards if card.counter_kw])
     return p.statics
 
@@ -399,7 +401,11 @@ def can_attack(c, step):
 
 
 def can_block(blocker, attacker):
-    if blocker.tapped or blocker.dead or blocker.locked or attacker.has("unblockable"):
+    if blocker.tapped or blocker.dead or blocker.locked or attacker.has("unblockable") or blocker.card.cant_block:
+        return False
+    if attacker.card.evade_artifact and blocker.card.is_artifact:  # Species 8472
+        return False
+    if attacker.card.evade_power and blocker.power <= attacker.card.evade_power:  # Cold-Blooded Crew
         return False
     return not attacker.has("flying") or blocker.has("flying") or blocker.has("reach")
 
@@ -583,7 +589,7 @@ def choose_attackers(mine, theirs, their_life, my_life, step):
         return []
     blockers = [b for b in theirs if not b.tapped and not b.dead]
     if max_through(cand, blockers) >= their_life:
-        return cand
+        return _not_alone(cand)
     attack = [c for c in cand if not any(_eats(b, c) for b in blockers)]
     their_attackers = [t for t in theirs if not t.dead and (not t.card.defender or _defender_ok(t)) and t.dmg > 0]
 
@@ -594,6 +600,13 @@ def choose_attackers(mine, theirs, their_life, my_life, step):
     if crack_back([]) < my_life:  # nur zurueckhalten, wenn es den Gegenangriff wirklich aufhaelt
         while attack and crack_back(attack) >= my_life:
             attack.remove(min(attack, key=lambda c: (c.dmg, c.toughness)))
+    return _not_alone(attack)
+
+
+def _not_alone(attack):
+    """506.5: eine Kreatur mit "can't attack alone" (Pet Sehlat) greift nicht als einzige an."""
+    if len(attack) == 1 and attack[0].card.cant_attack_alone:
+        return []
     return attack
 
 
@@ -745,6 +758,8 @@ class Player:
         self.no_hand_limit = False  # Deep Space Scan: kein Handlimit am Ende dieses Zugs
         self.sagas = []       # Sagas im Spiel: {"card", "lore", "exiled" (All Good Things), "temp" (Measure of a Man)}
         self.clues = 0        # Clue-Token (Investigate): {2}, opfern: eine Karte ziehen
+        self.foods = 0        # Food-Token: {2}, {T}, opfern: 3 Leben (TRK)
+        self.under_attack = False  # eine gegnerische Kreatur greift gerade an (Red Alert!, Guidance Failure)
         self.gained = 0       # in diesem Zug gewonnenes Leben (Enlightened Confidant)
         self.next_pw = 0      # der naechste Planeswalker-Zauber kostet {N} weniger (Sparks Ablaze)
         self.seek_discard = []  # mit Seek geholte Karten, die im naechsten Endsegment abgeworfen werden (Killian)
@@ -842,6 +857,8 @@ def own_reduction(p, card):
         return snw_x(p)
     if p is None or not card.self_discount:
         return 0
+    if card.self_discount[0] == "attacked":  # Red Alert!, Guidance Failure (Ziel ist dann ein Angreifer)
+        return card.self_discount[1] if p.under_attack else 0
     alive = [c for c in p.creatures if not c.dead]
     return cost_reduction(card, [c.power for c in alive], [c.toughness for c in alive],
                           any(c.card.legendary for c in alive), p.noncreature_cast)
@@ -1060,6 +1077,22 @@ def protect_response(p, target, caster, e, step):
             on_cast(p, card, step, e)
             creature_enters(p, new, step, e, caster)
             return True
+    if target.card.mv >= 3 or target is max(alive, key=danger):
+        for card in [c for c in p.hand if c.protect_spell and c.is_instant]:
+            if not _cast_from_open(p, card):
+                continue
+            p.cast_count += 1
+            if try_counter(p, card, step, e):
+                p.graveyard.append(card)
+                on_cast(p, card, step, e)
+                continue
+            on_cast(p, card, step, e)
+            p.graveyard.append(card)
+            target.extra |= set(card.protect_spell)
+            target.bonus += card.protect_counter
+            e["events"].append(f"{p.name}: {card.name} als Antwort – {target.card.name} bekommt "
+                               f"{', '.join(card.protect_spell)}")
+            return True
     if target.card.mv < 3:
         return False
     for lili in [c for c in alive if c.card.liliana_hexproof and c is not target and tap_ready(p, c)]:
@@ -1177,6 +1210,7 @@ def _mill(p, n, e=None, source=""):
         library_to_graveyard(p)
     if e is not None and milled:
         e["events"].append(f"{p.name}: {source} – Mill {len(milled)}")
+    return milled
 
 
 def ally_walker_enters(p, e=None):
@@ -1276,6 +1310,81 @@ def life_token_instants(p, opp, step, e):
             e["events"].append(f"{p.name}: {card.name} in Main 2 (X = {p.gained})")
             p.cast_count += 1
             _resolve(p, opp, card, step, e)
+
+
+def attack_planets(p, opp, step, e):
+    """"Whenever you attack" (Stable Wormhole): je Quelle ein New-Planet-Token."""
+    for src, card in static_sources(p):
+        if card.attack_planet:
+            planet_tokens(p, opp, 1, step, e, card.name)
+
+
+def attack_choice_triggers(p, opp, attackers, step, e):
+    """Angriffs-Ausloeser "choose one" (Tal Shiar Operative, ein Dilemma, 700.2b): Deathtouch fuer den gefaehrlichsten
+    Angreifer ohne Deathtouch, wenn der Verteidiger einen ungetappten Blocker hat; sonst der wertvollste andere Modus."""
+    blockers = [b for b in opp.creatures if not b.tapped and not b.dead] if opp is not None else []
+    for a in [a for a in attackers if a.card.attack_choices and not a.dead]:
+        face_dilemma(p, step, e)
+        subs = a.card.attack_choices[1]
+        dt = next((s for s in subs if "deathtouch" in s.grant_kw), None)
+        cands = [x for x in attackers if not x.dead and not x.has("deathtouch")]
+        if dt is not None and blockers and cands:
+            pick = max(cands, key=danger)
+            pick.extra.add("deathtouch")
+            e["events"].append(f"{p.name}: {a.card.name} – {pick.card.name} bekommt Deathtouch")
+            continue
+        rest = [s for s in subs if s is not dt]
+        if rest:
+            sub = max(rest, key=lambda s: mode_value(p, opp, s, step))
+            if sub.surveil:
+                surveil_cards(p, [sub.surveil], e, a.card.name)
+            else:
+                card_effects(p, opp, sub, step, e)
+
+
+def planet_abilities(p, opp, step, e):
+    """Saurian Explorer ("{6}: New-Planet-Token, nur als Hexerei") in Main 2 mit Mana, das sonst ungenutzt bliebe:
+    jede vorher bezahlbare Instant-/Flash-/Cycling-Karte bleibt bezahlbar (free_units)."""
+    for c in [c for c in p.creatures if c.card.planet_ability and not c.dead]:
+        alts = c.card.planet_ability
+        need = min(g + sum(n for _col, n in cols) for g, cols in alts)
+        if free_units(p) >= need and _pay_open(p, alts, treasure=False):
+            planet_tokens(p, opp, 1, step, e, c.card.name)
+
+
+def land_sac_value(p, opp, sub):
+    """Lohnt die Opfer-Faehigkeit eines Landes? Schaden nur, wenn er eine gegnerische Kreatur toetet; Landsuche nur mit
+    passendem Land in der Bibliothek; Ziehen, Token, Mill und Lebensverlust immer."""
+    if sub.removal:
+        return opp is not None and choose_target(sub.removal, p, opp) is not None
+    if sub.etb_basic_tapped:
+        return any(c.is_basic for c in p.library)
+    return bool(sub.draws or sub.creates_tokens or sub.mill_self or sub.opp_loss or sub.spell_life)
+
+
+def land_sac_abilities(p, opp, step, e):
+    """TRK Anomalien und Unexplored Territory ("{K}, {T}, Sacrifice this land: Effekt"): am Ende des gegnerischen Zugs
+    mit offenem Mana, das sonst ungenutzt bliebe (das Land muss selbst noch ungetappt sein); der New-Planet-Token
+    ersetzt das Land (getappt, im naechsten Zug Mana jeder Farbe). Teuerste Faehigkeit zuerst."""
+    lands = sorted([l for l in p.lands if l.land_sac_ability],
+                   key=lambda l: -min(g + sum(n for _c, n in cols) for g, cols in l.land_sac_ability[0]))
+    for land in lands:
+        alts, sub, planet = land.land_sac_ability
+        if land not in p.lands or land.land_colors not in p.open or not land_sac_value(p, opp, sub):
+            continue
+        p.open.remove(land.land_colors)  # {T}: das Land selbst
+        if not _pay_open(p, alts, treasure=False):
+            p.open.append(land.land_colors)
+            continue
+        p.lands.remove(land)
+        p.graveyard.append(land)
+        e["events"].append(f"{p.name}: opfert {land.name}")
+        if sub.removal:
+            cast_removal(sub, p, opp, e, step)
+            bury((p, opp), e)
+        card_effects(p, opp, sub._replace(removal=()), step, e)
+        if planet:
+            planet_tokens(p, opp, 1, step, e, land.name)
 
 
 def room_of_refuge(p, step, e):
@@ -2927,6 +3036,54 @@ def _redundant_land(p, lands=None):
                                           tapped[land.land_colors] > 0, land.is_basic))
 
 
+def fetch_land_tapped(p, opp, card, step, e):
+    """Basic Land (bzw. eines Landtyps, mit basic_planet auch eine Planet-Karte) getappt aus der Bibliothek aufs Feld,
+    danach mischen: zuerst neue Farben, dann der haeufigste Name. Das Land loest beim Betreten aus (getappt)."""
+    have = set().union(*(c.land_colors for c in p.lands)) if p.lands else set()
+    cands = [c for c in p.library if (c.is_basic and (not card.basic_type or card.basic_type in c.land_types))
+             or (card.basic_planet and c.is_land and "planet" in c.land_types)]
+    if not cands:
+        return
+    count = Counter(c.name for c in cands)
+    pick = max(cands, key=lambda c: (len(set(c.land_colors) - have), count[c.name], c.name))
+    p.library.remove(pick)
+    random.shuffle(p.library)
+    p.lands.append(pick)
+    e["events"].append(f"{p.name}: {card.name} sucht {pick.name} (getappt)")
+    if opp is not None or p.opponent is not None:
+        on_land(p, opp if opp is not None else p.opponent, pick, step, e, with_mana=False)
+
+
+def search_basic_type(p, kind, e, source=""):
+    """Basic Land eines Landtyps ("plains") aus der Bibliothek auf die Hand, danach mischen (Oberth-Class Starship)."""
+    pick = next((c for c in p.library if c.is_basic and kind in c.land_types), None)
+    if pick is None:
+        return
+    p.library.remove(pick)
+    p.hand.append(pick)
+    random.shuffle(p.library)
+    e["events"].append(f"{p.name}: {source} sucht {pick.name}")
+
+
+def planet_tokens(p, opp, n, step, e, source=""):
+    """TRK: n getappte New-Planet-Token (Land, Mana jeder Farbe); jedes loest Landfall aus. Getappt: ihr Mana fehlt
+    bis zum naechsten Enttappen (p.open bleibt, wie es ist)."""
+    for _ in range(n):
+        p.lands.append(NEW_PLANET)
+        on_land(p, opp if opp is not None else p.opponent, NEW_PLANET, step, e, with_mana=False)
+    if n:
+        e["events"].append(f"{p.name}: {source} – {n} New-Planet-Token")
+
+
+def _lose_land(p, land):
+    """Ein eigenes Land verlaesst das Spielfeld (Opfern, Zerstoeren): sein offenes Mana fehlt; Token verschwinden."""
+    if not _tapped_lands(p)[land.land_colors] and land.land_colors in p.open:
+        p.open.remove(land.land_colors)
+    p.lands.remove(land)
+    if not land.is_token:
+        p.graveyard.append(land)
+
+
 def creature_enters(p, new, step, e, opp=None, cast=True):
     """Eine Kreatur kam ins Spiel (schon in p.creatures): Leben (Greenhouse Propagator), Marken auf eine Kreatur, die
     in diesem Zug kam (Mabel), Team-Pump nach Artefakten (Craterclaw Colossus), Land gegen Token (Tenured
@@ -2967,7 +3124,14 @@ def creature_enters(p, new, step, e, opp=None, cast=True):
         host = new if attach == "self" else gear_host(p, step) if attach == "target" else None
         if host is not None and not host.dead:
             attach_gear(p, token, host, e)
-    if card.etb_grant:  # Teyo: Ziel vorgegeben (Antwort, Kampf) oder die gefaehrlichste eigene Kreatur, auch er selbst
+    if card.etb_grant and card.etb_grant_plain:  # Saru: eine andere eigene Kreatur, ohne Marke
+        t, p.grant_target = p.grant_target, None
+        others = [c for c in p.creatures if not c.dead and c is not new]
+        if t != "done" and others:
+            t = t if t is not None and t in others else max(others, key=danger)
+            t.extra |= set(card.etb_grant)
+            e["events"].append(f"{p.name}: {card.name} – {t.card.name} bekommt {', '.join(card.etb_grant)}")
+    elif card.etb_grant:  # Teyo: Ziel vorgegeben (Antwort, Kampf) oder die gefaehrlichste eigene Kreatur, auch er selbst
         t, p.grant_target = p.grant_target, None
         if t != "done":
             alive = [c for c in p.creatures if not c.dead]
@@ -3082,17 +3246,7 @@ def creature_enters(p, new, step, e, opp=None, cast=True):
             p.hand.append(pick)
             e["events"].append(f"{p.name}: {card.name} wirft {gone.name} ab, sucht {pick.name}")
     if card.etb_basic_tapped:  # Simulacrum Shaper: Basic Land getappt aufs Feld (Auswahl wie search_basics)
-        have = set().union(*(c.land_colors for c in p.lands)) if p.lands else set()
-        basics = [c for c in p.library if c.is_basic]
-        if basics:
-            count = Counter(c.name for c in basics)
-            pick = max(basics, key=lambda c: (len(set(c.land_colors) - have), count[c.name], c.name))
-            p.library.remove(pick)
-            random.shuffle(p.library)
-            p.lands.append(pick)
-            e["events"].append(f"{p.name}: {card.name} sucht {pick.name} (getappt)")
-            if opp is not None or p.opponent is not None:
-                on_land(p, opp if opp is not None else p.opponent, pick, step, e, with_mana=False)
+        fetch_land_tapped(p, opp, card, step, e)
     if card.etb_artifact_colors_draw:  # Karn, Gilded Guardian
         arts = [c for c in p.perms if c.is_artifact] + [c.card for c in p.creatures if c is not new and not c.dead
                                                          and c.card.is_artifact]
@@ -3200,8 +3354,9 @@ def surveil_cards(p, amounts, e, source):
     mark_surveil(p, e, max(1, events))
 
 
-def on_land(me, opp, land, step, e, with_mana=True):
-    """Ein Land kommt ins Spiel: Landfall, Surveil des Landes, Jace-Ausloeser. Gibt zusaetzliches Mana zurueck."""
+def on_land(me, opp, land, step, e, with_mana=True, untapped=False):
+    """Ein Land kommt ins Spiel: Landfall, Surveil des Landes, Jace-Ausloeser, Leben und Modi des Landes (TRK: "When
+    this land enters untapped, choose one" nur, wenn es ungetappt kam). Gibt zusaetzliches Mana zurueck."""
     mana = []
     if "forest" in land.land_types:  # Roiling Canopy: mindestens 5 andere Forests
         others = sum("forest" in x.land_types for x in me.lands) - (1 if land in me.lands else 0)
@@ -3219,9 +3374,18 @@ def on_land(me, opp, land, step, e, with_mana=True):
         for c in list(me.creatures):
             if c.card.landfall_life and not c.dead:
                 gain_life(me, c.card.landfall_life)
+            for atom in c.card.landfall if not c.dead else ():
+                if atom[0] == "self_pump":  # Planetary Patrol: bis Rundenende
+                    c.pump += atom[1]
+                    c.tpump += atom[2]
+                elif atom[0] == "tokens":  # Cleveland Booker
+                    make_tokens(me, list(atom[1]), step, e, opp, c.card.name)
         deal_noncombat(me, opp, face, e)
     if land.surveil:
         surveil_cards(me, [land.surveil], e, land.name)
+    gain_life(me, land.etb_life)  # Planeten-Laender
+    if land.choices and (untapped or not land.modes_untapped):
+        card_effects(me, opp, land, step, e)
     for ef in once_effects(land):
         if ef[1] == "etb":
             _jace_add(me, ef[2], e)
@@ -3300,7 +3464,7 @@ def bury(players, e):
     for p in players:
         legend_rule(p, e)
     triggers = []  # erst alle gleichzeitig sterben lassen (704.3), dann die Ausloeser
-    copies_made, returns = [], []
+    copies_made, returns, bolts, death_made = [], [], [], []
     for p in players:  # Invigorator, der in diesem Moment stirbt, loest trotzdem aus
         for c in p.creatures:
             if c.ramp_pending and (c.dead or c.damage >= c.toughness):
@@ -3348,6 +3512,10 @@ def bury(players, e):
                     p.charges += sum(1 for x in p.perms if x.charge_on_death)
                 if c.card.death_token_copy and not c.card.is_token:  # Sphinx of False Conclusions (707.2, 111.10)
                     copies_made.append((p, c.card._replace(is_token=True)))
+                if c.card.death_bolt:  # Munitions Enthusiast
+                    bolts.append((p, c.card.death_bolt, c.card.name))
+                if c.card.death_tokens:  # The Duras Sisters, Tenacious Drone
+                    death_made.append((p, c.card))
                 if c.card.death_heartwood:  # Aerid Konstrari: ungetappt, sofort offenes Mana (kein 302.6)
                     if artifact_tokens(p, HEARTWOOD, c.card.death_heartwood, p.now, e):
                         p.open += list(HEARTWOOD.mana_src) * c.card.death_heartwood
@@ -3368,6 +3536,12 @@ def bury(players, e):
         p.creatures.append(new)
         creature_enters(p, new, p.now, e, p.opponent, cast=False)
         e["events"].append(f"{p.name}: Token-Kopie von {card.name}")
+    for p, card in death_made:
+        make_tokens(p, list(card.death_tokens), p.now, e, p.opponent, card.name)
+    for p, n, name in bolts:
+        death_bolt(p, n, name, e)
+    if bolts:
+        bury(players, e)
     for p, ping, extra in triggers:  # Massacre Girl, Edgar, Way of the Necromancer
         if ping == "loyalty":
             if jace_present(p):
@@ -3390,6 +3564,23 @@ def bury(players, e):
             pick = max(alive, key=lambda x: (can_attack(x, p.now + 1), danger(x)))
             pick.bonus += n
             e["events"].append(f"{p.name}: {name} – {n} Marke(n) auf {pick.card.name}")
+
+
+def death_bolt(p, n, name, e):
+    """"When this creature dies, it deals N damage to any target" (Stufe 2, "any target"): Lethal an den Gegner, sonst
+    die gefaehrlichste gegnerische Kreatur, die daran stirbt (mit Power > 0), sonst an den Gegner."""
+    opp = p.opponent
+    if opp is None:
+        return
+    killable = [c for c in opp.creatures if not c.dead and c.power > 0 and c.toughness - c.damage <= n
+                and not hexproof(c) and not c.has("indestructible")]
+    if opp.life > n and killable:
+        pick = max(killable, key=danger)
+        pick.damage += n
+        e["events"].append(f"{p.name}: {name} – {n} Schaden an {pick.card.name}")
+    else:
+        e["events"].append(f"{p.name}: {name} – {n} Schaden an {opp.name}")
+        deal_noncombat(p, opp, n, e)
 
 
 def check_auras(p, e=None):
@@ -4133,10 +4324,14 @@ def mode_value(p, opp, sub, step, end_step=False):
         return (2, 1)
     if not end_step and any(a[0] in ("pump", "pump_all") for a in atoms) and any(can_attack(c, step) for c in alive):
         return (2, 0)
+    if not end_step and sub.grant_kw and not atoms and any(can_attack(c, step) for c in alive):
+        return (2, 0)  # Ni'Var Science Academy: Flying fuer einen Angreifer
     if face or any_dmg:
         return (1.5, face + any_dmg)
     if sub.spell_life or sub.etb_life:
         return (1, sub.spell_life + sub.etb_life)
+    if sub.gy_top_creature and any(c.is_creature for c in p.graveyard):
+        return (0.75,)  # The Unicomplex: die naechste Karte ist eine Kreatur aus dem Friedhof
     if sub.surveil:
         return (0.5,)
     return (0,)
@@ -4160,6 +4355,7 @@ def permanent_enters(p, opp, card, step, e):
         if alive:
             pick = max(alive, key=lambda c: (can_attack(c, step), danger(c)))
             pick.auras.append(card)
+            pick.extra |= set(card.aura_etb_kw)
             e["events"].append(f"{p.name}: {card.name} an {pick.card.name}")
     if card.station:  # Station-Karte: eigenes Objekt im Spiel, Charge-Marken bleiben, bis sie das Spielfeld verlaesst
         live = card._replace()
@@ -4530,6 +4726,58 @@ def reduce_costs(costs, n):
     return tuple(sorted({(max(0, g - n), cols) for g, cols in costs}))
 
 
+def mill_pick(p, milled):
+    """Bleibende Karte aus den gemillten: die teuerste, die man bald wirken kann (Manawert <= Laender + 1), sonst die
+    teuerste; ein Land nur, wenn keine andere da ist und die Hand keins hat."""
+    perms = [c for c in milled if not c.is_instant_sorcery and not c.is_land]
+    if perms:
+        return max(perms, key=lambda c: (c.mv <= len(p.lands) + 1, c.mv, c.name))
+    lands = [c for c in milled if c.is_land]
+    return lands[0] if lands and not any(h.is_land for h in p.hand) else None
+
+
+def trk_effects(me, opp, card, step, entry):
+    """TRK Pakete A und B beim Aufloesen bzw. Betreten."""
+    if card.food:
+        me.foods += card.food
+        entry["events"].append(f"{me.name}: {card.name} – {card.food} Food-Token")
+    if card.opp_loss and opp is not None:  # Artificial Anomaly: Lebensverlust, kein Schaden
+        opp.life -= card.opp_loss
+    if card.land_swap and me.lands:  # Genesis Effect: ein farbloses Land, sonst das entbehrlichste
+        land = next((l for l in me.lands if l.land_colors == ("C",)), None) or _redundant_land(me)
+        _lose_land(me, land)
+        entry["events"].append(f"{me.name}: {card.name} zerstoert {land.name}")
+    if card.planet_tokens:
+        planet_tokens(me, opp, card.planet_tokens, step, entry, card.name)
+    if card.gy_top_creature:  # The Unicomplex: die teuerste Kreatur aus dem Friedhof oben auf die Bibliothek
+        pool = [c for c in me.graveyard if c.is_creature]
+        if pool:
+            pick = max(pool, key=lambda c: (c.mv, c.name))
+            me.graveyard.remove(pick)
+            me.library.insert(0, pick)
+            entry["events"].append(f"{me.name}: {card.name} – {pick.name} oben auf die Bibliothek")
+    if card.is_mode and card.grant_kw and not card.modes and not card.is_instant_sorcery:
+        alive = [c for c in me.creatures if not c.dead]  # Ni'Var Science Academy: Flying fuer den besten Angreifer
+        if alive:
+            pick = max(alive, key=lambda c: (can_attack(c, step), danger(c)))
+            pick.extra |= set(card.grant_kw)
+    if card.etb_basic_tapped and not card.is_creature:  # Final Frontier, Genesis Device, The Naked Time I
+        fetch_land_tapped(me, opp, card, step, entry)
+    if card.etb_basic_hand == "basic":  # Warp Core
+        search_basics(me, 1, entry, card.name)
+    elif card.etb_basic_hand:  # Oberth-Class Starship
+        search_basic_type(me, card.etb_basic_hand, entry, card.name)
+
+
+def use_food(p, e):
+    """Food-Token ({2}, {T}, opfern: 3 Leben) am Ende des gegnerischen Zugs mit offenem Mana, das sonst ungenutzt
+    bliebe (nach den Clues)."""
+    while p.foods and _pay_open(p, ((2, ()),), treasure=False):
+        p.foods -= 1
+        gain_life(p, 3)
+        e["events"].append(f"{p.name}: Food – 3 Leben")
+
+
 def card_effects(me, opp, card, step, entry, modes=None):
     """Effekte einer Karte: bei Instants/Sorceries beim Auflösen, bei Permanents beim Betreten (603.6a, egal wie sie
     ins Spiel kommen). Treasure, Schaden an uns, Removal, Abwerfen, Schaden/Marken/Pumps, Ziehen, Surveil, Leben,
@@ -4556,6 +4804,7 @@ def card_effects(me, opp, card, step, entry, modes=None):
         artifact_tokens(me, HEARTWOOD, card.heartwood, step, entry)
         entry["events"].append(f"{me.name}: {card.name} – {card.heartwood} Heartwood-Token")
     me.life -= card.life_loss  # "You lose N life"
+    trk_effects(me, opp, card, step, entry)
     if card.loot:  # "Draw a card, then discard a card"
         _draw(me)
         gone = choose_discard(me)
@@ -4581,7 +4830,13 @@ def card_effects(me, opp, card, step, entry, modes=None):
     if card.opp_etb_life and opp is not None:  # Aria of Flame
         gain_life(opp, card.opp_etb_life)
     if card.mill_self:  # Dark Matter Manipulator, Omit Variables
-        _mill(me, card.mill_self, entry, card.name)
+        milled = _mill(me, card.mill_self, entry, card.name)
+        if card.mill_take:  # Temporal Anomaly: eine bleibende Karte aus den gemillten auf die Hand
+            pick = mill_pick(me, milled)
+            if pick is not None:
+                me.graveyard.remove(pick)
+                me.hand.append(pick)
+                entry["events"].append(f"{me.name}: {card.name} – {pick.name} auf die Hand")
     if card.team_grant:  # Artifist Acumen
         for c in me.creatures:
             if not c.dead:
@@ -5001,6 +5256,7 @@ def _use_removal(p, card, alts, is_spell, step, e, zone="hand", other=None, fx=N
 def respond_to_attack(dfn, att, attackers, e, step):
     """Der Verteidiger reagiert auf die Angreifer: Removal-Instants auf den gefaehrlichsten Angreifer, Flash-Kreaturen
     fuer einen guten Block oder gegen Lethal. Gibt die verbleibenden Angreifer zurueck."""
+    dfn.under_attack = bool(attackers)  # bis zum Rundenende (cleanup)
     while True:
         alive = [a for a in attackers if a in att.creatures and not a.dead and not a.locked]
         options = []
@@ -5024,7 +5280,7 @@ def respond_to_attack(dfn, att, attackers, e, step):
         if not affordable(dfn, card) or not legend_ok(dfn, card):
             continue
         new = Creature(card, step)
-        if card.etb_grant:  # Teyo, Diamondblade Mage: Marke und Deathtouch auf sich selbst
+        if card.etb_grant and not card.etb_grant_plain:  # Teyo, Diamondblade Mage: Marke und Deathtouch auf sich selbst
             new.gy, new.ctl = dfn.graveyard, dfn
             new.extra |= set(card.etb_grant)
             new.bonus += 1
@@ -5034,7 +5290,7 @@ def respond_to_attack(dfn, att, attackers, e, step):
         if card.etb_grant and "deathtouch" in card.etb_grant:  # auch ein Tausch gegen einen gefaehrlicheren Angreifer
             good = good or any(can_block(new, a) and outcome(a, [new])[0] and danger(a) > danger(new) for a in alive)
         if lethal or good:
-            if card.etb_grant:
+            if card.etb_grant and not card.etb_grant_plain:
                 dfn.grant_target = "done"
             _cast_from_open(dfn, card)
             if try_counter(dfn, card, step, e):
@@ -6320,7 +6576,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
         e["land"] = land.name + (" (getappt)" if tapped else "")
         if not tapped:
             pool_all = pool_all + [land.land_colors]
-        pool_all = pool_all + on_land(me, opp, land, step, e)
+        pool_all = pool_all + on_land(me, opp, land, step, e, untapped=not tapped)
     while me.extra_lands > 0 and any(c.is_land for c in me.hand):  # Way of the Paradox: weiterer Landdrop
         me.extra_lands -= 1
         land2, tapped2, _f = choose_land(me.hand, spells, pool_all, me.lands, *walker_flags(me), has_creature, True)
@@ -6332,7 +6588,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
         e["land"] = (e["land"] + ", " if e["land"] else "") + land2.name
         if not tapped2:
             pool_all = pool_all + [land2.land_colors]
-        pool_all = pool_all + on_land(me, opp, land2, step, e)
+        pool_all = pool_all + on_land(me, opp, land2, step, e, untapped=not tapped2)
     if walker_engine(me) and not me.jace.used:  # L2a: zeitkritische Loyalty-Faehigkeiten vor dem Zaubern
         mana = walker_phase(me, opp, step, e, "main1", pool_all, spells)
         if mana:
@@ -6587,6 +6843,9 @@ def take_turn(me, opp, step, rnd, skip_draw):
                 uncrew(me, v, e)
         attackers = choose_attackers(me.creatures, opp.creatures, opp.life, me.life, step)
     art_vigilance = any(c.card.artifact_vigilance for c in me.creatures if not c.dead)
+    if attackers:
+        attack_planets(me, opp, step, e)
+        attack_choice_triggers(me, opp, attackers, step, e)
     for a in attackers:
         if not (a.has("vigilance") or (art_vigilance and a.card.is_artifact)):
             a.tapped = True
@@ -6730,6 +6989,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     exhaust_abilities(me, opp, step, e)
     life_token_instants(me, opp, step, e)
     room_of_refuge(me, step, e)
+    planet_abilities(me, opp, step, e)
     rescue_girl(me, opp, step, e)
     identity_echo(me, opp, step, e)
     prepare_abilities(me, step, e)
@@ -6773,7 +7033,9 @@ def take_turn(me, opp, step, rnd, skip_draw):
     bury((me, opp), e)
     end_step_instants(opp, me, e, step)
     snw_sac_draw(opp, e)  # Warp Speed mit dem Rest des offenen Manas
+    land_sac_abilities(opp, me, step, e)
     use_clues(opp, e)
+    use_food(opp, e)
     hand_limit(me, e)
     expire_impulse(me)
     cleanup((me, opp))
@@ -6815,6 +7077,7 @@ def cleanup(players):
             c.tdraw = 0
         p.surveilled = False
         p.gained = 0
+        p.under_attack = False
 
 
 def _finish(entry, me, opp):
