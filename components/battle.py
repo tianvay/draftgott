@@ -117,6 +117,8 @@ class Creature:
         base = self.card.power + self.bonus + self.pump
         if self.card.gy_power and self.gy is not None:
             base += sum(1 for g in self.gy if any(getattr(g, _GY_TYPES[t], False) for t in self.card.gy_power))
+        if self.card.treasure_pump and self.ctl is not None:  # Grand Nagus Zek
+            base += self.ctl.treasures
         if self.card.artifact_count_power and self.ctl is not None:  # Collective Drone
             base += sum(1 for c in self.ctl.creatures if c.card.is_artifact and not c.dead)
         if self.card.domain_power and self.ctl is not None:
@@ -139,6 +141,8 @@ class Creature:
             + self._emblem(2) - sum(d[1] for d in self.lasting) + (self._goyf() + 1 if self.card.goyf else 0) \
             + sum(a.aura_pump[1] for a in self.auras if a.aura_pump)
         p = self.ctl
+        if self.card.treasure_pump and p is not None:
+            out += p.treasures
         if self.card.snw and p is not None:
             out += sum(a[2] for a in self.card.snw if a[0] == "pt") * snw_x(p)
         if p is not None and (self.card.cond_static or (p.statics or _statics(p))[0]):
@@ -686,7 +690,8 @@ class Walker:
 
 class Graveyard(list):
     """Friedhof eines Spielers: kommt eine Karte wie Paradox Kraken hinein (egal woher), beschwoert sie ihre Karte
-    auf die Hand des Besitzers."""
+    auf die Hand des Besitzers. Verlassen Karten den Friedhof, zaehlt owner.gy_left mit (TRK "Whenever one or more
+    cards leave your graveyard", ausgewertet in gy_leave_check)."""
     __slots__ = ("owner",)
 
     def __init__(self, items=(), owner=None):
@@ -719,6 +724,29 @@ class Graveyard(list):
         self.extend(cards)
         return self
 
+    def _left(self, n=1):
+        if self.owner is not None and n:
+            self.owner.gy_left = getattr(self.owner, "gy_left", 0) + n
+
+    def remove(self, x):
+        super().remove(x)
+        self._left()
+
+    def pop(self, *args):
+        out = super().pop(*args)
+        self._left()
+        return out
+
+    def clear(self):
+        n = len(self)
+        super().clear()
+        self._left(n)
+
+    def __delitem__(self, key):
+        before = len(self)
+        super().__delitem__(key)
+        self._left(before - len(self))
+
 
 def _set_graveyard(self, value):
     self._graveyard = Graveyard(value, self)
@@ -744,7 +772,10 @@ class Player:
         self.hand, self.library = (hand or []), (library or [])
         self.opening = list(self.hand)
         self.mulls = mulls
-        self.lands, self.creatures, self.perms, self.graveyard = [], [], [], []
+        self.lands, self.creatures, self.perms = [], [], []
+        self.gy_left, self.gy_seen = 0, 0  # Karten, die den Friedhof verlassen haben / davon schon ausgewertet
+        self.graveyard = []
+        self.overflow_used = None  # Overflow Submatrix: in diesem Zug schon genutzt (Zugnummer)
         self.vehicles = []  # Fahrzeuge: {"card", "since" (Schritt), "crewed" (Creature oder None), "tapped"}
         self.stations = []  # Station-Karten: {"card", "live" (Karte im Spiel), "since", "charge", "creature"}
         self.life = LIFE
@@ -1380,6 +1411,9 @@ def artifact_hit_triggers(p, hitters, step, e):
     Hive Mind Coprocessor (1 Leben zahlen, ziehen - nur, wenn wir danach mehr als 5 Leben haben) und Antagonist
     Incorporator (Kosten zahlen, Borg-Token - nur mit Mana, das sonst ungenutzt bliebe)."""
     sources = [card for _src, card in static_sources(p) if card.artifact_hit_draw or card.artifact_hit_token]
+    for a in hitters:
+        if a.card.reliant_return:  # U.S.S. Reliant als Kreatur trifft den Spieler
+            reliant_back(p, p.opponent, a.card.reliant_return, step, e, a.card.name)
     for a in [a for a in hitters if a.card.is_artifact]:
         for card in sources:
             if card.artifact_hit_draw and p.life - 1 > 5:
@@ -1960,6 +1994,9 @@ def upkeep_triggers(me, opp, step, e):
     """Zu Beginn jedes Upkeeps (beider Spieler): Verdant Kraken erschafft ein Tentacle fuer seinen Kontrolleur; Command
     the Stage kommt auf die Hand, wenn ein Gegner seines Besitzers im letzten Zug Schaden ausserhalb des Kampfs
     bekam."""
+    for c in list(me.creatures):  # Vash: zu Beginn des eigenen Upkeeps Surveil
+        if c.card.upkeep_surveil and not c.dead:
+            surveil_cards(me, [c.card.upkeep_surveil], e, c.card.name)
     for p in (me, opp):
         for c in list(p.creatures):
             if c.card.upkeep_token is not None and not c.dead:
@@ -3575,10 +3612,12 @@ def is_dying(c):
 def bury(players, e):
     """Gestorbene Kreaturen in den Friedhof (Schaden, Deathtouch, Toughness 0) und Legend-Regel. Danach Ausloeser fuer
     gestorbene eigene Kreaturen (Massacre Girl; sie sieht auch Tode im selben Moment wie ihren eigenen, 603.10a)."""
+    gy_leave_check(players, e)
     for p in players:
         legend_rule(p, e)
     triggers = []  # erst alle gleichzeitig sterben lassen (704.3), dann die Ausloeser
     copies_made, returns, bolts, death_made = [], [], [], []
+    died = []  # (Kontrolleur, Kreatur) fuer TRK-Ausloeser bei Tod
     for p in players:  # Invigorator, der in diesem Moment stirbt, loest trotzdem aus
         for c in p.creatures:
             if c.ramp_pending and (c.dead or c.damage >= c.toughness):
@@ -3626,6 +3665,7 @@ def bury(players, e):
                     p.charges += sum(1 for x in p.perms if x.charge_on_death)
                 if c.card.death_token_copy and not c.card.is_token:  # Sphinx of False Conclusions (707.2, 111.10)
                     copies_made.append((p, c.card._replace(is_token=True)))
+                died.append((p, c))
                 if c.card.death_bolt:  # Munitions Enthusiast
                     bolts.append((p, c.card.death_bolt, c.card.name))
                 if c.card.death_tokens:  # The Duras Sisters, Tenacious Drone
@@ -3652,6 +3692,8 @@ def bury(players, e):
         e["events"].append(f"{p.name}: Token-Kopie von {card.name}")
     for p, card in death_made:
         make_tokens(p, list(card.death_tokens), p.now, e, p.opponent, card.name)
+    if died:
+        death_watchers(players, died, e)
     for p, n, name in bolts:
         death_bolt(p, n, name, e)
     if bolts:
@@ -3678,6 +3720,74 @@ def bury(players, e):
             pick = max(alive, key=lambda x: (can_attack(x, p.now + 1), danger(x)))
             pick.bonus += n
             e["events"].append(f"{p.name}: {name} – {n} Marke(n) auf {pick.card.name}")
+
+
+def death_watchers(players, died, e):
+    """TRK-Ausloeser, wenn Kreaturen sterben: Excalbian Gamemaster (sie selbst oder eine andere eigene: Marke auf eine
+    eigene Kreatur), "another creature dies" (Survivalist einmal je Zug, Gowron je Kreatur, Grand Nagus Zek: Treasure
+    einmal je Zug) und Sarcophagus (Charge-Marke, solange er keine Kreatur ist)."""
+    for p in players:
+        mine = [c for q, c in died if q is p]
+        for src in mine + [c for c in p.creatures if not c.dead]:  # gestorbene Quellen sehen ihren Tod (603.10a)
+            n = src.card.death_ally_counter
+            if n and mine:
+                alive = [c for c in p.creatures if not c.dead]
+                for _ in mine:
+                    if alive:
+                        pick = max(alive, key=danger)
+                        pick.bonus += n
+                        e["events"].append(f"{p.name}: {src.card.name} – Marke auf {pick.card.name}")
+        for src in [c for c in p.creatures if not c.dead]:
+            others = [c for _q, c in died if c is not src]
+            if not others:
+                continue
+            if src.card.death_watch_counter:
+                n, once = src.card.death_watch_counter
+                if not once:
+                    src.bonus += n * len(others)
+                elif src.once.get("death_watch") != p.now:
+                    src.once["death_watch"] = p.now
+                    src.bonus += n
+            if src.card.death_watch_treasure and src.once.get("death_treasure") != p.now:
+                src.once["death_treasure"] = p.now
+                artifact_tokens(p, "treasure", 1, p.now, e)
+                e["events"].append(f"{p.name}: {src.card.name} – Treasure")
+        charged = False
+        for st in _station_ready(p):
+            if st["card"].death_charge and st["creature"] is None:
+                st["charge"] += len(died)
+                charged = True
+        if charged:
+            update_stations(p, p.now, e)
+
+
+def gy_leave_check(players, e):
+    """Karten haben seit der letzten Pruefung den eigenen Friedhof verlassen: "Whenever one or more cards leave"
+    loest einmal aus (Blastoneuron, Sela), "Whenever a card leaves ... only once each turn" einmal je Zug (Hologram
+    Stalker, Vash)."""
+    for p in players:
+        if p.gy_left <= p.gy_seen:
+            continue
+        p.gy_seen = p.gy_left
+        for src in [c for c in p.creatures if c.card.gy_leave and not c.dead]:
+            kind, value, once = src.card.gy_leave
+            if once:
+                if src.once.get("gy_leave") == p.now:
+                    continue
+                src.once["gy_leave"] = p.now
+            if kind == "drain" and p.opponent is not None:
+                p.opponent.life -= value
+                gain_life(p, value)
+            elif kind == "draw":
+                _draw(p, value)
+            elif kind in ("token", "tapped_token"):
+                before = len(p.creatures)
+                make_tokens(p, [(1, value)], p.now, e, p.opponent, src.card.name)
+                if kind == "tapped_token":
+                    for c in p.creatures[before:]:
+                        c.tapped = True
+            e["events"].append(f"{p.name}: {src.card.name} – Karte verlässt den Friedhof")
+        p.gy_seen = max(p.gy_seen, p.gy_left)
 
 
 def death_bolt(p, n, name, e):
@@ -4335,7 +4445,7 @@ def _resolve(me, opp, card, step, entry, owner=None, to_exile=False, modes=None)
             src = next((c for c in me.creatures if c.prepared and c.card.prepared[1] == card), None)
             if src is not None:
                 src.prepared = False
-        elif not to_exile:
+        elif not to_exile or card.is_creature:  # Kreatur aus dem Friedhof (Finality): gekontert wieder dorthin
             (owner or me).graveyard.append(card)
         on_cast(me, card, step, entry)
         if copy:
@@ -4350,6 +4460,7 @@ def _resolve(me, opp, card, step, entry, owner=None, to_exile=False, modes=None)
     elif card.is_creature:
         fresh = Creature(card, step)
         fresh.owner = owner
+        fresh.finality = to_exile  # aus dem Friedhof gewirkt (Storied Veteran, Overflow Submatrix)
         me.creatures.append(fresh)
     elif card.is_instant_sorcery:
         if not to_exile:  # Flashback: danach ins Exil
@@ -4514,6 +4625,8 @@ def permanent_enters(p, opp, card, step, e):
         saga_enters(p, opp, card, step, e)
     if card.cube_assimilate:
         cube_trigger(p, opp, step, e, card.name)
+    if card.reliant_return:
+        reliant_back(p, opp, card.reliant_return, step, e, card.name)
     _jace_etb(p, card, step, e)
     gain_life(p, card.etb_life)
     card_effects(p, opp, card, step, e)
@@ -4877,6 +4990,16 @@ def trk_effects(me, opp, card, step, entry):
         if alive:
             pick = max(alive, key=lambda c: (can_attack(c, step), danger(c)))
             pick.extra |= set(card.grant_kw)
+    if card.etb_mill_land:  # Temporal Conqueror: Mill, dann ein Land aus dem Friedhof, sonst Treasure
+        _mill(me, card.etb_mill_land, entry, card.name)
+        lands = [c for c in me.graveyard if c.is_land]
+        if lands:
+            pick = _best_from_gy(me, lands)
+            me.graveyard.remove(pick)
+            me.hand.append(pick)
+            entry["events"].append(f"{me.name}: {card.name} – {pick.name} auf die Hand")
+        else:
+            artifact_tokens(me, "treasure", 1, step, entry)
     if card.etb_basic_tapped and not card.is_creature:  # Final Frontier, Genesis Device, The Naked Time I
         fetch_land_tapped(me, opp, card, step, entry)
     if card.etb_basic_hand == "basic":  # Warp Core
@@ -5121,6 +5244,28 @@ def put_back(p, card, dest, step, e, opp=None, tapped=False, counters=0, finalit
         p.perms.append(card)
         permanent_enters(p, opp, card, step, e)
     e["events"].append(f"{p.name}: {card.name} aus dem Friedhof ins Spiel")
+
+
+def graveyard_casts(p):
+    """Kreaturenkarten, die p aus dem Friedhof wirken darf, als (Friedhofs-Version, Karte): Storied Veteran selbst;
+    mit Overflow Submatrix einmal je eigenem Zug die teuerste Artefaktkreatur."""
+    out = [(c._replace(from_gy=True), c) for c in dict.fromkeys(p.graveyard) if c.gy_cast]
+    if p.overflow_used != p.now and any(c.card.overflow_cast and not c.dead for c in p.creatures):
+        arts = [c for c in p.graveyard if c.is_creature and c.is_artifact and not c.gy_cast]
+        if arts:
+            best = max(arts, key=lambda c: (c.mv, c.power, c.name))
+            out.append((best._replace(from_gy=True), best))
+    return out
+
+
+def reliant_back(p, opp, n, step, e, source="U.S.S. Reliant"):
+    """U.S.S. Reliant: die beste Kreaturenkarte bis Manawert n aus dem Friedhof mit Finality-Marke ins Spiel."""
+    cands = gy_candidates(p, "creature", n)
+    if not cands:
+        return
+    pick = _best_from_gy(p, cands)
+    p.graveyard.remove(pick)
+    put_back(p, pick, "battlefield", step, e, opp, finality=True)
 
 
 def reanimate(p, opp, spec, step, e):
@@ -5480,6 +5625,7 @@ def end_step_instants(dfn, act, e, step):
     tap_artifact_abilities(dfn, e)
     draw_abilities(dfn, e)
     gy_draws(dfn, e)
+    gy_bottom_abilities(dfn, act, e)
     end_step_abilities(dfn, e, step)
     legend_discard_draw(dfn, e)
     twin_activate(dfn, act, step, e, end_step=True)
@@ -5489,10 +5635,63 @@ def gy_draws(p, e):
     """Am Ende des gegnerischen Zugs: Ziehen aus dem Friedhof mit freiem Mana (Seasoned Cryomancer: {3}{U}{U},
     Karte exilieren, zwei ziehen)."""
     for card in list(dict.fromkeys(p.graveyard)):
+        if card.gy_draw_loss and p.life - card.gy_draw_loss <= 5:  # Relentless Drednok: nicht unter 6 Leben
+            continue
         if card.gy_draw and card in p.graveyard and _pay_open(p, card.gy_draw[0]):
             p.graveyard.remove(card)
             _draw(p, card.gy_draw[1])
+            p.life -= card.gy_draw_loss
             e["events"].append(f"{p.name}: exiliert {card.name} aus dem Friedhof und zieht {card.gy_draw[1]}")
+
+
+def _gy_worth(c):
+    """Wie nuetzlich eine Karte im Friedhof ist (kleiner = eher weg): Laender, dann Instants/Sorceries ohne Nutzen im
+    Friedhof, dann der Rest nach Manawert; Karten mit eigener Friedhofs-Faehigkeit zuletzt."""
+    useful = bool(c.gy_ability or c.gy_draw or c.gy_cast or c.flashback or c.gy_return or c.gy_bottom_life or c.phoenix)
+    return (useful, not c.is_land, not c.is_instant_sorcery, c.mv, c.name)
+
+
+def gy_bottom_abilities(p, opp, e):
+    """Am Ende des gegnerischen Zugs mit uebrigem Mana: Daniels (sich unter die Bibliothek, Leben) und Cybernetic
+    Specialist (die unnuetzeste Friedhofskarte unter die Bibliothek), dieser nur, wenn danach ein eigener Ausloeser
+    "cards leave your graveyard" ausloesen kann."""
+    for card in list(dict.fromkeys(p.graveyard)):
+        if card.gy_bottom_life and card in p.graveyard and _pay_open(p, card.gy_bottom_life[0], treasure=False):
+            p.graveyard.remove(card)
+            p.library.append(card)
+            gain_life(p, card.gy_bottom_life[1])
+            e["events"].append(f"{p.name}: {card.name} aus dem Friedhof unter die Bibliothek")
+    watchers = [c for c in p.creatures if c.card.gy_leave and not c.dead
+                and not (c.card.gy_leave[2] and c.once.get("gy_leave") == p.now)]
+    for src in [c for c in p.creatures if c.card.gy_bottom_ability and not c.dead and not c.tapped]:
+        if not watchers or not p.graveyard:
+            break
+        if not _pay_open(p, src.card.gy_bottom_ability, treasure=False):
+            continue
+        src.tapped = True
+        pick = min(p.graveyard, key=_gy_worth)
+        p.graveyard.remove(pick)
+        p.library.append(pick)
+        e["events"].append(f"{p.name}: {src.card.name} – {pick.name} unter die Bibliothek")
+        bury((p,) + ((opp,) if opp is not None else ()), e)
+        watchers = [c for c in watchers if not (c.card.gy_leave[2] and c.once.get("gy_leave") == p.now)]
+
+
+def combat_exile_counters(p, step, e):
+    """Sylvia Tilly zu Beginn des eigenen Kampfs: mit freiem Mana die unnuetzeste Friedhofskarte exilieren, eine
+    +1/+1-Marke auf die beste eigene Angreiferin."""
+    for src in [c for c in p.creatures if c.card.combat_exile_counter and not c.dead]:
+        alts = src.card.combat_exile_counter
+        need = min(g + sum(n for _c, n in cols) for g, cols in alts)
+        if not p.graveyard or free_units(p) < need or not _pay_open(p, alts, treasure=False):
+            continue
+        pick = min(p.graveyard, key=_gy_worth)
+        p.graveyard.remove(pick)
+        target = buff_target(p, step)
+        if target is not None:
+            target.bonus += 1
+        e["events"].append(f"{p.name}: {src.card.name} exiliert {pick.name}"
+                           + (f" – Marke auf {target.card.name}" if target is not None else ""))
 
 
 def confidant_end_step(p, e):
@@ -5807,7 +6006,8 @@ def lasting_abilities(p, opp, step, e, own_turn, mode):
     rank = {"counter": 0, "return_self": 1, "return": 1, "token": 1, "empower": 2, "surveil": 3}
     for _round in range(10):
         sources = [(src, ab, None) for src, ab in ability_sources(p, step, own_turn, main=own_turn)]
-        sources += [(None, (card.gy_ability[0], 0, False, "instant", card.gy_ability[1]), card)
+        sources += [(None, (card.gy_ability[0], 0, False, "sorcery" if card.gy_ability_sorcery else "instant",
+                            card.gy_ability[1]), card)
                     for card in dict.fromkeys(p.graveyard) if card.gy_ability]
         for card in dict.fromkeys(p.graveyard):
             if card.gy_return and _gy_return_ok(p, card):
@@ -6742,6 +6942,12 @@ def take_turn(me, opp, step, rnd, skip_draw):
         if cheap not in fb_map:
             fb_map[cheap] = beam_map[cheap] = c
             me.hand.append(cheap)
+    overflow_keys = set()
+    for cheap, c in graveyard_casts(me):  # Storied Veteran, Overflow Submatrix: mit Finality-Marke
+        fb_map[cheap] = c
+        me.hand.append(cheap)
+        if not c.gy_cast:
+            overflow_keys.add(cheap)
 
     def cost(c):  # Prepared-Kopien mit Kostensenkung bzw. Steuer (Handkarten sind schon angepasst)
         if c.is_copy:
@@ -6966,6 +7172,8 @@ def take_turn(me, opp, step, rnd, skip_draw):
             if c in fb_map:
                 me.graveyard.remove(fb_map[c])
                 from_graveyard[fb_map[c]] += 1
+                if c in overflow_keys:
+                    me.overflow_used = me.now
         me.hand[:] = [c for c in me.hand if c not in fb_map]
         chosen = [fb_map.get(c, c) for c in chosen]
 
@@ -7045,6 +7253,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     hydra_spread(me, e)
     combat_buffs(me, step, e)
     combat_counters(me, step, e)
+    combat_exile_counters(me, step, e)
     twin_for_lethal(me, opp, step, e)
     sacrifice_for_lethal(me, opp, step, e)
     anomaly_for_lethal(me, opp, step, e)

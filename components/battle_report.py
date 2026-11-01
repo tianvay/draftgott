@@ -440,6 +440,17 @@ RULES = [
     "(Manawert, dann Stärke und Widerstand, bei Gleichstand die gegnerische). Borg Cube: beim Betreten bzw. Angriff "
     "eine mit ihm exilierte Karte assimilieren, sonst die gefährlichste gegnerische Kreatur exilieren; Affinity "
     "für Artefaktkreaturen.",
+    "Sterben und Friedhof (TRK): Excalbian Gamemaster legt je eigener gestorbener Kreatur (auch sich selbst) eine Marke "
+    "auf die gefährlichste eigene; „another creature dies“ zählt auch gegnerische Kreaturen (Survivalist und Zek nur "
+    "einmal je Zug, Gowron je Kreatur); Sarcophagus bekommt je Tod eine Charge-Marke. „Whenever one or more cards "
+    "leave your graveyard“ löst einmal je Vorgang aus, „Whenever a card leaves … only once each turn“ einmal je Zug. "
+    "Storied Veteran und mit Overflow Submatrix einmal je Zug die teuerste Artefaktkreatur werden aus dem Friedhof "
+    "wie Handkarten gewirkt und kommen mit Finality-Marke (gekontert zurück in den Friedhof). U.S.S. Reliant holt beim "
+    "Betreten und bei Kampfschaden die beste Kreatur bis Manawert 4 mit Finality-Marke. Am Ende des gegnerischen Zugs "
+    "mit übrigem Mana: Relentless Drednok (nur über 6 Leben), Daniels und Cybernetic Specialist (nur, wenn danach ein "
+    "eigener Friedhofs-Auslöser auslöst). Sylvia Tilly exiliert zu Kampfbeginn mit freiem Mana die unnützeste "
+    "Friedhofskarte (Länder zuerst, Karten mit eigener Friedhofs-Fähigkeit zuletzt). Photosynthetic Physician nur in "
+    "der eigenen Main Phase.",
     "Alchemy (YFRA): „perpetually“ ändert die Karte selbst (bleibt in Friedhof und Hand). Conjure benannter Karten "
     "(Kraken Hatchling, Mind Stone, Aria of Flame) mit ihren Texten von Scryfall. Avoided Stairwurm −1/−1 je "
     "Kreaturenkarte in der Bibliothek; Zimone macht Schaden wie mit positiver Power und wird prepared, sobald Karten "

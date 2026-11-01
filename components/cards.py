@@ -353,6 +353,25 @@ class Card(NamedTuple):
     artifact_kw_ability: tuple = ()  # "{K}: Artifact creatures you control gain ...": (Zahlungswege, Schluesselwoerter)
     tap3_draw: int = 0         # "Tap N untapped artifact creatures you control: draw, lose 1 life" (Trimatrix)
     cube_assimilate: bool = False  # Borg Cube: beim Betreten/Angriff exilierte Karte assimilieren, sonst exilieren
+    # TRK Paket H (Sterben und Friedhof)
+    death_ally_counter: int = 0  # sie oder eine andere eigene Kreatur stirbt: N Marken auf eine eigene Kreatur
+    death_watch_counter: tuple = ()  # eine andere Kreatur stirbt: (N Marken auf sich, nur einmal je Zug)
+    death_watch_treasure: bool = False  # eine andere Kreatur stirbt: Treasure, einmal je Zug (Grand Nagus Zek)
+    treasure_pump: bool = False  # +1/+1 je eigenem Treasure (Grand Nagus Zek)
+    death_charge: bool = False  # eine Kreatur stirbt: Charge-Marke, solange sie keine Kreatur ist (Sarcophagus)
+    gy_leave: tuple = ()       # Karten verlassen den eigenen Friedhof: (Art, Wert, nur einmal je Zug) mit Art "drain",
+    #                            "token", "tapped_token" (Wert: Token-Card), "draw"
+    upkeep_surveil: int = 0    # zu Beginn des eigenen Upkeeps Surveil N (Vash)
+    gy_cast: bool = False      # aus dem Friedhof wirkbar, kommt mit Finality-Marke (Storied Veteran)
+    overflow_cast: bool = False  # einmal je eigenem Zug eine Artefaktkreatur aus dem Friedhof (Overflow Submatrix)
+    from_gy: bool = False      # diese Card ist die Friedhofs-Version einer Karte (nur intern bei der Planung)
+    reliant_return: int = 0    # beim Betreten / Kampfschaden am Spieler: Kreatur bis Manawert N aus dem Friedhof
+    gy_draw_loss: int = 0      # gy_draw: dazu N Leben verlieren (Relentless Drednok)
+    gy_ability_sorcery: bool = False  # gy_ability nur als Hexerei (Photosynthetic Physician)
+    gy_bottom_life: tuple = ()  # "{K}, Put this card from your graveyard on the bottom of your library: N Leben"
+    gy_bottom_ability: tuple = ()  # "{K}, {T}: Put target card from your graveyard on the bottom of your library"
+    combat_exile_counter: tuple = ()  # Kampfbeginn: {K} und eine Friedhofskarte exilieren: Marke (Sylvia Tilly)
+    etb_mill_land: int = 0     # Betreten: Mill N, dann ein Land aus dem Friedhof auf die Hand, sonst Treasure
 
 
 LANDCYCLE_RE = re.compile(
@@ -2724,6 +2743,40 @@ _TRK_RES = {
     "tap3_draw": re.compile(r"^tap three untapped artifact creatures you control: you draw a card and lose 1 life\.$"),
     "cube": re.compile(r"^whenever this spacecraft enters or attacks, assimilate a creature card exiled with it\. if you "
                        r"can't, exile up to one target creature\.$"),
+    "death_ally_counter": re.compile(r"^whenever (?:~|this creature) or another creature you control dies, put (a|one|"
+                                     r"two) \+1/\+1 counters? on target creature you control\.$"),
+    "death_watch_counter": re.compile(r"^whenever another creature dies, put (a|one|two) \+1/\+1 counters? on (?:~|this "
+                                      r"creature)\.( this ability triggers only once each turn\.)?$"),
+    "death_watch_treasure": re.compile(r"^whenever another creature dies, create a treasure token\. this ability "
+                                       r"triggers only once each turn\.$"),
+    "treasure_pump": re.compile(r"^(?:~|this creature) gets \+1/\+1 for each treasure you control\.$"),
+    "death_charge": re.compile(r"^whenever a creature dies, if (?:~|this spacecraft) isn't a creature, put a charge "
+                               r"counter on it\.$"),
+    "gy_leave": re.compile(r"^whenever (?:one or more cards leave|a card leaves) your graveyard, (.+?)\.( this ability "
+                           r"triggers only once each turn\.)?$"),
+    "upkeep_surveil": re.compile(r"^at the beginning of your upkeep, surveil (\d+)\.$"),
+    "gy_cast": re.compile(r"^you may cast this card from your graveyard\. if you do, it enters with a finality counter "
+                          r"on it\.$"),
+    "overflow_cast": re.compile(r"^once during each of your turns, you may cast an artifact creature spell from your "
+                                r"graveyard\. if you cast a spell this way, that artifact creature enters with a finality "
+                                r"counter on it\.$"),
+    "reliant": re.compile(r"^whenever (?:~|[a-z.' ]+) enters or deals combat damage to a player, return target creature "
+                          r"card with mana value (\d+) or less from your graveyard to the battlefield with a finality "
+                          r"counter on it\.$"),
+    "gy_draw_loss": re.compile(r"^((?:\{[^}]+\})+), exile this card from your graveyard: you draw a card and lose (\d+) "
+                               r"life\.$"),
+    "gy_token_sorcery": re.compile(r"^((?:\{[^}]+\})+), exile this card from your graveyard: (create [^.]+ tokens?)\. "
+                                   r"activate only as a sorcery\.$"),
+    "gy_bottom_life": re.compile(r"^((?:\{[^}]+\})+), put this card from your graveyard on the bottom of your library: "
+                                 r"you gain (\d+) life\.$"),
+    "gy_bottom_ability": re.compile(r"^((?:\{[^}]+\})+), \{t\}: put target card from your graveyard on the bottom of "
+                                    r"your library\.$"),
+    "etb_surveil": re.compile(r"^when ~ enters, surveil (\d+)\.$"),
+    "combat_exile_counter": re.compile(r"^at the beginning of combat on your turn, you may pay ((?:\{[^}]+\})+) and "
+                                       r"exile a card from your graveyard\. when you do, put a \+1/\+1 counter on target "
+                                       r"creature\.$"),
+    "etb_mill_land": re.compile(r"^when (?:~|this creature) enters, mill (two|three|four|\d+) cards\. then return a land "
+                                r"card from your graveyard to your hand\. if you can't, create a treasure token\.$"),
     "basic_hand": re.compile(r"^when (?:~|this [a-z]+) enters, (?:you may )?search your library for a basic (land|plains|"
                              r"island|swamp|mountain|forest) card, reveal it, put it into your hand, then shuffle\.?$"),
 }
@@ -2891,6 +2944,56 @@ def trk_land_token_traits(card, type_line):
             out["artifact_kw_ability"] = (cost_alternatives(m.group(1).upper()), _kw_words(m.group(2)))
         if res["tap3_draw"].match(low):
             out["tap3_draw"] = 3
+        m = res["death_ally_counter"].match(low)
+        if m:
+            out["death_ally_counter"] = _count(m.group(1))
+        m = res["death_watch_counter"].match(low)
+        if m:
+            out["death_watch_counter"] = (_count(m.group(1)), bool(m.group(2)))
+        for key in ("death_watch_treasure", "treasure_pump", "death_charge", "gy_cast", "overflow_cast"):
+            if res[key].match(low):
+                out[key] = True
+        m = res["gy_leave"].match(low)
+        if m:
+            body, once = m.group(1), bool(m.group(2))
+            dm = re.match(r"^each opponent loses (\d+) life and you gain \1 life$", body)
+            tm = re.match(r"^create (a tapped )?(.+ tokens?)$", body)
+            tokens = _tokens_in("create a " + tm.group(2) + ".") if tm and tm.group(1) else \
+                _tokens_in(body + ".") if tm else []
+            if dm:
+                out["gy_leave"] = ("drain", int(dm.group(1)), once)
+            elif body == "draw a card":
+                out["gy_leave"] = ("draw", 1, once)
+            elif len(tokens) == 1 and tokens[0][0] == 1:
+                out["gy_leave"] = ("tapped_token" if tm.group(1) else "token", tokens[0][1], once)
+        m = res["upkeep_surveil"].match(low)
+        if m:
+            out["upkeep_surveil"] = int(m.group(1))
+        m = res["reliant"].match(low)
+        if m:
+            out["reliant_return"] = int(m.group(1))
+        m = res["gy_draw_loss"].match(low)
+        if m:
+            out["gy_draw"], out["gy_draw_loss"] = (cost_alternatives(m.group(1).upper()), 1), int(m.group(2))
+        m = res["gy_token_sorcery"].match(low)
+        if m and len(_tokens_in(m.group(2) + ".")) == 1:
+            out["gy_ability"] = (cost_alternatives(m.group(1).upper()), (("token",) + _tokens_in(m.group(2) + ".")[0],))
+            out["gy_ability_sorcery"] = True
+        m = res["gy_bottom_life"].match(low)
+        if m:
+            out["gy_bottom_life"] = (cost_alternatives(m.group(1).upper()), int(m.group(2)))
+        m = res["gy_bottom_ability"].match(low)
+        if m:
+            out["gy_bottom_ability"] = cost_alternatives(m.group(1).upper())
+        m = res["etb_surveil"].match(low)
+        if m:  # "When Sylvia Tilly enters" (Kurzname)
+            out["surveil"] = int(m.group(1))
+        m = res["combat_exile_counter"].match(low)
+        if m:
+            out["combat_exile_counter"] = cost_alternatives(m.group(1).upper())
+        m = res["etb_mill_land"].match(low)
+        if m:
+            out["etb_mill_land"] = _NUM_WORDS.get(m.group(1)) or int(m.group(1))
         m = res["attack_power"].match(low)
         if m:
             atoms = _attack_power_atoms(m.group(2))

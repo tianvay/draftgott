@@ -561,6 +561,9 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
   „can't block“, Power verdoppeln, Kirks exilierte Karte in Main 2) und Cantankerous Captain.
 - Borg (TRK): Schlüsselwörter für Artefaktkreaturen, Collective Drone, Hive Mind Coprocessor, Antagonist
   Incorporator, Organic Avulsion Unit, Collation Trimatrix, Assimilate (Death Is Irrelevant, Borg Cube), Affinity.
+- Sterben und Friedhof (TRK): Auslöser bei Tod (Excalbian, Survivalist, Gowron, Zek, Sarcophagus) und wenn Karten
+  den Friedhof verlassen (Blastoneuron, Sela, Hologram Stalker, Vash), Wirken aus dem Friedhof mit Finality (Storied
+  Veteran, Overflow Submatrix), U.S.S. Reliant, Fähigkeiten aus dem Friedhof, Sylvia Tilly, Temporal Conqueror.
 - Removal (Destroy/Exile, Schaden, −X/−X, Edikt, Fight, Biss, Bounce, Lock, zurück in die Bibliothek,
   Massenremoval) trifft die gefährlichste passende Kreatur; Removal-Instants vor dem Angriff, gegen Angreifer oder am
   Ende des gegnerischen Zugs.
