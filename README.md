@@ -575,6 +575,8 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
   System), Mr. Spock, Data, Phlox, Tricorder, Seven of Nine, Live Long and Prosper, Dathon, Dal R'El.
 - Kicker (TRK): Highly Illogical (größere Zauber nur mit Kicker), Eject the Warp Core (opfert nur, wenn −2/−2
   nicht reicht), Mirror Universe Intrusion (Kopie mit Menace, mit Kicker von jeder gegnerischen Kreatur).
+- Tappen (TRK): Brad Boimler, Captain Jean-Luc Picard, Worf, Honor-Bound Warrior (Main 2 wie Station), Kira Nerys,
+  Nog (Scout, Officer), I'm a Doctor, Not a . . .; Lwaxana Troi noch offen.
 - Removal (Destroy/Exile, Schaden, −X/−X, Edikt, Fight, Biss, Bounce, Lock, zurück in die Bibliothek,
   Massenremoval) trifft die gefährlichste passende Kreatur; Removal-Instants vor dem Angriff, gegen Angreifer oder am
   Ende des gegnerischen Zugs.

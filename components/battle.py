@@ -107,7 +107,9 @@ class Creature:
         tap_check ausgewertet."""
         if value and not getattr(self, "_tapped", False) and self.card.became_tapped:
             ctl = getattr(self, "ctl", None)
-            if ctl is not None:
+            if ctl is not None and self.card.became_tapped[0] == "counter_boost":  # Brad Boimler: bis Rundenende
+                ctl.counter_boost = ctl.now
+            elif ctl is not None:
                 ctl.tap_queue.append(self)
         self._tapped = value
 
@@ -119,11 +121,11 @@ class Creature:
     @bonus.setter
     def bonus(self, value):
         """Yoshimaru, Beloved Companion (614.1, auch "enters with", 122.6): kommen Marken auf eine eigene Kreatur,
-        kommt eine mehr dazu."""
+        kommt eine mehr dazu; ebenso in dem Zug, in dem Brad Boimler getappt wurde (eigener Ersatzeffekt)."""
         old = getattr(self, "_bonus", 0)
         ctl = getattr(self, "ctl", None)
-        if value > old and ctl is not None and any(c.card.counter_plus_one and not c.dead for c in ctl.creatures):
-            value += 1
+        if value > old and ctl is not None:
+            value += any(c.card.counter_plus_one and not c.dead for c in ctl.creatures) + counter_boost(ctl)
         self._bonus = value
 
     @property
@@ -833,6 +835,9 @@ class Player:
         self.drawn = 0        # gezogene Karten insgesamt (Lyra, Tolarian Archangel)
         self.drawn_mark = 0   # drawn zu Beginn des aktuellen Zugs
         self.extra_lands = 0  # zusaetzliche Landdrops in diesem Zug (Way of the Paradox)
+        self.counter_boost = None  # Brad Boimler: Schritt, in dem er getappt wurde (bis Rundenende eine Marke mehr)
+        self.kira_join = None  # Kira Nerys: waehrend unseres Angriffs angreifend gekommene Kreaturen
+        self.worf_taps = (None, 0, ())  # Worf: (Schritt, getappte Clues, getappte Artefakte) in diesem Zug
         self.trap_links = []  # Exil bis zum Verlassen (610.3): {"trap", "card", "owner", "creature"}
         self.lock_links = []  # Lock-Auras dieses Spielers: {"aura", "creature"}
         self.predrawn = Counter()  # Main Phase: Karten, deren "draw N" die Planung (resolve_draws) schon gezogen hat
@@ -3110,6 +3115,7 @@ _CAST_FILTERS = {
     "instsorc_creature": lambda c: c.is_instant_sorcery and targets_creature(c),
     "noncreature": lambda c: not c.is_creature,
     "creature": lambda c: c.is_creature,
+    "creature_spacecraft": lambda c: c.is_creature or bool(c.station),  # Picard
     "own_creature": targets_own_creature,
     "multicolor": lambda c: len(colors_of_alts(c.alts)) >= 2,
     "spell": lambda c: True,
@@ -3327,7 +3333,7 @@ def mission_trigger(p, kind, step, e, creature=None, with_mana=True):
         trig, token, need = m["card"].mission
         if trig != kind:
             continue
-        m["quest"] += 1
+        add_quest(p, m)
         full = m["quest"] >= need
         name = m["card"].name
         if kind == "artifact_enters":
@@ -3360,6 +3366,20 @@ def mission_trigger(p, kind, step, e, creature=None, with_mana=True):
     return mana
 
 
+def kira_enters(p, new):
+    """Kira Nerys: eine andere eigene Kreatur kommt: +N/+N bis Rundenende; kommt sie waehrend unseres Angriffs (nach
+    dem Erklaeren der Angreifer, vor den Blockern), kommt sie getappt und angreifend (506.3, ohne Angriffs-Ausloeser)."""
+    kiras = [c for c in p.creatures if not c.dead and c is not new and (c.card.kira_attack or c.card.kira_pump)]
+    for k in kiras:
+        new.pump += k.card.kira_pump
+        new.tpump += k.card.kira_pump
+    if p.kira_join is not None and any(k.card.kira_attack for k in kiras) and any(
+            c.attacked == p.now and not c.dead for c in p.creatures if c is not new):
+        new.tapped = True
+        new.attacked = p.now
+        p.kira_join.append(new)
+
+
 def creature_enters(p, new, step, e, opp=None, cast=True):
     """Eine Kreatur kam ins Spiel (schon in p.creatures): Leben (Greenhouse Propagator), Marken auf eine Kreatur, die
     in diesem Zug kam (Mabel), Team-Pump nach Artefakten (Craterclaw Colossus), Land gegen Token (Tenured
@@ -3368,6 +3388,7 @@ def creature_enters(p, new, step, e, opp=None, cast=True):
     card = new.card
     new.gy, new.ctl = p.graveyard, p
     new.bonus += card.enters_counters  # "enters with N +1/+1 counters" (614.1c)
+    kira_enters(p, new)
     mission_trigger(p, "creature_enters", step, e, creature=new)  # Support Mission
     if card.is_artifact and not card.is_token:  # Conquest Mission
         mission_trigger(p, "artifact_enters", step, e)
@@ -3890,7 +3911,7 @@ def death_watchers(players, died, e):
         charged = False
         for st in _station_ready(p):
             if st["card"].death_charge and st["creature"] is None:
-                st["charge"] += len(died)
+                add_charge(p, st, len(died))
                 charged = True
         if charged:
             update_stations(p, p.now, e)
@@ -3919,6 +3940,8 @@ def tap_check(players, e):
                 if c.once["promotion"] >= atom[1]:
                     c.once["promotion"] = 0
                     deal_noncombat(p, p.opponent, atom[2], e)
+            elif kind == "surveil":  # Nog als Scout
+                surveil_cards(p, [atom[1]], e, c.card.name)
             elif kind == "loot":
                 _draw(p)
                 gone = choose_discard(p)
@@ -7001,6 +7024,22 @@ def attack_keywords(me, attackers, alone, e):
                                    f"{', '.join(card.alone_kw)}")
 
 
+def counter_boost(p):
+    """Brad Boimler: 1, wenn p ihn in diesem Zug getappt hat (dann eine Marke mehr), sonst 0."""
+    return 1 if p.counter_boost is not None and p.counter_boost == p.now else 0
+
+
+def add_charge(p, st, n):
+    """n Charge-Marken auf ein Raumschiff (Brad Boimler: eine mehr)."""
+    if n > 0:
+        st["charge"] += n + counter_boost(p)
+
+
+def add_quest(p, m):
+    """Eine Quest-Marke auf eine Mission (Brad Boimler: eine mehr)."""
+    m["quest"] += 1 + counter_boost(p)
+
+
 def _station_ready(p):
     """Station-Karten, die noch im Spiel sind (als Permanent oder als Kreatur); weggefallene werden entfernt."""
     out = []
@@ -7080,10 +7119,86 @@ def station_phase(me, opp, step, e):
             if pick is None:
                 break
             pick.tapped = True
-            st["charge"] += pick.power
+            add_charge(me, st, pick.power)
             e["events"].append(f"{me.name}: Station – {pick.card.name} tappt, {st['card'].name} hat {st['charge']} "
                                f"Marken")
             update_stations(me, step, e)
+
+
+def _threats(opp):
+    return [t for t in opp.creatures if not t.dead and (not t.card.defender or _defender_ok(t)) and t.dmg > 0]
+
+
+def picard_tutor(me, opp, step, e):
+    """Captain Jean-Luc Picard in Main 2 (Nutzer 2026-11-02, wie Station): sieben ungetappte Officers, die nicht
+    angegriffen haben, tappen (die schwaechsten), wenn danach kein toedlicher Gegenangriff droht: das teuerste
+    Raumschiff der Bibliothek mit sieben Charge-Marken ins Spiel, dann mischen."""
+    for src in [c for c in me.creatures if c.card.officer_tutor and not c.dead]:
+        n, charge = src.card.officer_tutor
+        ships = [c for c in me.library if c.station]
+        officers = sorted((c for c in me.creatures if not c.dead and not c.tapped and c.attacked != me.now
+                           and "officer" in c.card.creature_types), key=danger)
+        if not ships or len(officers) < n:
+            return
+        use = officers[:n]
+        home = [h for h in me.creatures if not h.dead and not h.tapped and not any(h is u for u in use)]
+        if opp is not None and max_through(_threats(opp), home) >= me.life:
+            return
+        for c in use:
+            c.tapped = True
+        ship = max(ships, key=lambda c: (c.mv, c.name))
+        me.library.remove(ship)
+        random.shuffle(me.library)
+        me.perms.append(ship)
+        permanent_enters(me, opp, ship, step, e)
+        st = next((s for s in reversed(me.stations) if s["card"] is ship), None)
+        if st is not None:
+            add_charge(me, st, charge)
+            update_stations(me, step, e)
+        e["events"].append(f"{me.name}: {src.card.name} tappt {n} Officers – {ship.name} mit {charge} Marken")
+
+
+def worf_counters(me, opp, step, e):
+    """Worf, Honor-Bound Warrior in Main 2 (Nutzer 2026-11-02, wie Station): je zwei ungetappte Artefakte oder
+    Kreaturen tappen, +1/+1-Marke auf Worf. Zuerst Clues und Nichtkreatur-Artefakte (ohne Mana-Faehigkeit; Treasure
+    und Food brauchen ihr {T}), dann die schwaechsten Kreaturen, die nicht angegriffen haben und nicht gegen einen
+    toedlichen Gegenangriff fehlen. Worf tappt sich nicht selbst."""
+    for w in [c for c in me.creatures if c.card.tap2_counter and not c.dead]:
+        while True:
+            at, clues, arts = me.worf_taps if me.worf_taps[0] == me.now else (me.now, 0, ())
+            free_arts = [x for x in me.perms if x.is_artifact and not x.mana_src and not any(x is a for a in arts)]
+            picks = ["clue"] * min(2, me.clues - clues) + free_arts
+            picks = picks[:2]
+            chosen = []
+            for c in sorted((c for c in me.creatures if not c.dead and not c.tapped and c is not w
+                             and c.attacked != me.now), key=danger):
+                if len(picks) + len(chosen) >= 2:
+                    break
+                home = [h for h in me.creatures if not h.dead and not h.tapped and h is not c
+                        and not any(h is x for x in chosen)]
+                if opp is None or max_through(_threats(opp), home) < me.life:
+                    chosen.append(c)
+            if len(picks) + len(chosen) < 2:
+                break
+            for c in chosen:
+                c.tapped = True
+            me.worf_taps = (at, clues + picks.count("clue"), arts + tuple(x for x in picks if x != "clue"))
+            w.bonus += 1
+            e["events"].append(f"{me.name}: {w.card.name} – Marke ({w.bonus})")
+
+
+def nog_levels(me, opp, step, e):
+    """Nog in Main 2 mit sonst ungenutztem Mana (selbst gesetzt): {1} Scout (Grund-P/T 3/4, getappt: Surveil 2),
+    dann {3} Officer (Laender aus dem Friedhof spielen, ein zusaetzlicher Landdrop je eigenem Zug)."""
+    for c in [x for x in me.creatures if x.card.nog_levels and not x.dead]:
+        if "rogue" in c.card.creature_types and free_units(me) >= 1 and _pay_open(me, ((1, ()),), treasure=False):
+            c.base_card = c.base_card or c.card
+            c.card = c.card._replace(power=3, toughness=4, creature_types=("ferengi", "scout"),
+                                     became_tapped=("surveil", 2))
+            e["events"].append(f"{me.name}: {c.card.name} wird Scout")
+        if "scout" in c.card.creature_types and free_units(me) >= 3 and _pay_open(me, ((3, ()),), treasure=False):
+            c.card = c.card._replace(creature_types=("ferengi", "officer"), nog_levels=False, nog_officer=True)
+            e["events"].append(f"{me.name}: {c.card.name} wird Officer")
 
 
 def _crew_ready(p):
@@ -7420,7 +7535,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     me.land_now = None
     me.noncreature_cast = opp.noncreature_cast = False
     me.ward_budget, me.ward_pool = 0, None
-    me.extra_lands = 0
+    me.extra_lands = sum(1 for c in me.creatures if c.card.nog_officer and not c.dead)  # Nog als Officer
     me.turn_start = step
     me.own_turns += 1
     me.drawn_mark, opp.drawn_mark = me.drawn, opp.drawn
@@ -7534,6 +7649,12 @@ def take_turn(me, opp, step, rnd, skip_draw):
     pool_all = pool + [u for u, _i in creature_units]
     # Land
     walker_bf, jace_bf = walker_flags(me)
+    gy_lands = {}  # Nog als Officer: Laender aus dem Friedhof, voruebergehend auf der Hand
+    if any(c.card.nog_officer and not c.dead for c in me.creatures):
+        for c in dict.fromkeys(x for x in me.graveyard if x.is_land):
+            mark = c._replace(from_gy=True)
+            gy_lands[mark] = c
+            me.hand.append(mark)
     land, tapped, forced = choose_land(me.hand, spells, pool_all, me.lands, walker_bf, jace_bf, has_creature, True)
     tapped = land_tapped(me, tapped)
     if land is not None:
@@ -7541,6 +7662,9 @@ def take_turn(me, opp, step, rnd, skip_draw):
         if land in im_map:  # Land aus dem Exil (Blazing Crescendo)
             _take_impulse(me, im_map[land])
             land = im_map[land]
+        if land in gy_lands:
+            me.graveyard.remove(gy_lands[land])
+            land = gy_lands.pop(land)
         me.lands.append(land)
         me.land_now = land
         e["land"] = land.name + (" (getappt)" if tapped else "")
@@ -7554,11 +7678,16 @@ def take_turn(me, opp, step, rnd, skip_draw):
         if land2 is None:
             break
         me.hand.remove(land2)
+        if land2 in gy_lands:
+            me.graveyard.remove(gy_lands[land2])
+            land2 = gy_lands.pop(land2)
         me.lands.append(land2)
         e["land"] = (e["land"] + ", " if e["land"] else "") + land2.name
         if not tapped2:
             pool_all = pool_all + [land2.land_colors]
         pool_all = pool_all + on_land(me, opp, land2, step, e, untapped=not tapped2)
+    if gy_lands:
+        me.hand[:] = [c for c in me.hand if c not in gy_lands]
     if walker_engine(me) and not me.jace.used:  # L2a: zeitkritische Loyalty-Faehigkeiten vor dem Zaubern
         mana = walker_phase(me, opp, step, e, "main1", pool_all, spells)
         if mana:
@@ -7819,6 +7948,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
                 uncrew(me, v, e)
         attackers = choose_attackers(me.creatures, opp.creatures, opp.life, me.life, step)
     art_vigilance = any(c.card.artifact_vigilance for c in me.creatures if not c.dead)
+    me.kira_join = [] if attackers else None
     if attackers:
         attack_planets(me, opp, step, e)
         cube_attack(me, opp, attackers, step, e)
@@ -7908,6 +8038,9 @@ def take_turn(me, opp, step, rnd, skip_draw):
             for _ in range(sum(c.card.attack_ping for c in me.creatures if not c.dead)):
                 deal_noncombat(me, opp, 1, e)
         e["events"].append(f"{me.name}: {ping} Schaden durch Angriffs-Auslöser")
+    if me.kira_join:  # Kira Nerys: angreifend ins Spiel gekommen
+        attackers = attackers + [c for c in me.kira_join if not c.dead and any(c is x for x in me.creatures)]
+    me.kira_join = None
     locked = combat_locked(me, opp)  # Yuriko: im Kampf keine Zauber und keine Faehigkeiten (ausser Mana)
     if not locked:
         attackers = respond_to_attack(opp, me, attackers, e, step)
@@ -7979,7 +8112,10 @@ def take_turn(me, opp, step, rnd, skip_draw):
     prepare_abilities(me, step, e)
     emrakul_exile(me, step, e)
     hapatra_untap(me, step, e)
+    picard_tutor(me, opp, step, e)
     station_phase(me, opp, step, e)
+    worf_counters(me, opp, step, e)
+    nog_levels(me, opp, step, e)
     if me.walkers:
         pw_phase(me, opp, step, e, "after")
     if walker_engine(me):

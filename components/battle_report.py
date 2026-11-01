@@ -487,6 +487,13 @@ RULES = [
     "(Clue, sonst kleiner Kreatur-Token, sonst Food, wie bei Khan), dann −6/−6. Mirror Universe Intrusion kopiert "
     "die gefährlichste gegnerische Kreatur mit Menace; mit Kicker jede, wenn das Mana reicht und der Gegner "
     "mindestens zwei Kreaturen hat.",
+    "Tappen (TRK): Brad Boimler wird nur nebenbei getappt (Angriff, Crew, Station); danach kommt bis Rundenende auf "
+    "jede +1/+1-, Charge- und Quest-Marke eine mehr. Picard (sieben Officers) und Worf (zwei Artefakte oder "
+    "Kreaturen) tappen in Main 2 wie bei Station: nur, was nicht angegriffen hat und nicht gegen einen tödlichen "
+    "Gegenangriff fehlt, die schwächsten zuerst; Worf zuerst Clues und Nichtkreatur-Artefakte; Picard holt das "
+    "teuerste Raumschiff. Kira Nerys: Kreaturen, die nach dem Erklären der Angreifer kommen, greifen mit an. Nog "
+    "steigt in Main 2 mit sonst ungenutztem Mana auf (Scout, dann Officer: Länder aus dem Friedhof, ein Landdrop "
+    "mehr). Lwaxana Troi ist noch nicht modelliert.",
     "Alchemy (YFRA): „perpetually“ ändert die Karte selbst (bleibt in Friedhof und Hand). Conjure benannter Karten "
     "(Kraken Hatchling, Mind Stone, Aria of Flame) mit ihren Texten von Scryfall. Avoided Stairwurm −1/−1 je "
     "Kreaturenkarte in der Bibliothek; Zimone macht Schaden wie mit positiver Power und wird prepared, sobald Karten "

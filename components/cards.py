@@ -409,6 +409,12 @@ class Card(NamedTuple):
     kicker_sac: bool = False  # Eject the Warp Core: Kicker durch Opfern eines Artefakts oder einer Kreatur
     counter_mv: int = 0  # Highly Illogical: ohne Kicker nur Zauber mit hoechstens diesem Manawert
     mirror_copy: bool = False  # Mirror Universe Intrusion: Kopie mit Menace, mit Kicker von jeder Kreatur
+    officer_tutor: tuple = ()  # Picard: (N Officers tappen, Charge-Marken) - Raumschiff aus der Bibliothek
+    tap2_counter: bool = False  # Worf: zwei Artefakte/Kreaturen tappen: +1/+1-Marke (nur als Sorcery)
+    kira_attack: bool = False  # Kira Nerys: Kreaturen kommen waehrend unseres Angriffs angreifend ins Spiel
+    kira_pump: int = 0  # Kira Nerys: andere eigene Kreatur kommt: +N/+N bis Rundenende
+    nog_levels: bool = False  # Nog als Rogue: {1} Scout, dann {3} Officer
+    nog_officer: bool = False  # Nog als Officer: Laender aus dem Friedhof, ein zusaetzlicher Landdrop
 
 
 LANDCYCLE_RE = re.compile(
@@ -2363,14 +2369,15 @@ _F_RES = {
     "attack_tap": re.compile(r"^whenever (~|this creature|equipped creature) attacks, tap target creature defending "
                              r"player controls\.$"),
     "cast": re.compile(_PREFIX + r"whenever you cast (or copy an instant or sorcery spell|an instant or sorcery spell that targets a creature|an instant "
-                       r"or sorcery spell|a noncreature spell|a creature spell|a spell that targets a creature you "
+                       r"or sorcery spell|a noncreature spell|a creature or spacecraft spell|a creature spell|a spell that targets a creature you "
                        r"control|a multicolored spell|a spell|an? [a-z]+ spell), (.+)$"),
     "dilemma": re.compile(_PREFIX + r"whenever you face a dilemma, (.+)$"),
 }
 _CAST_FILTER = {"or copy an instant or sorcery spell": "instsorc",  # Magecraft (Kopien loesen nicht aus)
                 "an instant or sorcery spell that targets a creature": "instsorc_creature",
                 "an instant or sorcery spell": "instsorc", "a noncreature spell": "noncreature",
-                "a creature spell": "creature", "a spell that targets a creature you control": "own_creature",
+                "a creature spell": "creature", "a creature or spacecraft spell": "creature_spacecraft",
+                "a spell that targets a creature you control": "own_creature",
                 "a multicolored spell": "multicolor", "a spell": "spell"}
 _CAST_ATOM_RES = (
     (re.compile(rf"^{_S} gets \+(\d+)/\+(\d+) until end of turn and deals (\d+) damage to each opponent$"),
@@ -2882,6 +2889,22 @@ _TRK_RES = {
     "kicker_sac": re.compile(r"^kicker—sacrifice an artifact or creature\.$"),
     "counter_mv_kicked": re.compile(r"^counter target spell with mana value (\d+) or less\. if this spell was "
                                    r"kicked, instead counter target spell\.$"),
+    "officer_tutor": re.compile(r"^tap (seven|\d+) untapped officers you control: search your library for a "
+                               r"spacecraft card, put it onto the battlefield with (seven|\d+) charge counters on "
+                               r"it, then shuffle\.$"),
+    "tap2_counter": re.compile(r"^tap two untapped artifacts and/or creatures you control: put a \+1/\+1 counter "
+                              r"on ~\. activate only as a sorcery\.$"),
+    "kira_attack": re.compile(r"^if a creature you control would enter while you control an attacking creature, "
+                             r"instead it enters tapped and attacking\.$"),
+    "kira_pump": re.compile(r"^whenever another creature you control enters, it gets \+(\d+)/\+\1 until end of "
+                           r"turn\.$"),
+    "nog_scout": re.compile(r'^\{1\}: if ~ is a rogue, he becomes a ferengi scout with base power and toughness '
+                           r'3/4 and gains "whenever ~ becomes tapped, surveil 2\."$'),
+    "nog_officer": re.compile(r'^\{3\}: if ~ is a scout, he becomes a ferengi officer and gains "you may play '
+                             r'lands from your graveyard" and "you may play an additional land on each of your '
+                             r'turns\."$'),
+    "doctor": re.compile(r"^(?:put a \+1/\+1 counter on target creature you control\. )?untap it\. until end of "
+                        r"turn, it gets \+1/\+1 and becomes a doctor\.$"),
     "mirror_copy": re.compile(r"^create a token that's a copy of target creature an opponent controls, except it "
                              r"has menace\. if this spell was kicked, instead for each creature target opponent "
                              r"controls, create a token that's a copy of that creature, except it has menace\.$"),
@@ -3157,6 +3180,9 @@ def trk_land_token_traits(card, type_line):
                 out["became_tapped"] = ("surveil_or_draw", 1, 4)
             elif body == "draw a card, then discard a card.":
                 out["became_tapped"] = ("loot",)
+            elif body == ("until end of turn, if one or more counters would be put on a permanent you control, that "
+                          "many plus one of each of those kinds of counters are put on that permanent instead."):
+                out["became_tapped"] = ("counter_boost",)  # Brad Boimler (614.1)
             else:
                 bm = re.match(r"^put a promotion counter on (?:her|him|it)\. then if there are (three|\d+) or more "
                               r"promotion counters on (?:her|him|it), remove those counters and (?:she|he|it) deals "
@@ -3214,6 +3240,7 @@ def trk_land_token_traits(card, type_line):
             out["etb_basic_hand"] = "basic" if m.group(1) == "land" else m.group(1)
         out.update(trk_flow_fields(low, res))
         out.update(trk_kicker_fields(low, res))
+        out.update(trk_tap_fields(low, res))
     return out
 
 
@@ -3275,6 +3302,27 @@ def trk_kicker_fields(low, res):
         out["counter"], out["counter_mv"] = ("any", (), 0), int(m.group(1))
     if res["mirror_copy"].match(low):
         out["mirror_copy"] = True
+    return out
+
+
+def trk_tap_fields(low, res):
+    """TRK Paket D (Tappen als Kosten und Ausloeser): Felder einer Zeile."""
+    out = {}
+    m = res["officer_tutor"].match(low)
+    if m:
+        out["officer_tutor"] = (_NUM_WORDS.get(m.group(1)) or int(m.group(1)),
+                                _NUM_WORDS.get(m.group(2)) or int(m.group(2)))
+    if res["tap2_counter"].match(low):
+        out["tap2_counter"] = True
+    if res["kira_attack"].match(low):
+        out["kira_attack"] = True
+    m = res["kira_pump"].match(low)
+    if m:
+        out["kira_pump"] = int(m.group(1))
+    if res["nog_scout"].match(low) or res["nog_officer"].match(low):
+        out["nog_levels"] = True
+    if res["doctor"].match(low):  # I'm a Doctor, Not a . . .: Marke, enttappen, +1/+1 (der Kreaturtyp zaehlt nicht)
+        out["modes"], out["pump_tough"], out["untap_target"] = ((("counter", 1, 1), ("pump", 1)),), ((1,),), True
     return out
 
 
