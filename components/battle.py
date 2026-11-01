@@ -2998,6 +2998,12 @@ def on_cast(p, card, step, e):
         face_dilemma(p, step, e)
     if not card.is_creature:
         mission_trigger(p, "noncreature_cast", step, e)
+    if card.is_enchantment:  # Dathon: ziehen, bei einer Saga 2 Schaden an jedem Gegner
+        for c in [c for c in p.creatures if c.card.enchant_cast_draw and not c.dead]:
+            _draw(p)
+            e["events"].append(f"{p.name}: {c.card.name} zieht")
+            if card.saga and p.opponent is not None:
+                deal_noncombat(p, p.opponent, 2, e)
     if not card.is_creature:  # Tal Shiar Analyst
         for c in p.creatures:
             if c.card.cast_untap and not c.dead:
@@ -3090,6 +3096,8 @@ def cast_matches(kind, card):
             return _COLOR_WORDS[word] in colors_of_alts(card.alts)
         if word in _TYPE_FLAGS:
             return bool(getattr(card, _TYPE_FLAGS[word]))
+        if word == "spacecraft":  # alle TRK-Raumschiffe haben Station (Rutherford)
+            return bool(card.station)
         return word in card.creature_types
     return _CAST_FILTERS[kind](card)
 
@@ -3653,6 +3661,8 @@ def on_land(me, opp, land, step, e, with_mana=True, untapped=False):
         surveil_cards(me, [land.surveil], e, land.name)
     gain_life(me, land.etb_life)  # Planeten-Laender
     mana += mission_trigger(me, "landfall", step, e, with_mana=with_mana)
+    if with_mana:  # Dal R'El: "add {R} or {G}" (nur beim eigenen Landdrop in der Main Phase nutzbar)
+        mana += [c.card.landfall_mana for c in me.creatures if c.card.landfall_mana and not c.dead]
     if land.choices and (untapped or not land.modes_untapped):
         card_effects(me, opp, land, step, e)
     for ef in once_effects(land):
@@ -4275,10 +4285,17 @@ def surplus_land(p):
 
 
 def _draw(p, n=1):
-    for _ in range(n):
+    """n Karten ziehen. Mr. Spock: jedes Ziehen wird zu zwei (614.1; mehrere Spocks verdoppeln jeweils); Data: eine
+    +1/+1-Marke je gezogene Karte."""
+    creatures = getattr(p, "creatures", ())
+    doubles = sum(1 for c in creatures if c.card.draw_double and not c.dead)
+    data = [c for c in creatures if c.card.draw_counter and not c.dead]
+    for _ in range(n * 2 ** doubles):
         if p.library:
             p.hand.append(p.library.pop(0))
             p.drawn += 1
+            for c in data:
+                c.bonus += 1
 
 
 def tap_ready(p, c):
@@ -5275,6 +5292,146 @@ def trk_effects(me, opp, card, step, entry):
         search_basics(me, 1, entry, card.name)
     elif card.etb_basic_hand:  # Oberth-Class Starship
         search_basic_type(me, card.etb_basic_hand, entry, card.name)
+    flow_effects(me, opp, card, step, entry)
+
+
+_DIG_OK = {
+    "artifact": lambda c: c.is_artifact,
+    "noncreature_nonland": lambda c: not c.is_creature and not c.is_land,
+    "plains_perm3": lambda c: "plains" in c.land_types or (not c.is_land and not c.is_instant_sorcery and c.mv <= 3),
+    "any": lambda c: True,
+}
+_TUTOR_OK = {"aura": lambda c: c.is_aura, "equipment": lambda c: bool(c.equip), "spacecraft": lambda c: bool(c.station),
+             "whale": lambda c: "whale" in c.creature_types}
+
+
+def flow_effects(me, opp, card, step, entry):
+    """TRK Paket I (Kartenfluss) beim Aufloesen bzw. Betreten: oberste Karten ansehen und eine nehmen, Laender von oben
+    aufs Feld, Suchen nach Kartentyp, Opfern und ziehen (Khan), Live Long and Prosper."""
+    if card.top_dig:  # Rutherford, Coffee, Spock, Pattern Buffer: Wahl wie bei Hoshi Sato (dig_pick)
+        n, filt, to_gy = card.top_dig
+        top, me.library[:n] = me.library[:n], []
+        pick = dig_pick(me, [c for c in top if _DIG_OK[filt](c)])
+        if pick is not None:
+            top.remove(pick)
+            me.hand.append(pick)
+            entry["events"].append(f"{me.name}: {card.name} – {pick.name} auf die Hand")
+        if to_gy:
+            for c in top:
+                me.graveyard.append(c)
+        else:
+            random.shuffle(top)
+            me.library.extend(top)
+    if card.reveal_lands:
+        reveal_lands(me, opp, card, step, entry)
+    if card.tutor:  # Federation Resupply, H.M.S. Bounty: die teuerste, die man bald wirken kann
+        cands = [c for c in me.library if any(_TUTOR_OK[t](c) for t in card.tutor)]
+        if cands:
+            pick = max(cands, key=lambda c: (c.mv <= len(me.lands) + 1, c.mv, c.name))
+            me.library.remove(pick)
+            me.hand.append(pick)
+            random.shuffle(me.library)
+            entry["events"].append(f"{me.name}: {card.name} sucht {pick.name}")
+    if card.sac_draw and card.sac_draw[0] == "etb":  # Khan
+        flow_sac_draw(me, card, card.sac_draw[1], entry, [c for c in me.creatures if c.card is card])
+    if card.double_life_draw:  # Live Long and Prosper: Leben verdoppeln (Lebensgewinn), Handgroesse ziehen
+        if me.life > 0:
+            gain_life(me, me.life)
+        _draw(me, len(me.hand))
+        me.no_hand_limit = True
+        entry["events"].append(f"{me.name}: {card.name} – {me.life} Leben, {len(me.hand)} Karten auf der Hand")
+
+
+def reveal_lands(p, opp, card, step, e):
+    """U.S.S. Voyager: aufdecken bis zu zwei Laendern, die getappt aufs Feld, der Rest unter die Bibliothek. Hit It!:
+    die obersten N, ein Land getappt aufs Feld (zuerst neue Farben), der Rest in den Friedhof. Die Laender loesen beim
+    Betreten aus (getappt, ohne Mana)."""
+    mode, n = card.reveal_lands
+    if mode == "until":
+        lands, rest = [], []
+        while p.library and len(lands) < n:
+            top = p.library.pop(0)
+            (lands if top.is_land else rest).append(top)
+        random.shuffle(rest)
+        p.library.extend(rest)
+    else:
+        top, p.library[:n] = p.library[:n], []
+        have = set().union(*(c.land_colors for c in p.lands)) if p.lands else set()
+        found = [c for c in top if c.is_land]
+        lands = [max(found, key=lambda c: len(set(c.land_colors) - have))] if found else []
+        for c in top:
+            if c not in lands:
+                p.graveyard.append(c)
+    for land in lands:
+        p.lands.append(land)
+        e["events"].append(f"{p.name}: {card.name} – {land.name} getappt aufs Feld")
+        if opp is not None:
+            on_land(p, opp, land, step, e, with_mana=False)
+
+
+def flow_fodder(p, exclude=()):
+    """Was Khan bzw. Automated Warfare System opfern (selbst gesetzt): ein Clue, sonst ein Kreatur-Token mit Staerke 1
+    oder weniger, der nicht angreift, sonst ein Food. Echte Kreaturen und Treasure nie."""
+    if p.clues:
+        return "clue"
+    toks = [c for c in p.creatures if c.card.is_token and not c.dead and c.power <= 1
+            and not any(c is x for x in exclude)]
+    if toks:
+        return min(toks, key=danger)
+    return "food" if p.foods else None
+
+
+def flow_sac_draw(p, card, n, e, exclude=()):
+    pick = flow_fodder(p, exclude)
+    if pick is None:
+        return
+    if pick == "clue":
+        p.clues -= 1
+        name = "Clue"
+    elif pick == "food":
+        p.foods -= 1
+        name = "Food"
+    else:
+        pick.dead = True
+        name = pick.card.name
+    _draw(p, n)
+    e["events"].append(f"{p.name}: {card.name} opfert {name} und zieht {n}")
+
+
+def attack_flow(me, opp, attackers, step, e):
+    """Angriffs-Ausloeser aus Paket I: Tricorder (ausgeruestete Kreatur greift an: Surveil), Automated Warfare System
+    (opfern und ziehen; keine angreifende Kreatur)."""
+    for a in attackers:
+        for g in a.gear:
+            if g.equip_attack_surveil:
+                surveil_cards(me, [g.equip_attack_surveil], e, g.name)
+        if a.card.sac_draw and a.card.sac_draw[0] == "attack" and not a.dead:
+            flow_sac_draw(me, a.card, a.card.sac_draw[1], e, attackers)
+
+
+def counter_hit_draws(p, hitters, e):
+    """Phlox: je eigene Kreatur mit einer Marke (+1/+1 oder Stun), die den Spieler trifft, eine Karte je Phlox."""
+    n = sum(1 for c in p.creatures if c.card.counter_hit_draw and not c.dead)
+    for a in hitters if n else ():
+        if a.bonus > 0 or a.stun:
+            _draw(p, n)
+            e["events"].append(f"{p.name}: Phlox – {a.card.name} trifft, zieht {n}")
+
+
+def main1_loot(p, e):
+    """Seven of Nine zu Beginn der ersten Main Phase: ziehen, dann abwerfen, ausser mit N verschieden benannten
+    Laendern."""
+    for c in [c for c in p.creatures if c.card.main1_loot_lands and not c.dead]:
+        _draw(p)
+        if snw_x(p) >= c.card.main1_loot_lands:
+            e["events"].append(f"{p.name}: {c.card.name} zieht")
+            continue
+        gone = choose_discard(p)
+        if gone is not None:
+            p.hand.remove(gone)
+            p.graveyard.append(gone)
+            discarded(p, e, [gone])
+        e["events"].append(f"{p.name}: {c.card.name} zieht" + (f", wirft {gone.name} ab" if gone else ""))
 
 
 def dig_pick(p, cards):
@@ -7238,9 +7395,8 @@ def take_turn(me, opp, step, rnd, skip_draw):
             me.lost = True
             e["note"] = "muss aus leerer Bibliothek ziehen"
             return e
-        card = me.library.pop(0)
-        me.hand.append(card)
-        me.drawn += 1
+        card = me.library[0]
+        _draw(me)
         e["drew"] = card.name
         for w in opp.walkers:  # The Theorist: zu Beginn des Draw Steps des Gegners
             if "opp_draw" in w.card.pw_static:
@@ -7251,6 +7407,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
         saga_after_draw(me, opp, step, e)
         if opp.life <= 0 or me.life <= 0:
             return e
+    main1_loot(me, e)  # Seven of Nine
     disc, orig = discount(me), {}  # Kostensenkung, Steuer, Zusatzkosten: angepasste Handkarten fuer die Main Phase
     for i, c in enumerate(me.hand):
         cheap = _discounted(c, disc, me)
@@ -7663,6 +7820,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     attack_keywords(me, attackers, alone, e)
     attack_taps(me, opp, attackers, e)
     attack_power_triggers(me, opp, attackers, step, e)
+    attack_flow(me, opp, attackers, step, e)
     for a in attackers:  # Angriffs-Ausloeser der Kreatur selbst
         a.attacked = step
         for g in a.gear:  # Medic's Kitesail
@@ -7732,6 +7890,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     combat_life(me, opp, res)
     e["damage"] = res["player"]
     artifact_hit_triggers(me, [a for a, _bs in blocks if res["to_player"].get(id(a))], step, e)
+    counter_hit_draws(me, [a for a, _bs in blocks if res["to_player"].get(id(a))], e)
     for a, _bs in blocks:  # "deals combat damage to a player, draw ..." (Frostbite Pyromental)
         if (a.card.combat_draw or a.tdraw) and res["to_player"].get(id(a)):
             _draw(me, a.card.combat_draw + a.tdraw)

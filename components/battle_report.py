@@ -475,6 +475,13 @@ RULES = [
     "verliert der Gegner 1 Leben, ab 7 Marken 2; Exploratory: bei Landfall bis zur ersten Nichtland-Karte exilieren, "
     "die in Main 2 gespielt wird (wie bei Kirk), ab 5 Marken {R}{R}; Support: Marke auf jede eigene Kreatur, die "
     "kommt, ab 5 Marken zwei.",
+    "Kartenfluss (TRK): von den obersten Karten (Rutherford, Coffee, Spock, Pattern Buffer) wird die passende Karte "
+    "genommen wie bei Hoshi Sato (ein Land, wenn die Hand keins hat und weniger als 5 liegen, sonst die teuerste bald "
+    "wirkbare). Voyager und Hit It! legen die Länder getappt (Landfall ohne Mana), Hit It! zuerst eine neue Farbe. "
+    "Federation Resupply und Bounty suchen die teuerste bald wirkbare Karte. Khan und Automated Warfare System opfern "
+    "nur einen Clue, sonst einen nicht angreifenden Kreatur-Token mit Stärke höchstens 1, sonst ein Food. Mr. Spock "
+    "verdoppelt jedes Ziehen (mehrere Spocks jeweils), Data bekommt je gezogene Karte eine Marke. Phlox zählt +1/+1- "
+    "und Stun-Marken. Dal R'El gibt {R} oder {G} nur beim eigenen Landdrop.",
     "Alchemy (YFRA): „perpetually“ ändert die Karte selbst (bleibt in Friedhof und Hand). Conjure benannter Karten "
     "(Kraken Hatchling, Mind Stone, Aria of Flame) mit ihren Texten von Scryfall. Avoided Stairwurm −1/−1 je "
     "Kreaturenkarte in der Bibliothek; Zimone macht Schaden wie mit positiver Power und wird prepared, sobald Karten "

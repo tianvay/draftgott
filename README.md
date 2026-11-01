@@ -569,6 +569,10 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
 - Federation (TRK): X = Kreaturtypen der eigenen Nicht-Borg-Kreaturen (Saavik, Hoshi Sato, Captain Archer, Sarek,
   Infinite Diversity, Starfleet Academy).
 - Quest-Missionen (TRK): Conquest, Anthropological, Vengeance, Exploratory, Support mit eigenen Quest-Marken.
+- Kartenfluss (TRK): oberste Karten ansehen und eine nehmen (Rutherford, There's Coffee in that Nebula, Spock,
+  Pattern Buffer Preservation), Länder von oben (U.S.S. Voyager, Hit It!), Suchen nach Kartentyp (Federation
+  Resupply, H.M.S. Bounty), Impulse (Reckless Impulse, Silicate Surveyor), Opfern und ziehen (Khan, Automated Warfare
+  System), Mr. Spock, Data, Phlox, Tricorder, Seven of Nine, Live Long and Prosper, Dathon, Dal R'El.
 - Removal (Destroy/Exile, Schaden, −X/−X, Edikt, Fight, Biss, Bounce, Lock, zurück in die Bibliothek,
   Massenremoval) trifft die gefährlichste passende Kreatur; Removal-Instants vor dem Angriff, gegen Angreifer oder am
   Ende des gegnerischen Zugs.

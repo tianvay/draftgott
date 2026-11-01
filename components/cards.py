@@ -391,6 +391,20 @@ class Card(NamedTuple):
     # TRK Paket G (Quest-Missionen)
     mission: tuple = ()        # (Ausloeser, Token-Card oder None, Schwelle): "artifact_enters", "noncreature_cast",
     #                            "creature_dies", "landfall", "creature_enters"
+    # TRK Paket I (Kartenfluss)
+    top_dig: tuple = ()        # oberste N ansehen, eine passende auf die Hand: (N, Filter, Rest in den Friedhof);
+    #                            Filter "artifact", "plains_perm3", "noncreature_nonland", "any" (muss nehmen)
+    reveal_lands: tuple = ()   # Laender von oben getappt aufs Feld: ("until", 2) bis zwei Laender, ("top", 5) eins
+    tutor: tuple = ()          # Bibliothek nach einer Karte dieser Typen durchsuchen, auf die Hand ("aura", "whale")
+    sac_draw: tuple = ()       # "you may sacrifice another creature or artifact. If you do, draw N": ("etb"/"attack", N)
+    draw_double: bool = False  # Mr. Spock: "If you would draw a card, draw two cards instead" (614.1)
+    draw_counter: bool = False  # Data: je gezogene Karte eine +1/+1-Marke
+    counter_hit_draw: bool = False  # Phlox: eigene Kreatur mit Marke trifft den Spieler: ziehen
+    equip_attack_surveil: int = 0  # Tricorder: ausgeruestete Kreatur greift an: Surveil N
+    main1_loot_lands: int = 0  # Seven of Nine: Main 1 ziehen, abwerfen ausser mit N verschieden benannten Laendern
+    double_life_draw: bool = False  # Live Long and Prosper
+    enchant_cast_draw: bool = False  # Dathon: Verzauberung gewirkt: ziehen, Saga: 2 Schaden an jedem Gegner
+    landfall_mana: tuple = ()  # Dal R'El: Landfall, eine Mana-Einheit (Farben zur Wahl)
 
 
 LANDCYCLE_RE = re.compile(
@@ -2364,7 +2378,7 @@ _CAST_ATOM_RES = (
      lambda m: (("counter_all", _count(m.group(1))),)),
     (re.compile(rf"^put {_N} \+1/\+1 counters? on each other creature you control$"),
      lambda m: (("counter_others", _count(m.group(1))),)),
-    (re.compile(rf"^put {_N} \+1/\+1 counters? on target creature you control$"),
+    (re.compile(rf"^put {_N} \+1/\+1 counters? on target creature(?: you control)?$"),  # Rutherford: wir waehlen
      lambda m: (("target_counter", _count(m.group(1))),)),
     (re.compile(r"^creatures you control get \+(\d+)/\+(\d+) until end of turn$"),
      lambda m: (("team_pump", int(m.group(1)), int(m.group(2))),)),
@@ -2827,6 +2841,37 @@ _TRK_RES = {
                            r"~\.$"),
     "etb_named_token": re.compile(r"^when (?:[a-z]+ )?~(?: [a-z]+)? enters, "
                                   r"(create [a-z]+, a (?:legendary )?\d+/\d+ .+ token\.)$"),
+    "top_dig": re.compile(r"^(?:when (?:~|this [a-z]+) enters, )?look at the top (two|three|four|five|six|seven) cards "
+                          r"of your library\. (?:you may reveal (an artifact card|a plains card or nonland permanent "
+                          r"card with mana value 3 or less|a noncreature, nonland card) from among them and put it into "
+                          r"your hand\. put the rest on the bottom(?: of your library)? in (?:a random|any) order|put one "
+                          r"of them into your hand and the other into your graveyard)\.$"),
+    "reveal_until_lands": re.compile(r"^when (?:~|this [a-z]+) enters, reveal cards from the top of your library until "
+                                     r"you reveal two land cards\. put those land cards onto the battlefield tapped and "
+                                     r"the rest on the bottom of your library in a random order\.$"),
+    "reveal_top_land": re.compile(r"^when (?:~|this [a-z]+) enters, reveal the top (five|four|three) cards of your "
+                                  r"library\. put a land card from among them onto the battlefield tapped and the rest "
+                                  r"into your graveyard\.$"),
+    "tutor": re.compile(r"^(?:when (?:~|this [a-z]+) enters, )?(?:you may )?search your library for an? ([a-z, ]+?) "
+                        r"card, reveal it, put it into your hand, then shuffle\.$"),
+    "impulse_top": re.compile(r"^(?:when (?:~|this [a-z]+) enters, )?exile the top (card|two cards) of your library\. "
+                              r"until the end of your next turn, you may play (?:that card|those cards)\.$"),
+    "sac_draw": re.compile(r"^(when ~ enters|whenever (?:~|this creature) attacks), you may sacrifice another creature "
+                           r"or artifact\. if you do, draw (a card|two cards)\.$"),
+    "draw_double": re.compile(r"^if you would draw a card, draw two cards instead\.$"),
+    "draw_counter": re.compile(r"^whenever you draw a card, put a \+1/\+1 counter on ~\.$"),
+    "counter_hit_draw": re.compile(r"^whenever a creature you control with a counter on it deals combat damage to a "
+                                   r"player, draw a card\.$"),
+    "equip_attack_surveil": re.compile(r"^whenever equipped creature attacks, surveil (\d+)\.$"),
+    "main1_loot": re.compile(r"^at the beginning of your first main phase, draw a card\. then discard a card unless you "
+                             r"control (five|four|six|seven) or more differently named lands\.$"),
+    "double_life_draw": re.compile(r"^double your life total\. draw cards equal to the number of cards in your hand\. "
+                                   r"you have no maximum hand size until your next turn\.$"),
+    "enchant_cast_draw": re.compile(r"^whenever you cast an enchantment spell, draw a card\. if it's a saga spell, ~ "
+                                    r"deals 2 damage to each opponent\.$"),
+    "landfall_mana": re.compile(r"^landfall — whenever a land you control enters, add \{([wubrg])\} or "
+                                r"\{([wubrg])\}\.$"),
+    "sac_land_draw": re.compile(r"^((?:\{[^}]+\})+), sacrifice a land: draw a card\.$"),
     "basic_hand": re.compile(r"^when (?:~|this [a-z]+) enters, (?:you may )?search your library for a basic (land|plains|"
                              r"island|swamp|mountain|forest) card, reveal it, put it into your hand, then shuffle\.?$"),
 }
@@ -3154,6 +3199,52 @@ def trk_land_token_traits(card, type_line):
         m = res["basic_hand"].match(low)
         if m:
             out["etb_basic_hand"] = "basic" if m.group(1) == "land" else m.group(1)
+        out.update(trk_flow_fields(low, res))
+    return out
+
+
+_DIG_FILTERS = {"an artifact card": "artifact", "a noncreature, nonland card": "noncreature_nonland",
+                "a plains card or nonland permanent card with mana value 3 or less": "plains_perm3"}
+
+
+def trk_flow_fields(low, res):
+    """TRK Paket I (Kartenfluss): Felder einer Zeile."""
+    out = {}
+    m = res["top_dig"].match(low)
+    if m:
+        n = _NUM_WORDS[m.group(1)]
+        out["top_dig"] = (n, _DIG_FILTERS[m.group(2)], False) if m.group(2) else (n, "any", True)
+    if res["reveal_until_lands"].match(low):
+        out["reveal_lands"] = ("until", 2)
+    m = res["reveal_top_land"].match(low)
+    if m:
+        out["reveal_lands"] = ("top", _NUM_WORDS[m.group(1)])
+    m = res["tutor"].match(low)
+    if m and not m.group(1).startswith("basic"):
+        words = tuple(w for w in re.split(r",? or |, ", m.group(1)) if w)
+        if all(w in ("aura", "equipment", "spacecraft", "whale") for w in words):
+            out["tutor"] = words
+    m = res["impulse_top"].match(low)
+    if m:
+        out["impulse"] = 1 if m.group(1) == "card" else 2
+    m = res["sac_draw"].match(low)
+    if m:
+        out["sac_draw"] = ("etb" if m.group(1).startswith("when ~") else "attack", 1 if m.group(2) == "a card" else 2)
+    for key in ("draw_double", "draw_counter", "counter_hit_draw", "double_life_draw", "enchant_cast_draw"):
+        if res[key].match(low):
+            out[key] = True
+    m = res["equip_attack_surveil"].match(low)
+    if m:
+        out["equip_attack_surveil"] = int(m.group(1))
+    m = res["main1_loot"].match(low)
+    if m:
+        out["main1_loot_lands"] = _NUM_WORDS[m.group(1)]
+    m = res["landfall_mana"].match(low)
+    if m:
+        out["landfall_mana"] = (m.group(1).upper(), m.group(2).upper())
+    m = res["sac_land_draw"].match(low)
+    if m:
+        out["draw_abilities"] = ((cost_alternatives(m.group(1).upper()), False, "sac_land"),)
     return out
 
 
