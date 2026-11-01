@@ -22,7 +22,7 @@ from components.mulligan import deal_opening
 from components.jace import (JaceState, cast_filter_matches, enter_filter_matches, once_effects,
                              recurring_effects, surveil)
 from components.simulation import walker_rank
-from components.cards import HEARTWOOD, NEW_PLANET, Card, token_card
+from components.cards import HEARTWOOD, NEW_PLANET, Card, enters_tapped, token_card
 from components.conjure import conjure
 from components.simulation import (ANY_COLOR, apply_effects, apply_surveils, best_cast_reduced, choose_land,
                                    cost_reduction, do_cycle, enter_value, enters_prepared, free_spells, hand_form,
@@ -401,7 +401,8 @@ def can_attack(c, step):
 
 
 def can_block(blocker, attacker):
-    if blocker.tapped or blocker.dead or blocker.locked or attacker.has("unblockable") or blocker.card.cant_block:
+    if blocker.tapped or blocker.dead or blocker.locked or attacker.has("unblockable") or blocker.card.cant_block \
+            or "cant_block_turn" in blocker.extra:  # La'An: "can't block this turn"
         return False
     if attacker.card.evade_artifact and blocker.card.is_artifact:  # Species 8472
         return False
@@ -776,6 +777,7 @@ class Player:
         self.ward_budget = 0  # in der Main Phase fuer Ward eingeplantes Mana (mit dem Zauber bezahlt)
         self.ward_pool = None  # beim Planen der Main Phase: Mana des Zugs fuer die Ward-Pruefung
         self.impulse = []     # Karten im Exil, die wir spielen duerfen: (Karte, letzter eigener Zug)
+        self.combat_impulse = []  # im Kampf exiliert, in Main 2 spielbar (Kirk, Commanding Officer)
         self.own_turns = 0    # Zahl der eigenen Zuege bisher
         self.drawn = 0        # gezogene Karten insgesamt (Lyra, Tolarian Archangel)
         self.drawn_mark = 0   # drawn zu Beginn des aktuellen Zugs
@@ -6063,6 +6065,16 @@ def combat_buffs(me, step, e):
             pick.pump += n
             pick.tpump += n
             e["events"].append(f"{me.name}: {c.card.name} – {pick.card.name} +{n}/+{n}")
+    for c in list(me.creatures):  # Cantankerous Captain: +P/+0, ab Gesamtstaerke N dazu Menace
+        if c.dead or not c.card.combat_pump_power:
+            continue
+        pw, kws, need = c.card.combat_pump_power
+        pick = buff_target(me, step)
+        pick.pump += pw
+        if total_power(me) >= need:
+            pick.extra |= set(kws)
+        e["events"].append(f"{me.name}: {c.card.name} – {pick.card.name} +{pw}/+0"
+                           + (f", {', '.join(kws)}" if kws[0] in pick.extra else ""))
 
 
 def buff_target(p, step, others_of=None):
@@ -6313,20 +6325,107 @@ def crew_to_block(p, attackers, step, e):
     return blocks
 
 
+def stopping_blocker(me, opp, attackers):
+    """Der gefaehrlichste Blocker, der unseren staerksten Angreifer aufhalten wuerde (toeten oder ueberleben); kann
+    ihn keiner blocken, der naechststaerkere Angreifer. Kein Ziel mit Hexproof; Ward nur, wenn wir zahlen koennen."""
+    for a in sorted(attackers, key=danger, reverse=True):
+        cands = [b for b in opp.creatures if not b.dead and not b.tapped and can_block(b, a) and not hexproof(b)
+                 and ward_ok(me, b)]
+        if cands:  # zuerst Blocker, die ihn wirklich aufhalten (toeten oder ueberleben)
+            stop = [b for b in cands if outcome(a, [b])[0] or not outcome(a, [b])[1][0]]
+            return max(stop or cands, key=danger)
+    return None
+
+
+def total_power(p):
+    """Gesamtstaerke der eigenen Kreaturen (TRK "creatures you control have total power N or greater")."""
+    return sum(c.power for c in p.creatures if not c.dead)
+
+
+def attack_power_triggers(me, opp, attackers, step, e):
+    """TRK "Whenever you attack while creatures you control have total power N or greater": einmal je Quelle, wenn
+    wir mit mindestens einer Kreatur angreifen (508.1m); die Bedingung gilt beim Ausloesen, also fuer alle Quellen
+    mit der Gesamtstaerke direkt nach dem Erklaeren. Ziele: Marke und Pump auf den gefaehrlichsten Angreifer, "can't
+    block" fuer den Blocker, der unseren staerksten Angreifer aufhalten wuerde (wie beim Tappen)."""
+    alive = [a for a in attackers if not a.dead]
+    if not alive:
+        return
+    power = total_power(me)
+    for src in [c for c in me.creatures if c.card.attack_power and not c.dead]:
+        need, atoms = src.card.attack_power
+        if power < need:
+            continue
+        for atom in atoms:
+            kind = atom[0]
+            if kind == "counter_target":
+                pick = max(alive, key=danger)
+                pick.bonus += atom[1]
+                e["events"].append(f"{me.name}: {src.card.name} – Marke auf {pick.card.name}")
+            elif kind == "counter_self":
+                src.bonus += atom[1]
+                e["events"].append(f"{me.name}: {src.card.name} – Marke auf sich")
+            elif kind == "untap_self":
+                src.tapped = False
+            elif kind == "attacker_pump":
+                pick = max(alive, key=danger)
+                pick.pump += atom[1]
+                pick.tpump += atom[2]
+                pick.extra |= set(atom[3])
+                e["events"].append(f"{me.name}: {src.card.name} – {pick.card.name} +{atom[1]}/+{atom[2]}"
+                                   + (f" {', '.join(atom[3])}" if atom[3] else ""))
+            elif kind == "no_block" and opp is not None:
+                target = stopping_blocker(me, opp, alive)
+                if target is not None and pay_ward(me, target, e):
+                    target.extra.add("cant_block_turn")
+                    e["events"].append(f"{me.name}: {src.card.name} – {target.card.name} kann nicht blocken")
+            elif kind == "impulse" and me.library:  # Kirk: nur in diesem Zug spielbar (Main 2)
+                top = me.library.pop(0)
+                me.impulse.append((top, me.own_turns))
+                me.combat_impulse.append(top)
+                e["events"].append(f"{me.name}: {src.card.name} exiliert {top.name} (in diesem Zug spielbar)")
+            elif kind == "double_power":  # 701.10b: +X/+0, X = Power
+                if src.power > 0:
+                    src.pump += src.power
+                e["events"].append(f"{me.name}: {src.card.name} – Power verdoppelt")
+
+
+def combat_impulse_main2(me, opp, step, e):
+    """Kirk, Commanding Officer: im Kampf exilierte Karten in Main 2 spielen - ein Land, wenn wir in diesem Zug noch
+    keins gelegt haben, sonst wirken, wenn das uebrige Mana reicht (wie eine Handkarte)."""
+    cards, me.combat_impulse = me.combat_impulse, []
+    for card in cards:
+        if not any(c is card for c, _l in me.impulse):
+            continue
+        if card.is_land:
+            if me.land_now is not None:
+                continue
+            _take_impulse(me, card)
+            me.lands.append(card)
+            me.land_now = card
+            tapped = land_tapped(me, enters_tapped(card, me.lands[:-1]))
+            if not tapped:
+                me.open.append(card.land_colors)
+            e["events"].append(f"{me.name}: spielt {card.name} aus dem Exil")
+            on_land(me, opp, card, step, e, with_mana=False, untapped=not tapped)
+            continue
+        if not legend_ok(me, card):
+            continue
+        me.hand.append(card)
+        if not _cast_from_open(me, card):
+            me.hand.remove(card)
+            continue
+        _take_impulse(me, card)
+        me.cast_count += 1
+        e["events"].append(f"{me.name}: wirkt {card.name} aus dem Exil")
+        _resolve(me, opp, card, step, e)
+
+
 def attack_taps(me, opp, attackers, e):
     """"Whenever ~ / equipped creature attacks, tap target creature defending player controls" (Nutzer 2026-10-20):
-    der gefaehrlichste Blocker, der unseren staerksten Angreifer aufhalten wuerde; kann ihn keiner blocken, der
-    naechststaerkere Angreifer. Kein Ziel mit Hexproof; Ward nur, wenn wir zahlen koennen."""
+    der gefaehrlichste Blocker, der unseren staerksten Angreifer aufhalten wuerde (stopping_blocker)."""
     n = sum(1 for a in attackers if a.card.attack_tap) + sum(1 for a in attackers for g in a.gear if g.equip_attack_tap)
     for _k in range(n):
-        target = None
-        for a in sorted(attackers, key=danger, reverse=True):
-            cands = [b for b in opp.creatures if not b.dead and not b.tapped and can_block(b, a) and not hexproof(b)
-                     and ward_ok(me, b)]
-            if cands:  # zuerst Blocker, die ihn wirklich aufhalten (toeten oder ueberleben)
-                stop = [b for b in cands if outcome(a, [b])[0] or not outcome(a, [b])[1][0]]
-                target = max(stop or cands, key=danger)
-                break
+        target = stopping_blocker(me, opp, attackers)
         if target is None or not pay_ward(me, target, e):
             return
         target.tapped = True
@@ -6895,6 +6994,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
                 e["events"].append(f"{me.name}: {c.card.name} – {alone.card.name} greift allein an")
     attack_keywords(me, attackers, alone, e)
     attack_taps(me, opp, attackers, e)
+    attack_power_triggers(me, opp, attackers, step, e)
     for a in attackers:  # Angriffs-Ausloeser der Kreatur selbst
         a.attacked = step
         for g in a.gear:  # Medic's Kitesail
@@ -6985,6 +7085,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     for c in main2:
         resolve(c)
     e["main2"] = [c.name for c in main2]
+    combat_impulse_main2(me, opp, step, e)
     lasting_abilities(me, opp, step, e, own_turn=True, mode="free")  # z. B. Grim Repriser nach dem Angriffs-Schaden
     exhaust_abilities(me, opp, step, e)
     life_token_instants(me, opp, step, e)

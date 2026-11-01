@@ -421,6 +421,14 @@ RULES = [
     "blocken kann, sonst Surveil. Red Alert! und Guidance Failure kosten weniger, solange wir angegriffen werden. "
     "„When this creature dies, it deals N damage to any target“: Lethal, sonst die gefährlichste Kreatur, die "
     "stirbt, sonst der Gegner.",
+    "Gesamtstärke (TRK): „Whenever you attack while creatures you control have total power 8 or greater“ löst einmal "
+    "aus, wenn wir mit mindestens einer Kreatur angreifen (508.1m); es zählt die Stärke aller eigenen Kreaturen direkt "
+    "nach dem Erklären der Angreifer, auch der zu Hause gebliebenen. Marke (Hologram Janeway) und Pump (Una "
+    "Chin-Riley) gehen an den gefährlichsten Angreifer; La'An: der Blocker, der unseren stärksten Angreifer aufhalten "
+    "würde, kann nicht blocken (wie beim Tappen); Worf verdoppelt seine Power (701.10b); Kirk exiliert die oberste "
+    "Karte, sie wird in Main 2 gespielt (ein Land, wenn wir noch keins gelegt haben, sonst wenn das übrige Mana "
+    "reicht). Cantankerous Captain: zu Kampfbeginn +1/+0 für unsere beste Angreiferin, Menace ab Gesamtstärke 8 nach "
+    "dem Pump.",
     "Alchemy (YFRA): „perpetually“ ändert die Karte selbst (bleibt in Friedhof und Hand). Conjure benannter Karten "
     "(Kraken Hatchling, Mind Stone, Aria of Flame) mit ihren Texten von Scryfall. Avoided Stairwurm −1/−1 je "
     "Kreaturenkarte in der Bibliothek; Zimone macht Schaden wie mit positiver Power und wird prepared, sobald Karten "

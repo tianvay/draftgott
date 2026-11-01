@@ -338,6 +338,13 @@ class Card(NamedTuple):
     basic_type: str = ""       # Landsuche aufs Feld (etb_basic_tapped) nur mit diesem Landtyp (z. B. "mountain")
     basic_planet: bool = False  # Landsuche aufs Feld: auch Planet-Karten ("basic land card or Planet card")
     etb_basic_hand: str = ""   # beim Betreten Basic Land ("basic") bzw. eines Typs ("plains") auf die Hand
+    # TRK Paket C
+    attack_power: tuple = ()   # "Whenever you attack while creatures you control have total power N or greater":
+    #                            (N, Effekte) mit ("counter_target", n), ("counter_self", n), ("untap_self",),
+    #                            ("attacker_pump", P, T, Schluesselwoerter), ("no_block",), ("impulse",),
+    #                            ("double_power",)
+    combat_pump_power: tuple = ()  # Kampfbeginn: eigene Kreatur +P/+0, ab Gesamtstaerke N dazu Schluesselwoerter:
+    #                                (P, Schluesselwoerter, N) (Cantankerous Captain)
 
 
 LANDCYCLE_RE = re.compile(
@@ -2684,6 +2691,11 @@ _TRK_RES = {
     "opp_loss": re.compile(r"(?:^|\. )each opponent loses (\d+) life\b"),
     "basic_spell": re.compile(r"^" + _BASIC_SEARCH),
     "basic_etb": re.compile(r"^when (?:~|this [a-z]+) enters, (?:you may )?" + _BASIC_SEARCH),
+    "attack_power": re.compile(r"^whenever you attack while creatures you control have total power (\d+) or "
+                               r"greater, (.+)$"),
+    "combat_pump_power": re.compile(r"^at the beginning of combat on your turn, target creature you control gets "
+                                    r"\+(\d+)/\+0 until end of turn\. then that creature gains ([a-z ]+?) until end "
+                                    r"of turn if creatures you control have total power (\d+) or greater\.$"),
     "basic_hand": re.compile(r"^when (?:~|this [a-z]+) enters, (?:you may )?search your library for a basic (land|plains|"
                              r"island|swamp|mountain|forest) card, reveal it, put it into your hand, then shuffle\.?$"),
 }
@@ -2713,6 +2725,39 @@ def _kw_words(text):
     words = tuple(w.strip() for w in re.split(r",? and |, ", text) if w.strip())
     return words if all(w in GRANTABLE + ("hexproof", "indestructible", "vigilance", "lifelink") for w in words) \
         else None
+
+
+_ATTACK_POWER_RES = (
+    (re.compile(r"^put (a|one|two) \+1/\+1 counters? on target creature$"),
+     lambda m: (("counter_target", _count(m.group(1))),)),
+    (re.compile(r"^put (a|one|two) \+1/\+1 counters? on (?:~|this creature)$"),
+     lambda m: (("counter_self", _count(m.group(1))),)),
+    (re.compile(r"^untap it$"), lambda m: (("untap_self",),)),
+    (re.compile(r"^target attacking creature gets \+(\d+)/\+(\d+)(?: and gains ([a-z ,]+?))? until end of turn$"),
+     lambda m: (("attacker_pump", int(m.group(1)), int(m.group(2)),
+                 _kw_words(m.group(3)) if m.group(3) else ()),) if not m.group(3) or _kw_words(m.group(3)) else None),
+    (re.compile(r"^target creature can't block this turn$"), lambda m: (("no_block",),)),
+    (re.compile(r"^exile the top card of your library$"), lambda m: (("impulse",),)),
+    (re.compile(r"^you may play that card this turn$"), lambda m: ()),
+    (re.compile(r"^double (?:~|[a-z]+)'s power until end of turn$"), lambda m: (("double_power",),)),
+)
+
+
+def _attack_power_atoms(text):
+    """Effekte von "Whenever you attack while ... total power N or greater, ..." oder None, wenn ein Satz fehlt."""
+    atoms = []
+    for sentence in re.split(r"\.\s+", text.strip().rstrip(".")):
+        for rx, build in _ATTACK_POWER_RES:
+            m = rx.match(sentence.strip())
+            if m:
+                got = build(m)
+                if got is None:
+                    return None
+                atoms += got
+                break
+        else:
+            return None
+    return tuple(atoms) or None
 
 
 def trk_land_token_traits(card, type_line):
@@ -2803,6 +2848,14 @@ def trk_land_token_traits(card, type_line):
             out["etb_basic_tapped"] = True
             out["basic_type"] = "" if m.group(1) == "land" else m.group(1)
             out["basic_planet"] = bool(m.group(2))
+        m = res["attack_power"].match(low)
+        if m:
+            atoms = _attack_power_atoms(m.group(2))
+            if atoms:
+                out["attack_power"] = (int(m.group(1)), atoms)
+        m = res["combat_pump_power"].match(low)
+        if m and _kw_words(m.group(2)):
+            out["combat_pump_power"] = (int(m.group(1)), _kw_words(m.group(2)), int(m.group(3)))
         m = res["basic_hand"].match(low)
         if m:
             out["etb_basic_hand"] = "basic" if m.group(1) == "land" else m.group(1)
