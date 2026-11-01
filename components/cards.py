@@ -382,6 +382,12 @@ class Card(NamedTuple):
     cast_untap: bool = False   # Nichtkreatur-Zauber: enttappt sich (Tal Shiar Analyst)
     artifact_shroud: bool = False  # kein Ziel von Faehigkeiten gegnerischer Artefakte (Species 8472)
     target_token: object = None  # eigene Kreatur wird Ziel des Gegners: dieses Token getappt (MACO Strike Team)
+    # TRK Paket F (Federation: X = Kreaturtypen unter den eigenen Nicht-Borg-Kreaturen)
+    fed_dig: bool = False      # Betreten: oberste X Karten ansehen, eine auf die Hand (Hoshi Sato)
+    fed_pump: tuple = ()       # "{K}, {T}: Target creature you control gets +X/+X", nur als Hexerei (Captain Archer)
+    fed_draw: bool = False     # Kampfbeginn: je fuenf Typen eine Karte, ab drei Karten zwei Marken auf alle (Sarek)
+    fed_copy: bool = False     # Instant/Sorcery aus dem Friedhof exilieren und X-mal kopieren (Infinite Diversity)
+    fed_mana: int = 0          # Land "{N}, {T}: X Mana einer Farbe" (Starfleet Academy): N
 
 
 LANDCYCLE_RE = re.compile(
@@ -2706,6 +2712,7 @@ NEW_PLANET = Card(True, 0, (), ANY_COLOR, False, False, 0, 0, name="New Planet",
 _PLANET = r"create a tapped planet land token named new planet with \"\{t\}: add one mana of any color\.\""
 _BASIC_SEARCH = (r"search your library for an? basic (land|plains|island|swamp|mountain|forest) card( or planet card)?, "
                  r"put it onto the battlefield tapped, then shuffle\.?$")
+_FED_WHERE = r", where x is the number of creature types among non-borg creatures you control"
 _TRK_RES = {
     "etb_life_land": re.compile(r"^when this land enters, you gain (\d+) life\.?$"),
     "gy_top": re.compile(r"^(?:when this [a-z]+ enters, )?put target creature card from your graveyard on top of your "
@@ -2802,6 +2809,21 @@ _TRK_RES = {
                                   r"opponents control\.$"),
     "target_token": re.compile(r"^whenever a creature you control becomes the target of a spell or ability an opponent "
                                r"controls, create a tapped (.+ token)\.$"),
+    "fed_saavik": re.compile(r"^federation — when ~ enters, (?:she|he|it) deals x damage to target attacking or "
+                             r"blocking creature an opponent controls" + _FED_WHERE + r"\.$"),
+    "fed_dig": re.compile(r"^federation — when ~ enters, look at the top x cards of your library" + _FED_WHERE + r"\. "
+                          r"put one of them into your hand and the rest on the bottom of your library in a random "
+                          r"order\.$"),
+    "fed_pump": re.compile(r"^federation — ((?:\{[^}]+\})+), \{t\}: target creature you control gets \+x/\+x until end "
+                           r"of turn" + _FED_WHERE + r"\. activate only as a sorcery\.$"),
+    "fed_draw": re.compile(r"^federation — at the beginning of combat on your turn, draw a card for every five creature "
+                           r"types among non-borg creatures you control\. if you draw three or more cards this way, put "
+                           r"two \+1/\+1 counters on each creature you control\.$"),
+    "fed_copy": re.compile(r"^federation — exile target instant or sorcery card from your graveyard\. copy that card x "
+                           r"times" + _FED_WHERE + r"\. you may cast the copies without paying their mana costs\. exile "
+                           r"~\.$"),
+    "etb_named_token": re.compile(r"^when (?:[a-z]+ )?~(?: [a-z]+)? enters, "
+                                  r"(create [a-z]+, a (?:legendary )?\d+/\d+ .+ token\.)$"),
     "basic_hand": re.compile(r"^when (?:~|this [a-z]+) enters, (?:you may )?search your library for a basic (land|plains|"
                              r"island|swamp|mountain|forest) card, reveal it, put it into your hand, then shuffle\.?$"),
 }
@@ -2895,6 +2917,10 @@ def trk_land_token_traits(card, type_line):
                             r"any color\.\"", "", effect).strip()
             sub = _sub_card(card.get("name", ""), effect)
             out["land_sac_ability"] = (cost_alternatives(m.group(1).upper()), sub, "new planet" in low)
+        m = re.match(r"^federation — \{(\d+)\}, \{t\}: choose a color\. add an amount of mana of that color equal to "
+                     r"the number of creature types among non-borg creatures you control\.$", low)
+        if m and is_land:
+            out["fed_mana"] = int(m.group(1))
         if is_land:
             continue
         m = res["food"].match(low)
@@ -3063,6 +3089,18 @@ def trk_land_token_traits(card, type_line):
         m = res["target_token"].match(low)
         if m and _tokens_in("create a " + m.group(1) + "."):
             out["target_token"] = _tokens_in("create a " + m.group(1) + ".")[0][1]
+        if res["fed_saavik"].match(low):  # Menge -4: Federation-X, dazu die eigenen Typen (sie kommt gerade)
+            own = tuple(t.lower() for t in type_line.split("—", 1)[1].split()) if "—" in type_line else ()
+            out["removal"] = ("damage", -4, (("attacking",), ("fed_self", own)), False, "etb", False)
+        for key in ("fed_dig", "fed_draw", "fed_copy"):
+            if res[key].match(low):
+                out[key] = True
+        m = res["fed_pump"].match(low)
+        if m:
+            out["fed_pump"] = cost_alternatives(m.group(1).upper())
+        m = res["etb_named_token"].match(low)
+        if m and _tokens_in(m.group(1)):  # "When Captain Archer enters" (Kurzname mit Titel)
+            out["creates_tokens"] = tuple(_tokens_in(m.group(1)))
         m = res["attack_power"].match(low)
         if m:
             atoms = _attack_power_atoms(m.group(2))

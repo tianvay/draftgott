@@ -460,6 +460,15 @@ RULES = [
     "gegnerischen Zugs, im eigenen Zug nur als Lethal. Marooned: wir zahlen die {3} immer (Lock). Species 8472 ist "
     "kein Ziel für Fähigkeiten gegnerischer Artefakte. MACO Strike Team: getapptes Officer-Token, wenn der Gegner "
     "eine eigene Kreatur als Ziel wählt.",
+    "Federation (TRK): X = Zahl der Kreaturtypen unter den eigenen Nicht-Borg-Kreaturen, im Moment der Wirkung "
+    "gezählt. Saavik kommt nur mit Flash gegen einen Angreifer, den ihr Schaden tötet (am Ende des gegnerischen Zugs "
+    "nicht). Hoshi Sato: aus den obersten X ein Land, wenn keins auf der Hand ist und weniger als 5 liegen, sonst die "
+    "teuerste bald wirkbare Karte; der Rest unter die Bibliothek. Captain Archer pumpt vor dem Angriff mit freiem Mana "
+    "den gefährlichsten anderen Angreifer um +X/+X. Sarek zieht zu Kampfbeginn je fünf Typen eine Karte. Infinite "
+    "Diversity nur mit einem Instant/Sorcery im Friedhof; kopiert wird nach dem Rang der Modi (Lethal, Removal, "
+    "Ziehen, Token, Marken, Schaden, Leben). Starfleet Academy: beim Bilden des Manas zu Zugbeginn X gezählt; lohnt "
+    "es sich (X größer als die Academy und fünf weitere Mana), gibt es X Mana der Farbe, die die Hand am meisten "
+    "braucht.",
     "Alchemy (YFRA): „perpetually“ ändert die Karte selbst (bleibt in Friedhof und Hand). Conjure benannter Karten "
     "(Kraken Hatchling, Mind Stone, Aria of Flame) mit ihren Texten von Scryfall. Avoided Stairwurm −1/−1 je "
     "Kreaturenkarte in der Bibliothek; Zimone macht Schaden wie mit positiver Power und wird prepared, sobald Karten "

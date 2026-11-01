@@ -884,6 +884,32 @@ def _mana(me, step):
 # Mana, Ziele, Removal, Abwerfen
 # ---------------------------------------------------------------------------------------------------------------------
 
+def academy_mana(p, pool, e=None):
+    """Starfleet Academy ({N}, {T}: X Mana einer Farbe, X = Federation) beim Bilden des Manas zu Zugbeginn: nur, wenn
+    X mehr bringt als die Academy und N weitere Mana. Farbe: die meisten farbigen Symbole der Handkarten; ersetzt
+    werden zuerst farblose und solche Mana, deren Farben die Hand sonst nicht braucht."""
+    for land in [l for l in p.lands if l.fed_mana]:
+        n = land.fed_mana
+        x = federation_x(p)
+        if x <= n + 1 or len(pool) < n + 1 or land.land_colors not in pool:
+            continue
+        need = Counter()
+        for c in p.hand:
+            if not c.is_land and c.alts:
+                for col, k in c.alts[0][1]:
+                    need[col] += k
+        color = max("WUBRG", key=lambda col: (need[col], -"WUBRG".index(col)))
+        rest = list(pool)
+        rest.remove(land.land_colors)
+        spare = sorted(rest, key=lambda u: (any(need[col] and col != color for col in u), len(u)))[:n]
+        for u in spare:
+            rest.remove(u)
+        pool = rest + [(color,)] * x
+        if e is not None:
+            e["events"].append(f"{p.name}: {land.name} – {x} Mana {color}")
+    return pool
+
+
 def pay(pool, alts):
     """Bezahlt Kosten aus pool (Farbtupel). Gibt den Rest zurueck (moeglichst viele Farben uebrig) oder None."""
     rems = pay_subsets(list(pool), alts) if alts else [list(pool)]
@@ -1012,7 +1038,20 @@ def _amount(spec, caster):
         return max((card.mv for card in caster.graveyard), default=0)
     if amount == -1:  # X: so viel wie Laender
         return len(caster.lands)
+    if amount == -4:  # TRK Federation (Saavik): dazu die Typen der Quelle, die gerade ins Spiel kommt
+        own = next((item[1] for item in spec[2] if item[0] == "fed_self"), ())
+        return federation_x(caster, own)
     return amount
+
+
+def federation_x(p, extra=()):
+    """TRK Federation: Zahl der Kreaturtypen unter den eigenen Nicht-Borg-Kreaturen (extra: Typen einer Kreatur, die
+    gerade ins Spiel kommt)."""
+    types = set(extra)
+    for c in p.creatures:
+        if not c.dead and "borg" not in c.card.creature_types:
+            types |= set(c.card.creature_types)
+    return len(types)
 
 
 def _matches(cond, c):
@@ -1027,6 +1066,8 @@ def _matches(cond, c):
         if kind == "pow_ge" and c.power < item[1]:
             return False
         if kind == "color" and not (colors_of_alts(c.card.alts) & set(item[1:])):
+            return False
+        if kind == "attacking" and (c.ctl is None or c.attacked != c.ctl.now):  # Saavik: angreifend
             return False
     return True
 
@@ -5129,6 +5170,27 @@ def trk_effects(me, opp, card, step, entry):
         if alive:
             pick = max(alive, key=lambda c: (can_attack(c, step), danger(c)))
             pick.extra |= set(card.grant_kw)
+    if card.fed_dig:  # Hoshi Sato: oberste X Karten, eine auf die Hand, der Rest unter die Bibliothek
+        x = federation_x(me)
+        top, me.library[:x] = me.library[:x], []
+        pick = dig_pick(me, top)
+        if pick is not None:
+            top.remove(pick)
+            me.hand.append(pick)
+            entry["events"].append(f"{me.name}: {card.name} – {pick.name} auf die Hand")
+        random.shuffle(top)
+        me.library.extend(top)
+    if card.fed_copy:  # Infinite Diversity: der wertvollste Instant/Sorcery aus dem Friedhof, X Kopien
+        cands = [g for g in me.graveyard if g.is_instant_sorcery and g is not card]
+        if card in me.graveyard:
+            list.remove(me.graveyard, card)  # "Exile Infinite Diversity": nie im Friedhof
+        if cands:
+            pick = max(cands, key=lambda g: (mode_value(me, opp, g, step), g.mv))
+            me.graveyard.remove(pick)
+            x = federation_x(me)
+            entry["events"].append(f"{me.name}: {card.name} – {x} Kopien von {pick.name}")
+            for _ in range(x):
+                _resolve_copy(me, opp, pick, step, entry, None)
     if card.etb_tap_opp:  # Vexing Drone, Enterprise NX-01, Type-2 Phaser
         tap_target(me, opp, card, card.etb_tap_opp == 2, entry)
     if card.etb_mill_land:  # Temporal Conqueror: Mill, dann ein Land aus dem Friedhof, sonst Treasure
@@ -5147,6 +5209,52 @@ def trk_effects(me, opp, card, step, entry):
         search_basics(me, 1, entry, card.name)
     elif card.etb_basic_hand:  # Oberth-Class Starship
         search_basic_type(me, card.etb_basic_hand, entry, card.name)
+
+
+def dig_pick(p, cards):
+    """Karte aus den obersten (Hoshi Sato): ein Land, wenn keins auf der Hand ist und weniger als 5 liegen, sonst die
+    teuerste Nichtland-Karte, die man bald wirken kann (wie mill_pick), sonst ein Land."""
+    lands = [c for c in cards if c.is_land]
+    if lands and not any(h.is_land for h in p.hand) and len(p.lands) < 5:
+        return lands[0]
+    rest = [c for c in cards if not c.is_land]
+    if rest:
+        return max(rest, key=lambda c: (c.mv <= len(p.lands) + 1, c.mv, c.name))
+    return lands[0] if lands else None
+
+
+def federation_pumps(p, opp, step, e):
+    """Captain Archer ({G}, {T}: +X/+X, nur als Hexerei) vor dem Angriff mit freiem Mana: der gefaehrlichste andere
+    Angreifer, wenn er angreifen kann."""
+    for src in [c for c in p.creatures if c.card.fed_pump and not c.dead]:
+        if not tap_ready(p, src):
+            continue
+        cands = [c for c in p.creatures if c is not src and not c.dead and can_attack(c, step)]
+        alts = src.card.fed_pump
+        need = min(g + sum(n for _c, n in cols) for g, cols in alts)
+        if not cands or free_units(p) < need or not _pay_open(p, alts, treasure=False):
+            continue
+        src.tapped = True
+        x = federation_x(p)
+        pick = max(cands, key=danger)
+        pick.pump += x
+        pick.tpump += x
+        e["events"].append(f"{p.name}: {src.card.name} – {pick.card.name} +{x}/+{x}")
+
+
+def federation_draws(p, step, e):
+    """Sarek zu Beginn des eigenen Kampfs: je fuenf Typen eine Karte; ab drei Karten zwei Marken auf jede eigene
+    Kreatur."""
+    for src in [c for c in p.creatures if c.card.fed_draw and not c.dead]:
+        n = federation_x(p) // 5
+        if not n:
+            continue
+        _draw(p, n)
+        e["events"].append(f"{p.name}: {src.card.name} zieht {n}")
+        if n >= 3:
+            for c in p.creatures:
+                if not c.dead:
+                    c.bonus += 2
 
 
 def use_food(p, e):
@@ -5431,6 +5539,7 @@ def main_phase_spells(me, opp):
     cards = [c for c in me.hand if not c.is_land] + copies(me)
     return [c for c in cards if not c.is_instant and (not c.flash or (c.is_aura and (c.aura_pump or c.aura_kw)))
             and legend_ok(me, c) and reanimate_ok(me, c)
+            and (not c.fed_copy or any(g.is_instant_sorcery for g in me.graveyard))
             and (not c.animate_artifact or animate_target(me) is not None)
             and (not c.rummage_spell or surplus_land(me) is not None)
             and (not c.twin or twin_host(me, opp) is not None)
@@ -5655,6 +5764,12 @@ def _use_removal(p, card, alts, is_spell, step, e, zone="hand", other=None, fx=N
     return True
 
 
+def _combat_flash_removal(card):
+    """Flash-Kreatur, deren Betreten-Removal nur angreifende Kreaturen trifft (Saavik): nur gegen einen Angriff."""
+    return card.flash and card.is_creature and card.removal and card.removal[4] == "etb" \
+        and ("attacking",) in card.removal[2]
+
+
 def respond_to_attack(dfn, att, attackers, e, step):
     """Der Verteidiger reagiert auf die Angreifer: Removal-Instants auf den gefaehrlichsten Angreifer, Flash-Kreaturen
     fuer einen guten Block oder gegen Lethal. Gibt die verbleibenden Angreifer zurueck."""
@@ -5678,6 +5793,22 @@ def respond_to_attack(dfn, att, attackers, e, step):
         if _use_removal(dfn, card, alts, is_spell, step, e, zone, att, rc, target=target):
             cast_removal(rc, dfn, att, e, step, target=target)
     alive = [a for a in attackers if a in att.creatures and not a.dead and not a.locked]
+    for card in [c for c in dfn.hand if _combat_flash_removal(c)]:  # Saavik: nur mit einem Angreifer, der stirbt
+        if not alive or not affordable(dfn, card) or not legend_ok(dfn, card):
+            continue
+        if not any(t in alive for t in valid_targets(card.removal, dfn, att)):
+            continue
+        _cast_from_open(dfn, card)
+        if try_counter(dfn, card, step, e):
+            dfn.graveyard.append(card)
+            on_cast(dfn, card, step, e)
+            continue
+        new = Creature(card, step)
+        dfn.creatures.append(new)
+        e["events"].append(f"{dfn.name}: {card.name} mit Flash gegen einen Angreifer")
+        on_cast(dfn, card, step, e)
+        creature_enters(dfn, new, step, e, att)
+        alive = [a for a in attackers if a in att.creatures and not a.dead and not a.locked]
     for card in sorted([c for c in dfn.hand if c.flash and c.is_creature], key=lambda c: -c.mv):
         if not affordable(dfn, card) or not legend_ok(dfn, card):
             continue
@@ -5719,7 +5850,7 @@ def end_step_instants(dfn, act, e, step):
             continue  # "any target" am Endstep nur gegen eine Kreatur oder als Lethal
         if _use_removal(dfn, card, alts, is_spell, step, e, zone, act, rc):
             cast_removal(rc, dfn, act, e, step)
-    for card in sorted([c for c in dfn.hand if c.flash], key=lambda c: -c.mv):
+    for card in sorted([c for c in dfn.hand if c.flash and not _combat_flash_removal(c)], key=lambda c: -c.mv):
         if card in dfn.hand and legend_ok(dfn, card) and _cast_from_open(dfn, card):
             e["events"].append(f"{dfn.name}: {card.name} mit Flash am Ende des Zugs")
             _resolve(dfn, act, card, step, e)
@@ -7104,6 +7235,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
         return [cost(c) for c in main_phase_spells(me, opp)]
     # Main 1: Landcycling, wenn ein Land fuer den Landdrop fehlt
     pool, creature_units = _mana(me, step)
+    pool = academy_mana(me, pool, e)
     if me.charges and any(c.charge_on_death for c in me.perms):  # Gardenize: {G} je Charge-Marke in der ersten Main
         pool = pool + [("G",)] * me.charges
     elif not any(c.charge_on_death for c in me.perms):
@@ -7390,6 +7522,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     # Faehigkeiten vor dem Angriff: Marken und Empower mit freiem Mana, Flying/Menace fuer den Angriff
     pre_attack_abilities(me, opp, step, e)
     artifact_menace(me, opp, step, e)
+    federation_pumps(me, opp, step, e)
     combat_draw_abilities(me, opp, step, e)
     # Kampf: zu Beginn Darklight Phoenix und Desperate Futurescribe
     phoenix_check(me, opp, step, e)
@@ -7397,6 +7530,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     combat_buffs(me, step, e)
     combat_counters(me, step, e)
     combat_exile_counters(me, step, e)
+    federation_draws(me, step, e)
     twin_for_lethal(me, opp, step, e)
     sacrifice_for_lethal(me, opp, step, e)
     anomaly_for_lethal(me, opp, step, e)
