@@ -405,6 +405,10 @@ class Card(NamedTuple):
     double_life_draw: bool = False  # Live Long and Prosper
     enchant_cast_draw: bool = False  # Dathon: Verzauberung gewirkt: ziehen, Saga: 2 Schaden an jedem Gegner
     landfall_mana: tuple = ()  # Dal R'El: Landfall, eine Mana-Einheit (Farben zur Wahl)
+    kicker: tuple = ()  # Kicker mit Mana (702.33): Zahlungswege der Zusatzkosten
+    kicker_sac: bool = False  # Eject the Warp Core: Kicker durch Opfern eines Artefakts oder einer Kreatur
+    counter_mv: int = 0  # Highly Illogical: ohne Kicker nur Zauber mit hoechstens diesem Manawert
+    mirror_copy: bool = False  # Mirror Universe Intrusion: Kopie mit Menace, mit Kicker von jeder Kreatur
 
 
 LANDCYCLE_RE = re.compile(
@@ -1153,6 +1157,7 @@ _EXTRA_COST_RE = re.compile(r"^as an additional cost to cast this spell, [^.]*\b
 _GRANT_KW_RE = re.compile(r"\btarget creature(?: you control)? (?:gets [^.]*? and )?gains ([a-z ,]+?) until end of turn"
                           r"|\btarget creature[^.]*\. it gains ([a-z ,]+?) until end of turn")
 _CHOOSE_RE = re.compile(r"^(?:when (?:~|this creature|this land) enters(?: untapped)?, )?choose (one|two|three) —$")
+_MODE_WORD_RE = re.compile(r"^[A-Z][A-Za-z' ]{0,30} — (?=[A-Z])")
 _YOU_DRAW_LIFE_RE = re.compile(r"^you draw (a|an|one|two|three) cards? and gain (\d+) life\.", re.I)
 
 
@@ -1190,6 +1195,7 @@ def modal_choices(card, type_line):
             if not bullet.strip().startswith("•"):
                 break
             text = bullet.strip().lstrip("•").strip()
+            text = _MODE_WORD_RE.sub("", text)  # TRK: "Interfere — Counter target spell ..."
             text = _YOU_DRAW_LIFE_RE.sub(lambda mm: f"Draw {mm.group(1)} card{'s' if mm.group(1) not in ('a', 'an', 'one') else ''}. "
                                          f"You gain {mm.group(2)} life.", text)
             sub_type = front.get("type_line") or card.get("type_line", "")
@@ -2872,6 +2878,13 @@ _TRK_RES = {
     "landfall_mana": re.compile(r"^landfall — whenever a land you control enters, add \{([wubrg])\} or "
                                 r"\{([wubrg])\}\.$"),
     "sac_land_draw": re.compile(r"^((?:\{[^}]+\})+), sacrifice a land: draw a card\.$"),
+    "kicker": re.compile(r"^kicker ((?:\{[^}]+\})+)$"),
+    "kicker_sac": re.compile(r"^kicker—sacrifice an artifact or creature\.$"),
+    "counter_mv_kicked": re.compile(r"^counter target spell with mana value (\d+) or less\. if this spell was "
+                                   r"kicked, instead counter target spell\.$"),
+    "mirror_copy": re.compile(r"^create a token that's a copy of target creature an opponent controls, except it "
+                             r"has menace\. if this spell was kicked, instead for each creature target opponent "
+                             r"controls, create a token that's a copy of that creature, except it has menace\.$"),
     "basic_hand": re.compile(r"^when (?:~|this [a-z]+) enters, (?:you may )?search your library for a basic (land|plains|"
                              r"island|swamp|mountain|forest) card, reveal it, put it into your hand, then shuffle\.?$"),
 }
@@ -3200,6 +3213,7 @@ def trk_land_token_traits(card, type_line):
         if m:
             out["etb_basic_hand"] = "basic" if m.group(1) == "land" else m.group(1)
         out.update(trk_flow_fields(low, res))
+        out.update(trk_kicker_fields(low, res))
     return out
 
 
@@ -3245,6 +3259,22 @@ def trk_flow_fields(low, res):
     m = res["sac_land_draw"].match(low)
     if m:
         out["draw_abilities"] = ((cost_alternatives(m.group(1).upper()), False, "sac_land"),)
+    return out
+
+
+def trk_kicker_fields(low, res):
+    """TRK Paket K (Kicker, 702.33): Felder einer Zeile."""
+    out = {}
+    m = res["kicker"].match(low)
+    if m:
+        out["kicker"] = cost_alternatives(m.group(1).upper())
+    if res["kicker_sac"].match(low):
+        out["kicker_sac"] = True
+    m = res["counter_mv_kicked"].match(low)
+    if m:
+        out["counter"], out["counter_mv"] = ("any", (), 0), int(m.group(1))
+    if res["mirror_copy"].match(low):
+        out["mirror_copy"] = True
     return out
 
 

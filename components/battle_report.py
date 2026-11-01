@@ -482,6 +482,11 @@ RULES = [
     "nur einen Clue, sonst einen nicht angreifenden Kreatur-Token mit Stärke höchstens 1, sonst ein Food. Mr. Spock "
     "verdoppelt jedes Ziehen (mehrere Spocks jeweils), Data bekommt je gezogene Karte eine Marke. Phlox zählt +1/+1- "
     "und Stun-Marken. Dal R'El gibt {R} oder {G} nur beim eigenen Landdrop.",
+    "Kicker (TRK, 702.33): Highly Illogical kontert ohne Kicker nur Zauber mit Manawert 2 oder weniger, größere "
+    "nur, wenn auch die {1}{U} des Kickers offen sind. Eject the Warp Core opfert nur, wenn −2/−2 nicht reicht "
+    "(Clue, sonst kleiner Kreatur-Token, sonst Food, wie bei Khan), dann −6/−6. Mirror Universe Intrusion kopiert "
+    "die gefährlichste gegnerische Kreatur mit Menace; mit Kicker jede, wenn das Mana reicht und der Gegner "
+    "mindestens zwei Kreaturen hat.",
     "Alchemy (YFRA): „perpetually“ ändert die Karte selbst (bleibt in Friedhof und Hand). Conjure benannter Karten "
     "(Kraken Hatchling, Mind Stone, Aria of Flame) mit ihren Texten von Scryfall. Avoided Stairwurm −1/−1 je "
     "Kreaturenkarte in der Bibliothek; Zimone macht Schaden wie mit positiver Power und wird prepared, sobald Karten "

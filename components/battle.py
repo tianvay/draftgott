@@ -1033,6 +1033,9 @@ def danger(c):
 
 def _amount(spec, caster):
     amount = spec[1]
+    kick = next((c[1] for c in spec[2] if c[0] == "kicked_sac"), 0)
+    if kick and flow_fodder(caster, _attacking(caster)) is not None:  # Eject the Warp Core: mit Kicker moeglich
+        return kick
     if amount == -2:  # "damage equal to its power": unsere staerkste Kreatur
         return max((c.power for c in caster.creatures if not c.dead), default=0)
     if amount == -3:  # hoechster Manawert im eigenen Friedhof (Hapatra)
@@ -4490,6 +4493,15 @@ def _cast_removal(card, caster, victim, e, step, target=None):
     if not pay_ward(caster, target, e):
         e["events"].append(f"{caster.name}: {card.name} ohne Ziel (Ward)")
         return
+    kick = next((c[1] for c in spec[2] if c[0] == "kicked_sac"), 0) if card.kicker_sac else 0
+    if kick:  # Eject the Warp Core (702.33): Kicker nur, wenn -2/-2 nicht reicht (selbst gesetzt)
+        amount = spec[1]
+        pick = flow_fodder(caster, _attacking(caster))
+        if target.toughness - target.damage > amount and pick is not None:
+            name = sac_fodder(caster, pick)
+            amount = kick
+            e["events"].append(f"{caster.name}: {card.name} mit Kicker ({name} geopfert)")
+            bury((caster,), e)
     label = target.label()
     maco_tokens(victim, e)
     if protect_response(victim, target, caster, e, step):
@@ -4658,6 +4670,10 @@ def try_counter(caster, spell, step, e, threat=None, effects=None):
         if n and _payable(caster, ((n, ()),)):
             continue  # weicher Counter: der Gegner wuerde zahlen
         alts = _alts(holder, c)
+        if mode.counter_mv and spell.mv > mode.counter_mv:  # Highly Illogical: nur mit Kicker (702.33)
+            if not c.kicker:
+                continue
+            alts = with_kicker(alts, c.kicker)
         if _payable(holder, alts):
             options.append((min(g + sum(k for _c, k in cols) for g, cols in alts), c.name, c, alts))
     if not options:
@@ -4669,6 +4685,17 @@ def try_counter(caster, spell, step, e, threat=None, effects=None):
     on_cast(holder, card, step, e)
     e["events"].append(f"{holder.name}: {card.name} kontert {spell.name}")
     return True
+
+
+def with_kicker(alts, kicker):
+    """Zahlungswege mit den Zusatzkosten des Kickers (601.2f)."""
+    out = set()
+    for g, cols in alts:
+        for kg, kcols in kicker:
+            both = Counter(dict(cols))
+            both.update(dict(kcols))
+            out.add((g + kg, tuple(sorted(both.items()))))
+    return tuple(sorted(out))
 
 
 def held_counter(p, orig=None):
@@ -5004,7 +5031,7 @@ def beam_versions(p, opp):
             continue
         if beam_pick(p, opp, scotty=not c.beam) is None:
             continue
-        out.append((_discounted(c._replace(alts=c.beam or c.alts), discount(p), p), c))
+        out.append((_discounted(c._replace(alts=c.beam or c.alts, from_gy=True), discount(p), p), c))
     return out
 
 
@@ -5340,6 +5367,23 @@ def flow_effects(me, opp, card, step, entry):
         _draw(me, len(me.hand))
         me.no_hand_limit = True
         entry["events"].append(f"{me.name}: {card.name} – {me.life} Leben, {len(me.hand)} Karten auf der Hand")
+    if card.mirror_copy and opp is not None:
+        mirror_copies(me, opp, card, step, entry)
+
+
+def mirror_copies(me, opp, card, step, e):
+    """Mirror Universe Intrusion: Kopie (707.2) der gefaehrlichsten gegnerischen Kreatur mit Menace; Kicker
+    (selbst gesetzt: wenn das offene Mana reicht und der Gegner mindestens zwei Kreaturen hat) von jeder."""
+    alive = [c for c in opp.creatures if not c.dead]
+    if not alive:
+        return
+    kicked = len(alive) >= 2 and bool(card.kicker) and _pay_open(me, card.kicker)
+    for t in (alive if kicked else [max(alive, key=danger)]):
+        kw = t.card.kw if "menace" in t.card.kw else t.card.kw + ("menace",)
+        token = Creature(t.card._replace(is_token=True, kw=kw), step)
+        me.creatures.append(token)
+        e["events"].append(f"{me.name}: {card.name}{' mit Kicker' if kicked else ''} – Kopie von {t.card.name}")
+        creature_enters(me, token, step, e, opp, cast=False)
 
 
 def reveal_lands(p, opp, card, step, e):
@@ -5370,7 +5414,7 @@ def reveal_lands(p, opp, card, step, e):
 
 
 def flow_fodder(p, exclude=()):
-    """Was Khan bzw. Automated Warfare System opfern (selbst gesetzt): ein Clue, sonst ein Kreatur-Token mit Staerke 1
+    """Was Khan, Automated Warfare System bzw. Eject the Warp Core opfern (selbst gesetzt): ein Clue, sonst ein Kreatur-Token mit Staerke 1
     oder weniger, der nicht angreift, sonst ein Food. Echte Kreaturen und Treasure nie."""
     if p.clues:
         return "clue"
@@ -5381,19 +5425,27 @@ def flow_fodder(p, exclude=()):
     return "food" if p.foods else None
 
 
+def _attacking(p):
+    return [c for c in p.creatures if c.attacked is not None and c.attacked == p.now]
+
+
+def sac_fodder(p, pick):
+    """Opfert, was flow_fodder gewaehlt hat; gibt den Namen zurueck."""
+    if pick == "clue":
+        p.clues -= 1
+        return "Clue"
+    if pick == "food":
+        p.foods -= 1
+        return "Food"
+    pick.dead = True
+    return pick.card.name
+
+
 def flow_sac_draw(p, card, n, e, exclude=()):
     pick = flow_fodder(p, exclude)
     if pick is None:
         return
-    if pick == "clue":
-        p.clues -= 1
-        name = "Clue"
-    elif pick == "food":
-        p.foods -= 1
-        name = "Food"
-    else:
-        pick.dead = True
-        name = pick.card.name
+    name = sac_fodder(p, pick)
     _draw(p, n)
     e["events"].append(f"{p.name}: {card.name} opfert {name} und zieht {n}")
 
@@ -5766,6 +5818,7 @@ def main_phase_spells(me, opp):
             and (not c.animate_artifact or animate_target(me) is not None)
             and (not c.rummage_spell or surplus_land(me) is not None)
             and (not c.twin or twin_host(me, opp) is not None)
+            and (not c.mirror_copy or (opp is not None and any(not x.dead for x in opp.creatures)))
             and (not c.cast_threshold or threshold(me))
             and (not c.entrust or entrust_pick(me) is not None)
             and (not c.x_counters or sum(1 for x in me.creatures if not x.dead) >= 2)
@@ -5935,8 +5988,8 @@ def held_removal(me, opp, orig=None):
 
 
 def _flashback_version(p, card):
-    """Die Karte mit ihren Flashback-Kosten (inkl. Kostensenkung bzw. Steuer)."""
-    return _discounted(card._replace(alts=card.flashback), discount(p), p)
+    """Die Karte mit ihren Flashback-Kosten (inkl. Kostensenkung bzw. Steuer); from_gy: nie gleich der Handkarte."""
+    return _discounted(card._replace(alts=card.flashback, from_gy=True), discount(p), p)
 
 
 def threshold(p):

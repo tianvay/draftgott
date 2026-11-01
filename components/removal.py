@@ -40,6 +40,7 @@ _TUCK = re.compile(r"\btarget creature or spacecraft's owner puts it on their ch
                    r"its owner may put it on top of their library")
 _DAMAGE_EACH = re.compile(r"\bdeals? (\d+) damage to each (creature|other creature)")
 _MINUS = re.compile(r"\b" + _TARGET + r" creature[^.]*? gets? -(\d+|x)/-(\d+|x)")
+_KICKED_MINUS = re.compile(r"if this spell was kicked, that creature gets -(\d+)/-\1 until end of turn instead")
 _FIGHT = re.compile(r"\bfights? (" + _TARGET + r" creature[^.]*|another target creature[^.]*)")
 _BOUNCE = re.compile(r"\breturn " + _TARGET + r" ([^.]*?) to (its|their) owner'?s'? hand")
 # Basis-Toughness 0: "has base power and toughness 0/0", "becomes a 0/0", "has base toughness 0"
@@ -238,7 +239,9 @@ def _spec_from(low, label):
         return "damage", -2, _conditions(m.group(1)), False
     if label == "−X/−X":
         m = _MINUS.search(low)
-        return "minus", (_amount_of(m.group(2)) if m else -1), _conditions(target), False
+        kicked = _KICKED_MINUS.search(low)  # Eject the Warp Core (TRK)
+        cond = _conditions(target) + (("kicked_sac", int(kicked.group(1))),) if kicked else _conditions(target)
+        return "minus", (_amount_of(m.group(2)) if m else -1), cond, False
     if label == "−1/−1-Marken":
         m = _MINUS_COUNTERS.search(low)
         amount = -3 if "graveyard" in low else (_amount_of(m.group(1)) if m else -1)
@@ -287,6 +290,9 @@ def removal_spec(card):
         spec = _spec_from(low, res[1])
         if spec and (best is None or res[0] > best[0]):
             best = (res[0], spec + (when, "you may discard a card" in low))
+    if best and any(c[0] == "kicked_sac" for c in best[1][2]) and \
+            "kicker—sacrifice an artifact or creature" not in (text or "").lower():
+        best = (best[0], best[1][:2] + (tuple(c for c in best[1][2] if c[0] != "kicked_sac"),) + best[1][3:])
     return best[1] if best else ()
 
 

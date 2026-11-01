@@ -573,6 +573,8 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
   Pattern Buffer Preservation), Länder von oben (U.S.S. Voyager, Hit It!), Suchen nach Kartentyp (Federation
   Resupply, H.M.S. Bounty), Impulse (Reckless Impulse, Silicate Surveyor), Opfern und ziehen (Khan, Automated Warfare
   System), Mr. Spock, Data, Phlox, Tricorder, Seven of Nine, Live Long and Prosper, Dathon, Dal R'El.
+- Kicker (TRK): Highly Illogical (größere Zauber nur mit Kicker), Eject the Warp Core (opfert nur, wenn −2/−2
+  nicht reicht), Mirror Universe Intrusion (Kopie mit Menace, mit Kicker von jeder gegnerischen Kreatur).
 - Removal (Destroy/Exile, Schaden, −X/−X, Edikt, Fight, Biss, Bounce, Lock, zurück in die Bibliothek,
   Massenremoval) trifft die gefährlichste passende Kreatur; Removal-Instants vor dem Angriff, gegen Angreifer oder am
   Ende des gegnerischen Zugs.
