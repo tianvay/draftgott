@@ -451,6 +451,15 @@ RULES = [
     "eigener Friedhofs-Auslöser auslöst). Sylvia Tilly exiliert zu Kampfbeginn mit freiem Mana die unnützeste "
     "Friedhofskarte (Länder zuerst, Karten mit eigener Friedhofs-Fähigkeit zuletzt). Photosynthetic Physician nur in "
     "der eigenen Main Phase.",
+    "Tappen und Stun (TRK): „When … enters, tap target creature an opponent controls (and put a stun counter on it)“ "
+    "trifft in unserem Zug den Blocker, der unseren stärksten Angreifer aufhalten würde, sonst die gefährlichste "
+    "Kreatur; Vexing Drone kommt dafür schon in Main 1. „Whenever ~ becomes tapped“ löst bei jedem Tappen aus "
+    "(Angriff, Crew, Station, Kosten), es wird nicht extra getappt. Hemmer: eigene Raumschiffe haben im eigenen Zug "
+    "Hexproof. DOT-7 Repair Squad (freies Mana, einmal je Zug) und D'Vana Tendi ({T}) enttappen in Main 2 unsere "
+    "gefährlichste getappte Kreatur als Blocker, wenn der Gegner angreifen kann. Tal Shiar Analyst pingt am Ende des "
+    "gegnerischen Zugs, im eigenen Zug nur als Lethal. Marooned: wir zahlen die {3} immer (Lock). Species 8472 ist "
+    "kein Ziel für Fähigkeiten gegnerischer Artefakte. MACO Strike Team: getapptes Officer-Token, wenn der Gegner "
+    "eine eigene Kreatur als Ziel wählt.",
     "Alchemy (YFRA): „perpetually“ ändert die Karte selbst (bleibt in Friedhof und Hand). Conjure benannter Karten "
     "(Kraken Hatchling, Mind Stone, Aria of Flame) mit ihren Texten von Scryfall. Avoided Stairwurm −1/−1 je "
     "Kreaturenkarte in der Bibliothek; Zimone macht Schaden wie mit positiver Power und wird prepared, sobald Karten "

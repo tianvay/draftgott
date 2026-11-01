@@ -46,7 +46,7 @@ _BOUNCE = re.compile(r"\breturn " + _TARGET + r" ([^.]*?) to (its|their) owner'?
 _TOUGH0 = re.compile(r"\b(" + _TARGET + r" creature[^.]*?)\b(?:has base power and toughness (?:\d+|x)/0|"
                      r"becomes an? (?:\d+|x)/0|has base toughness 0)\b")
 _MINUS_COUNTERS = re.compile(r"\bput (x|\d+) -1/-1 counters? on (?:up to one )?(?:another )?target creature")
-_LOCK = re.compile(r"\benchanted creature (?:[^.]*?\b)?(doesn't untap|can't attack|can't block)")
+_LOCK = re.compile(r"\benchanted (?:creature|permanent) (?:[^.]*?\b)?(doesn't untap|can't attack|can't block)")
 _ACTIVATED = re.compile(r"^[^:\"]*(\{[^}]+\}|\bsacrifice\b|\bdiscard\b|\bexile this\b)[^:\"]*:")
 _LOYALTY = re.compile(r"^[+−\-]?(\d+|x):")
 _TRIGGER = re.compile(r"^(when|whenever|at the beginning)\b")
@@ -274,7 +274,7 @@ def removal_spec(card):
             if _TRIGGER.match(low):
                 continue
             when = "spell"
-        elif aura and low.startswith("enchanted creature"):
+        elif aura and low.startswith(("enchanted creature", "enchanted permanent")):  # Marooned (TRK)
             when = "aura"
         else:
             head, _, body = low.partition(",")

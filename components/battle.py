@@ -45,7 +45,7 @@ _GY_TYPES = {"creature": "is_creature", "planeswalker": "is_planeswalker", "arti
 
 class Creature:
     """Eine Kreatur auf dem Feld (Karte, Schritt des Eintritts, getappt, Schaden, Marken, Pump)."""
-    __slots__ = ("card", "entered", "tapped", "_damage", "_bonus", "pump", "land_source", "attacked", "ramp_pending",
+    __slots__ = ("card", "entered", "_tapped", "_damage", "_bonus", "pump", "land_source", "attacked", "ramp_pending",
                  "base_card", "dead", "touched", "locked", "prepared",
                  "tpump", "extra", "lifted", "owner", "at_jace", "gy", "dealt", "finality", "ctl", "once", "stun", "gear",
                  "tdraw", "auras", "exile_step", "at_pw", "lasting", "crew")
@@ -96,6 +96,20 @@ class Creature:
         if value > old and self.card.damage_ramp:
             self.ramp_pending = getattr(self, "ramp_pending", 0) + value - old
         self._damage = value
+
+    @property
+    def tapped(self):
+        return self._tapped
+
+    @tapped.setter
+    def tapped(self, value):
+        """TRK "Whenever ~ becomes tapped": jedes neue Tappen (Angriff, Crew, Station, Kosten) wird vorgemerkt und in
+        tap_check ausgewertet."""
+        if value and not getattr(self, "_tapped", False) and self.card.became_tapped:
+            ctl = getattr(self, "ctl", None)
+            if ctl is not None:
+                ctl.tap_queue.append(self)
+        self._tapped = value
 
     @property
     def bonus(self):
@@ -812,6 +826,8 @@ class Player:
         self.impulse = []     # Karten im Exil, die wir spielen duerfen: (Karte, letzter eigener Zug)
         self.combat_impulse = []  # im Kampf exiliert, in Main 2 spielbar (Kirk, Commanding Officer)
         self.cube_exiled = []  # Borg Cube: exilierte Kreaturenkarten (Karte, Besitzer) zum Assimilieren
+        self.tap_queue = []   # getappte Kreaturen mit "becomes tapped"-Ausloeser (TRK)
+        self.gear_step = None  # Zug, in dem ein Equipment oder Raumschiff unter unserer Kontrolle ins Spiel kam (Sulu)
         self.own_turns = 0    # Zahl der eigenen Zuege bisher
         self.drawn = 0        # gezogene Karten insgesamt (Lyra, Tolarian Archangel)
         self.drawn_mark = 0   # drawn zu Beginn des aktuellen Zugs
@@ -1018,6 +1034,9 @@ def _matches(cond, c):
 def hexproof(c):
     """702.11b: kann nicht Ziel von Zaubern und Faehigkeiten der Gegner sein (Ruric Thar: bis zum ersten
     Kampfschaden). Effekte ohne Ziel (Schaden an allen, Edikt) treffen die Kreatur trotzdem."""
+    if c.card.station and c.ctl is not None and c.ctl.turn_start == c.ctl.now and any(
+            x.card.spacecraft_hexproof and not x.dead for x in c.ctl.creatures):  # Hemmer
+        return True
     return c.has("hexproof") or (c.card.hexproof_until_damage and not c.dealt)
 
 
@@ -2935,6 +2954,10 @@ def on_cast(p, card, step, e):
     _jace_on_cast(p, card, step, e)
     if card.choices and card.is_instant_sorcery:  # 700.2a: Modi beim Wirken gewaehlt (Permanents: card_effects)
         face_dilemma(p, step, e)
+    if not card.is_creature:  # Tal Shiar Analyst
+        for c in p.creatures:
+            if c.card.cast_untap and not c.dead:
+                c.tapped = False
     if card.is_planeswalker:  # Sparks Ablaze: der Rabatt gilt nur fuer den naechsten Planeswalker
         p.next_pw = 0
     if card.hand_exile_land and p.cc_land is not None and not any(c == card for c, _l in p.impulse):
@@ -3612,6 +3635,7 @@ def is_dying(c):
 def bury(players, e):
     """Gestorbene Kreaturen in den Friedhof (Schaden, Deathtouch, Toughness 0) und Legend-Regel. Danach Ausloeser fuer
     gestorbene eigene Kreaturen (Massacre Girl; sie sieht auch Tode im selben Moment wie ihren eigenen, 603.10a)."""
+    tap_check(players, e)
     gy_leave_check(players, e)
     for p in players:
         legend_rule(p, e)
@@ -3759,6 +3783,118 @@ def death_watchers(players, died, e):
                 charged = True
         if charged:
             update_stations(p, p.now, e)
+
+
+def tap_check(players, e):
+    """TRK "Whenever ~ becomes tapped": Shuttle Ace (Leben), Sulu (ziehen, wenn in diesem Zug ein Equipment oder
+    Raumschiff kam), Jett Reno (Surveil, ab Power 4 ziehen), Beckett Mariner (Promotion-Marken, ab 3 Schaden am
+    Gegner), Hemmer (ziehen, abwerfen)."""
+    for p in players:
+        queue, p.tap_queue = p.tap_queue, []
+        for c in queue:
+            atom = c.card.became_tapped
+            kind = atom[0]
+            if kind == "life":
+                gain_life(p, atom[1])
+            elif kind == "draw_if_gear" and p.gear_step == p.now:
+                _draw(p, atom[1])
+            elif kind == "surveil_or_draw":
+                if c.power >= atom[2]:
+                    _draw(p, atom[1])
+                else:
+                    surveil_cards(p, [atom[1]], e, c.card.name)
+            elif kind == "promotion":
+                c.once["promotion"] = c.once.get("promotion", 0) + 1
+                if c.once["promotion"] >= atom[1]:
+                    c.once["promotion"] = 0
+                    deal_noncombat(p, p.opponent, atom[2], e)
+            elif kind == "loot":
+                _draw(p)
+                gone = choose_discard(p)
+                if gone is not None:
+                    p.hand.remove(gone)
+                    p.graveyard.append(gone)
+                    discarded(p, e, [gone])
+            else:
+                continue
+            e["events"].append(f"{p.name}: {c.card.name} wird getappt")
+
+
+def tap_target(p, opp, card, stun, e):
+    """Gegnerische Kreatur tappen (und Stun-Marke) beim Betreten: in unserem Zug der Blocker, der unseren staerksten
+    Angreifer aufhalten wuerde (wie "tap target creature defending player controls"), sonst die gefaehrlichste. Kein
+    Ziel mit Hexproof; von Artefakten nicht Species 8472 (artifact_shroud); Ward nur, wenn wir zahlen koennen."""
+    if opp is None:
+        return
+    shroud = [c for c in opp.creatures if card.is_artifact and c.card.artifact_shroud]
+    for c in shroud:
+        c.extra.add("hexproof")  # nur fuer diese Wahl
+    try:
+        attackers = [c for c in p.creatures if not c.dead and can_attack(c, p.now)] if p.turn_start == p.now else []
+        target = stopping_blocker(p, opp, attackers) if attackers else None
+        if target is None:
+            cands = [c for c in opp.creatures if not c.dead and not hexproof(c) and ward_ok(p, c)
+                     and (stun or not c.tapped)]
+            target = max(cands, key=danger) if cands else None
+    finally:
+        for c in shroud:
+            c.extra.discard("hexproof")
+    if target is None or not pay_ward(p, target, e):
+        return
+    maco_tokens(opp, e)
+    target.tapped = True
+    if stun:
+        target.stun += 1
+    e["events"].append(f"{p.name}: {card.name} tappt {target.card.name}" + (" (Stun-Marke)" if stun else ""))
+
+
+def maco_tokens(victim, e):
+    """MACO Strike Team: eine eigene Kreatur wird Ziel eines gegnerischen Zaubers oder einer Faehigkeit."""
+    for c in [c for c in victim.creatures if c.card.target_token is not None and not c.dead]:
+        before = len(victim.creatures)
+        make_tokens(victim, [(1, c.card.target_token)], victim.now, e, victim.opponent, c.card.name)
+        for t in victim.creatures[before:]:
+            t.tapped = True
+
+
+def untap_abilities(p, opp, step, e):
+    """Main 2: DOT-7 Repair Squad (freies Mana, einmal je Zug) bzw. D'Vana Tendi ({T}) enttappen unsere
+    gefaehrlichste getappte Kreatur als Blocker, wenn der Gegner Kreaturen hat, die angreifen koennen."""
+    if opp is None or not any(not c.dead and c.dmg > 0 for c in opp.creatures):
+        return
+    for src in [c for c in p.creatures if c.card.untap_ability and not c.dead]:
+        alts, tap_self = src.card.untap_ability
+        tapped = [c for c in p.creatures if c.tapped and not c.dead and c is not src]
+        if not tapped:
+            return
+        if tap_self:
+            if src.tapped or not tap_ready(p, src):
+                continue
+        elif src.once.get("untap") == p.now:
+            continue
+        need = min(g + sum(n for _c, n in cols) for g, cols in alts)
+        if need and (free_units(p) < need or not _pay_open(p, alts, treasure=False)):
+            continue
+        if tap_self:
+            src.tapped = True
+        else:
+            src.once["untap"] = p.now
+        pick = max(tapped, key=danger)
+        pick.tapped = False
+        e["events"].append(f"{p.name}: {src.card.name} enttappt {pick.card.name}")
+
+
+def tap_pings(p, opp, step, e, own_turn):
+    """Tal Shiar Analyst ({T}: N Schaden an jedem Gegner): am Ende des gegnerischen Zugs (die Kreatur enttappt gleich
+    wieder), im eigenen Zug nur als Lethal."""
+    if opp is None:
+        return
+    for c in [c for c in p.creatures if c.card.tap_ping and not c.dead and not c.tapped and tap_ready(p, c)]:
+        if own_turn and opp.life > c.card.tap_ping:
+            continue
+        c.tapped = True
+        e["events"].append(f"{p.name}: {c.card.name} – {c.card.tap_ping} Schaden")
+        deal_noncombat(p, opp, c.card.tap_ping, e)
 
 
 def gy_leave_check(players, e):
@@ -4240,6 +4376,7 @@ def _cast_removal(card, caster, victim, e, step, target=None):
         e["events"].append(f"{caster.name}: {card.name} ohne Ziel (Ward)")
         return
     label = target.label()
+    maco_tokens(victim, e)
     if protect_response(victim, target, caster, e, step):
         bury((caster, victim), e)
         e["events"].append(f"{caster.name}: {card.name} ohne Ziel ({target.card.name} hat Hexproof)")
@@ -4623,6 +4760,8 @@ def permanent_enters(p, opp, card, step, e):
         attach_twin(p, opp, card, e)
     if card.saga:
         saga_enters(p, opp, card, step, e)
+    if card.equip or card.station:
+        p.gear_step = p.now
     if card.cube_assimilate:
         cube_trigger(p, opp, step, e, card.name)
     if card.reliant_return:
@@ -4990,6 +5129,8 @@ def trk_effects(me, opp, card, step, entry):
         if alive:
             pick = max(alive, key=lambda c: (can_attack(c, step), danger(c)))
             pick.extra |= set(card.grant_kw)
+    if card.etb_tap_opp:  # Vexing Drone, Enterprise NX-01, Type-2 Phaser
+        tap_target(me, opp, card, card.etb_tap_opp == 2, entry)
     if card.etb_mill_land:  # Temporal Conqueror: Mill, dann ein Land aus dem Friedhof, sonst Treasure
         _mill(me, card.etb_mill_land, entry, card.name)
         lands = [c for c in me.graveyard if c.is_land]
@@ -6188,6 +6329,8 @@ def combat_etb(me, opp, card, step, chosen=()):
                and (c.entered < step or c.card.haste)]
     if card.surveil and waiting and not me.surveilled:
         return True
+    if card.etb_tap_opp and stopping_blocker(me, opp, attackers) is not None:
+        return True  # Vexing Drone: den Blocker vor dem Angriff tappen
     if card.removal and card.removal[4] == "etb" and attackers:
         if any(any(_eats(t, a) for a in attackers) for t in valid_targets(card.removal, me, opp)):
             return True
@@ -7417,6 +7560,8 @@ def take_turn(me, opp, step, rnd, skip_draw):
     life_token_instants(me, opp, step, e)
     room_of_refuge(me, step, e)
     planet_abilities(me, opp, step, e)
+    untap_abilities(me, opp, step, e)
+    tap_pings(me, opp, step, e, own_turn=True)
     rescue_girl(me, opp, step, e)
     identity_echo(me, opp, step, e)
     prepare_abilities(me, step, e)
@@ -7463,6 +7608,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     snw_sac_draw(opp, e)  # Warp Speed mit dem Rest des offenen Manas
     land_sac_abilities(opp, me, step, e)
     tap3_draws(opp, e)
+    tap_pings(opp, me, step, e, own_turn=False)
     use_clues(opp, e)
     use_food(opp, e)
     hand_limit(me, e)

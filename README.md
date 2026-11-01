@@ -564,6 +564,8 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
 - Sterben und Friedhof (TRK): Auslöser bei Tod (Excalbian, Survivalist, Gowron, Zek, Sarcophagus) und wenn Karten
   den Friedhof verlassen (Blastoneuron, Sela, Hologram Stalker, Vash), Wirken aus dem Friedhof mit Finality (Storied
   Veteran, Overflow Submatrix), U.S.S. Reliant, Fähigkeiten aus dem Friedhof, Sylvia Tilly, Temporal Conqueror.
+- Tappen und Stun (TRK): Tappen/Stun beim Betreten, „becomes tapped“-Auslöser, Enttappen (DOT-7, D'Vana Tendi), Tal
+  Shiar Analyst, Marooned, Hemmer, Species 8472 gegen Artefakt-Fähigkeiten, MACO Strike Team.
 - Removal (Destroy/Exile, Schaden, −X/−X, Edikt, Fight, Biss, Bounce, Lock, zurück in die Bibliothek,
   Massenremoval) trifft die gefährlichste passende Kreatur; Removal-Instants vor dem Angriff, gegen Angreifer oder am
   Ende des gegnerischen Zugs.

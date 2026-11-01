@@ -372,6 +372,16 @@ class Card(NamedTuple):
     gy_bottom_ability: tuple = ()  # "{K}, {T}: Put target card from your graveyard on the bottom of your library"
     combat_exile_counter: tuple = ()  # Kampfbeginn: {K} und eine Friedhofskarte exilieren: Marke (Sylvia Tilly)
     etb_mill_land: int = 0     # Betreten: Mill N, dann ein Land aus dem Friedhof auf die Hand, sonst Treasure
+    # TRK Paket J (Tappen und Stun)
+    etb_tap_opp: int = 0       # Betreten: gegnerische Kreatur tappen (1), dazu Stun-Marke (2)
+    became_tapped: tuple = ()  # "Whenever ~ becomes tapped": ("life", n), ("draw_if_gear", n),
+    #                            ("surveil_or_draw", n, Power), ("promotion", Marken, Schaden), ("loot",)
+    spacecraft_hexproof: bool = False  # im eigenen Zug haben eigene Raumschiffe Hexproof (Hemmer)
+    untap_ability: tuple = ()  # "Untap target creature / another target permanent": (Zahlungswege, sich tappen)
+    tap_ping: int = 0          # "{T}: N damage to each opponent" (Tal Shiar Analyst)
+    cast_untap: bool = False   # Nichtkreatur-Zauber: enttappt sich (Tal Shiar Analyst)
+    artifact_shroud: bool = False  # kein Ziel von Faehigkeiten gegnerischer Artefakte (Species 8472)
+    target_token: object = None  # eigene Kreatur wird Ziel des Gegners: dieses Token getappt (MACO Strike Team)
 
 
 LANDCYCLE_RE = re.compile(
@@ -2777,6 +2787,21 @@ _TRK_RES = {
                                        r"creature\.$"),
     "etb_mill_land": re.compile(r"^when (?:~|this creature) enters, mill (two|three|four|\d+) cards\. then return a land "
                                 r"card from your graveyard to your hand\. if you can't, create a treasure token\.$"),
+    "etb_tap_opp": re.compile(r"^when (?:~|this [a-z]+) enters, tap target creature an opponent controls( and put a "
+                              r"stun counter on it)?\.$"),
+    "became_tapped": re.compile(r"^(?:[a-z ]+ — )?whenever (?:~|this creature) becomes tapped, (.+)$"),
+    "jett_dilemma": re.compile(r"^whenever you face a dilemma, put a \+1/1 counter on ~\.$"),
+    "spacecraft_hexproof": re.compile(r"^during your turn, spacecraft you control have hexproof\.$"),
+    "untap_target": re.compile(r"^((?:\{[^}]+\})+): untap target creature\. activate only as a sorcery and only once "
+                               r"each turn\.$"),
+    "untap_another": re.compile(r"^\{t\}: untap another target permanent\.$"),
+    "tap_ping": re.compile(r"^\{t\}: (?:~|this creature) deals (\d+) damage to each opponent\.$"),
+    "cast_untap": re.compile(r"^whenever you cast a noncreature spell, untap (?:~|this creature)\.$"),
+    "marooned": re.compile(r"^when this aura enters, you may pay \{(\d+)\}\. if you do, tap enchanted permanent\.$"),
+    "artifact_shroud": re.compile(r"^(?:~|this creature) can't be the target of abilities from artifact sources your "
+                                  r"opponents control\.$"),
+    "target_token": re.compile(r"^whenever a creature you control becomes the target of a spell or ability an opponent "
+                               r"controls, create a tapped (.+ token)\.$"),
     "basic_hand": re.compile(r"^when (?:~|this [a-z]+) enters, (?:you may )?search your library for a basic (land|plains|"
                              r"island|swamp|mountain|forest) card, reveal it, put it into your hand, then shuffle\.?$"),
 }
@@ -2994,6 +3019,50 @@ def trk_land_token_traits(card, type_line):
         m = res["etb_mill_land"].match(low)
         if m:
             out["etb_mill_land"] = _NUM_WORDS.get(m.group(1)) or int(m.group(1))
+        m = res["etb_tap_opp"].match(low)
+        if m:
+            out["etb_tap_opp"] = 2 if m.group(1) else 1
+        m = res["became_tapped"].match(low)
+        if m:
+            body = m.group(1)
+            bm = re.match(r"^you gain (\d+) life\.$", body)
+            if bm:
+                out["became_tapped"] = ("life", int(bm.group(1)))
+            elif body == "if an equipment or spacecraft entered the battlefield under your control this turn, draw a card.":
+                out["became_tapped"] = ("draw_if_gear", 1)
+            elif re.match(r"^surveil 1\. if (?:her|his|its) power is 4 or greater, instead draw a card\.$", body):
+                out["became_tapped"] = ("surveil_or_draw", 1, 4)
+            elif body == "draw a card, then discard a card.":
+                out["became_tapped"] = ("loot",)
+            else:
+                bm = re.match(r"^put a promotion counter on (?:her|him|it)\. then if there are (three|\d+) or more "
+                              r"promotion counters on (?:her|him|it), remove those counters and (?:she|he|it) deals "
+                              r"(\d+) damage to each opponent\.$", body)
+                if bm:
+                    out["became_tapped"] = ("promotion", _NUM_WORDS.get(bm.group(1)) or int(bm.group(1)),
+                                            int(bm.group(2)))
+        if res["jett_dilemma"].match(low):  # Druckfehler "+1/1" bei Scryfall: wie +1/+1
+            out["dilemma_trig"] = (("counter", 1),)
+        if res["spacecraft_hexproof"].match(low):
+            out["spacecraft_hexproof"] = True
+        m = res["untap_target"].match(low)
+        if m:
+            out["untap_ability"] = (cost_alternatives(m.group(1).upper()), False)
+        if res["untap_another"].match(low):
+            out["untap_ability"] = (((0, ()),), True)
+        m = res["tap_ping"].match(low)
+        if m:
+            out["tap_ping"] = int(m.group(1))
+        if res["cast_untap"].match(low):
+            out["cast_untap"] = True
+        m = res["marooned"].match(low)
+        if m:  # wir zahlen immer: das Permanent wird getappt und bleibt es (Lock)
+            out["extra_cost"] = int(m.group(1))
+        if res["artifact_shroud"].match(low):
+            out["artifact_shroud"] = True
+        m = res["target_token"].match(low)
+        if m and _tokens_in("create a " + m.group(1) + "."):
+            out["target_token"] = _tokens_in("create a " + m.group(1) + ".")[0][1]
         m = res["attack_power"].match(low)
         if m:
             atoms = _attack_power_atoms(m.group(2))
