@@ -429,6 +429,17 @@ RULES = [
     "Karte, sie wird in Main 2 gespielt (ein Land, wenn wir noch keins gelegt haben, sonst wenn das übrige Mana "
     "reicht). Cantankerous Captain: zu Kampfbeginn +1/+0 für unsere beste Angreiferin, Menace ab Gesamtstärke 8 nach "
     "dem Pump.",
+    "Borg und Artefaktkreaturen (TRK): „Artifact creatures you control have …“ gilt laufend (auch als Station-Stufe "
+    "des Borg Cube); Collective Drone zählt die eigenen Artefaktkreaturen. Hive Mind Coprocessor: nach Kampfschaden "
+    "am Spieler 1 Leben zahlen und ziehen, solange wir danach mehr als 5 Leben haben; Antagonist Incorporator: {1} "
+    "für ein Borg-Token nur mit Mana, das sonst ungenutzt bliebe. Organic Avulsion Unit: Menace vor dem Angriff mit "
+    "freiem Mana, wenn der Gegner einen ungetappten Blocker hat. Collation Trimatrix: am Ende des gegnerischen Zugs "
+    "drei ungetappte Artefaktkreaturen tappen (die schwächsten), solange wir danach mehr als 5 Leben haben. "
+    "Assimilate: die Karte kommt mit einer +1/+1-Marke als Borg-Artefaktkreatur unter unsere Kontrolle, gehört aber "
+    "weiter ihrem Besitzer. Death Is Irrelevant nimmt im Endsegment die wertvollste Kreaturenkarte aus einem Friedhof "
+    "(Manawert, dann Stärke und Widerstand, bei Gleichstand die gegnerische). Borg Cube: beim Betreten bzw. Angriff "
+    "eine mit ihm exilierte Karte assimilieren, sonst die gefährlichste gegnerische Kreatur exilieren; Affinity "
+    "für Artefaktkreaturen.",
     "Alchemy (YFRA): „perpetually“ ändert die Karte selbst (bleibt in Friedhof und Hand). Conjure benannter Karten "
     "(Kraken Hatchling, Mind Stone, Aria of Flame) mit ihren Texten von Scryfall. Avoided Stairwurm −1/−1 je "
     "Kreaturenkarte in der Bibliothek; Zimone macht Schaden wie mit positiver Power und wird prepared, sobald Karten "

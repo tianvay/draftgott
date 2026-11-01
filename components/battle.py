@@ -117,6 +117,8 @@ class Creature:
         base = self.card.power + self.bonus + self.pump
         if self.card.gy_power and self.gy is not None:
             base += sum(1 for g in self.gy if any(getattr(g, _GY_TYPES[t], False) for t in self.card.gy_power))
+        if self.card.artifact_count_power and self.ctl is not None:  # Collective Drone
+            base += sum(1 for c in self.ctl.creatures if c.card.is_artifact and not c.dead)
         if self.card.domain_power and self.ctl is not None:
             base += len({t for land in self.ctl.lands for t in land.land_types} & BASIC_TYPES)
         if self.card.snw and self.ctl is not None:  # Strange new worlds: Power = verschieden benannte Laender
@@ -778,6 +780,7 @@ class Player:
         self.ward_pool = None  # beim Planen der Main Phase: Mana des Zugs fuer die Ward-Pruefung
         self.impulse = []     # Karten im Exil, die wir spielen duerfen: (Karte, letzter eigener Zug)
         self.combat_impulse = []  # im Kampf exiliert, in Main 2 spielbar (Kirk, Commanding Officer)
+        self.cube_exiled = []  # Borg Cube: exilierte Kreaturenkarten (Karte, Besitzer) zum Assimilieren
         self.own_turns = 0    # Zahl der eigenen Zuege bisher
         self.drawn = 0        # gezogene Karten insgesamt (Lyra, Tolarian Archangel)
         self.drawn_mark = 0   # drawn zu Beginn des aktuellen Zugs
@@ -859,6 +862,8 @@ def own_reduction(p, card):
         return snw_x(p)
     if p is None or not card.self_discount:
         return 0
+    if card.self_discount[0] == "artifact_creatures":  # Borg Cube: Affinity for artifact creatures
+        return sum(1 for c in p.creatures if c.card.is_artifact and not c.dead)
     if card.self_discount[0] == "attacked":  # Red Alert!, Guidance Failure (Ziel ist dann ein Angreifer)
         return card.self_discount[1] if p.under_attack else 0
     alive = [c for c in p.creatures if not c.dead]
@@ -1312,6 +1317,113 @@ def life_token_instants(p, opp, step, e):
             e["events"].append(f"{p.name}: {card.name} in Main 2 (X = {p.gained})")
             p.cast_count += 1
             _resolve(p, opp, card, step, e)
+
+
+def assimilate(p, card, owner, step, e, source=""):
+    """TRK Assimilate: die Kreaturenkarte kommt unter p ins Spiel, mit einer +1/+1-Marke, als Borg-Artefaktkreatur
+    ohne andere Kreaturtypen; sie gehoert weiter owner (stirbt sie, geht die Originalkarte in seinen Friedhof)."""
+    new = Creature(card._replace(is_artifact=True, creature_types=("borg",)), step)
+    new.base_card = card
+    new.owner = owner if owner is not p else None
+    new.gy, new.ctl = p.graveyard, p
+    new.bonus = 1
+    p.creatures.append(new)
+    e["events"].append(f"{p.name}: {source} assimiliert {card.name}")
+    creature_enters(p, new, step, e, p.opponent, cast=False)
+
+
+def end_assimilate(p, opp, step, e):
+    """Death Is Irrelevant: zu Beginn des eigenen Endsegments die wertvollste Kreaturenkarte aus einem Friedhof
+    (Manawert, dann Staerke und Widerstand; bei Gleichstand aus dem gegnerischen)."""
+    for _src, card in static_sources(p):
+        if not card.end_assimilate:
+            continue
+        cands = [(c, q) for q in (opp, p) if q is not None for c in q.graveyard if c.is_creature]
+        if not cands:
+            continue
+        pick, owner = max(cands, key=lambda t: (t[0].mv, t[0].power + t[0].toughness, t[1] is opp))
+        owner.graveyard.remove(pick)
+        assimilate(p, pick, owner, step, e, card.name)
+
+
+def cube_trigger(p, opp, step, e, source="Borg Cube"):
+    """Borg Cube beim Betreten oder Angriff: eine mit ihm exilierte Kreaturenkarte assimilieren; sonst die
+    gefaehrlichste gegnerische Kreatur exilieren (kein Hexproof, Ward nur, wenn wir zahlen koennen)."""
+    if p.cube_exiled:
+        card, owner = p.cube_exiled.pop(0)
+        assimilate(p, card, owner, step, e, source)
+        return
+    if opp is None:
+        return
+    cands = [c for c in opp.creatures if not c.dead and not hexproof(c) and ward_ok(p, c)]
+    if not cands:
+        return
+    t = max(cands, key=danger)
+    if not pay_ward(p, t, e):
+        return
+    opp.creatures.remove(t)
+    _leave(opp, t.card)
+    check_auras(opp, e)
+    if not t.card.is_token:
+        p.cube_exiled.append((t.base_card or t.card, t.owner or opp))
+    e["events"].append(f"{p.name}: {source} – {t.card.name} ins Exil")
+
+
+def cube_attack(p, opp, attackers, step, e):
+    for a in attackers:
+        if a.card.cube_assimilate and not a.dead:
+            cube_trigger(p, opp, step, e, a.card.name)
+
+
+def artifact_hit_triggers(p, hitters, step, e):
+    """Verliehene Ausloeser "Whenever this creature deals combat damage to a player" fuer eigene Artefaktkreaturen:
+    Hive Mind Coprocessor (1 Leben zahlen, ziehen - nur, wenn wir danach mehr als 5 Leben haben) und Antagonist
+    Incorporator (Kosten zahlen, Borg-Token - nur mit Mana, das sonst ungenutzt bliebe)."""
+    sources = [card for _src, card in static_sources(p) if card.artifact_hit_draw or card.artifact_hit_token]
+    for a in [a for a in hitters if a.card.is_artifact]:
+        for card in sources:
+            if card.artifact_hit_draw and p.life - 1 > 5:
+                p.life -= 1
+                _draw(p)
+                e["events"].append(f"{p.name}: {card.name} – {a.card.name} trifft, 1 Leben, zieht")
+            if card.artifact_hit_token:
+                alts, token = card.artifact_hit_token
+                need = min(g + sum(n for _c, n in cols) for g, cols in alts)
+                if free_units(p) >= need and _pay_open(p, alts, treasure=False):
+                    make_tokens(p, [(1, token)], step, e, p.opponent, card.name)
+
+
+def artifact_menace(p, opp, step, e):
+    """Organic Avulsion Unit ({2}: Artefaktkreaturen bekommen Menace) vor dem Angriff mit freiem Mana, wenn eine
+    eigene Artefaktkreatur angreifen kann und der Gegner einen ungetappten Blocker hat."""
+    if opp is None or not any(not b.dead and not b.tapped for b in opp.creatures):
+        return
+    for src in [c for c in p.creatures if c.card.artifact_kw_ability and not c.dead]:
+        alts, kws = src.card.artifact_kw_ability
+        arts = [c for c in p.creatures if c.card.is_artifact and not c.dead]
+        if not any(can_attack(c, step) and not all(c.has(k) for k in kws) for c in arts):
+            continue
+        need = min(g + sum(n for _c, n in cols) for g, cols in alts)
+        if free_units(p) >= need and _pay_open(p, alts, treasure=False):
+            for c in arts:
+                c.extra |= set(kws)
+            e["events"].append(f"{p.name}: {src.card.name} – Artefaktkreaturen bekommen {', '.join(kws)}")
+
+
+def tap3_draws(p, e):
+    """Collation Trimatrix am Ende des gegnerischen Zugs (die Kreaturen enttappen gleich wieder): drei ungetappte
+    eigene Artefaktkreaturen tappen, ziehen und 1 Leben verlieren, solange wir danach mehr als 5 Leben haben."""
+    for src in [c for c in p.creatures if c.card.tap3_draw and not c.dead]:
+        n = src.card.tap3_draw
+        while p.life - 1 > 5:
+            ready = sorted((c for c in p.creatures if c.card.is_artifact and not c.dead and not c.tapped), key=danger)
+            if len(ready) < n:
+                break
+            for c in ready[:n]:
+                c.tapped = True
+            p.life -= 1
+            _draw(p)
+            e["events"].append(f"{p.name}: {src.card.name} – tappt {n} Artefaktkreaturen, zieht")
 
 
 def attack_planets(p, opp, step, e):
@@ -3503,7 +3615,7 @@ def bury(players, e):
                     p.graveyard.append(c.land_source)
                 elif c.base_card is not None:  # Puppet Crafting: die Artefakt-Karte (Token verschwinden)
                     if not c.base_card.is_token:
-                        p.graveyard.append(c.base_card)
+                        (c.owner or p).graveyard.append(c.base_card)
                 elif not c.card.is_token and not c.finality:
                     (c.owner or p).graveyard.append(c.card)
                 if any(a.aura_return for a in c.auras) and not c.card.is_token and c.land_source is None:
@@ -4400,6 +4512,8 @@ def permanent_enters(p, opp, card, step, e):
         attach_twin(p, opp, card, e)
     if card.saga:
         saga_enters(p, opp, card, step, e)
+    if card.cube_assimilate:
+        cube_trigger(p, opp, step, e, card.name)
     _jace_etb(p, card, step, e)
     gain_life(p, card.etb_life)
     card_effects(p, opp, card, step, e)
@@ -6160,8 +6274,8 @@ def update_stations(p, step, e):
         at, pw, tw, tiers = card.station
         reached = [t for t in tiers if st["charge"] >= t[0]]
         kws = tuple(dict.fromkeys(k for t in reached for k in t[1]))
-        conds = tuple((("always",), t[2][2] if t[2][2] == "others" else "team", t[2][0], t[2][1], ())
-                      for t in reached if t[2])
+        conds = tuple((("always",), t[2][2] if t[2][2] in ("others", "artifact") else "team", t[2][0], t[2][1],
+                       t[2][3] if len(t[2]) > 3 else ()) for t in reached if t[2])
         if at and st["charge"] >= at:
             if st["creature"] is None:
                 p.perms.remove(st["live"])
@@ -6924,6 +7038,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     hall_of_echoes(me, step, e)
     # Faehigkeiten vor dem Angriff: Marken und Empower mit freiem Mana, Flying/Menace fuer den Angriff
     pre_attack_abilities(me, opp, step, e)
+    artifact_menace(me, opp, step, e)
     combat_draw_abilities(me, opp, step, e)
     # Kampf: zu Beginn Darklight Phoenix und Desperate Futurescribe
     phoenix_check(me, opp, step, e)
@@ -6944,6 +7059,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     art_vigilance = any(c.card.artifact_vigilance for c in me.creatures if not c.dead)
     if attackers:
         attack_planets(me, opp, step, e)
+        cube_attack(me, opp, attackers, step, e)
         attack_choice_triggers(me, opp, attackers, step, e)
     for a in attackers:
         if not (a.has("vigilance") or (art_vigilance and a.card.is_artifact)):
@@ -7063,6 +7179,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     me.dealt_combat += res["player"]
     combat_life(me, opp, res)
     e["damage"] = res["player"]
+    artifact_hit_triggers(me, [a for a, _bs in blocks if res["to_player"].get(id(a))], step, e)
     for a, _bs in blocks:  # "deals combat damage to a player, draw ..." (Frostbite Pyromental)
         if (a.card.combat_draw or a.tdraw) and res["to_player"].get(id(a)):
             _draw(me, a.card.combat_draw + a.tdraw)
@@ -7110,6 +7227,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
             if c.card.endstep_counters:
                 c.bonus += c.card.endstep_counters
     confidant_end_step(me, e)
+    end_assimilate(me, opp, step, e)
     for p_ in (me, opp):  # Lyra, Tolarian Archangel: 3 oder mehr Karten in diesem Zug gezogen
         if p_.drawn - p_.drawn_mark >= 3:
             for c in list(p_.creatures):
@@ -7135,6 +7253,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     end_step_instants(opp, me, e, step)
     snw_sac_draw(opp, e)  # Warp Speed mit dem Rest des offenen Manas
     land_sac_abilities(opp, me, step, e)
+    tap3_draws(opp, e)
     use_clues(opp, e)
     use_food(opp, e)
     hand_limit(me, e)

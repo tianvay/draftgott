@@ -345,6 +345,14 @@ class Card(NamedTuple):
     #                            ("double_power",)
     combat_pump_power: tuple = ()  # Kampfbeginn: eigene Kreatur +P/+0, ab Gesamtstaerke N dazu Schluesselwoerter:
     #                                (P, Schluesselwoerter, N) (Cantankerous Captain)
+    # TRK Paket E (Borg, Artefaktkreaturen)
+    end_assimilate: bool = False  # eigenes Endsegment: Kreaturenkarte aus einem Friedhof assimilieren
+    artifact_count_power: bool = False  # Power = Zahl der eigenen Artefaktkreaturen (Collective Drone)
+    artifact_hit_draw: bool = False  # Artefaktkreaturen: Kampfschaden am Spieler, 1 Leben zahlen: ziehen
+    artifact_hit_token: tuple = ()  # Artefaktkreaturen: Kampfschaden am Spieler, Kosten zahlen: Token (Kosten, Token)
+    artifact_kw_ability: tuple = ()  # "{K}: Artifact creatures you control gain ...": (Zahlungswege, Schluesselwoerter)
+    tap3_draw: int = 0         # "Tap N untapped artifact creatures you control: draw, lose 1 life" (Trimatrix)
+    cube_assimilate: bool = False  # Borg Cube: beim Betreten/Angriff exilierte Karte assimilieren, sonst exilieren
 
 
 LANDCYCLE_RE = re.compile(
@@ -2396,6 +2404,13 @@ def foundation_traits(card, type_line):
             elif team:
                 tiers.append((int(m.group(1)), (), (int(team.group(2)), int(team.group(3)),
                                                     "others" if team.group(1) else "all")))
+            elif re.match(r"^artifact creatures you control have ([a-z ,]+?)\.$", m.group(2)) and _kw_words(
+                    m.group(2)[len("artifact creatures you control have "):-1]):  # Borg Cube
+                tiers.append((int(m.group(1)), (), (0, 0, "artifact",
+                                                    _kw_words(m.group(2)[len("artifact creatures you control have "):-1]))))
+        m = re.match(r"^artifact creatures you control have ([a-z ,]+?)\.$", low)
+        if m and _kw_words(m.group(1)) and _kw_words(m.group(1)) != ("vigilance",):  # artifact_vigilance
+            cond.append((("always",), "artifact", 0, 0, _kw_words(m.group(1))))
         m = re.match(r"^(other creatures|creatures|artifact creatures) you control get \+(\d+)/\+(\d+)\.$", low)
         if m:  # Anthem (613.4c): immer an; "artifact" nur fuer Artefaktkreaturen (auch die Quelle)
             cond.append((("always",), {"other creatures": "others", "creatures": "team"}.get(m.group(1), "artifact"),
@@ -2696,6 +2711,19 @@ _TRK_RES = {
     "combat_pump_power": re.compile(r"^at the beginning of combat on your turn, target creature you control gets "
                                     r"\+(\d+)/\+0 until end of turn\. then that creature gains ([a-z ]+?) until end "
                                     r"of turn if creatures you control have total power (\d+) or greater\.$"),
+    "end_assimilate": re.compile(r"^at the beginning of your end step, assimilate target creature card from a "
+                                 r"graveyard\.$"),
+    "artifact_count_power": re.compile(r"^(?:~|this creature)'s power is equal to the number of artifact creatures you "
+                                       r"control\.$"),
+    "artifact_hit_draw": re.compile(r"^artifact creatures you control have \"whenever this creature deals combat damage "
+                                    r"to a player, you may pay 1 life\. if you do, draw a card\.\"$"),
+    "artifact_hit_token": re.compile(r"^artifact creatures you control have \"whenever this creature deals combat damage "
+                                     r"to a player, you may pay ((?:\{[^}]+\})+)\. if you do, (create .+ token)\.\"$"),
+    "artifact_kw_ability": re.compile(r"^((?:\{[^}]+\})+): artifact creatures you control gain ([a-z ,]+?) until end "
+                                      r"of turn\.$"),
+    "tap3_draw": re.compile(r"^tap three untapped artifact creatures you control: you draw a card and lose 1 life\.$"),
+    "cube": re.compile(r"^whenever this spacecraft enters or attacks, assimilate a creature card exiled with it\. if you "
+                       r"can't, exile up to one target creature\.$"),
     "basic_hand": re.compile(r"^when (?:~|this [a-z]+) enters, (?:you may )?search your library for a basic (land|plains|"
                              r"island|swamp|mountain|forest) card, reveal it, put it into your hand, then shuffle\.?$"),
 }
@@ -2848,6 +2876,21 @@ def trk_land_token_traits(card, type_line):
             out["etb_basic_tapped"] = True
             out["basic_type"] = "" if m.group(1) == "land" else m.group(1)
             out["basic_planet"] = bool(m.group(2))
+        for key in ("end_assimilate", "artifact_count_power", "artifact_hit_draw"):
+            if res[key].match(low):
+                out[key] = True
+        if res["cube"].match(low):
+            out["cube_assimilate"] = True
+        if low == "affinity for artifact creatures":
+            out["self_discount"] = ("artifact_creatures",)
+        m = res["artifact_hit_token"].match(low)
+        if m and _tokens_in(m.group(2) + "."):
+            out["artifact_hit_token"] = (cost_alternatives(m.group(1).upper()), _tokens_in(m.group(2) + ".")[0][1])
+        m = res["artifact_kw_ability"].match(low)
+        if m and _kw_words(m.group(2)):
+            out["artifact_kw_ability"] = (cost_alternatives(m.group(1).upper()), _kw_words(m.group(2)))
+        if res["tap3_draw"].match(low):
+            out["tap3_draw"] = 3
         m = res["attack_power"].match(low)
         if m:
             atoms = _attack_power_atoms(m.group(2))

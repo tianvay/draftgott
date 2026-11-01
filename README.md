@@ -559,6 +559,8 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
   Sterbe-Auslöser mit Schaden und Token.
 - Gesamtstärke 8 (TRK): Angriffs-Auslöser „while creatures you control have total power 8 or greater“ (Marke, Pump,
   „can't block“, Power verdoppeln, Kirks exilierte Karte in Main 2) und Cantankerous Captain.
+- Borg (TRK): Schlüsselwörter für Artefaktkreaturen, Collective Drone, Hive Mind Coprocessor, Antagonist
+  Incorporator, Organic Avulsion Unit, Collation Trimatrix, Assimilate (Death Is Irrelevant, Borg Cube), Affinity.
 - Removal (Destroy/Exile, Schaden, −X/−X, Edikt, Fight, Biss, Bounce, Lock, zurück in die Bibliothek,
   Massenremoval) trifft die gefährlichste passende Kreatur; Removal-Instants vor dem Angriff, gegen Angreifer oder am
   Ende des gegnerischen Zugs.
