@@ -568,6 +568,7 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
   Shiar Analyst, Marooned, Hemmer, Species 8472 gegen Artefakt-Fähigkeiten, MACO Strike Team.
 - Federation (TRK): X = Kreaturtypen der eigenen Nicht-Borg-Kreaturen (Saavik, Hoshi Sato, Captain Archer, Sarek,
   Infinite Diversity, Starfleet Academy).
+- Quest-Missionen (TRK): Conquest, Anthropological, Vengeance, Exploratory, Support mit eigenen Quest-Marken.
 - Removal (Destroy/Exile, Schaden, −X/−X, Edikt, Fight, Biss, Bounce, Lock, zurück in die Bibliothek,
   Massenremoval) trifft die gefährlichste passende Kreatur; Removal-Instants vor dem Angriff, gegen Angreifer oder am
   Ende des gegnerischen Zugs.

@@ -388,6 +388,9 @@ class Card(NamedTuple):
     fed_draw: bool = False     # Kampfbeginn: je fuenf Typen eine Karte, ab drei Karten zwei Marken auf alle (Sarek)
     fed_copy: bool = False     # Instant/Sorcery aus dem Friedhof exilieren und X-mal kopieren (Infinite Diversity)
     fed_mana: int = 0          # Land "{N}, {T}: X Mana einer Farbe" (Starfleet Academy): N
+    # TRK Paket G (Quest-Missionen)
+    mission: tuple = ()        # (Ausloeser, Token-Card oder None, Schwelle): "artifact_enters", "noncreature_cast",
+    #                            "creature_dies", "landfall", "creature_enters"
 
 
 LANDCYCLE_RE = re.compile(
@@ -2888,6 +2891,42 @@ def _attack_power_atoms(text):
     return tuple(atoms) or None
 
 
+_QUEST = r"put a quest counter on this enchantment\. "
+_MISSION_RES = (
+    (re.compile(r"^whenever a nontoken artifact you control enters, " + _QUEST + r"(create .+ token)\. if this "
+                r"enchantment has (\w+) or more quest counters on it, create two of those tokens instead\.$"),
+     "artifact_enters"),
+    (re.compile(r"^whenever you cast a noncreature spell, " + _QUEST + r"draw a card\. then discard a card unless this "
+                r"enchantment has (\w+) or more quest counters on it\.$"), "noncreature_cast"),
+    (re.compile(r"^whenever a creature dies, " + _QUEST + r"target opponent loses 1 life\. that player loses 2 life "
+                r"instead if there are (\w+) or more quest counters on this enchantment\.$"), "creature_dies"),
+    (re.compile(r"^(?:landfall — )?whenever a land you control enters, " + _QUEST + r"then exile cards from the top of "
+                r"your library until you exile a nonland card\. you may play that card this turn\. if this enchantment "
+                r"has (\w+) or more quest counters on it, add \{r\}\{r\}\.$"), "landfall"),
+    (re.compile(r"^whenever a creature you control enters, " + _QUEST + r"put a \+1/\+1 counter on that creature\. if "
+                r"this enchantment has (\w+) or more quest counters on it, instead put two \+1/\+1 counters on that "
+                r"creature\.$"), "creature_enters"),
+)
+
+
+def _mission(low):
+    """TRK Quest-Missionen: (Ausloeser, Token oder None, Schwelle) oder ()."""
+    for rx, kind in _MISSION_RES:
+        m = rx.match(low)
+        if not m:
+            continue
+        word = m.group(m.re.groups)
+        n = _NUM_WORDS.get(word) or (int(word) if word.isdigit() else 0)
+        token = None
+        if kind == "artifact_enters":
+            tokens = _tokens_in(m.group(1) + ".")
+            if len(tokens) != 1:
+                return ()
+            token = tokens[0][1]
+        return (kind, token, n)
+    return ()
+
+
 def trk_land_token_traits(card, type_line):
     """TRK Pakete A und B: Felder fuer Card._replace (ueberschreiben die anderen Parser). Laender: Leben beim
     Betreten, Modi beim ungetappten Betreten, "Sacrifice this land"-Faehigkeiten; sonst Food, Block-/Angriffs-
@@ -3101,6 +3140,9 @@ def trk_land_token_traits(card, type_line):
         m = res["etb_named_token"].match(low)
         if m and _tokens_in(m.group(1)):  # "When Captain Archer enters" (Kurzname mit Titel)
             out["creates_tokens"] = tuple(_tokens_in(m.group(1)))
+        m = _mission(low)
+        if m:
+            out["mission"] = m
         m = res["attack_power"].match(low)
         if m:
             atoms = _attack_power_atoms(m.group(2))

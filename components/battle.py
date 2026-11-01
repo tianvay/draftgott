@@ -827,6 +827,7 @@ class Player:
         self.combat_impulse = []  # im Kampf exiliert, in Main 2 spielbar (Kirk, Commanding Officer)
         self.cube_exiled = []  # Borg Cube: exilierte Kreaturenkarten (Karte, Besitzer) zum Assimilieren
         self.tap_queue = []   # getappte Kreaturen mit "becomes tapped"-Ausloeser (TRK)
+        self.missions = []    # Quest-Missionen im Spiel: {"card": eigenes Objekt in perms, "quest": Marken}
         self.gear_step = None  # Zug, in dem ein Equipment oder Raumschiff unter unserer Kontrolle ins Spiel kam (Sulu)
         self.own_turns = 0    # Zahl der eigenen Zuege bisher
         self.drawn = 0        # gezogene Karten insgesamt (Lyra, Tolarian Archangel)
@@ -2995,6 +2996,8 @@ def on_cast(p, card, step, e):
     _jace_on_cast(p, card, step, e)
     if card.choices and card.is_instant_sorcery:  # 700.2a: Modi beim Wirken gewaehlt (Permanents: card_effects)
         face_dilemma(p, step, e)
+    if not card.is_creature:
+        mission_trigger(p, "noncreature_cast", step, e)
     if not card.is_creature:  # Tal Shiar Analyst
         for c in p.creatures:
             if c.card.cast_untap and not c.dead:
@@ -3299,6 +3302,53 @@ def _lose_land(p, land):
         p.graveyard.append(land)
 
 
+def live_missions(p):
+    """Quest-Missionen, die noch im Spiel sind (weggefallene werden entfernt)."""
+    p.missions = [m for m in p.missions if any(x is m["card"] for x in p.perms)]
+    return p.missions
+
+
+def mission_trigger(p, kind, step, e, creature=None, with_mana=True):
+    """TRK Quest-Missionen: erst eine Quest-Marke, dann der Effekt (ab der Schwelle der staerkere). Gibt Mana zurueck
+    (Exploratory Mission ab 5 Marken {R}{R}, nur wenn with_mana)."""
+    mana = []
+    for m in live_missions(p):
+        trig, token, need = m["card"].mission
+        if trig != kind:
+            continue
+        m["quest"] += 1
+        full = m["quest"] >= need
+        name = m["card"].name
+        if kind == "artifact_enters":
+            make_tokens(p, [(2 if full else 1, token)], step, e, p.opponent, name)
+        elif kind == "noncreature_cast":
+            _draw(p)
+            if not full:
+                gone = choose_discard(p)
+                if gone is not None:
+                    p.hand.remove(gone)
+                    p.graveyard.append(gone)
+                    discarded(p, e, [gone])
+            e["events"].append(f"{p.name}: {name} – zieht" + ("" if full else ", wirft ab"))
+        elif kind == "creature_dies" and p.opponent is not None:
+            p.opponent.life -= 2 if full else 1
+            e["events"].append(f"{p.name}: {name} – {p.opponent.name} verliert {2 if full else 1} Leben")
+        elif kind == "landfall":
+            while p.library:
+                top = p.library.pop(0)
+                if not top.is_land:
+                    p.impulse.append((top, p.own_turns))
+                    p.combat_impulse.append(top)
+                    e["events"].append(f"{p.name}: {name} exiliert {top.name} (in diesem Zug spielbar)")
+                    break
+            if full and with_mana:
+                mana += [("R",), ("R",)]
+        elif kind == "creature_enters" and creature is not None:
+            creature.bonus += 2 if full else 1
+            e["events"].append(f"{p.name}: {name} – Marke auf {creature.card.name}")
+    return mana
+
+
 def creature_enters(p, new, step, e, opp=None, cast=True):
     """Eine Kreatur kam ins Spiel (schon in p.creatures): Leben (Greenhouse Propagator), Marken auf eine Kreatur, die
     in diesem Zug kam (Mabel), Team-Pump nach Artefakten (Craterclaw Colossus), Land gegen Token (Tenured
@@ -3307,6 +3357,9 @@ def creature_enters(p, new, step, e, opp=None, cast=True):
     card = new.card
     new.gy, new.ctl = p.graveyard, p
     new.bonus += card.enters_counters  # "enters with N +1/+1 counters" (614.1c)
+    mission_trigger(p, "creature_enters", step, e, creature=new)  # Support Mission
+    if card.is_artifact and not card.is_token:  # Conquest Mission
+        mission_trigger(p, "artifact_enters", step, e)
     if card.x_counters:  # "enters with X +1/+1 counters" (Guiding Hydra), X beim Wirken festgelegt
         for i, (xc, xv) in enumerate(p.x_values):
             if xc == card:
@@ -3599,6 +3652,7 @@ def on_land(me, opp, land, step, e, with_mana=True, untapped=False):
     if land.surveil:
         surveil_cards(me, [land.surveil], e, land.name)
     gain_life(me, land.etb_life)  # Planeten-Laender
+    mana += mission_trigger(me, "landfall", step, e, with_mana=with_mana)
     if land.choices and (untapped or not land.modes_untapped):
         card_effects(me, opp, land, step, e)
     for ef in once_effects(land):
@@ -3759,6 +3813,9 @@ def bury(players, e):
         make_tokens(p, list(card.death_tokens), p.now, e, p.opponent, card.name)
     if died:
         death_watchers(players, died, e)
+        for p in players:
+            for _ in died:
+                mission_trigger(p, "creature_dies", p.now, e)
     for p, n, name in bolts:
         death_bolt(p, n, name, e)
     if bolts:
@@ -4803,6 +4860,15 @@ def permanent_enters(p, opp, card, step, e):
         saga_enters(p, opp, card, step, e)
     if card.equip or card.station:
         p.gear_step = p.now
+    if card.mission:  # eigenes Objekt je Mission, damit jede ihre Marken zaehlt (400.7)
+        live = card._replace()
+        for i in range(len(p.perms) - 1, -1, -1):
+            if p.perms[i] is card:
+                p.perms[i] = live
+                break
+        p.missions.append({"card": live, "quest": 0})
+    if card.is_artifact and not card.is_token:
+        mission_trigger(p, "artifact_enters", step, e)
     if card.cube_assimilate:
         cube_trigger(p, opp, step, e, card.name)
     if card.reliant_return:

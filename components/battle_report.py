@@ -469,6 +469,12 @@ RULES = [
     "Ziehen, Token, Marken, Schaden, Leben). Starfleet Academy: beim Bilden des Manas zu Zugbeginn X gezählt; lohnt "
     "es sich (X größer als die Academy und fünf weitere Mana), gibt es X Mana der Farbe, die die Hand am meisten "
     "braucht.",
+    "Quest-Missionen (TRK): jede Mission zählt ihre eigenen Quest-Marken; erst die Marke, dann der Effekt, ab der "
+    "Schwelle der stärkere. Conquest: Borg-Token, wenn ein nicht-Token-Artefakt kommt; Anthropological: bei jedem "
+    "Nichtkreatur-Zauber ziehen, bis 3 Marken danach abwerfen; Vengeance: bei jedem Tod (auch gegnerischer Kreaturen) "
+    "verliert der Gegner 1 Leben, ab 7 Marken 2; Exploratory: bei Landfall bis zur ersten Nichtland-Karte exilieren, "
+    "die in Main 2 gespielt wird (wie bei Kirk), ab 5 Marken {R}{R}; Support: Marke auf jede eigene Kreatur, die "
+    "kommt, ab 5 Marken zwei.",
     "Alchemy (YFRA): „perpetually“ ändert die Karte selbst (bleibt in Friedhof und Hand). Conjure benannter Karten "
     "(Kraken Hatchling, Mind Stone, Aria of Flame) mit ihren Texten von Scryfall. Avoided Stairwurm −1/−1 je "
     "Kreaturenkarte in der Bibliothek; Zimone macht Schaden wie mit positiver Power und wird prepared, sobald Karten "
