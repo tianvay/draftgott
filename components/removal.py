@@ -38,7 +38,7 @@ _TUCK = re.compile(r"\btarget creature or spacecraft's owner puts it on their ch
                    r"library|\bthe owner of (?:up to one )?(?:other )?target (nonland permanent|creature|permanent)[^.]* puts "
                    r"it on (?:their choice of )?the top or bottom of their library|\bchoose target nonland permanent\. "
                    r"its owner may put it on top of their library")
-_DAMAGE_EACH = re.compile(r"\bdeals? (\d+) damage to each (creature|other creature)")
+_DAMAGE_EACH = re.compile(r"\bdeals? (\d+) damage to each (?:opponent and each )?(creature|other creature)")
 _MINUS = re.compile(r"\b" + _TARGET + r" creature[^.]*? gets? -(\d+|x)/-(\d+|x)")
 _KICKED_MINUS = re.compile(r"if this spell was kicked, that creature gets -(\d+)/-\1 until end of turn instead")
 _FIGHT = re.compile(r"\bfights? (" + _TARGET + r" creature[^.]*|another target creature[^.]*)")

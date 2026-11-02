@@ -415,6 +415,21 @@ class Card(NamedTuple):
     kira_pump: int = 0  # Kira Nerys: andere eigene Kreatur kommt: +N/+N bis Rundenende
     nog_levels: bool = False  # Nog als Rogue: {1} Scout, dann {3} Officer
     nog_officer: bool = False  # Nog als Officer: Laender aus dem Friedhof, ein zusaetzlicher Landdrop
+    ally_enter_counter: int = 0  # Deanna Troi: andere eigene Kreaturen kommen mit N zusaetzlichen +1/+1-Marken
+    officer_token_power: int = 0  # Academy Instructor: +N/+0 je eigenem Officer-Token
+    etb_mana: int = 0  # Modus beim Betreten: N Mana einer Farbe (Culber and Stamets)
+    sac_klingon: tuple = ()  # General Chang: Kosten von "Sacrifice a creature: Marke auf jeden Klingonen"
+    main1_counter_mana: bool = False  # Jadzia Dax: Main 1 Marke auf sich, dann {G} je Marke
+    channel_counter: tuple = ()  # Jadzia Dax (Transfer Symbiont): (Kosten, N Marken) aus der Hand abwerfen
+    creature_enter_life: int = 0  # Sickbay: eigene Kreatur kommt: N Leben
+    lead_pump: tuple = ()  # Picard, Leading by Example: Kosten von "{T}: andere Kreatur +X/+X" (X = seine Power)
+    tea_ability: tuple = ()  # Tea, Earl Grey, Hot: (Kosten, Schaden an den Gegner, Leben) beim Opfern
+    end_discard: int = 0  # Armus: im eigenen Endsegment wirft der Gegner N Karten ab
+    pump_death_draw: bool = False  # A Good Day to Die: stirbt die Kreatur in diesem Zug, ziehen
+    treasure_ability: tuple = ()  # Savvy Profiteer: Kosten von "{T}: Treasure"
+    quark: bool = False  # Quark: Treasure in jedem Upkeep, Treasure duerfen nicht geopfert werden
+    team_mana: tuple = ()  # Rok-Tahk: eigene Kreaturen haben "{T}: Add ..." (Mana-Einheiten)
+    dukat: bool = False  # Gul Dukat: in jedem Endsegment verliert der Gegner sein in diesem Zug verlorenes Leben
 
 
 LANDCYCLE_RE = re.compile(
@@ -1162,7 +1177,7 @@ _EXTRA_COST_RE = re.compile(r"^as an additional cost to cast this spell, [^.]*\b
 
 _GRANT_KW_RE = re.compile(r"\btarget creature(?: you control)? (?:gets [^.]*? and )?gains ([a-z ,]+?) until end of turn"
                           r"|\btarget creature[^.]*\. it gains ([a-z ,]+?) until end of turn")
-_CHOOSE_RE = re.compile(r"^(?:when (?:~|this creature|this land) enters(?: untapped)?, )?choose (one|two|three) —$")
+_CHOOSE_RE = re.compile(r"^(?:when (?:~|this creature|this land) enters?(?: untapped)?, )?choose (one|two|three) —$")
 _MODE_WORD_RE = re.compile(r"^[A-Z][A-Za-z' ]{0,30} — (?=[A-Z])")
 _YOU_DRAW_LIFE_RE = re.compile(r"^you draw (a|an|one|two|three) cards? and gain (\d+) life\.", re.I)
 
@@ -2325,7 +2340,8 @@ _F_RES = {
                               r"(?: and ha(?:s|ve) (.+?))? as long as you gained life this turn\.$"),
     "cond_gy": re.compile(r"^as long as there are " + _N + r" or more creature cards in your graveyard, "
                           r"(?:~|this creature) gets \+(\d+)/\+(\d+)\.$"),
-    "counter_kw": re.compile(r"^(?:creatures you control with \+1/\+1 counters on them have|each creature you control "
+    "counter_kw": re.compile(r"^(?:creatures you control with (?:\+1/\+1 )?counters on them have|each creature you "
+                             r"control "
                              r"with a \+1/\+1 counter on it has) (.+?)\.$"),
     "combat_counter": re.compile(r"^at the beginning of combat on your turn, put " + _N + r" \+1/\+1 counters? on "
                                  r"target creature you control\.(?: it gains (.+?) until end of turn\.)?$"),
@@ -2905,6 +2921,43 @@ _TRK_RES = {
                              r'turns\."$'),
     "doctor": re.compile(r"^(?:put a \+1/\+1 counter on target creature you control\. )?untap it\. until end of "
                         r"turn, it gets \+1/\+1 and becomes a doctor\.$"),
+    "lf_self_counter": re.compile(r"^landfall — whenever a land you control enters, put (a|one|two|\d+) \+1/\+1 "
+                                 r"counters? on (?:~|this creature)\.$"),
+    "lf_target_counter": re.compile(r"^landfall — whenever a land you control enters, put (a|one|two|\d+) "
+                                   r"\+1/\+1 counters? on target creature you control\.$"),
+    "lf_burnham": re.compile(r"^landfall — whenever a land you control enters, (?:~|(?:captain|~) burnham) deals (\d+) "
+                            r"damage to each opponent\. if this is the second time this ability has resolved this "
+                            r"turn, put a \+1/\+1 counter on (?:~|(?:captain|~) burnham)\.$"),
+    "ally_enter_counter": re.compile(r"^other creatures you control enter with an additional \+1/\+1 counter on "
+                                    r"them\.$"),
+    "officer_token_power": re.compile(r"^(?:~|this creature) gets \+1/\+0 for each officer token you control\.$"),
+    "distribute_two": re.compile(r"^distribute two \+1/\+1 counters among one or two target creatures\.$"),
+    "etb_mana": re.compile(r"^when (?:~|this creature) enters, add two mana of any one color\.$"),
+    "sac_klingon": re.compile(r"^((?:\{[^}]+\})+), sacrifice a creature: put a \+1/\+1 counter on each klingon "
+                             r"you control\.$"),
+    "main1_counter_mana": re.compile(r"^at the beginning of your first main phase, put a \+1/\+1 counter on "
+                                    r"(?:~|jadzia dax), then add an amount of \{g\} equal to the number of counters "
+                                    r"on her\.$"),
+    "channel_counter": re.compile(r"^transfer symbiont — ((?:\{[^}]+\})+), discard this card: put (two|\d+) "
+                                 r"\+1/\+1 counters on target creature\.$"),
+    "creature_enter_life": re.compile(r"^whenever a creature you control enters, you gain (\d+) life\.$"),
+    "sickbay_counters": re.compile(r"^at the beginning of combat on your turn, put x \+1/\+1 counters on target "
+                                  r"creature you control, where x is one plus the amount of life you gained this "
+                                  r"turn\.$"),
+    "lead_pump": re.compile(r"^((?:\{[^}]+\})+), \{t\}: another target creature gets \+x/\+x until end of turn, "
+                           r"where x is (?:~|picard)'s power\. activate only as a sorcery\.$"),
+    "tea": re.compile(r"^((?:\{[^}]+\})+), \{t\}, sacrifice this artifact: choose one —$"),
+    "khan_face": re.compile(r"^when ~ enters, (?:he|she|it|~) deals (\d+) damage to each opponent and each creature "
+                           r"your opponents control\.$"),
+    "crystal": re.compile(r"^when (?:~|this creature) enters, if you cast it, destroy all nonartifact creatures\.$"),
+    "end_discard": re.compile(r"^at the beginning of your end step, target opponent discards (two|\d+) cards\.$"),
+    "death_draw": re.compile(r"(?:^|\. )when that creature dies this turn, you draw a card\.$"),
+    "treasure_ability": re.compile(r"^((?:\{[^}]+\})+), \{t\}: create a treasure token\.$"),
+    "quark": re.compile(r"^(?:you can't sacrifice treasure tokens|at the beginning of each upkeep, create a treasure "
+                       r"token)\.$"),
+    "team_mana": re.compile(r'^creatures you control have "\{t\}: add ((?:\{[wubrg]\})+)\."$'),
+    "dukat": re.compile(r"^at the beginning of each end step, each opponent loses life equal to the life that "
+                       r"player lost this turn\. you gain life equal to the life lost this way\.$"),
     "mirror_copy": re.compile(r"^create a token that's a copy of target creature an opponent controls, except it "
                              r"has menace\. if this spell was kicked, instead for each creature target opponent "
                              r"controls, create a token that's a copy of that creature, except it has menace\.$"),
@@ -3241,6 +3294,7 @@ def trk_land_token_traits(card, type_line):
         out.update(trk_flow_fields(low, res))
         out.update(trk_kicker_fields(low, res))
         out.update(trk_tap_fields(low, res))
+        out.update(trk_r12_fields(low, res, lines))
     return out
 
 
@@ -3323,6 +3377,72 @@ def trk_tap_fields(low, res):
         out["nog_levels"] = True
     if res["doctor"].match(low):  # I'm a Doctor, Not a . . .: Marke, enttappen, +1/+1 (der Kreaturtyp zaehlt nicht)
         out["modes"], out["pump_tough"], out["untap_target"] = ((("counter", 1, 1), ("pump", 1)),), ((1,),), True
+    return out
+
+
+def trk_r12_fields(low, res, lines):
+    """TRK Pakete R1 (Marken, Landfall) und R2 (Schaden, Leben, Mana): Felder einer Zeile."""
+    out = {}
+    m = res["lf_self_counter"].match(low)
+    if m:
+        out["landfall"] = (("self_counter", _count(m.group(1))),)
+    m = res["lf_target_counter"].match(low)
+    if m:
+        out["landfall"] = (("target_counter", _count(m.group(1))),)
+    m = res["lf_burnham"].match(low)
+    if m:
+        out["landfall"] = (("face", int(m.group(1))), ("second_counter", 1))
+    if res["ally_enter_counter"].match(low):
+        out["ally_enter_counter"] = 1
+    if res["officer_token_power"].match(low):
+        out["officer_token_power"] = 1
+    if res["distribute_two"].match(low):  # Pure Energy: beide Marken auf die beste Kreatur
+        out["modes"] = ((("counter", 2, 1),),)
+    if res["etb_mana"].match(low):
+        out["etb_mana"] = 2
+    m = res["sac_klingon"].match(low)
+    if m:
+        out["sac_klingon"] = cost_alternatives(m.group(1).upper())
+    if res["main1_counter_mana"].match(low):
+        out["main1_counter_mana"] = True
+    m = res["channel_counter"].match(low)
+    if m:
+        out["channel_counter"] = (cost_alternatives(m.group(1).upper()), _count(m.group(2)))
+    m = res["creature_enter_life"].match(low)
+    if m:
+        out["creature_enter_life"] = int(m.group(1))
+    if res["sickbay_counters"].match(low):  # X = 1 + Lebensgewinn in diesem Zug
+        out["combat_counter"] = (-1, ())
+    m = res["lead_pump"].match(low)
+    if m:
+        out["lead_pump"] = cost_alternatives(m.group(1).upper())
+    m = res["tea"].match(low)
+    if m:  # Tea, Earl Grey, Hot: die Modi stehen in den Aufzaehlungspunkten
+        text = " ".join(l for _r, l in lines)
+        dmg = re.search(r"deals (\d+) damage to target opponent", text)
+        life = re.search(r"you gain (\d+) life", text)
+        out["tea_ability"] = (cost_alternatives(m.group(1).upper()), int(dmg.group(1)) if dmg else 0,
+                              int(life.group(1)) if life else 0)
+    m = res["khan_face"].match(low)
+    if m:
+        out["modes"] = ((("face", int(m.group(1))),),)
+    if res["crystal"].match(low):
+        out["removal"] = ("sweep", 0, (("nonartifact",),), False, "etb", False)
+    m = res["end_discard"].match(low)
+    if m:
+        out["end_discard"] = _count(m.group(1))
+    if res["death_draw"].search(low):
+        out["pump_death_draw"] = True
+    m = res["treasure_ability"].match(low)
+    if m:
+        out["treasure_ability"] = cost_alternatives(m.group(1).upper())
+    if res["quark"].match(low):
+        out["quark"] = True
+    m = res["team_mana"].match(low)
+    if m:
+        out["team_mana"] = tuple((c.upper(),) for c in re.findall(r"\{([wubrg])\}", m.group(1)))
+    if res["dukat"].match(low):
+        out["dukat"] = True
     return out
 
 

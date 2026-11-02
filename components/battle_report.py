@@ -494,6 +494,13 @@ RULES = [
     "teuerste Raumschiff. Kira Nerys: Kreaturen, die nach dem Erklären der Angreifer kommen, greifen mit an. Nog "
     "steigt in Main 2 mit sonst ungenutztem Mana auf (Scout, dann Officer: Länder aus dem Friedhof, ein Landdrop "
     "mehr). Lwaxana Troi ist noch nicht modelliert.",
+    "Marken und Leben (TRK): Pure Energy legt beide Marken auf die beste Kreatur; Picard, Leading by Example "
+    "pumpt in Main 1 mit freiem Mana die gefährlichste andere angriffsbereite Kreatur (Picard greift dann nicht "
+    "an); Jadzia Dax gibt ihr {G} in Main 1, Transfer Symbiont ist ein Kampftrick aus der Hand; General Chang "
+    "opfert wie Edgar (gegen Removal, sterbende Blocker). Crystalline Entity wird nur gewirkt, wenn der Gegner "
+    "mindestens so viel Manawert an Nichtartefakt-Kreaturen verliert wie wir. Tea, Earl Grey, Hot und Savvy "
+    "Profiteer am Ende des gegnerischen Zugs mit sonst ungenutztem Mana; Tea macht Schaden, außer wir haben 10 "
+    "oder weniger Leben und der Schaden ist nicht tödlich. Quark: Treasure in jedem Upkeep, nicht nutzbar.",
     "Alchemy (YFRA): „perpetually“ ändert die Karte selbst (bleibt in Friedhof und Hand). Conjure benannter Karten "
     "(Kraken Hatchling, Mind Stone, Aria of Flame) mit ihren Texten von Scryfall. Avoided Stairwurm −1/−1 je "
     "Kreaturenkarte in der Bibliothek; Zimone macht Schaden wie mit positiver Power und wird prepared, sobald Karten "

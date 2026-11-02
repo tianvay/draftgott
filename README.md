@@ -577,6 +577,10 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
   nicht reicht), Mirror Universe Intrusion (Kopie mit Menace, mit Kicker von jeder gegnerischen Kreatur).
 - Tappen (TRK): Brad Boimler, Captain Jean-Luc Picard, Worf, Honor-Bound Warrior (Main 2 wie Station), Kira Nerys,
   Nog (Scout, Officer), I'm a Doctor, Not a . . .; Lwaxana Troi noch offen.
+- Marken, Landfall, Leben und Mana (TRK): Xindi Surveyors, Syndicate Liquidators, Captain Michael Burnham, Deanna
+  Troi, Academy Instructor, Dominion Supervisor, Pure Energy, Culber and Stamets, General Chang, Jadzia Dax,
+  Sickbay, Picard, Leading by Example, Tea, Earl Grey, Hot, Khan, Despot by Design, Crystalline Entity, Armus,
+  A Good Day to Die, Savvy Profiteer, Quark, Rok-Tahk, Gul Dukat.
 - Removal (Destroy/Exile, Schaden, −X/−X, Edikt, Fight, Biss, Bounce, Lock, zurück in die Bibliothek,
   Massenremoval) trifft die gefährlichste passende Kreatur; Removal-Instants vor dem Angriff, gegen Angreifer oder am
   Ende des gegnerischen Zugs.

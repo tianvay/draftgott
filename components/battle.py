@@ -135,6 +135,9 @@ class Creature:
             base += sum(1 for g in self.gy if any(getattr(g, _GY_TYPES[t], False) for t in self.card.gy_power))
         if self.card.treasure_pump and self.ctl is not None:  # Grand Nagus Zek
             base += self.ctl.treasures
+        if self.card.officer_token_power and self.ctl is not None:  # Academy Instructor
+            base += self.card.officer_token_power * sum(1 for c in self.ctl.creatures if c.card.is_token and not c.dead
+                                                        and "officer" in c.card.creature_types)
         if self.card.artifact_count_power and self.ctl is not None:  # Collective Drone
             base += sum(1 for c in self.ctl.creatures if c.card.is_artifact and not c.dead)
         if self.card.domain_power and self.ctl is not None:
@@ -838,6 +841,7 @@ class Player:
         self.counter_boost = None  # Brad Boimler: Schritt, in dem er getappt wurde (bis Rundenende eine Marke mehr)
         self.kira_join = None  # Kira Nerys: waehrend unseres Angriffs angreifend gekommene Kreaturen
         self.worf_taps = (None, 0, ())  # Worf: (Schritt, getappte Clues, getappte Artefakte) in diesem Zug
+        self.life_mark = LIFE  # Leben zu Beginn des laufenden Zugs (Gul Dukat: in diesem Zug verlorenes Leben)
         self.trap_links = []  # Exil bis zum Verlassen (610.3): {"trap", "card", "owner", "creature"}
         self.lock_links = []  # Lock-Auras dieses Spielers: {"aura", "creature"}
         self.predrawn = Counter()  # Main Phase: Karten, deren "draw N" die Planung (resolve_draws) schon gezogen hat
@@ -876,9 +880,11 @@ def _mana(me, step):
         else:
             pool.append(land.land_colors)
     pool += [u for card in me.perms for u in card.mana_src]
+    team = tuple(u for c in me.creatures if not c.dead for u in c.card.team_mana)  # Rok-Tahk
     creature_units = [(u, i) for i, c in enumerate(me.creatures)
-                      if c.card.mana_src and not c.tapped and (c.entered < step or c.card.haste or c.has("haste"))
-                      for u in c.card.mana_src]
+                      if (c.card.mana_src or team) and not c.tapped
+                      and (c.entered < step or c.card.haste or c.has("haste"))
+                      for u in c.card.mana_src + team]
     powers = len({c.power for c in me.creatures if not c.dead})
     creature_units += [(ANY_COLOR, i) for i, c in enumerate(me.creatures)  # Loot, the Nexus
                        if c.card.nexus_mana and not c.tapped and not c.dead
@@ -987,6 +993,8 @@ def _sculptures(p):
 
 
 def treasure_count(p):
+    if any(c.card.quark and not c.dead for c in p.creatures):  # Quark: Treasure duerfen nicht geopfert werden
+        return 0
     return p.treasures + len(_sculptures(p))
 
 
@@ -2067,6 +2075,9 @@ def upkeep_triggers(me, opp, step, e):
         if c.card.upkeep_surveil and not c.dead:
             surveil_cards(me, [c.card.upkeep_surveil], e, c.card.name)
     for p in (me, opp):
+        for c in list(p.creatures):  # Quark: zu Beginn jedes Upkeeps ein Treasure
+            if c.card.quark and not c.dead:
+                artifact_tokens(p, "treasure", 1, step, e)
         for c in list(p.creatures):
             if c.card.upkeep_token is not None and not c.dead:
                 make_tokens(p, [(1, c.card.upkeep_token)], step, e, p.opponent, c.card.name)
@@ -3366,6 +3377,13 @@ def mission_trigger(p, kind, step, e, creature=None, with_mana=True):
     return mana
 
 
+def ally_enters(p, new):
+    """Deanna Troi: andere eigene Kreaturen kommen mit zusaetzlichen Marken (614.1c); Sickbay: Leben."""
+    new.bonus += sum(c.card.ally_enter_counter for c in p.creatures if c is not new and not c.dead)
+    for card in p.perms:
+        gain_life(p, card.creature_enter_life)
+
+
 def kira_enters(p, new):
     """Kira Nerys: eine andere eigene Kreatur kommt: +N/+N bis Rundenende; kommt sie waehrend unseres Angriffs (nach
     dem Erklaeren der Angreifer, vor den Blockern), kommt sie getappt und angreifend (506.3, ohne Angriffs-Ausloeser)."""
@@ -3388,6 +3406,7 @@ def creature_enters(p, new, step, e, opp=None, cast=True):
     card = new.card
     new.gy, new.ctl = p.graveyard, p
     new.bonus += card.enters_counters  # "enters with N +1/+1 counters" (614.1c)
+    ally_enters(p, new)
     kira_enters(p, new)
     mission_trigger(p, "creature_enters", step, e, creature=new)  # Support Mission
     if card.is_artifact and not card.is_token:  # Conquest Mission
@@ -3680,6 +3699,18 @@ def on_land(me, opp, land, step, e, with_mana=True, untapped=False):
                     c.tpump += atom[2]
                 elif atom[0] == "tokens":  # Cleveland Booker
                     make_tokens(me, list(atom[1]), step, e, opp, c.card.name)
+                elif atom[0] == "self_counter":  # Xindi Surveyors
+                    c.bonus += atom[1]
+                elif atom[0] == "target_counter":  # Syndicate Liquidators: wie combat_counters
+                    pick = buff_target(me, step)
+                    if pick is not None:
+                        pick.bonus += atom[1]
+                elif atom[0] == "second_counter":  # Captain Burnham: beim zweiten Aufloesen in diesem Zug
+                    at, n = c.once.get("landfall", (None, 0))
+                    n = n + 1 if at == me.now else 1
+                    c.once["landfall"] = (me.now, n)
+                    if n == 2:
+                        c.bonus += atom[1]
         deal_noncombat(me, opp, face, e)
     if land.surveil:
         surveil_cards(me, [land.surveil], e, land.name)
@@ -3814,6 +3845,8 @@ def bury(players, e):
                     returns.append((c.owner or p, c.card))  # Ferocity of the Hunt
                 if c.card.death_draw:  # Simulacrum Shaper
                     _draw(p, c.card.death_draw)
+                if c.once.get("death_draw") == p.now:  # A Good Day to Die
+                    _draw(p)
                 if any(x.charge_on_death for x in p.perms):  # Gardenize
                     p.charges += sum(1 for x in p.perms if x.charge_on_death)
                 if c.card.death_token_copy and not c.card.is_token:  # Sphinx of False Conclusions (707.2, 111.10)
@@ -4230,8 +4263,9 @@ def choose_discard(p):
 
 
 def _sacrificer(p):
-    """Eigene Kreatur mit "{N}, Sacrifice another creature: Marke auf sich" (Edgar, Ancient Bloodlord)."""
-    return next((c for c in p.creatures if c.card.sac_counter and not c.dead), None)
+    """Eigene Kreatur mit "{N}, Sacrifice another creature: Marke auf sich" (Edgar, Ancient Bloodlord) bzw.
+    "{N}, Sacrifice a creature: Marke auf jeden Klingonen" (General Chang)."""
+    return next((c for c in p.creatures if (c.card.sac_counter or c.card.sac_klingon) and not c.dead), None)
 
 
 def sacrifice_for(p, victim, e, mode="rest"):
@@ -4240,6 +4274,15 @@ def sacrifice_for(p, victim, e, mode="rest"):
     ed = _sacrificer(p)
     if ed is None or victim is ed or victim.dead:
         return False
+    if not ed.card.sac_counter:  # General Chang
+        if not _pay_ability(p, ed.card.sac_klingon, mode):
+            return False
+        victim.dead = True
+        for k in p.creatures:
+            if "klingon" in k.card.creature_types and not k.dead:
+                k.bonus += 1
+        e["events"].append(f"{p.name}: {ed.card.name} opfert {victim.card.name} (Marke auf jeden Klingonen)")
+        return True
     alts, n, kws = ed.card.sac_counter
     if not _pay_ability(p, alts, mode):
         return False
@@ -4274,7 +4317,7 @@ def sacrifice_for_lethal(me, opp, step, e):
     """Vor dem eigenen Angriff: opfert die schwaechsten anderen Kreaturen (Token zuerst) fuer Edgar, wenn Marken und
     Menace Lethal ergeben. Gerechnet wird ohne den Schaden der Geopferten."""
     ed = _sacrificer(me)
-    if ed is None or not can_attack(ed, step) or _attack_value(me, opp, step) >= opp.life:
+    if ed is None or not ed.card.sac_counter or not can_attack(ed, step) or _attack_value(me, opp, step) >= opp.life:
         return
     alts, n, kws = ed.card.sac_counter
     others = sorted((c for c in me.creatures if c is not ed and not c.dead),
@@ -4466,6 +4509,8 @@ def _cast_removal(card, caster, victim, e, step, target=None):
         hit = list(victim.creatures)
         if not ("chosen_type",) in spec[2] and not ("opponents",) in spec[2]:
             hit += caster.creatures
+        if ("nonartifact",) in spec[2]:  # Crystalline Entity
+            hit = [c for c in hit if not c.card.is_artifact]
         for c in hit:
             if kind == "sweep":
                 c.dead = c.dead or not c.has("indestructible")  # 702.12b
@@ -5555,6 +5600,52 @@ def federation_draws(p, step, e):
                     c.bonus += 2
 
 
+def use_tea(p, e):
+    """Tea, Earl Grey, Hot am Ende des gegnerischen Zugs mit sonst ungenutztem Mana (selbst gesetzt): Schaden, wenn er
+    toedlich ist; Leben, wenn wir 10 oder weniger haben; sonst Schaden."""
+    opp = p.opponent
+    for card in [c for c in p.perms if c.tea_ability]:
+        alts, dmg, life = card.tea_ability
+        if not _pay_open(p, alts, treasure=False):
+            return
+        p.perms.remove(card)
+        p.graveyard.append(card)
+        if opp is not None and dmg and (opp.life <= dmg or p.life > 10 or not life):
+            deal_noncombat(p, opp, dmg, e)
+            e["events"].append(f"{p.name}: {card.name} – {dmg} Schaden")
+        else:
+            gain_life(p, life)
+            e["events"].append(f"{p.name}: {card.name} – {life} Leben")
+
+
+def savvy_treasures(p, e):
+    """Savvy Profiteer am Ende des gegnerischen Zugs mit sonst ungenutztem Mana (selbst gesetzt): Treasure."""
+    for c in [x for x in p.creatures if x.card.treasure_ability and not x.dead]:
+        if not tap_ready(p, c) or not _pay_open(p, c.card.treasure_ability, treasure=False):
+            continue
+        c.tapped = True
+        artifact_tokens(p, "treasure", 1, p.now, e)
+        e["events"].append(f"{p.name}: {c.card.name} – Treasure")
+
+
+def end_step_triggers(me, opp, e):
+    """Beginn des Endsegments von me: Armus (der Gegner wirft zwei Karten ab, nur im eigenen Zug); Gul Dukat (in jedem
+    Endsegment: der Gegner verliert das in diesem Zug verlorene Leben noch einmal, wir gewinnen es)."""
+    for c in list(me.creatures):
+        if c.card.end_discard and not c.dead and opp is not None:
+            discard(opp, c.card.end_discard, e)
+    for p, foe in ((me, opp), (opp, me)):
+        if p is None or foe is None:
+            continue
+        for c in list(p.creatures):
+            if c.card.dukat and not c.dead:
+                lost = max(0, foe.life_mark + foe.gained - foe.life)
+                if lost:
+                    foe.life -= lost
+                    gain_life(p, lost)
+                    e["events"].append(f"{p.name}: {c.card.name} – {foe.name} verliert {lost} Leben")
+
+
 def use_food(p, e):
     """Food-Token ({2}, {T}, opfern: 3 Leben) am Ende des gegnerischen Zugs mit offenem Mana, das sonst ungenutzt
     bliebe (nach den Clues)."""
@@ -5584,6 +5675,8 @@ def card_effects(me, opp, card, step, entry, modes=None):
             if ef[1] == "spell":
                 _jace_add(me, ef[2], entry)
         gain_life(me, card.etb_life)  # Modus beim Betreten: "you gain N life" (z. B. Archive Arbiter)
+    if card.etb_mana:  # Culber and Stamets: N Mana einer Farbe
+        me.open = list(me.open) + [ANY_COLOR] * card.etb_mana
     if card.treasure:
         artifact_tokens(me, "treasure", card.treasure, step, entry)
     if card.heartwood:  # 111.10x: Heartwood-Token
@@ -5831,6 +5924,19 @@ def reanimate_ok(p, card):
     return not card.reanimate or bool(gy_candidates(p, card.reanimate[1], card.reanimate[2]))
 
 
+def sweep_etb_ok(me, opp, card):
+    """Kreatur mit Massenremoval beim Betreten (Crystalline Entity, selbst gesetzt): nur, wenn der Gegner
+    mindestens so viel Manawert an betroffenen Kreaturen verliert wie wir."""
+    spec = card.removal
+    if not card.is_creature or not spec or spec[0] != "sweep" or spec[4] != "etb" or opp is None:
+        return True
+
+    def lost(p):
+        return sum(c.card.mv for c in p.creatures if not c.dead and not c.has("indestructible")
+                   and not (("nonartifact",) in spec[2] and c.card.is_artifact))
+    return lost(opp) >= lost(me)
+
+
 def main_phase_spells(me, opp):
     """Karten fuer die Main Phases: keine Instants, keine Flash-Karten, Removal nur mit gueltigem Ziel; dazu die
     Kopien der Prepared-Kreaturen."""
@@ -5842,6 +5948,7 @@ def main_phase_spells(me, opp):
             and (not c.rummage_spell or surplus_land(me) is not None)
             and (not c.twin or twin_host(me, opp) is not None)
             and (not c.mirror_copy or (opp is not None and any(not x.dead for x in opp.creatures)))
+            and sweep_etb_ok(me, opp, c)
             and (not c.cast_threshold or threshold(me))
             and (not c.entrust or entrust_pick(me) is not None)
             and (not c.x_counters or sum(1 for x in me.creatures if not x.dead) >= 2)
@@ -5918,14 +6025,24 @@ def _score(pairs, attacking, defender_life):
     return mine + theirs + lethal
 
 
+def _channel_version(card):
+    """Jadzia Dax (Transfer Symbiont): die Faehigkeit aus der Hand als Instant mit Marken (wie ein Kampftrick)."""
+    alts, n = card.channel_counter
+    return card._replace(alts=alts, is_creature=False, is_instant=True, is_instant_sorcery=True, flash=False,
+                         modes=((("counter", n, 1),),), pump_tough=((n,),), mv=min(g + sum(k for _c, k in cols)
+                                                                                 for g, cols in alts))
+
+
 def combat_tricks(p, pairs, opp, e, step, attacking):
     """Kampftricks (Instants und Flash-Karten mit Pump/Marken) nach den Blockern, wenn sie den Kampf verbessern:
     eigene Kreatur ueberlebt, gegnerische stirbt oder Lethal."""
     own = [a for a, _bs in pairs] if attacking else [b for _a, bs in pairs for b in bs]
     if not own:
         return
-    for card in sorted([c for c in p.hand if (c.is_instant or c.flash) and _trick_atoms(c)], key=lambda c: c.mv):
-        if not affordable(p, card):
+    cands = [(c, c) for c in p.hand if (c.is_instant or c.flash) and _trick_atoms(c)]
+    cands += [(c, _channel_version(c)) for c in p.hand if c.channel_counter]  # Transfer Symbiont
+    for orig, card in sorted(cands, key=lambda x: x[1].mv):
+        if not affordable(p, card) or orig not in p.hand:
             continue
         base = _score(pairs, attacking, opp.life)
         best = None
@@ -5940,6 +6057,14 @@ def combat_tricks(p, pairs, opp, e, step, attacking):
                     best = (gain, mode, i, tough, grants, base < 1000 <= base + gain)
         if best is None:
             continue
+        if orig is not card:  # Faehigkeit aus der Hand (abwerfen): kein Zauber, nicht konterbar
+            _pay_open(p, _alts(p, card))
+            p.hand.remove(orig)
+            p.graveyard.append(orig)
+            discarded(p, e, [orig])
+            _apply_trick(best[1], own[best[2]], own, best[3], best[4])
+            e["events"].append(f"{p.name}: {orig.name} (aus der Hand) auf {own[best[2]].card.name}")
+            continue
         _cast_from_open(p, card)
         if try_counter(p, card, step, e, threat="lethal" if best[5] else None):
             p.graveyard.append(card)
@@ -5948,6 +6073,8 @@ def combat_tricks(p, pairs, opp, e, step, attacking):
         _apply_trick(best[1], own[best[2]], own, best[3], best[4])
         if card.untap_target:  # Tethermage's Advantage: "Untap it"
             own[best[2]].tapped = False
+        if card.pump_death_draw:  # A Good Day to Die: stirbt sie in diesem Zug, ziehen
+            own[best[2]].once["death_draw"] = p.now
         if card.is_creature:
             if card.etb_grant:
                 p.grant_target = "done"  # Teyo: Marke und Schluesselwort schon auf der Kampfkreatur
@@ -6971,6 +7098,34 @@ def buff_target(p, step, others_of=None):
     return max(alive, key=lambda x: (can_attack(x, step), danger(x))) if alive else None
 
 
+def jadzia_mana(p, e):
+    """Jadzia Dax zu Beginn der ersten Main Phase: eine Marke auf sie, dann {G} je Marke."""
+    out = []
+    for c in p.creatures:
+        if c.card.main1_counter_mana and not c.dead:
+            c.bonus += 1
+            out += [("G",)] * c.bonus
+            e["events"].append(f"{p.name}: {c.card.name} – Marke, {c.bonus} {{G}}")
+    return out
+
+
+def lead_pump(me, opp, step, e):
+    """Picard, Leading by Example in Main 1 vor dem Angriff (selbst gesetzt): mit freiem Mana tappen, +X/+X (X = seine
+    Power) auf die gefaehrlichste andere Kreatur, die angreifen kann."""
+    for src in [c for c in me.creatures if c.card.lead_pump and not c.dead]:
+        target = buff_target(me, step, others_of=src)
+        if target is None or not can_attack(target, step) or not tap_ready(me, src) or src.power <= 0:
+            continue
+        need = min(g + sum(n for _c, n in cols) for g, cols in src.card.lead_pump)
+        if free_units(me) < need or not _pay_open(me, src.card.lead_pump, treasure=False):
+            continue
+        src.tapped = True
+        x = src.power
+        target.pump += x
+        target.tpump += x
+        e["events"].append(f"{me.name}: {src.card.name} – {target.card.name} +{x}/+{x}")
+
+
 def combat_counters(me, step, e):
     """Zu Beginn des eigenen Kampfs: N +1/+1-Marken auf eine eigene Kreatur, dazu Schluesselwoerter bis Rundenende
     (Training Regimen, Additive Evolution)."""
@@ -6981,6 +7136,8 @@ def combat_counters(me, step, e):
         if pick is None:
             continue
         n, kws = card.combat_counter
+        if n == -1:  # Sickbay: X = 1 + Lebensgewinn in diesem Zug
+            n = 1 + me.gained
         pick.bonus += n
         pick.extra |= set(kws)
         e["events"].append(f"{me.name}: {card.name} – {n} Marke(n) auf {pick.card.name}"
@@ -7543,6 +7700,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
         p_.direct_mark, p_.deaths_mark = p_.dealt_direct, p_.deaths
     me.opponent, opp.opponent = opp, me
     me.now = opp.now = step
+    me.life_mark, opp.life_mark = me.life, opp.life
     expire_until_next_turn(me, step)
     for w in me.walkers:
         w.used = False
@@ -7627,6 +7785,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     # Main 1: Landcycling, wenn ein Land fuer den Landdrop fehlt
     pool, creature_units = _mana(me, step)
     pool = academy_mana(me, pool, e)
+    pool = pool + jadzia_mana(me, e)  # Jadzia Dax
     if me.charges and any(c.charge_on_death for c in me.perms):  # Gardenize: {G} je Charge-Marke in der ersten Main
         pool = pool + [("G",)] * me.charges
     elif not any(c.charge_on_death for c in me.perms):
@@ -7940,6 +8099,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     sacrifice_for_lethal(me, opp, step, e)
     anomaly_for_lethal(me, opp, step, e)
     snw_tap_blocker(me, opp, step, e)
+    lead_pump(me, opp, step, e)
     crewed = crew_to_attack(me, opp, step, e)
     attackers = choose_attackers(me.creatures, opp.creatures, opp.life, me.life, step)
     if any(v["crewed"] not in attackers for v in crewed):  # Fahrzeug greift doch nicht an: Crew zuruecknehmen
@@ -8146,6 +8306,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
                 p_.creatures.remove(c)
                 e["events"].append(f"{p_.name}: Kopie von {c.card.name} exiliert")
     end_step_discards((me, opp), e)
+    end_step_triggers(me, opp, e)
     for p_ in (me, opp):  # "At the beginning of the end step, sacrifice this creature"
         for c in p_.creatures:
             if c.card.end_sacrifice:
@@ -8158,6 +8319,8 @@ def take_turn(me, opp, step, rnd, skip_draw):
     tap3_draws(opp, e)
     tap_pings(opp, me, step, e, own_turn=False)
     use_clues(opp, e)
+    use_tea(opp, e)
+    savvy_treasures(opp, e)
     use_food(opp, e)
     hand_limit(me, e)
     expire_impulse(me)
