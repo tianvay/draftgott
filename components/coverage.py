@@ -132,6 +132,8 @@ ON_PURPOSE = {
     "Tam, the Possibility": re.compile(r"proliferate x times"),
     "Extrapolate the Impossible": re.compile(r"from outside the game"),
     # TRK (Nutzer 2026-10-30): Strange-new-worlds-Sonderfaelle vorerst nicht; Saga-Kapitel ohne Gegenstueck im Modell
+    "Gwyndala, the Progeny": re.compile(r"each equipment token you control becomes a copy of target equipment"),
+    # Nutzer 2026-11-05: Gwyndalas Kopier-Faehigkeit bewusst nicht
     "Captain Benjamin Sisko": re.compile(r"exile the top five cards of your library\. you may cast any number of "
                                          r"spells"),  # Nutzer 2026-11-03: Fuenffarben-Faehigkeit bewusst nicht
     "Ensign Pavel Chekov": re.compile(r"each opponent exiles the top x cards of their library"),

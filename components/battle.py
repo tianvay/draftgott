@@ -850,6 +850,8 @@ class Player:
         self.stolen = []  # Worf, Intelligence Contractor: bis Rundenende uebernommene Kreaturen
         self.explosives = []  # Engineered Explosives im Spiel: {"card", "charge", "since"}
         self.peace = []  # Peace in Our Time im Spiel: {"card": eigenes Objekt in perms, "count": Marken}
+        self.zefram_turn = None  # Zefram Cochrane: Schritt, in dem ein Artefakt von oben gewirkt wurde
+        self.warp_used = (None, ())  # Warp Core: (Schritt, getappte Warp Cores)
         self.trap_links = []  # Exil bis zum Verlassen (610.3): {"trap", "card", "owner", "creature"}
         self.lock_links = []  # Lock-Auras dieses Spielers: {"aura", "creature"}
         self.predrawn = Counter()  # Main Phase: Karten, deren "draw N" die Planung (resolve_draws) schon gezogen hat
@@ -3113,6 +3115,20 @@ def on_cast(p, card, step, e):
         if c.card.kai_name and c.once.get("kai") is not None and c.once.get("kai") == card.name:
             p.life -= 3
             e["events"].append(f"{foe.name}: {c.card.name} – {p.name} verliert 3 Leben")
+    if not card.is_creature:
+        for side in (p, foe):  # Lt. Cmdr. Data: jeder Nichtkreatur-Zauber
+            for c in (side.creatures if side is not None else ()):
+                if c.card.data_counter and not c.dead:
+                    c.bonus += 1
+        for st in _station_ready(p):  # Romulan Bird-of-Prey
+            if st["card"].cast_charge and st["creature"] is None:
+                add_charge(p, st, st["card"].cast_charge)
+                update_stations(p, step, e)
+    if card.cast_copy and not card.is_token:  # Combadge: Token-Kopie
+        tok = card._replace(is_token=True)
+        p.perms.append(tok)
+        permanent_enters(p, foe, tok, step, e)
+        e["events"].append(f"{p.name}: {card.name} – Kopie")
     if card.choices and card.is_instant_sorcery:  # 700.2a: Modi beim Wirken gewaehlt (Permanents: card_effects)
         face_dilemma(p, step, e)
     if not card.is_creature:
@@ -4299,7 +4315,8 @@ def noncreature_targets(caster, victim, allowed):
     out, used = [], Counter()
 
     def ok(card):
-        return not card.is_token and (allowed != "artifact_enchantment" or not card.is_planeswalker)
+        return not card.is_token and not card.cloak_hexproof and (
+            allowed != "artifact_enchantment" or not card.is_planeswalker)
 
     for link in victim.trap_links:
         if link["owner"] is caster and ok(link["trap"]) and not link["card"].is_token:
@@ -4559,6 +4576,9 @@ def use_draw_ability(p, c, ab, e):
     if kind == "rummage":
         gone = surplus_land(p)
         if gone is None or not _pay_ability(p, alts, "rest"):
+            return False
+    elif kind == "loot" and any(g or cols for g, cols in alts):  # Loot mit Kosten (Isolinear Processor)
+        if not _pay_ability(p, alts, "rest"):
             return False
     elif kind == "sac_land":
         need = max((x.mv for x in p.hand if not x.is_land), default=0)
@@ -5200,6 +5220,10 @@ def permanent_enters(p, opp, card, step, e):
                 p.perms[i] = live
                 break
         p.stations.append({"card": card, "live": live, "since": step, "charge": 0, "creature": None})
+        extra = sum(c.card.zefram_charge for c in p.creatures if not c.dead)  # Zefram Cochrane
+        if extra:
+            add_charge(p, p.stations[-1], extra)
+            update_stations(p, step, e)
     if card.vehicle:  # Fahrzeug: seit wann unter unserer Kontrolle (fuer den Angriff, 302.6)
         p.vehicles.append({"card": card, "since": step, "crewed": None, "tapped": False})
     if card.equip_etb and card in p.perms:  # Ausruestung: beim Betreten anlegen
@@ -7401,7 +7425,8 @@ def equip_gear(me, step, e):
         host = next((c for c in me.creatures if g in c.gear and not c.dead), None)
         if host is not None and can_attack(host, step):
             continue
-        cands = [c for c in me.creatures if can_attack(c, step) and c is not host and _may_equip(g, c)]
+        cands = [c for c in me.creatures if can_attack(c, step) and c is not host and _may_equip(g, c)
+                 and not (g.communicator_unblock and any(x.communicator_unblock for x in c.gear))]
         if not cands:
             continue
         pick = max(cands, key=lambda c: (c.dmg, c.bonus))
@@ -7612,6 +7637,10 @@ def attack_keywords(me, attackers, alone, e):
     """Angriffs-Ausloeser mit Pump und Schluesselwoertern bis Rundenende: die Kreatur selbst ("Whenever ~ attacks
     [alone], ~ gets +P/+T and gains ..."), jede eigene Kreatur, die allein angreift (Black Widow), und jede
     ausgeruestete Angreiferin (Dain Ironfoot)."""
+    for a in attackers:  # Combadge: noch eine andere Kreatur mit Communicator
+        if any(g.communicator_unblock for g in a.gear) and any(
+                c is not a and not c.dead and any(g.communicator_unblock for g in c.gear) for c in me.creatures):
+            a.extra.add("unblockable")
     for a in attackers:
         if a.card.attack_self and (not a.card.attack_self[3] or a is alone):
             pw, tw, kws, _alone = a.card.attack_self
@@ -7653,7 +7682,11 @@ def counter_boost(p):
 def add_charge(p, st, n):
     """n Charge-Marken auf ein Raumschiff (Brad Boimler: eine mehr)."""
     if n > 0:
-        st["charge"] += n + counter_boost(p)
+        st["charge"] += n * 2 ** sum(1 for c in p.creatures if c.card.charge_double and not c.dead) + counter_boost(p)
+        if st["card"].charge_impulse and st.get("impulse_turn") != p.now and p.library:  # Enterprise-D
+            st["impulse_turn"] = p.now
+            top = p.library.pop(0)
+            p.impulse.append((top, p.own_turns))
 
 
 def add_quest(p, m):
@@ -7744,6 +7777,90 @@ def station_phase(me, opp, step, e):
             e["events"].append(f"{me.name}: Station – {pick.card.name} tappt, {st['card'].name} hat {st['charge']} "
                                f"Marken")
             update_stations(me, step, e)
+
+
+def warp_core_phase(me, step, e):
+    """Warp Core in Main 2 mit freiem Mana (selbst gesetzt): zwei Marken auf das Raumschiff, das seiner naechsten Stufe
+    am naechsten ist; einmal je Zug ({T})."""
+    ready = [st for st in _station_ready(me)]
+    at, used = me.warp_used if me.warp_used[0] == me.now else (me.now, ())
+    for core in [x for x in me.perms if x.warp_charge and not any(x is u for u in used)]:
+        if not ready:
+            return
+        alts, n = core.warp_charge
+        need = min(g + sum(k for _c, k in cols) for g, cols in alts)
+        if free_units(me) < need or not _pay_open(me, alts, treasure=False):
+            continue
+
+        def gap(st):
+            steps = sorted({st["card"].station[0]} | {t[0] for t in st["card"].station[3]} - {0})
+            return min((x - st["charge"] for x in steps if x > st["charge"]), default=99)
+        st = min(ready, key=gap)
+        add_charge(me, st, n)
+        update_stations(me, step, e)
+        used = used + (core,)
+        e["events"].append(f"{me.name}: {core.name} – {st['card'].name} hat {st['charge']} Marken")
+    me.warp_used = (at, used)
+
+
+def dathon_counters(me, opp, step, e):
+    """Dathon in Main 2 mit freiem Mana (Nutzer 2026-11-05): noch eine Quest-Marke auf eine Mission, sonst eine
+    Peace-Marke, sonst eine Lore-Marke auf eine Saga (nicht vor dem letzten Kapitel); nur, wo schon eine liegt."""
+    for src in [c for c in me.creatures if c.card.dathon_counter and not c.dead]:
+        alts = src.card.dathon_counter
+        need = min(g + sum(k for _c, k in cols) for g, cols in alts)
+        while free_units(me) >= need:
+            mission = next((m for m in me.missions if m["quest"] > 0 and any(x is m["card"] for x in me.perms)), None)
+            peace = next((k for k in me.peace if k["count"] > 0 and any(x is k["card"] for x in me.perms)), None)
+            saga = next((st for st in me.sagas if any(x is st["card"] for x in me.perms)
+                         and st["lore"] + 1 < st["card"].saga[0]), None)
+            if mission is None and peace is None and saga is None:
+                return
+            if not _pay_open(me, alts, treasure=False):
+                return
+            if mission is not None:
+                add_quest(me, mission)
+                e["events"].append(f"{me.name}: {src.card.name} – Quest-Marke")
+            elif peace is not None:
+                peace["count"] += 1 + counter_boost(me)
+                e["events"].append(f"{me.name}: {src.card.name} – Peace-Marke")
+            else:
+                e["events"].append(f"{me.name}: {src.card.name} – Lore-Marke")
+                saga_lore(me, opp, saga, step, e)
+
+
+def seven_upgrade(me, step, e):
+    """Seven of Nine in Main 2 (selbst gesetzt): mit sonst ungenutztem Mana Grund-P/T 7/9 (ab 7 verschieden benannten
+    Laendern)."""
+    for c in [x for x in me.creatures if x.card.seven_79 and not x.dead and x.card.power != 7]:
+        alts = c.card.seven_79
+        need = min(g + sum(k for _c, k in cols) for g, cols in alts)
+        if snw_x(me) < 7 or free_units(me) < need or not _pay_open(me, alts, treasure=False):
+            continue
+        c.base_card = c.base_card or c.card
+        c.card = c.card._replace(power=7, toughness=9)
+        e["events"].append(f"{me.name}: {c.card.name} wird 7/9")
+
+
+def data_draw(p, e):
+    """Lt. Cmdr. Data am Ende des gegnerischen Zugs mit freiem Mana (Nutzer 2026-11-05): drei Marken entfernen und
+    ziehen - zuerst Stun-Marken eigener Kreaturen, dann +1/+1-Marken von Data, solange er mindestens 3/3 bleibt."""
+    for data in [c for c in p.creatures if c.card.data_draw and not c.dead]:
+        alts, n = data.card.data_draw
+        need = min(g + sum(k for _c, k in cols) for g, cols in alts)
+        while free_units(p) >= need:
+            stuns = sum(c.stun for c in p.creatures if not c.dead)
+            own = max(0, min(data.bonus, data.power - 3, data.toughness - 3))
+            if stuns + own < n or not _pay_open(p, alts, treasure=False):
+                return
+            left = n
+            for c in p.creatures:
+                take = min(c.stun, left)
+                c.stun -= take
+                left -= take
+            data.bonus -= left
+            _draw(p)
+            e["events"].append(f"{p.name}: {data.card.name} – {n} Marken weg, zieht")
 
 
 def _threats(opp):
@@ -8278,6 +8395,13 @@ def take_turn(me, opp, step, rnd, skip_draw):
         im_map[mark] = c
         me.hand.append(mark)
 
+    zef_map = {}  # Zefram Cochrane: einmal je eigenem Zug ein Artefakt von oben, voruebergehend auf der Hand
+    if me.library and me.zefram_turn != step and any(c.card.zefram_top and not c.dead for c in me.creatures):
+        top = me.library[0]
+        if top.is_artifact and not top.is_land and top.alts:
+            mark = _discounted(top._replace(from_gy=True), disc, me)
+            zef_map[mark] = top
+            me.hand.append(mark)
     fb_map = {}  # Flashback: Sorceries aus dem Friedhof mit Flashback-Kosten, voruebergehend auf der Hand
     for c in me.graveyard:
         if c.flashback and not c.is_instant and not c.flashback_discard:
@@ -8497,6 +8621,16 @@ def take_turn(me, opp, step, rnd, skip_draw):
                     break
             if not crafters:
                 break
+    for src in [x for x in me.perms if x.artifact_mana]:  # Isolinear Processor: {C} nur fuer Artefakt-Zauber
+        temp = set(ex_map) | set(fb_map) | set(im_map) | set(zef_map)
+        cands = [c for c in me.hand if c.is_artifact and not c.is_land and c.alts and c not in temp
+                 and c not in chosen and legend_ok(me, c) and pay(rest, c.alts) is None
+                 and pay(rest + list(src.artifact_mana), c.alts) is not None]
+        if cands:
+            pick = max(cands, key=lambda c: (c.mv, c.name))
+            rest = pay(rest + list(src.artifact_mana), pick.alts)
+            chosen.append(pick)
+            e["events"].append(f"{me.name}: {pick.name} mit dem Mana von {src.name}")
     me.open = rest
     me.ward_budget = sum(ward_of.get(c, 0) for c in chosen if ward_of.get(c, 0) < 99)
     chosen = [c if c.is_copy else hand_form(c, me.hand) if c not in me.hand else c for c in chosen]
@@ -8520,6 +8654,13 @@ def take_turn(me, opp, step, rnd, skip_draw):
                 _take_impulse(me, im_map[c])
         me.hand[:] = [c for c in me.hand if c not in im_map]
         chosen = [im_map.get(c, c) for c in chosen]
+    if zef_map:  # Zefram Cochrane: das gewirkte Artefakt verlaesst die Bibliothek
+        for c in chosen:
+            if c in zef_map and me.library and me.library[0] is zef_map[c]:
+                me.library.pop(0)
+                me.zefram_turn = step
+        me.hand[:] = [c for c in me.hand if c not in zef_map]
+        chosen = [zef_map.get(c, c) for c in chosen]
     owner_of = me.exiled_from or opp
     if any(c.is_creature and not c.is_token and not c.is_copy for c in chosen):  # Arni, Humble Scribe enttappt dann
         for c in list(me.creatures):
@@ -8803,7 +8944,10 @@ def take_turn(me, opp, step, rnd, skip_draw):
     emrakul_exile(me, step, e)
     hapatra_untap(me, step, e)
     picard_tutor(me, opp, step, e)
+    warp_core_phase(me, step, e)
     station_phase(me, opp, step, e)
+    dathon_counters(me, opp, step, e)
+    seven_upgrade(me, step, e)
     worf_counters(me, opp, step, e)
     nog_levels(me, opp, step, e)
     explosives_phase(me, opp, step, e)
@@ -8851,6 +8995,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     tap3_draws(opp, e)
     tap_pings(opp, me, step, e, own_turn=False)
     use_clues(opp, e)
+    data_draw(opp, e)
     use_tea(opp, e)
     savvy_treasures(opp, e)
     use_food(opp, e)

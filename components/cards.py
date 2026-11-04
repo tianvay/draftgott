@@ -464,6 +464,20 @@ class Card(NamedTuple):
     sunburst_bomb: bool = False  # Engineered Explosives: Sunburst, opfern: Nichtland-Permanents mit MW = Marken
     peace: bool = False  # Peace in Our Time
     infiltrate: bool = False  # Dominion Infiltration: X Kopien gegnerischer Kreaturen mit Haste
+    charge_double: bool = False  # Geordi La Forge: Charge-Marken auf eigene Artefakte doppelt
+    zefram_top: bool = False  # Zefram Cochrane: einmal je eigenem Zug ein Artefakt von oben wirken
+    zefram_charge: int = 0  # Zefram Cochrane: eigene Raumschiffe kommen mit N Marken mehr
+    cloak_hexproof: bool = False  # Romulan Bird-of-Prey: Hexproof, solange es keine Kreatur ist
+    cast_charge: int = 0  # Romulan Bird-of-Prey: Nichtkreatur-Zauber: N Charge-Marken, solange keine Kreatur
+    charge_impulse: bool = False  # Enterprise-D: erste Charge-Marken im Zug: oberste Karte exilieren, spielbar
+    warp_charge: tuple = ()  # Warp Core: (Kosten, N) - {T}: N Charge-Marken auf ein Raumschiff
+    artifact_mana: tuple = ()  # Isolinear Processor: Mana nur fuer Artefakt-Zauber
+    cast_copy: bool = False  # Combadge: beim Wirken eine Token-Kopie
+    communicator_unblock: bool = False  # Combadge: Communicator, unblockbar mit einer zweiten
+    data_counter: bool = False  # Lt. Cmdr. Data: jeder Nichtkreatur-Zauber: Marke
+    data_draw: tuple = ()  # Lt. Cmdr. Data: (Kosten, N Marken entfernen) - ziehen
+    dathon_counter: tuple = ()  # Dathon: Kosten von "noch eine Marke auf eine eigene Verzauberung"
+    seven_79: tuple = ()  # Seven of Nine: Kosten von "Grund-P/T 7/9" (ab 7 verschieden benannten Laendern)
 
 
 LANDCYCLE_RE = re.compile(
@@ -3074,6 +3088,35 @@ _TRK_RES = {
     "infiltrate": re.compile(r"^choose x target creatures your opponents control\. for each of them, create a token "
                             r"that's a copy of that creature, except it has changeling\. those tokens gain haste\. "
                             r"exile those tokens at the beginning of the next end step\.$"),
+    "charge_double": re.compile(r"^if you would put one or more charge counters on an artifact you control, put "
+                               r"twice that many charge counters on that artifact instead\.$"),
+    "zefram_top": re.compile(r"^(?:you may look at the top card of your library any time|once during each of your "
+                            r"turns, you may cast an artifact spell from the top of your library)\.$"),
+    "zefram_charge": re.compile(r"^spacecraft you control enter with (two|\d+) additional charge counters on "
+                               r"them\.$"),
+    "cloak_hexproof": re.compile(r"^cloaking device — as long as this spacecraft isn't a creature, it has "
+                                r"hexproof\.$"),
+    "cast_charge": re.compile(r"^whenever you cast a noncreature spell, if this spacecraft isn't a creature, put "
+                             r"(two|\d+) charge counters on it\.$"),
+    "charge_impulse": re.compile(r"^whenever one or more charge counters are put on ~ for the first time each "
+                                r"turn, exile the top card of your library\. you may play that card this turn\.$"),
+    "warp_charge": re.compile(r"^((?:\{[^}]+\})+), \{t\}: put (two|\d+) charge counters on target spacecraft\. "
+                             r"activate only as a sorcery\.$"),
+    "artifact_mana": re.compile(r"^\{t\}: add \{c\}\. spend this mana only to cast an artifact spell or activate "
+                               r"an ability of an artifact source\.$"),
+    "tap_loot": re.compile(r"^((?:\{[^}]+\})+), \{t\}: draw a card, then discard a card\.$"),
+    "cast_copy": re.compile(r"^when you cast this spell, copy it\.$"),
+    "communicator": re.compile(r'^equipped creature has "whenever this creature attacks while you control another '
+                              r'creature with a communicator attached to it, this creature can\'t be blocked this '
+                              r'turn\."$'),
+    "data_counter": re.compile(r"^whenever a player casts a noncreature spell, put a \+1/\+1 counter on ~\.$"),
+    "data_draw": re.compile(r"^((?:\{[^}]+\})+), remove (three|\d+) counters from among creatures you control: "
+                           r"draw a card\.$"),
+    "dathon_counter": re.compile(r"^((?:\{[^}]+\})+): choose a counter on target enchantment you control\. put "
+                                r"another counter of that kind on it\. activate only as a sorcery\.$"),
+    "seven_79": re.compile(r"^((?:\{[^}]+\})+): (?:~|seven of nine)'s base power and toughness become 7/9\. "
+                          r"activate only if you "
+                          r"control (?:seven|~) or more differently named lands\.$"),
     "mirror_copy": re.compile(r"^create a token that's a copy of target creature an opponent controls, except it "
                              r"has menace\. if this spell was kicked, instead for each creature target opponent "
                              r"controls, create a token that's a copy of that creature, except it has menace\.$"),
@@ -3414,6 +3457,7 @@ def trk_land_token_traits(card, type_line):
         out.update(trk_r3_fields(card, low, res, lines, i))
         out.update(trk_r4_fields(card, low, res, lines, spell))
         out.update(trk_r5_fields(card, low, res, lines, i))
+        out.update(trk_r6_fields(low, res, lines))
     return out
 
 
@@ -3662,6 +3706,43 @@ def trk_r5_fields(card, low, res, lines, i):
     m = res["threaten"].match(low)
     if m:
         out["threaten_mv"] = int(m.group(1))
+    return out
+
+
+def trk_r6_fields(low, res, lines):
+    """TRK Paket R6 (Charge-Marken und Artefakte): Felder einer Zeile."""
+    out = {}
+    for key in ("charge_double", "zefram_top", "cloak_hexproof", "charge_impulse", "cast_copy", "data_counter"):
+        if res[key].match(low):
+            out[key] = True
+    m = res["zefram_charge"].match(low)
+    if m:
+        out["zefram_charge"] = _count(m.group(1))
+    m = res["cast_charge"].match(low)
+    if m:
+        out["cast_charge"] = _count(m.group(1))
+    m = res["warp_charge"].match(low)
+    if m:
+        out["warp_charge"] = (cost_alternatives(m.group(1).upper()), _count(m.group(2)))
+    if res["artifact_mana"].match(low):
+        out["artifact_mana"] = (("C",),)
+    m = res["tap_loot"].match(low)
+    if m:
+        out["draw_abilities"] = ((cost_alternatives(m.group(1).upper()), True, "loot"),)
+    if res["communicator"].match(low):  # Combadge: Equip ohne Pump
+        out["communicator_unblock"] = True
+        eq = next((re.match(r"^equip ((?:\{[^}]+\})+)", l) for _r, l in lines if re.match(r"^equip \{", l)), None)
+        if eq:
+            out["equip"] = (cost_alternatives(eq.group(1).upper()), 0, 0, False)
+    m = res["data_draw"].match(low)
+    if m:
+        out["data_draw"] = (cost_alternatives(m.group(1).upper()), _count(m.group(2)))
+    m = res["dathon_counter"].match(low)
+    if m:
+        out["dathon_counter"] = cost_alternatives(m.group(1).upper())
+    m = res["seven_79"].match(low)
+    if m:
+        out["seven_79"] = cost_alternatives(m.group(1).upper())
     return out
 
 

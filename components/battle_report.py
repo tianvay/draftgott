@@ -523,6 +523,12 @@ RULES = [
     "Time: ziehen nur, wenn man ohnehin nicht angreift, nie für den Sieg des Gegners. Engineered Explosives: "
     "Farbzahl mit dem größten Vorsprung, ab dem nächsten Zug in Main 2 opfern, wenn es noch lohnt. Dominion "
     "Infiltration: X aus dem offenen Mana, die gefährlichsten Kreaturen.",
+    "Charge-Marken und Artefakte (TRK): Geordi La Forge verdoppelt Charge-Marken, Zefram Cochrane gibt Raumschiffen "
+    "zwei mehr und wirkt einmal je Zug ein Artefakt von oben; Warp Core in Main 2 auf das Raumschiff, das seiner "
+    "nächsten Stufe am nächsten ist; Isolinear Processor: {C} nur für Artefakt-Zauber, Loot am Ende des "
+    "gegnerischen Zugs. Combadge macht beim Wirken eine Kopie, beide an verschiedene Kreaturen. Data zieht am Ende "
+    "des gegnerischen Zugs mit Stun-Marken, dann eigenen Marken (bleibt mindestens 3/3). Dathon: Mission, Peace, "
+    "Saga (nicht vor dem letzten Kapitel). Gwyndalas Kopier-Fähigkeit bewusst nicht.",
     "Alchemy (YFRA): „perpetually“ ändert die Karte selbst (bleibt in Friedhof und Hand). Conjure benannter Karten "
     "(Kraken Hatchling, Mind Stone, Aria of Flame) mit ihren Texten von Scryfall. Avoided Stairwurm −1/−1 je "
     "Kreaturenkarte in der Bibliothek; Zimone macht Schaden wie mit positiver Power und wird prepared, sobald Karten "

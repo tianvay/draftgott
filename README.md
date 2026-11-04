@@ -588,6 +588,9 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
   Removal mit "Exile target ..." exiliert (vorher Friedhof).
 - Gegnerhand und Interaktion (TRK): V'Ger, Salt Vampire, Zero, Kai Winn, Nyota Uhura, Brazen Bluff, The Caretaker,
   Worf, Intelligence Contractor, Engineered Explosives, Peace in Our Time, Dominion Infiltration.
+- Charge-Marken und Artefakte (TRK): Warp Core, Geordi La Forge, Romulan Bird-of-Prey, Zefram Cochrane, Enterprise-D,
+  Isolinear Processor, Combadge, Lieutenant Commander Data, Dathon, Seven of Nine (7/9); Gwyndala ohne
+  Kopier-Fähigkeit.
 - Removal (Destroy/Exile, Schaden, −X/−X, Edikt, Fight, Biss, Bounce, Lock, zurück in die Bibliothek,
   Massenremoval) trifft die gefährlichste passende Kreatur; Removal-Instants vor dem Angriff, gegen Angreifer oder am
   Ende des gegnerischen Zugs.

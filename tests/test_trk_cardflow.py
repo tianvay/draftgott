@@ -152,15 +152,8 @@ class ParseTests(unittest.TestCase):
 
     def test_coverage(self):
         for key in RAW:
-            lines = open_lines(key)
-            if key == "seven":
-                self.assertEqual(len(lines), 1, key)
-                self.assertIn("7/9", lines[0])
-            elif key == "dathon":
-                self.assertEqual(len(lines), 1, key)
-                self.assertIn("choose a counter", lines[0].lower())
-            else:  # Khan: Wirken aus dem Exil seit TRK R4 modelliert (Nutzer 2026-11-05)
-                self.assertEqual(lines, [], key)
+            # Khan seit TRK R4, Seven of Nine (7/9) und Dathon (Marke) seit R6 modelliert (Nutzer 2026-11-05)
+            self.assertEqual(open_lines(key), [], key)
 
 
 class DigTests(unittest.TestCase):
