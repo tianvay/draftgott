@@ -454,6 +454,16 @@ class Card(NamedTuple):
     cast_from_exile: bool = False  # Khan, Vengeful Heart: aus dem eigenen Exil wirkbar
     exile_removal: bool = False  # Removal-Zauber exiliert statt zu zerstoeren ("Exile target creature")
     sac_creature_cost: bool = False  # Zusatzkosten: eine Kreatur opfern (The Needs of the Many)
+    opp_minus_power: int = 0  # V'Ger (Modus): gegnerische Kreaturen -N/-0 bis zu unserem naechsten Zug
+    hand_exile: str = ""  # Salt Vampire ("draw": er zieht) bzw. Zero ("tax": spielbar fuer {2} mehr)
+    kai_name: bool = False  # Kai Winn: gewaehlter Name; zaubert der Gegner ihn, verliert er 3 Leben
+    uhura_number: bool = False  # Nyota Uhura: gewaehlte Zahl; zaubert der Gegner diesen Manawert, ziehen wir
+    bluff: bool = False  # Brazen Bluff: gegen einen gegnerischen Nichtkreatur-Zauber
+    caretaker: bool = False  # The Caretaker: nach einem Dilemma im Endsegment eine Karte des Gegners gratis
+    threaten_mv: int = 0  # Worf, Intelligence Contractor: gegnerische Kreatur bis Manawert N bis Rundenende
+    sunburst_bomb: bool = False  # Engineered Explosives: Sunburst, opfern: Nichtland-Permanents mit MW = Marken
+    peace: bool = False  # Peace in Our Time
+    infiltrate: bool = False  # Dominion Infiltration: X Kopien gegnerischer Kreaturen mit Haste
 
 
 LANDCYCLE_RE = re.compile(
@@ -3030,6 +3040,40 @@ _TRK_RES = {
                                      r"owner's hand\.$"),
     "cast_from_exile": re.compile(r"^you may cast this card from exile\.$"),
     "exile_removal": re.compile(r"\bexile (?:up to one )?target (?:[a-z ,-]*?)(?:creature|permanent)\b"),
+    "enters_attacks_choose": re.compile(r"^whenever ~ enters or attacks, choose one —$"),
+    "look_draw": re.compile(r"^look at target opponent's hand, then draw a card\.$"),
+    "opp_minus_power": re.compile(r"^creatures your opponents control get -(\d+)/-0 until your next turn\.$"),
+    "hand_exile_draw": re.compile(r"^when (?:~|this creature) enters, look at target opponent's hand\. you may "
+                                 r"choose a nonland card from it\. if you do, that player exiles that card, then "
+                                 r"draws a card\.$"),
+    "hand_exile_tax": re.compile(r"^when (?:~|this creature) enters, look at target opponent's hand\. you may "
+                                r"exile a nonland card from it\. for as long as that card remains exiled, its owner "
+                                r"may play it\. a spell cast this way costs \{2\} more to cast\.$"),
+    "kai_name": re.compile(r"^(?:as ~ enters, choose a nonland card name|whenever an opponent casts a spell with the "
+                          r"chosen name or activates an ability of a source with the chosen name, that player loses "
+                          r"3 life)\.$"),
+    "uhura_number": re.compile(r"^(?:hailing frequencies — as ~ enters, choose a number between 0 and 10|open a "
+                              r"channel — whenever an opponent casts a spell with mana value equal to the chosen "
+                              r"number, you draw a card)\.$"),
+    "bluff": re.compile(r"^choose target noncreature spell an opponent controls\. that player may exile it\. if "
+                       r"they don't, you may cast a noncreature spell from your hand without paying its mana "
+                       r"cost\.$"),
+    "caretaker": re.compile(r"^at the beginning of each end step, if you faced a dilemma this turn, target opponent "
+                           r"exiles cards from the top of their library until they exile a nonland card\. you may "
+                           r"cast that card without paying its mana cost\.$"),
+    "threaten": re.compile(r"^when ~ enters, for each opponent, gain control of up to one target creature that "
+                          r"player controls with mana value (\d+) or less until end of turn\. untap those "
+                          r"creatures\. until end of turn, they become warriors in addition to their other types "
+                          r"and gain haste\.$"),
+    "sunburst_bomb": re.compile(r"^(?:sunburst|\{2\}, sacrifice this artifact: destroy each nonland permanent with "
+                               r"mana value equal to the number of charge counters on this artifact\.)$"),
+    "peace": re.compile(r"^(?:at the beginning of combat on each player's turn, that player may draw a card\. if "
+                       r"they do, they can't attack this turn and you put a peace counter on this enchantment|at the "
+                       r"beginning of your upkeep, if this enchantment has twelve or more peace counters on it, you "
+                       r"win the game)\.$"),
+    "infiltrate": re.compile(r"^choose x target creatures your opponents control\. for each of them, create a token "
+                            r"that's a copy of that creature, except it has changeling\. those tokens gain haste\. "
+                            r"exile those tokens at the beginning of the next end step\.$"),
     "mirror_copy": re.compile(r"^create a token that's a copy of target creature an opponent controls, except it "
                              r"has menace\. if this spell was kicked, instead for each creature target opponent "
                              r"controls, create a token that's a copy of that creature, except it has menace\.$"),
@@ -3369,6 +3413,7 @@ def trk_land_token_traits(card, type_line):
         out.update(trk_r12_fields(low, res, lines))
         out.update(trk_r3_fields(card, low, res, lines, i))
         out.update(trk_r4_fields(card, low, res, lines, spell))
+        out.update(trk_r5_fields(card, low, res, lines, i))
     return out
 
 
@@ -3587,6 +3632,36 @@ def trk_r4_fields(card, low, res, lines, spell):
         out["tell_me"] = (int(m.group(1)), int(m.group(2)))
     if spell and res["exile_removal"].search(low) and " until " not in low:
         out["exile_removal"] = True
+    return out
+
+
+def trk_r5_fields(card, low, res, lines, i):
+    """TRK Paket R5 (Gegnerhand und Interaktion): Felder einer Zeile."""
+    out = {}
+    if res["enters_attacks_choose"].match(low):  # V'Ger: Betreten und Angriff, dieselben Modi
+        subs = []
+        for braw, _blow in lines[i + 1:]:
+            if not braw.strip().startswith("•"):
+                break
+            subs.append(_sub_card(card.get("name", ""), re.sub(r"\([^)]*\)", "", braw.strip().lstrip("•")).strip(),
+                                  "Instant")._replace(is_mode=True))
+        if subs:
+            out["choices"] = out["attack_choices"] = (1, tuple(subs))
+    if res["look_draw"].match(low):
+        out["draws"] = 1
+    m = res["opp_minus_power"].match(low)
+    if m:
+        out["opp_minus_power"] = int(m.group(1))
+    if res["hand_exile_draw"].match(low):
+        out["hand_exile"] = "draw"
+    if res["hand_exile_tax"].match(low):
+        out["hand_exile"] = "tax"
+    for key in ("kai_name", "uhura_number", "bluff", "caretaker", "sunburst_bomb", "peace", "infiltrate"):
+        if res[key].match(low):
+            out[key] = True
+    m = res["threaten"].match(low)
+    if m:
+        out["threaten_mv"] = int(m.group(1))
     return out
 
 

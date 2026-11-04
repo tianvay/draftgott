@@ -847,6 +847,9 @@ class Player:
         self.naked_turn = None  # The Naked Time II: Schritt, in dem kommende Kreaturen Marke und Haste bekommen
         self.prevent_turn = None  # The Needs of the Many: Schritt, in dem aller Schaden an uns verhindert wird
         self.bones_back = []  # Bones McCoy: Karten, die im naechsten Endsegment mit Marke zurueckkommen
+        self.stolen = []  # Worf, Intelligence Contractor: bis Rundenende uebernommene Kreaturen
+        self.explosives = []  # Engineered Explosives im Spiel: {"card", "charge", "since"}
+        self.peace = []  # Peace in Our Time im Spiel: {"card": eigenes Objekt in perms, "count": Marken}
         self.trap_links = []  # Exil bis zum Verlassen (610.3): {"trap", "card", "owner", "creature"}
         self.lock_links = []  # Lock-Auras dieses Spielers: {"aura", "creature"}
         self.predrawn = Counter()  # Main Phase: Karten, deren "draw N" die Planung (resolve_draws) schon gezogen hat
@@ -2075,6 +2078,24 @@ def hydra_spread(p, e):
     bury((p,) if p.opponent is None else (p, p.opponent), e)
 
 
+def peace_combat(me, opp, step, e):
+    """Peace in Our Time zu Beginn des Kampfs von me (Nutzer 2026-11-05): ziehen (dann kein Angriff), wenn me ohnehin
+    nicht angreifen wuerde; nie, wenn der Gegner als Besitzer dadurch 12 Marken haette. Gibt True zurueck, wenn
+    gezogen."""
+    if opp is None:
+        return False
+    entries = [(owner, k) for owner in (me, opp) for k in owner.peace if any(x is k["card"] for x in owner.perms)]
+    if not entries or choose_attackers(me.creatures, opp.creatures, opp.life, me.life, step):
+        return False
+    if any(owner is opp and k["count"] + 1 + counter_boost(opp) >= 12 for owner, k in entries):
+        return False
+    for owner, k in entries:
+        _draw(me)
+        k["count"] += 1 + counter_boost(owner)
+    e["events"].append(f"{me.name}: Peace in Our Time – zieht, greift nicht an")
+    return True
+
+
 def kobayashi_upkeep(p, opp, step, e):
     """Kobayashi Maru Scenario im eigenen Upkeep: Hail (die gefaehrlichste gegnerische Kreatur bis Manawert 3 auf
     die Hand), wenn es ein Ziel gibt, sonst Sensors (zwei ziehen), dann Transport (zwei Officers), Hail ohne Ziel;
@@ -2120,6 +2141,10 @@ def upkeep_triggers(me, opp, step, e):
     the Stage kommt auf die Hand, wenn ein Gegner seines Besitzers im letzten Zug Schaden ausserhalb des Kampfs
     bekam."""
     kobayashi_upkeep(me, opp, step, e)
+    me.peace = [k for k in me.peace if any(x is k["card"] for x in me.perms)]
+    if opp is not None and any(k["count"] >= 12 for k in me.peace):  # Peace in Our Time: gewonnen
+        opp.life = min(opp.life, 0)
+        e["events"].append(f"{me.name}: Peace in Our Time – gewonnen")
     for c in list(me.creatures):  # Vash: zu Beginn des eigenen Upkeeps Surveil
         if c.card.upkeep_surveil and not c.dead:
             surveil_cards(me, [c.card.upkeep_surveil], e, c.card.name)
@@ -3078,6 +3103,16 @@ def emblem_cast(p, step, e):
 def on_cast(p, card, step, e):
     """Ein Zauber wurde gewirkt: Jace-Ausloeser, Marken fuer Zauber mit Ziel beim Gegner (Danitha)."""
     _jace_on_cast(p, card, step, e)
+    foe = p.opponent
+    for c in list(foe.creatures) if foe is not None else ():  # Nyota Uhura, Kai Winn
+        if c.dead:
+            continue
+        if c.card.uhura_number and c.once.get("uhura") == card.mv:
+            _draw(foe)
+            e["events"].append(f"{foe.name}: {c.card.name} – zieht ({card.name})")
+        if c.card.kai_name and c.once.get("kai") is not None and c.once.get("kai") == card.name:
+            p.life -= 3
+            e["events"].append(f"{foe.name}: {c.card.name} – {p.name} verliert 3 Leben")
     if card.choices and card.is_instant_sorcery:  # 700.2a: Modi beim Wirken gewaehlt (Permanents: card_effects)
         face_dilemma(p, step, e)
     if not card.is_creature:
@@ -3452,6 +3487,14 @@ def mission_trigger(p, kind, step, e, creature=None, with_mana=True):
     return mana
 
 
+def seen_cards(p):
+    """Nichtland-Karten von p, die der Gegner gesehen hat: Feld (Kreaturen, Permanents) und Friedhof."""
+    if p is None:
+        return []
+    cards = [c.base_card or c.card for c in p.creatures if not c.card.is_token] + list(p.perms) + list(p.graveyard)
+    return [c for c in cards if not c.is_land and not c.is_token]
+
+
 def ally_enters(p, new):
     """Deanna Troi: andere eigene Kreaturen kommen mit zusaetzlichen Marken (614.1c); Sickbay: Leben."""
     new.bonus += sum(c.card.ally_enter_counter for c in p.creatures if c is not new and not c.dead)
@@ -3486,6 +3529,15 @@ def creature_enters(p, new, step, e, opp=None, cast=True):
     new.bonus += card.enters_counters  # "enters with N +1/+1 counters" (614.1c)
     ally_enters(p, new)
     kira_enters(p, new)
+    if card.uhura_number or card.kai_name:  # Nutzer 2026-11-05: nur nach Gesehenem (Feld und Friedhof des Gegners)
+        seen = seen_cards(p.opponent)
+        if card.uhura_number:
+            mvs = Counter(c.mv for c in seen)
+            new.once["uhura"] = max(mvs, key=lambda v: (mvs[v], v)) if mvs else 3
+        if card.kai_name:
+            names = Counter(c.name for c in seen)
+            mv_of = {c.name: c.mv for c in seen}
+            new.once["kai"] = max(names, key=lambda n: (names[n], mv_of[n], n)) if names else None
     mission_trigger(p, "creature_enters", step, e, creature=new)  # Support Mission
     if card.is_artifact and not card.is_token:  # Conquest Mission
         mission_trigger(p, "artifact_enters", step, e)
@@ -4879,9 +4931,17 @@ def try_counter(caster, spell, step, e, threat=None, effects=None):
             alts = with_kicker(alts, c.kicker)
         if _payable(holder, alts):
             options.append((min(g + sum(k for _c, k in cols) for g, cols in alts), c.name, c, alts))
+    if not spell.is_creature:  # Brazen Bluff: nur mit einer anderen Nichtkreatur-Karte auf der Hand
+        for c in holder.hand:
+            if c.bluff and _bluff_card(holder, c) is not None:
+                alts = _alts(holder, c)
+                if _payable(holder, alts):
+                    options.append((min(g + sum(k for _c, k in cols) for g, cols in alts), c.name, c, alts))
     if not options:
         return False
     _cost, _name, card, alts = min(options, key=lambda o: (o[0], o[1]))
+    if card.bluff:
+        return brazen_bluff(holder, caster, card, alts, spell, step, e)
     _pay_open(holder, alts)
     holder.hand.remove(card)
     holder.graveyard.append(card)
@@ -4899,6 +4959,30 @@ def with_kicker(alts, kicker):
             both.update(dict(kcols))
             out.add((g + kg, tuple(sorted(both.items()))))
     return tuple(sorted(out))
+
+
+def _bluff_card(p, bluff):
+    """Die beste Nichtkreatur-Karte der Hand fuer Brazen Bluff (hoechster Manawert) oder None."""
+    cands = [c for c in p.hand if c is not bluff and not c.is_creature and not c.is_land and c.alts]
+    return max(cands, key=lambda c: (c.mv, c.name)) if cands else None
+
+
+def brazen_bluff(holder, caster, card, alts, spell, step, e):
+    """Brazen Bluff (Nutzer 2026-11-05, wie ein Counterspell): der Zaubernde gibt seinen Zauber auf, wenn unsere
+    beste Nichtkreatur-Karte mindestens so viel Manawert hat; sonst wirken wir sie gratis (sie loest zuerst auf)."""
+    _pay_open(holder, alts)
+    holder.hand.remove(card)
+    holder.graveyard.append(card)
+    on_cast(holder, card, step, e)
+    free = _bluff_card(holder, card)
+    if free is not None and free.mv >= spell.mv:
+        e["events"].append(f"{holder.name}: {card.name} – {caster.name} exiliert {spell.name}")
+        return True
+    if free is not None:
+        holder.hand.remove(free)
+        e["events"].append(f"{holder.name}: {card.name} – wirkt {free.name} gratis")
+        _resolve(holder, caster, free, step, e)
+    return False
 
 
 def held_counter(p, orig=None):
@@ -5001,6 +5085,21 @@ def jace_instant_turn(p, opp, step, e):
                 activate_pw(p, opp, w, (opts[0][2], opts[0][3]), step, e, opts[0][4])
 
 
+def hand_exile(p, opp, card, e):
+    """Salt Vampire bzw. Zero (selbst gesetzt): aus der Hand des Gegners Removal zuerst, sonst die teuerste
+    Nichtland-Karte. Salt Vampire: er zieht dafuer; Zero: er darf sie fuer {2} mehr aus dem Exil spielen."""
+    cands = [c for c in opp.hand if not c.is_land]
+    if not cands:
+        return
+    pick = max(cands, key=lambda c: (bool(c.removal), c.mv, c.name))
+    opp.hand.remove(pick)
+    if card.hand_exile == "draw":
+        _draw(opp)
+    else:
+        opp.impulse.append((pick._replace(alts=tuple((g + 2, cols) for g, cols in pick.alts)), 10 ** 9))
+    e["events"].append(f"{p.name}: {card.name} exiliert {pick.name} aus der Hand von {opp.name}")
+
+
 def bones_cands(p):
     return [g for g in p.graveyard if not g.is_instant_sorcery and "doctor" not in g.creature_types]
 
@@ -5008,6 +5107,8 @@ def bones_cands(p):
 def mode_value(p, opp, sub, step, end_step=False):
     """Wert eines Modus: Lethal > Removal (toetet) > Karte ziehen > Token > Marken/Pumps > Schaden > Leben.
     end_step: am Ende des gegnerischen Zugs zaehlen Pumps bis Rundenende nicht."""
+    if sub.opp_minus_power:  # V'Ger: lohnt erst ab zwei gegnerischen Kreaturen (selbst gesetzt)
+        return (4, 2) if opp is not None and sum(1 for c in opp.creatures if not c.dead) >= 2 else (0,)
     if sub.bones_return:  # Bones McCoy
         return (4, 0) if bones_cands(p) else (0,)
     if sub.bones_protect:
@@ -5078,6 +5179,13 @@ def permanent_enters(p, opp, card, step, e):
             pick.auras.append(card)
             pick.extra |= set(card.aura_etb_kw)
             e["events"].append(f"{p.name}: {card.name} an {pick.card.name}")
+    if card.peace:  # Peace in Our Time: eigenes Objekt, Marken
+        live = card._replace()
+        for i in range(len(p.perms) - 1, -1, -1):
+            if p.perms[i] is card:
+                p.perms[i] = live
+                break
+        p.peace.append({"card": live, "count": 0})
     if card.kobayashi is not None:  # Kobayashi Maru Scenario: eigenes Objekt, gewaehlte Modi
         live = card._replace()
         for i in range(len(p.perms) - 1, -1, -1):
@@ -5848,6 +5956,27 @@ def end_step_triggers(me, opp, e):
     for c in list(me.creatures):  # Targ Wrangler
         if c.card.targ_sac and not c.dead and c.attacked is not None and c.attacked == me.now:
             targ_sacrifice(me, c, e)
+    for t in me.stolen:  # Worf, Intelligence Contractor: zurueck zum Gegner
+        if any(t is x for x in me.creatures) and opp is not None:
+            me.creatures.remove(t)
+            t.ctl, t.gy = opp, opp.graveyard
+            if t.owner is opp:
+                t.owner = None
+            opp.creatures.append(t)
+    me.stolen = []
+    for p, foe in ((me, opp), (opp, me)):  # The Caretaker
+        if p is None or foe is None or not p.dilemmas_turn:
+            continue
+        for c in [x for x in p.creatures if x.card.caretaker and not x.dead]:
+            while foe.library:
+                top = foe.library.pop(0)
+                if not top.is_land:
+                    break
+            else:
+                continue
+            e["events"].append(f"{p.name}: {c.card.name} – {top.name} gratis")
+            if legend_ok(p, top):
+                _resolve(p, foe, top, p.now, e, owner=foe)
     for p in (me, opp):  # Bones McCoy: mit Marke zurueck
         if p is None:
             continue
@@ -5900,6 +6029,36 @@ def card_effects(me, opp, card, step, entry, modes=None):
             if ef[1] == "spell":
                 _jace_add(me, ef[2], entry)
         gain_life(me, card.etb_life)  # Modus beim Betreten: "you gain N life" (z. B. Archive Arbiter)
+    if card.opp_minus_power and opp is not None:  # V'Ger: bis zu unserem naechsten Zug
+        for c in opp.creatures:
+            if not c.dead:
+                c.lasting.append((card.opp_minus_power, 0, me, step))
+    if card.hand_exile and opp is not None:  # Salt Vampire, Zero
+        hand_exile(me, opp, card, entry)
+    if card.threaten_mv and opp is not None:  # Worf, Intelligence Contractor
+        cands = [c for c in opp.creatures if not c.dead and c.card.mv <= card.threaten_mv and not hexproof(c)
+                 and ward_ok(me, c)]
+        if cands:
+            t = max(cands, key=danger)
+            pay_ward(me, t, entry)
+            opp.creatures.remove(t)
+            t.owner = t.owner or opp
+            t.ctl, t.gy, t.tapped = me, me.graveyard, False
+            t.extra.add("haste")
+            me.creatures.append(t)
+            me.stolen.append(t)
+            entry["events"].append(f"{me.name}: {card.name} übernimmt {t.card.name}")
+    if card.infiltrate and opp is not None:  # Dominion Infiltration: X aus dem offenen Mana
+        alive = sorted((c for c in opp.creatures if not c.dead), key=danger, reverse=True)
+        x = 0
+        while x < len(alive) and _pay_open(me, ((1, ()),), treasure=False):
+            x += 1
+        for t in alive[:x]:
+            tok = Creature(t.card._replace(is_token=True, haste=True), step)
+            tok.gy, tok.ctl, tok.exile_step = me.graveyard, me, step
+            me.creatures.append(tok)
+            entry["events"].append(f"{me.name}: {card.name} – Kopie von {t.card.name}")
+            creature_enters(me, tok, step, entry, opp, cast=False)
     if card.bones_return:  # Bones McCoy: bestes Nicht-Doctor-Permanent aus dem Friedhof
         cands = bones_cands(me)
         if cands:
@@ -6202,7 +6361,8 @@ def main_phase_spells(me, opp):
             and (not c.rummage_spell or surplus_land(me) is not None)
             and (not c.twin or twin_host(me, opp) is not None)
             and (not c.mirror_copy or (opp is not None and any(not x.dead for x in opp.creatures)))
-            and sweep_etb_ok(me, opp, c) and kobayashi_ok(me, opp, c)
+            and sweep_etb_ok(me, opp, c) and kobayashi_ok(me, opp, c) and not c.sunburst_bomb
+            and (not c.infiltrate or (opp is not None and any(not x.dead for x in opp.creatures)))
             and (not c.cast_threshold or threshold(me))
             and (not c.entrust or entrust_pick(me) is not None)
             and (not c.x_counters or sum(1 for x in me.creatures if not x.dead) >= 2)
@@ -7648,6 +7808,58 @@ def worf_counters(me, opp, step, e):
             e["events"].append(f"{me.name}: {w.card.name} – Marke ({w.bonus})")
 
 
+def _bomb_value(p, mv):
+    """Wert der Nichtland-Permanents von p mit Manawert mv (Kreaturen Power + Toughness, sonst 2 + Manawert)."""
+    val = sum(max(0, c.power) + max(0, c.toughness) for c in p.creatures if not c.dead and c.card.mv == mv
+              and not c.has("indestructible"))
+    return val + sum(2 + x.mv for x in p.perms if not x.is_land and x.mv == mv and not x.sunburst_bomb)
+
+
+def explosives_phase(me, opp, step, e):
+    """Engineered Explosives (Nutzer 2026-11-05): wirken mit der Farbzahl (Sunburst), bei der der Gegner am meisten
+    mehr verliert als wir; ab dem naechsten Zug in Main 2 fuer {2} opfern, wenn es dann noch lohnt."""
+    if opp is None:
+        return
+    me.explosives = [x for x in me.explosives if any(x["card"] is c for c in me.perms)]
+    for ex in list(me.explosives):
+        n = ex["charge"]
+        if ex["since"] >= me.turn_start or _bomb_value(opp, n) <= _bomb_value(me, n):
+            continue
+        if not _pay_open(me, ((2, ()),), treasure=False):
+            continue
+        me.perms.remove(ex["card"])
+        me.graveyard.append(ex["card"])
+        me.explosives.remove(ex)
+        e["events"].append(f"{me.name}: {ex['card'].name} – zerstört alles mit Manawert {n}")
+        for p in (me, opp):
+            for c in p.creatures:
+                if not c.dead and c.card.mv == n and not c.has("indestructible"):
+                    c.dead = True
+                    c.once["destroyed"] = True
+            for x in [x for x in p.perms if not x.is_land and x.mv == n]:
+                destroy_permanent(p, x, e)
+        bury((me, opp), e)
+    for card in [c for c in me.hand if c.sunburst_bomb]:
+        best = None
+        for n in range(0, 6):
+            gain = _bomb_value(opp, n) - _bomb_value(me, n)
+            if gain <= 0 or (best is not None and gain <= best[0]):
+                continue
+            combo = next((cs for cs in itertools.combinations("WUBRG", n)
+                          if pay(me.open, ((0, tuple((col, 1) for col in cs)),)) is not None), None)
+            if combo is not None:
+                best = (gain, n, combo)
+        if best is None:
+            continue
+        _gain, n, combo = best
+        _pay_open(me, ((0, tuple((col, 1) for col in combo)),), treasure=False)
+        me.hand.remove(card)
+        live = card._replace()
+        me.perms.append(live)
+        me.explosives.append({"card": live, "charge": n, "since": step})
+        e["events"].append(f"{me.name}: {card.name} mit {n} Marken")
+
+
 def nog_levels(me, opp, step, e):
     """Nog in Main 2 mit sonst ungenutztem Mana (selbst gesetzt): {1} Scout (Grund-P/T 3/4, getappt: Surveil 2),
     dann {3} Officer (Laender aus dem Friedhof spielen, ein zusaetzlicher Landdrop je eigenem Zug)."""
@@ -8412,6 +8624,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     sacrifice_for_lethal(me, opp, step, e)
     anomaly_for_lethal(me, opp, step, e)
     snw_tap_blocker(me, opp, step, e)
+    peace = peace_combat(me, opp, step, e)
     lead_pump(me, opp, step, e)
     crewed = crew_to_attack(me, opp, step, e)
     attackers = choose_attackers(me.creatures, opp.creatures, opp.life, me.life, step)
@@ -8421,6 +8634,8 @@ def take_turn(me, opp, step, rnd, skip_draw):
                 uncrew(me, v, e)
         attackers = choose_attackers(me.creatures, opp.creatures, opp.life, me.life, step)
     art_vigilance = any(c.card.artifact_vigilance for c in me.creatures if not c.dead)
+    if peace:  # Peace in Our Time: gezogen, kein Angriff
+        attackers = []
     me.kira_join = [] if attackers else None
     if attackers:
         attack_planets(me, opp, step, e)
@@ -8591,6 +8806,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     station_phase(me, opp, step, e)
     worf_counters(me, opp, step, e)
     nog_levels(me, opp, step, e)
+    explosives_phase(me, opp, step, e)
     if me.walkers:
         pw_phase(me, opp, step, e, "after")
     if walker_engine(me):

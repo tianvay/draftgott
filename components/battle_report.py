@@ -515,6 +515,14 @@ RULES = [
     "Massenremoval, das mindestens zwei unserer Kreaturen tötet. Tell Me What You See: der Gegner verliert 4 "
     "Leben, außer er hätte danach 4 oder weniger. Exil-Removal exiliert jetzt (statt Friedhof); Khan, Vengeful "
     "Heart bleibt im Exil wirkbar (Exil-Removal, Finality, verfallene Impulse).",
+    "Gegnerhand und Interaktion (TRK): Salt Vampire und Zero nehmen aus der Hand des Gegners Removal zuerst, sonst "
+    "die teuerste Nichtland-Karte. Nyota Uhura und Kai Winn wählen nur nach Gesehenem (Feld, Friedhof des "
+    "Gegners): häufigster Manawert (sonst 3) bzw. häufigster Name (sonst keiner). Brazen Bluff wie ein "
+    "Counterspell; der Gegner gibt seinen Zauber auf, wenn unsere beste Nichtkreatur-Karte mindestens so viel "
+    "Manawert hat, sonst wirken wir sie gratis. V'Ger: Ziehen, ab zwei gegnerischen Kreaturen -1/-0. Peace in Our "
+    "Time: ziehen nur, wenn man ohnehin nicht angreift, nie für den Sieg des Gegners. Engineered Explosives: "
+    "Farbzahl mit dem größten Vorsprung, ab dem nächsten Zug in Main 2 opfern, wenn es noch lohnt. Dominion "
+    "Infiltration: X aus dem offenen Mana, die gefährlichsten Kreaturen.",
     "Alchemy (YFRA): „perpetually“ ändert die Karte selbst (bleibt in Friedhof und Hand). Conjure benannter Karten "
     "(Kraken Hatchling, Mind Stone, Aria of Flame) mit ihren Texten von Scryfall. Avoided Stairwurm −1/−1 je "
     "Kreaturenkarte in der Bibliothek; Zimone macht Schaden wie mit positiver Power und wird prepared, sobald Karten "

@@ -586,6 +586,8 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
 - Opfern und Friedhof (TRK): Gowron, Kirk, Commanding Officer, Dahar Master, Targ Wrangler, Dr. McCoy, Bones McCoy,
   Raffi Musiker, Gabriel Lorca, The Needs of the Many, De-evolve, Tell Me What You See, Khan aus dem Exil;
   Removal mit "Exile target ..." exiliert (vorher Friedhof).
+- Gegnerhand und Interaktion (TRK): V'Ger, Salt Vampire, Zero, Kai Winn, Nyota Uhura, Brazen Bluff, The Caretaker,
+  Worf, Intelligence Contractor, Engineered Explosives, Peace in Our Time, Dominion Infiltration.
 - Removal (Destroy/Exile, Schaden, −X/−X, Edikt, Fight, Biss, Bounce, Lock, zurück in die Bibliothek,
   Massenremoval) trifft die gefährlichste passende Kreatur; Removal-Instants vor dem Angriff, gegen Angreifer oder am
   Ende des gegnerischen Zugs.
