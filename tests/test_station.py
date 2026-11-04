@@ -93,11 +93,8 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(C["d7"].station, (8, 3, 3, ((8, ("flying",), None),)))
 
     def test_coverage(self):
-        for key in ("sweeper", "frigate", "sawship", "ds9"):
+        for key in ("sweeper", "frigate", "sawship", "ds9", "d7"):  # D-7 "3+": seit TRK R3 modelliert (Nutzer 2026-11-04)
             self.assertEqual([line for _c, _m, line in analyze_card(RAW[key])], [], key)
-        open_lines = {line for _c, _m, line in analyze_card(RAW["d7"])}
-        self.assertEqual(len(open_lines), 1)
-        self.assertTrue(open_lines.pop().startswith("3+"))
 
 
 class EnterTests(unittest.TestCase):

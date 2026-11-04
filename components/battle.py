@@ -842,6 +842,9 @@ class Player:
         self.kira_join = None  # Kira Nerys: waehrend unseres Angriffs angreifend gekommene Kreaturen
         self.worf_taps = (None, 0, ())  # Worf: (Schritt, getappte Clues, getappte Artefakte) in diesem Zug
         self.life_mark = LIFE  # Leben zu Beginn des laufenden Zugs (Gul Dukat: in diesem Zug verlorenes Leben)
+        self.kobayashi = []  # Kobayashi Maru Scenario im Spiel: {"card": eigenes Objekt in perms, "used": Modi}
+        self.dilemmas_turn = 0  # in diesem Zug gefaced Dilemmas (Captain Benjamin Sisko)
+        self.naked_turn = None  # The Naked Time II: Schritt, in dem kommende Kreaturen Marke und Haste bekommen
         self.trap_links = []  # Exil bis zum Verlassen (610.3): {"trap", "card", "owner", "creature"}
         self.lock_links = []  # Lock-Auras dieses Spielers: {"aura", "creature"}
         self.predrawn = Counter()  # Main Phase: Karten, deren "draw N" die Planung (resolve_draws) schon gezogen hat
@@ -1559,8 +1562,11 @@ def attack_choice_triggers(p, opp, attackers, step, e):
             e["events"].append(f"{p.name}: {a.card.name} – {pick.card.name} bekommt Deathtouch")
             continue
         rest = [s for s in subs if s is not dt]
-        if rest:
-            sub = max(rest, key=lambda s: mode_value(p, opp, s, step))
+        if rest and a.card.modes_all_empty_hand and not p.hand:  # Captain Kirk: ohne Handkarten alle Modi
+            picks = sorted(rest, key=lambda s: mode_value(p, opp, s, step), reverse=True)
+        else:
+            picks = [max(rest, key=lambda s: mode_value(p, opp, s, step))] if rest else []
+        for sub in picks:
             if sub.surveil:
                 surveil_cards(p, [sub.surveil], e, a.card.name)
             else:
@@ -2067,10 +2073,51 @@ def hydra_spread(p, e):
     bury((p,) if p.opponent is None else (p, p.opponent), e)
 
 
+def kobayashi_upkeep(p, opp, step, e):
+    """Kobayashi Maru Scenario im eigenen Upkeep: Hail (die gefaehrlichste gegnerische Kreatur bis Manawert 3 auf
+    die Hand), wenn es ein Ziel gibt, sonst Sensors (zwei ziehen), dann Transport (zwei Officers), Hail ohne Ziel;
+    zuletzt Abandon Ship: wir verlieren."""
+    p.kobayashi = [k for k in p.kobayashi if any(x is k["card"] for x in p.perms)]
+    for k in p.kobayashi:
+        used = k["used"]
+        target = None
+        if "hail" not in used and opp is not None:
+            target = choose_target(("bounce", 0, (("mv_le", 3),), False, "spell", False), p, opp)
+        if target is not None:
+            mode = "hail"
+            opp.creatures.remove(target)
+            if not target.card.is_token:
+                (target.owner or opp).hand.append(target.base_card or target.card)
+            _leave(opp, target.card)
+        elif "sensors" not in used:
+            mode = "sensors"
+            _draw(p, 2)
+        elif "transport" not in used:
+            mode = "transport"
+            make_tokens(p, [(2, k["card"].kobayashi)], step, e, opp, k["card"].name)
+        elif "hail" not in used:
+            mode = "hail"
+        else:
+            mode = "abandon"
+            p.life = min(p.life, 0)
+        used.append(mode)
+        e["events"].append(f"{p.name}: {k['card'].name} – {mode}")
+
+
+def kobayashi_ok(me, opp, card):
+    """Kobayashi Maru Scenario nur kurz vor dem Sieg (Nutzer 2026-11-03): unsere Kreaturen schaffen das Leben des
+    Gegners in hoechstens drei Angriffen (Summe der Power)."""
+    if card.kobayashi is None or opp is None:
+        return True
+    power = sum(max(0, c.power) for c in me.creatures if not c.dead and not c.card.defender)
+    return 3 * power >= opp.life
+
+
 def upkeep_triggers(me, opp, step, e):
     """Zu Beginn jedes Upkeeps (beider Spieler): Verdant Kraken erschafft ein Tentacle fuer seinen Kontrolleur; Command
     the Stage kommt auf die Hand, wenn ein Gegner seines Besitzers im letzten Zug Schaden ausserhalb des Kampfs
     bekam."""
+    kobayashi_upkeep(me, opp, step, e)
     for c in list(me.creatures):  # Vash: zu Beginn des eigenen Upkeeps Surveil
         if c.card.upkeep_surveil and not c.dead:
             surveil_cards(me, [c.card.upkeep_surveil], e, c.card.name)
@@ -3163,6 +3210,7 @@ def cast_triggers(p, card, step, e):
 def face_dilemma(p, step, e):
     """TRK: p waehlt Modi fuer einen Zauber oder eine Faehigkeit (700.2a/b) - "Whenever you face a dilemma"-Ausloeser
     eigener Kreaturen und Permanents, einmal je Zauber bzw. Faehigkeit, egal wie viele Modi."""
+    p.dilemmas_turn += 1  # Captain Benjamin Sisko
     for src, source in static_sources(p):
         if source.dilemma_trig:
             cast_effects(p, src, source, source.dilemma_trig, step, e, "Dilemma")
@@ -3382,6 +3430,9 @@ def ally_enters(p, new):
     new.bonus += sum(c.card.ally_enter_counter for c in p.creatures if c is not new and not c.dead)
     for card in p.perms:
         gain_life(p, card.creature_enter_life)
+    if p.naked_turn is not None and p.naked_turn == p.now:  # The Naked Time II
+        new.bonus += 1
+        new.extra.add("haste")
 
 
 def kira_enters(p, new):
@@ -4912,6 +4963,8 @@ def mode_value(p, opp, sub, step, end_step=False):
 def choose_modes(p, opp, card, step, end_step=False):
     """So viele verschiedene Modi wie verlangt, die wertvollsten zuerst."""
     n, subs = card.choices
+    if card.modes_all_empty_hand and not p.hand:  # Captain Kirk: ohne Handkarten alle Modi
+        n = len(subs)
     return sorted(subs, key=lambda s: mode_value(p, opp, s, step, end_step), reverse=True)[:n]
 
 
@@ -4929,6 +4982,13 @@ def permanent_enters(p, opp, card, step, e):
             pick.auras.append(card)
             pick.extra |= set(card.aura_etb_kw)
             e["events"].append(f"{p.name}: {card.name} an {pick.card.name}")
+    if card.kobayashi is not None:  # Kobayashi Maru Scenario: eigenes Objekt, gewaehlte Modi
+        live = card._replace()
+        for i in range(len(p.perms) - 1, -1, -1):
+            if p.perms[i] is card:
+                p.perms[i] = live
+                break
+        p.kobayashi.append({"card": live, "used": []})
     if card.station:  # Station-Karte: eigenes Objekt im Spiel, Charge-Marken bleiben, bis sie das Spielfeld verlaesst
         live = card._replace()
         for i in range(len(p.perms) - 1, -1, -1):
@@ -5280,6 +5340,15 @@ def saga_atom(p, opp, st, atom, step, e):
         owner, back = st["temp"]
         st["temp"] = None
         put_back(owner, back, "battlefield", step, e, p)
+    elif kind == "naked_turn":  # The Naked Time II
+        p.naked_turn = p.now
+    elif kind == "sac_land":  # The Naked Time III: ein Land der haeufigsten Farbe (selbst gesetzt)
+        if p.lands:
+            common = Counter(l.land_colors for l in p.lands)
+            land = max(reversed(p.lands), key=lambda l: common[l.land_colors])
+            p.lands.remove(land)
+            p.graveyard.append(land)
+            e["events"].append(f"{p.name}: {card.name} – opfert {land.name}")
     elif kind == "sac_for_tokens":  # erst Clue/Treasure, dann ein Token bzw. eine Kreatur unter 2/2 + 2/2
         small = sorted((c for c in p.creatures if not c.dead and c.power + c.toughness < 4),
                        key=lambda c: (not c.card.is_token, _value(c)))
@@ -5631,6 +5700,9 @@ def savvy_treasures(p, e):
 def end_step_triggers(me, opp, e):
     """Beginn des Endsegments von me: Armus (der Gegner wirft zwei Karten ab, nur im eigenen Zug); Gul Dukat (in jedem
     Endsegment: der Gegner verliert das in diesem Zug verlorene Leben noch einmal, wir gewinnen es)."""
+    for c in list(me.creatures):  # Captain Benjamin Sisko: ein Officer je Dilemma in diesem Zug
+        if c.card.end_dilemma_tokens is not None and not c.dead and me.dilemmas_turn:
+            make_tokens(me, [(me.dilemmas_turn, c.card.end_dilemma_tokens)], me.now, e, opp, c.card.name)
     for c in list(me.creatures):
         if c.card.end_discard and not c.dead and opp is not None:
             discard(opp, c.card.end_discard, e)
@@ -5675,6 +5747,12 @@ def card_effects(me, opp, card, step, entry, modes=None):
             if ef[1] == "spell":
                 _jace_add(me, ef[2], entry)
         gain_life(me, card.etb_life)  # Modus beim Betreten: "you gain N life" (z. B. Archive Arbiter)
+    if card.discard_first:  # Captain Kirk: "Discard a card, then draw a card" (ziehen ueber card.draws)
+        gone = choose_discard(me)
+        if gone is not None:
+            me.hand.remove(gone)
+            me.graveyard.append(gone)
+            discarded(me, entry, [gone])
     if card.etb_mana:  # Culber and Stamets: N Mana einer Farbe
         me.open = list(me.open) + [ANY_COLOR] * card.etb_mana
     if card.treasure:
@@ -5948,7 +6026,7 @@ def main_phase_spells(me, opp):
             and (not c.rummage_spell or surplus_land(me) is not None)
             and (not c.twin or twin_host(me, opp) is not None)
             and (not c.mirror_copy or (opp is not None and any(not x.dead for x in opp.creatures)))
-            and sweep_etb_ok(me, opp, c)
+            and sweep_etb_ok(me, opp, c) and kobayashi_ok(me, opp, c)
             and (not c.cast_threshold or threshold(me))
             and (not c.entrust or entrust_pick(me) is not None)
             and (not c.x_counters or sum(1 for x in me.creatures if not x.dead) >= 2)
@@ -7126,6 +7204,30 @@ def lead_pump(me, opp, step, e):
         e["events"].append(f"{me.name}: {src.card.name} – {target.card.name} +{x}/+{x}")
 
 
+def combat_tokens(me, opp, step, e):
+    """Zu Beginn des eigenen Kampfs: D-7 Battle Cruiser (ab seiner Stufe) und L'Rell erschaffen ein Token mit Haste,
+    das im naechsten Endsegment geopfert wird."""
+    for st in _station_ready(me):
+        n_tok = st["card"].station_combat_token
+        if n_tok and st["charge"] >= n_tok[0]:
+            make_tokens(me, [(1, n_tok[1])], step, e, opp, st["card"].name)
+    for c in [x for x in me.creatures if x.card.combat_token is not None and not x.dead]:
+        make_tokens(me, [(1, c.card.combat_token)], step, e, opp, c.card.name)
+
+
+def lrell_surveil(p, e):
+    """L'Rell im eigenen Endsegment (selbst gesetzt): Kreaturen, die ohnehin geopfert werden ("Sacrifice it at the
+    beginning of the next end step"), mit sonst ungenutztem Mana fuer Surveil opfern."""
+    for src in [c for c in p.creatures if c.card.sac_surveil and not c.dead]:
+        alts, n = src.card.sac_surveil
+        need = min(g + sum(k for _c, k in cols) for g, cols in alts)
+        for c in [x for x in p.creatures if x.card.end_sacrifice and not x.dead and x is not src]:
+            if free_units(p) < need or not _pay_open(p, alts, treasure=False):
+                return
+            c.dead = True
+            surveil_cards(p, [n], e, src.card.name)
+
+
 def combat_counters(me, step, e):
     """Zu Beginn des eigenen Kampfs: N +1/+1-Marken auf eine eigene Kreatur, dazu Schluesselwoerter bis Rundenende
     (Training Regimen, Additive Evolution)."""
@@ -7701,6 +7803,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     me.opponent, opp.opponent = opp, me
     me.now = opp.now = step
     me.life_mark, opp.life_mark = me.life, opp.life
+    me.dilemmas_turn = opp.dilemmas_turn = 0
     expire_until_next_turn(me, step)
     for w in me.walkers:
         w.used = False
@@ -8093,6 +8196,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     hydra_spread(me, e)
     combat_buffs(me, step, e)
     combat_counters(me, step, e)
+    combat_tokens(me, opp, step, e)
     combat_exile_counters(me, step, e)
     federation_draws(me, step, e)
     twin_for_lethal(me, opp, step, e)
@@ -8307,6 +8411,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
                 e["events"].append(f"{p_.name}: Kopie von {c.card.name} exiliert")
     end_step_discards((me, opp), e)
     end_step_triggers(me, opp, e)
+    lrell_surveil(me, e)
     for p_ in (me, opp):  # "At the beginning of the end step, sacrifice this creature"
         for c in p_.creatures:
             if c.card.end_sacrifice:

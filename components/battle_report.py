@@ -501,6 +501,12 @@ RULES = [
     "mindestens so viel Manawert an Nichtartefakt-Kreaturen verliert wie wir. Tea, Earl Grey, Hot und Savvy "
     "Profiteer am Ende des gegnerischen Zugs mit sonst ungenutztem Mana; Tea macht Schaden, außer wir haben 10 "
     "oder weniger Leben und der Schaden ist nicht tödlich. Quark: Treasure in jedem Upkeep, nicht nutzbar.",
+    "Kampfbeginn und Modi (TRK): D-7 Battle Cruiser (ab 3 Marken) und L'Rell erschaffen zu Kampfbeginn ein "
+    "2/1-Token mit Haste, das im Endsegment geopfert wird; L'Rell opfert es vorher mit sonst ungenutztem Mana für "
+    "Surveil. Captain Kirk wählt den wertvollsten Modus, ohne Handkarten alle. Kobayashi Maru Scenario wird nur "
+    "gewirkt, wenn unsere Kreaturen das Leben des Gegners in höchstens drei Angriffen schaffen; Modi: Hail mit "
+    "Ziel, sonst Sensors, dann Transport, im vierten Upkeep verloren. Sisko: ein Officer je Dilemma (die "
+    "Fünffarben-Fähigkeit bewusst nicht). The Naked Time III opfert ein Land der häufigsten Farbe.",
     "Alchemy (YFRA): „perpetually“ ändert die Karte selbst (bleibt in Friedhof und Hand). Conjure benannter Karten "
     "(Kraken Hatchling, Mind Stone, Aria of Flame) mit ihren Texten von Scryfall. Avoided Stairwurm −1/−1 je "
     "Kreaturenkarte in der Bibliothek; Zimone macht Schaden wie mit positiver Power und wird prepared, sobald Karten "

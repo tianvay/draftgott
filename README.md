@@ -581,6 +581,8 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
   Troi, Academy Instructor, Dominion Supervisor, Pure Energy, Culber and Stamets, General Chang, Jadzia Dax,
   Sickbay, Picard, Leading by Example, Tea, Earl Grey, Hot, Khan, Despot by Design, Crystalline Entity, Armus,
   A Good Day to Die, Savvy Profiteer, Quark, Rok-Tahk, Gul Dukat.
+- Kampfbeginn und Modi (TRK): D-7 Battle Cruiser, L'Rell, Captain James T. Kirk, Kobayashi Maru Scenario (nur kurz
+  vor dem Sieg), Captain Benjamin Sisko (ohne die Fünffarben-Fähigkeit), The Naked Time.
 - Removal (Destroy/Exile, Schaden, −X/−X, Edikt, Fight, Biss, Bounce, Lock, zurück in die Bibliothek,
   Massenremoval) trifft die gefährlichste passende Kreatur; Removal-Instants vor dem Angriff, gegen Angreifer oder am
   Ende des gegnerischen Zugs.

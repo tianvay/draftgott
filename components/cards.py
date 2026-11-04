@@ -430,6 +430,13 @@ class Card(NamedTuple):
     quark: bool = False  # Quark: Treasure in jedem Upkeep, Treasure duerfen nicht geopfert werden
     team_mana: tuple = ()  # Rok-Tahk: eigene Kreaturen haben "{T}: Add ..." (Mana-Einheiten)
     dukat: bool = False  # Gul Dukat: in jedem Endsegment verliert der Gegner sein in diesem Zug verlorenes Leben
+    station_combat_token: tuple = ()  # D-7 Battle Cruiser: (Stufe, Token) zu Kampfbeginn, im Endsegment geopfert
+    combat_token: object = None  # L'Rell: Token zu Kampfbeginn (Haste, im Endsegment geopfert)
+    sac_surveil: tuple = ()  # L'Rell: (Kosten, N) - andere Kreatur oder Artefakt opfern: Surveil N
+    modes_all_empty_hand: bool = False  # Captain Kirk: ohne Handkarten alle Modi
+    discard_first: bool = False  # Modus "Discard a card, then draw a card" (Captain Kirk)
+    kobayashi: object = None  # Kobayashi Maru Scenario: das Officer-Token des Modus Transport
+    end_dilemma_tokens: object = None  # Captain Benjamin Sisko: Token je Dilemma in diesem Zug im Endsegment
 
 
 LANDCYCLE_RE = re.compile(
@@ -2718,6 +2725,9 @@ _CHAPTER_RES = (  # Kapitel, die der Zauber-Parser nicht liest (TRK)
     (r"exile up to one target nontoken artifact or creature\.", lambda m: (("temp_exile",),)),
     (r"return the exiled card to the battlefield under its owner's control\. you gain (\d+) life\.",
      lambda m: (("return_exiled",), ("life", int(m.group(1))))),
+    (r"whenever a creature you control enters this turn, put a \+1/\+1 counter on it and it gains haste until end "
+     r"of turn\.", lambda m: (("naked_turn",),)),
+    (r"sacrifice a land\.", lambda m: (("sac_land",),)),
     (r"you may sacrifice an artifact or creature\. if you do, (create .+ tokens?)\.",
      lambda m: (("sac_for_tokens", tuple(_tokens_in(m.group(1) + "."))),)),
 )
@@ -2958,6 +2968,17 @@ _TRK_RES = {
     "team_mana": re.compile(r'^creatures you control have "\{t\}: add ((?:\{[wubrg]\})+)\."$'),
     "dukat": re.compile(r"^at the beginning of each end step, each opponent loses life equal to the life that "
                        r"player lost this turn\. you gain life equal to the life lost this way\.$"),
+    "station_combat_token": re.compile(r"^(\d+)\+ \| at the beginning of combat on your turn, (create .+? token) "
+                                      r"with haste\. sacrifice it at the beginning of the next end step\.$"),
+    "combat_token": re.compile(r"^at the beginning of combat on your turn, (create .+? token) with haste\. "
+                              r"sacrifice it at the beginning of the next end step\.$"),
+    "sac_surveil": re.compile(r"^((?:\{[^}]+\})+), sacrifice another creature or artifact: surveil (\d+)\.$"),
+    "kirk_modes": re.compile(r"^whenever (?:~|(?:captain|~) kirk|captain ~) enters or attacks, choose one\. if you have no "
+                            r"cards in hand, choose one or more instead\.$"),
+    "discard_draw": re.compile(r"^discard a card, then draw a card\.$"),
+    "kobayashi": re.compile(r"^at the beginning of your upkeep, choose one that hasn't been chosen —$"),
+    "end_dilemma_tokens": re.compile(r"^at the beginning of your end step, (create a .+? token) for each dilemma "
+                                    r"you've faced this turn\.$"),
     "mirror_copy": re.compile(r"^create a token that's a copy of target creature an opponent controls, except it "
                              r"has menace\. if this spell was kicked, instead for each creature target opponent "
                              r"controls, create a token that's a copy of that creature, except it has menace\.$"),
@@ -3295,6 +3316,7 @@ def trk_land_token_traits(card, type_line):
         out.update(trk_kicker_fields(low, res))
         out.update(trk_tap_fields(low, res))
         out.update(trk_r12_fields(low, res, lines))
+        out.update(trk_r3_fields(card, low, res, lines, i))
     return out
 
 
@@ -3443,6 +3465,45 @@ def trk_r12_fields(low, res, lines):
         out["team_mana"] = tuple((c.upper(),) for c in re.findall(r"\{([wubrg])\}", m.group(1)))
     if res["dukat"].match(low):
         out["dukat"] = True
+    return out
+
+
+def _haste_token(text):
+    """Token aus "create ... token" mit Haste, das im naechsten Endsegment geopfert wird."""
+    tokens = _tokens_in(text + ".")
+    return tokens[0][1]._replace(haste=True, end_sacrifice=True) if tokens else None
+
+
+def trk_r3_fields(card, low, res, lines, i):
+    """TRK Paket R3 (Kampfbeginn und Modi): Felder einer Zeile; i: Index der Zeile (Aufzaehlungspunkte danach)."""
+    out = {}
+    m = res["station_combat_token"].match(low)
+    if m and _haste_token(m.group(2)) is not None:
+        out["station_combat_token"] = (int(m.group(1)), _haste_token(m.group(2)))
+    m = res["combat_token"].match(low)
+    if m and _haste_token(m.group(1)) is not None:
+        out["combat_token"] = _haste_token(m.group(1))
+    m = res["sac_surveil"].match(low)
+    if m:
+        out["sac_surveil"] = (cost_alternatives(m.group(1).upper()), int(m.group(2)))
+    if res["kirk_modes"].match(low):  # Betreten und Angriff: dieselben Modi
+        subs = []
+        for braw, _blow in lines[i + 1:]:
+            if not braw.strip().startswith("•"):
+                break
+            subs.append(_sub_card(card.get("name", ""), re.sub(r"\([^)]*\)", "", braw.strip().lstrip("•")).strip(),
+                                  "Instant")._replace(is_mode=True))
+        out["modes_all_empty_hand"] = True
+        if subs:
+            out["choices"] = out["attack_choices"] = (1, tuple(subs))
+    if res["discard_draw"].match(low):
+        out["draws"], out["discard_first"] = 1, True
+    if res["kobayashi"].match(low):
+        tokens = _tokens_in("create a 1/1 red officer creature token.")
+        out["kobayashi"] = tokens[0][1] if tokens else True
+    m = res["end_dilemma_tokens"].match(low)
+    if m and _tokens_in(m.group(1) + "."):
+        out["end_dilemma_tokens"] = _tokens_in(m.group(1) + ".")[0][1]
     return out
 
 
