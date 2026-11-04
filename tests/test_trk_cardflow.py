@@ -159,9 +159,7 @@ class ParseTests(unittest.TestCase):
             elif key == "dathon":
                 self.assertEqual(len(lines), 1, key)
                 self.assertIn("choose a counter", lines[0].lower())
-            elif key == "khan":
-                self.assertEqual(lines, ["You may cast this card from exile."], key)
-            else:
+            else:  # Khan: Wirken aus dem Exil seit TRK R4 modelliert (Nutzer 2026-11-05)
                 self.assertEqual(lines, [], key)
 
 

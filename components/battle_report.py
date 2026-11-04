@@ -507,6 +507,14 @@ RULES = [
     "gewirkt, wenn unsere Kreaturen das Leben des Gegners in höchstens drei Angriffen schaffen; Modi: Hail mit "
     "Ziel, sonst Sensors, dann Transport, im vierten Upkeep verloren. Sisko: ein Officer je Dilemma (die "
     "Fünffarben-Fähigkeit bewusst nicht). The Naked Time III opfert ein Land der häufigsten Farbe.",
+    "Opfern und Friedhof (TRK): Gowron und Kirk, Commanding Officer opfern nur, was ohnehin stirbt (Removal, "
+    "sterbender Blocker); Kirk zerstört dabei das wertvollste Artefakt bzw. die wertvollste Verzauberung des "
+    "Gegners. Dahar Master opfert nur Clue, kleinen Token oder Food, und nur für einen Kill oder Lethal; Targ "
+    "Wrangler opfert Clue, Food, Treasure, kleinen Token, dann das billigste Nichtkreatur-Permanent. Dr. McCoy "
+    "rettet Kreaturen mit Marken vor Zerstörung. The Needs of the Many gegen einen tödlichen Angriff oder "
+    "Massenremoval, das mindestens zwei unserer Kreaturen tötet. Tell Me What You See: der Gegner verliert 4 "
+    "Leben, außer er hätte danach 4 oder weniger. Exil-Removal exiliert jetzt (statt Friedhof); Khan, Vengeful "
+    "Heart bleibt im Exil wirkbar (Exil-Removal, Finality, verfallene Impulse).",
     "Alchemy (YFRA): „perpetually“ ändert die Karte selbst (bleibt in Friedhof und Hand). Conjure benannter Karten "
     "(Kraken Hatchling, Mind Stone, Aria of Flame) mit ihren Texten von Scryfall. Avoided Stairwurm −1/−1 je "
     "Kreaturenkarte in der Bibliothek; Zimone macht Schaden wie mit positiver Power und wird prepared, sobald Karten "

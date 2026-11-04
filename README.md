@@ -583,6 +583,9 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
   A Good Day to Die, Savvy Profiteer, Quark, Rok-Tahk, Gul Dukat.
 - Kampfbeginn und Modi (TRK): D-7 Battle Cruiser, L'Rell, Captain James T. Kirk, Kobayashi Maru Scenario (nur kurz
   vor dem Sieg), Captain Benjamin Sisko (ohne die Fünffarben-Fähigkeit), The Naked Time.
+- Opfern und Friedhof (TRK): Gowron, Kirk, Commanding Officer, Dahar Master, Targ Wrangler, Dr. McCoy, Bones McCoy,
+  Raffi Musiker, Gabriel Lorca, The Needs of the Many, De-evolve, Tell Me What You See, Khan aus dem Exil;
+  Removal mit "Exile target ..." exiliert (vorher Friedhof).
 - Removal (Destroy/Exile, Schaden, −X/−X, Edikt, Fight, Biss, Bounce, Lock, zurück in die Bibliothek,
   Massenremoval) trifft die gefährlichste passende Kreatur; Removal-Instants vor dem Angriff, gegen Angreifer oder am
   Ende des gegnerischen Zugs.

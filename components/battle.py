@@ -845,6 +845,8 @@ class Player:
         self.kobayashi = []  # Kobayashi Maru Scenario im Spiel: {"card": eigenes Objekt in perms, "used": Modi}
         self.dilemmas_turn = 0  # in diesem Zug gefaced Dilemmas (Captain Benjamin Sisko)
         self.naked_turn = None  # The Naked Time II: Schritt, in dem kommende Kreaturen Marke und Haste bekommen
+        self.prevent_turn = None  # The Needs of the Many: Schritt, in dem aller Schaden an uns verhindert wird
+        self.bones_back = []  # Bones McCoy: Karten, die im naechsten Endsegment mit Marke zurueckkommen
         self.trap_links = []  # Exil bis zum Verlassen (610.3): {"trap", "card", "owner", "creature"}
         self.lock_links = []  # Lock-Auras dieses Spielers: {"aura", "creature"}
         self.predrawn = Counter()  # Main Phase: Karten, deren "draw N" die Planung (resolve_draws) schon gezogen hat
@@ -2121,6 +2123,17 @@ def upkeep_triggers(me, opp, step, e):
     for c in list(me.creatures):  # Vash: zu Beginn des eigenen Upkeeps Surveil
         if c.card.upkeep_surveil and not c.dead:
             surveil_cards(me, [c.card.upkeep_surveil], e, c.card.name)
+    for p in (me, opp):  # De-evolve: ab Threshold die verzauberte Kreatur exilieren
+        if p is None or p.opponent is None or len(p.graveyard) < 7:
+            continue
+        for lock in [l for l in p.lock_links if l["aura"].threshold_exile]:
+            holder, cr = p.opponent, lock["creature"]
+            if any(cr is x for x in holder.creatures):
+                holder.creatures.remove(cr)
+                _leave(holder, cr.card)
+                exile_own(cr.owner or holder, cr.base_card or cr.card)
+                e["events"].append(f"{p.name}: {lock['aura'].name} exiliert {cr.card.name}")
+            destroy_permanent(p, lock["aura"], e)
     for p in (me, opp):
         for c in list(p.creatures):  # Quark: zu Beginn jedes Upkeeps ein Treasure
             if c.card.quark and not c.dead:
@@ -2931,10 +2944,15 @@ def jace_turn_start(p, step, e=None):
         _jace_activate(p, step, e, False)
 
 
+def prevented(p):
+    """The Needs of the Many: aller Schaden an p wird in diesem Zug verhindert."""
+    return p.prevent_turn is not None and p.prevent_turn == p.now
+
+
 def deal_noncombat(src, victim, amount, e):
     """Schaden ausserhalb des Kampfs von src an den Spieler victim (direkter Schaden). Jedes Ereignis gibt Kreaturen
     wie Massacre Girl ("whenever an opponent is dealt noncombat damage") ihre Marken."""
-    if amount <= 0 or victim is None:
+    if amount <= 0 or victim is None or prevented(victim):
         return
     victim.life -= amount
     victim.noncombat_step = victim.now
@@ -3211,6 +3229,15 @@ def face_dilemma(p, step, e):
     """TRK: p waehlt Modi fuer einen Zauber oder eine Faehigkeit (700.2a/b) - "Whenever you face a dilemma"-Ausloeser
     eigener Kreaturen und Permanents, einmal je Zauber bzw. Faehigkeit, egal wie viele Modi."""
     p.dilemmas_turn += 1  # Captain Benjamin Sisko
+    for card in [g for g in p.graveyard if g.lorca_return]:  # Gabriel Lorca: mit freiem Mana zurueck
+        if free_units(p) >= 1 and _pay_open(p, card.lorca_return, treasure=False):
+            p.graveyard.remove(card)
+            p.hand.append(card)
+            e["events"].append(f"{p.name}: {card.name} aus dem Friedhof auf die Hand")
+    for card in [x for x in p.perms if x.dilemma_bounce_self]:  # Tell Me What You See: wieder wirken
+        p.perms.remove(card)
+        p.hand.append(card)
+        e["events"].append(f"{p.name}: {card.name} zurück auf die Hand")
     for src, source in static_sources(p):
         if source.dilemma_trig:
             cast_effects(p, src, source, source.dilemma_trig, step, e, "Dilemma")
@@ -3835,6 +3862,24 @@ def legend_ok(p, card):
                 or any(c.name == card.name for c in p.perms) or any(w.card.name == card.name for w in p.walkers))
 
 
+def mccoy_saves(players, e):
+    """Dr. McCoy, Surly Surgeon (614.1): eine andere eigene Kreatur mit +1/+1-Marke, die zerstoert wuerde (toedlicher
+    Schaden, Deathtouch, Zerstoeren-Effekt), verliert stattdessen ihre Marken, und ihr Schaden wird geheilt."""
+    for p in players:
+        docs = [c for c in p.creatures if c.card.mccoy_save and not c.dead]
+        if not docs:
+            continue
+        for c in p.creatures:
+            if all(c is d for d in docs) or c.bonus <= 0 or c.toughness <= 0:
+                continue
+            destroyed = c.dead and c.once.get("destroyed")
+            lethal = not c.dead and is_dying(c)
+            if destroyed or lethal:
+                c.bonus, c.damage, c.touched, c.dead = 0, 0, False, False
+                c.once.pop("destroyed", None)
+                e["events"].append(f"{p.name}: {docs[0].card.name} rettet {c.card.name} (Marken weg)")
+
+
 def is_dying(c):
     """Stirbt die Kreatur (704.5f/g/h)? Indestructible (702.12b): toedlicher Schaden und Deathtouch zerstoeren sie
     nicht; Toughness 0 oder weniger, Opfern und Zerstoeren-Effekte, die sie schon markiert haben, schon."""
@@ -3848,6 +3893,7 @@ def bury(players, e):
     gestorbene eigene Kreaturen (Massacre Girl; sie sieht auch Tode im selben Moment wie ihren eigenen, 603.10a)."""
     tap_check(players, e)
     gy_leave_check(players, e)
+    mccoy_saves(players, e)
     for p in players:
         legend_rule(p, e)
     triggers = []  # erst alle gleichzeitig sterben lassen (704.3), dann die Ausloeser
@@ -3892,6 +3938,10 @@ def bury(players, e):
                         (c.owner or p).graveyard.append(c.base_card)
                 elif not c.card.is_token and not c.finality:
                     (c.owner or p).graveyard.append(c.card)
+                elif not c.card.is_token:  # ins Exil (Finality, Exil-Removal): Khan bleibt wirkbar
+                    exile_own(c.owner or p, c.card)
+                if c.once.get("bones") == p.now and not c.card.is_token and not c.finality:  # Bones McCoy
+                    (c.owner or p).bones_back.append(c.base_card or c.card)
                 if any(a.aura_return for a in c.auras) and not c.card.is_token and c.land_source is None:
                     returns.append((c.owner or p, c.card))  # Ferocity of the Hunt
                 if c.card.death_draw:  # Simulacrum Shaper
@@ -4316,15 +4366,26 @@ def choose_discard(p):
 def _sacrificer(p):
     """Eigene Kreatur mit "{N}, Sacrifice another creature: Marke auf sich" (Edgar, Ancient Bloodlord) bzw.
     "{N}, Sacrifice a creature: Marke auf jeden Klingonen" (General Chang)."""
-    return next((c for c in p.creatures if (c.card.sac_counter or c.card.sac_klingon) and not c.dead), None)
+    return next((c for c in p.creatures if (c.card.sac_counter or c.card.sac_klingon or c.card.sac_trample_draw)
+                 and not c.dead), None)
 
 
 def sacrifice_for(p, victim, e, mode="rest"):
     """Opfert victim fuer die Faehigkeit von Edgar (bezahlt mit mode, siehe _pay_ability). victim stirbt (bury
     danach), Edgar bekommt seine Marke und die Schluesselwoerter bis Rundenende."""
+    if victim.card.self_sac_destroy and not victim.dead and kirk_sac(p, victim, e, mode):
+        return True  # Kirk, Commanding Officer: stirbt ohnehin
     ed = _sacrificer(p)
     if ed is None or victim is ed or victim.dead:
         return False
+    if ed.card.sac_trample_draw and not ed.card.sac_counter and not ed.card.sac_klingon:  # Gowron
+        victim.dead = True
+        ed.extra.add("trample")
+        if "klingon" in victim.card.creature_types:
+            _draw(p)
+            p.life -= 1
+        e["events"].append(f"{p.name}: {ed.card.name} opfert {victim.card.name}")
+        return True
     if not ed.card.sac_counter:  # General Chang
         if not _pay_ability(p, ed.card.sac_klingon, mode):
             return False
@@ -4345,10 +4406,23 @@ def sacrifice_for(p, victim, e, mode="rest"):
     return True
 
 
+def kirk_sac(p, kirk, e, mode="rest"):
+    """Kirk, Commanding Officer (Nutzer 2026-11-04: nur, wenn er ohnehin stirbt): sich opfern und das wertvollste
+    Artefakt bzw. die wertvollste Verzauberung des Gegners zerstoeren (Locks auf unseren Kreaturen zuerst)."""
+    opp = p.opponent
+    targets = noncreature_targets(p, opp, "artifact_enchantment") if opp is not None else []
+    if not targets or not _pay_ability(p, kirk.card.self_sac_destroy, mode):
+        return False
+    kirk.dead = True
+    e["events"].append(f"{p.name}: {kirk.card.name} opfert sich")
+    destroy_permanent(opp, targets[0][2], e)
+    return True
+
+
 def sacrifice_blockers(dfn, pairs, e):
     """Nach den Blocks: ein eigener Blocker, der stirbt, ohne den Angreifer zu toeten, wird fuer Edgar geopfert. Der
     Angreifer bleibt geblockt (509.1h) und macht keinen Schaden; nicht gegen Trample (702.19e: alles ginge an uns)."""
-    if _sacrificer(dfn) is None:
+    if _sacrificer(dfn) is None and not any(b.card.self_sac_destroy for _a, bs in pairs for b in bs):
         return
     done = False
     for att, bs in pairs:
@@ -4562,9 +4636,17 @@ def _cast_removal(card, caster, victim, e, step, target=None):
             hit += caster.creatures
         if ("nonartifact",) in spec[2]:  # Crystalline Entity
             hit = [c for c in hit if not c.card.is_artifact]
+        if any(c.needs_many for c in victim.hand):  # The Needs of the Many gegen Massenremoval
+            doomed = [c for c in hit if any(c is x for x in victim.creatures) and not c.dead
+                      and not c.has("indestructible")
+                      and (kind == "sweep" or c.toughness - c.damage <= amount)]
+            if len(doomed) >= 2:
+                needs_cast(victim, e, step, doomed)
         for c in hit:
             if kind == "sweep":
-                c.dead = c.dead or not c.has("indestructible")  # 702.12b
+                if not c.dead and not c.has("indestructible"):  # 702.12b
+                    c.dead = True
+                    c.once["destroyed"] = True
             else:
                 c.damage += amount
         e["events"].append(f"{caster.name}: {card.name} trifft alle Kreaturen")
@@ -4646,6 +4728,8 @@ def _cast_removal(card, caster, victim, e, step, target=None):
             e["events"].append(f"{caster.name}: {card.name} – {label} ist unzerstörbar")
         else:
             target.dead = True
+            if not card.exile_removal:  # Dr. McCoy, Surly Surgeon: nur Zerstoeren, kein Exil
+                target.once["destroyed"] = True
     elif kind == "minus" and target.has("indestructible"):  # -X/-X wirkt: Toughness 0 (704.5f)
         target.pump -= amount
         target.tpump -= amount
@@ -4706,7 +4790,7 @@ def _cast_removal(card, caster, victim, e, step, target=None):
         return
     e["events"].append(f"{caster.name}: {card.name} – {label}")
     before = target.finality
-    if card.removal_exile:  # "If that permanent would die this turn, exile it instead"
+    if card.removal_exile or (card.exile_removal and kind == "destroy"):  # Exil statt Friedhof
         target.finality = True
     bury((caster, victim), e)
     target.finality = before
@@ -4917,9 +5001,21 @@ def jace_instant_turn(p, opp, step, e):
                 activate_pw(p, opp, w, (opts[0][2], opts[0][3]), step, e, opts[0][4])
 
 
+def bones_cands(p):
+    return [g for g in p.graveyard if not g.is_instant_sorcery and "doctor" not in g.creature_types]
+
+
 def mode_value(p, opp, sub, step, end_step=False):
     """Wert eines Modus: Lethal > Removal (toetet) > Karte ziehen > Token > Marken/Pumps > Schaden > Leben.
     end_step: am Ende des gegnerischen Zugs zaehlen Pumps bis Rundenende nicht."""
+    if sub.bones_return:  # Bones McCoy
+        return (4, 0) if bones_cands(p) else (0,)
+    if sub.bones_protect:
+        return (1,)
+    if sub.etb_clue:  # Raffi: Investigate wie Ziehen, ausser das Leben wird knapp
+        return (0,) if p.life <= sub.life_loss + 2 else (4, 1)
+    if sub.gy_hate:
+        return (1,)
     spec = sub.removal
     atoms = [a for m in sub.modes[:1] for a in m]
     face = sum(a[1] for a in atoms if a[0] == "face")
@@ -5669,6 +5765,52 @@ def federation_draws(p, step, e):
                     c.bonus += 2
 
 
+def dahar_pay(p, opp, card, e):
+    """Dahar Master (selbst gesetzt): opfert nur Clue, kleinen Token oder Food (flow_fodder) und nur, wenn die 2
+    Schaden eine Kreatur toeten oder Lethal sind."""
+    if opp is None or not card.removal:
+        return False
+    pick = flow_fodder(p, [c for c in p.creatures if c.card.name == card.name])
+    if pick is None:
+        return False
+    if choose_target(card.removal, p, opp) is None and opp.life > _amount(card.removal, p):
+        return False
+    name = sac_fodder(p, pick)
+    e["events"].append(f"{p.name}: {card.name} opfert {name}")
+    return True
+
+
+def targ_sacrifice(p, src, e):
+    """Targ Wrangler (selbst gesetzt): Clue, Food, Treasure, kleiner Kreatur-Token, Nichtkreatur-Permanent mit dem
+    kleinsten Manawert, sonst die schwaechste Kreatur (auch er selbst)."""
+    if p.clues:
+        p.clues -= 1
+        name = "Clue"
+    elif p.foods:
+        p.foods -= 1
+        name = "Food"
+    elif p.treasures:
+        p.treasures -= 1
+        name = "Treasure"
+    else:
+        toks = [c for c in p.creatures if c.card.is_token and not c.dead and c.power <= 1]
+        perms = [x for x in p.perms if not x.is_land]
+        alive = [c for c in p.creatures if not c.dead]
+        if toks:
+            pick = min(toks, key=danger)
+            pick.dead, name = True, pick.card.name
+        elif perms:
+            card = min(perms, key=lambda x: (x.mv, x.name))
+            destroy_permanent(p, card, e)
+            name = card.name
+        elif alive:
+            pick = min(alive, key=_value)
+            pick.dead, name = True, pick.card.name
+        else:
+            return
+    e["events"].append(f"{p.name}: {src.card.name} – opfert {name}")
+
+
 def use_tea(p, e):
     """Tea, Earl Grey, Hot am Ende des gegnerischen Zugs mit sonst ungenutztem Mana (selbst gesetzt): Schaden, wenn er
     toedlich ist; Leben, wenn wir 10 oder weniger haben; sonst Schaden."""
@@ -5703,6 +5845,17 @@ def end_step_triggers(me, opp, e):
     for c in list(me.creatures):  # Captain Benjamin Sisko: ein Officer je Dilemma in diesem Zug
         if c.card.end_dilemma_tokens is not None and not c.dead and me.dilemmas_turn:
             make_tokens(me, [(me.dilemmas_turn, c.card.end_dilemma_tokens)], me.now, e, opp, c.card.name)
+    for c in list(me.creatures):  # Targ Wrangler
+        if c.card.targ_sac and not c.dead and c.attacked is not None and c.attacked == me.now:
+            targ_sacrifice(me, c, e)
+    for p in (me, opp):  # Bones McCoy: mit Marke zurueck
+        if p is None:
+            continue
+        back, p.bones_back = p.bones_back, []
+        for card in back:
+            if card in p.graveyard:
+                p.graveyard.remove(card)
+                put_back(p, card, "battlefield", p.now, e, p.opponent, counters=1)
     for c in list(me.creatures):
         if c.card.end_discard and not c.dead and opp is not None:
             discard(opp, c.card.end_discard, e)
@@ -5747,6 +5900,27 @@ def card_effects(me, opp, card, step, entry, modes=None):
             if ef[1] == "spell":
                 _jace_add(me, ef[2], entry)
         gain_life(me, card.etb_life)  # Modus beim Betreten: "you gain N life" (z. B. Archive Arbiter)
+    if card.bones_return:  # Bones McCoy: bestes Nicht-Doctor-Permanent aus dem Friedhof
+        cands = bones_cands(me)
+        if cands:
+            pick = _best_from_gy(me, cands)
+            me.graveyard.remove(pick)
+            me.hand.append(pick)
+            entry["events"].append(f"{me.name}: {card.name} – {pick.name} auf die Hand")
+    if card.bones_protect:  # Bones McCoy: die gefaehrlichste andere eigene Kreatur
+        others = [c for c in me.creatures if not c.dead and c.card.name != card.name]
+        if others:
+            max(others, key=danger).once["bones"] = me.now
+    if card.gy_hate and opp is not None and opp.graveyard:  # Raffi: die staerkste Karte im Friedhof des Gegners
+        opp.graveyard.remove(_best_from_gy(opp, list(opp.graveyard)))
+    me.clues += card.etb_clue  # Raffi: Investigate
+    if card.tell_me and opp is not None:  # Nutzer 2026-11-04: Leben, ausser er haette danach 4 oder weniger
+        life, n = card.tell_me
+        if opp.life - life > 4:
+            opp.life -= life
+            surveil_cards(me, [n], entry, card.name)
+        else:
+            _draw(me)
     if card.discard_first:  # Captain Kirk: "Discard a card, then draw a card" (ziehen ueber card.draws)
         gone = choose_discard(me)
         if gone is not None:
@@ -5771,6 +5945,8 @@ def card_effects(me, opp, card, step, entry, modes=None):
             discarded(me, entry)
     if card.self_damage:  # "damage to each player" trifft auch uns
         me.life -= card.self_damage
+    if card.dahar_sac and not dahar_pay(me, opp, card, entry):  # Dahar Master: ohne Opfer kein Schaden
+        card = card._replace(removal=(), modes=())
     effects = card._replace(modes=()) if card.etb_grant else card  # Teyo: Marke mit dem Schluesselwort (creature_enters)
     if card.removal and opp is not None and len(me.lands) >= card.etb_lands_needed \
             and _edict_paid(me, opp, card, entry):
@@ -6274,10 +6450,36 @@ def _combat_flash_removal(card):
         and ("attacking",) in card.removal[2]
 
 
+def needs_cast(p, e, step, doomed=()):
+    """The Needs of the Many (Nutzer 2026-11-04: gegen Lethal und Massenremoval): die schwaechste Kreatur opfern (eine,
+    die ohnehin stirbt, Token zuerst), dann Hexproof und Indestructible fuer das Team, kein Schaden an uns; Exil."""
+    card = next((c for c in p.hand if c.needs_many and affordable(p, c)), None)
+    alive = [c for c in p.creatures if not c.dead]
+    if card is None or not alive:
+        return False
+    pool = [c for c in doomed if any(c is x for x in alive)] or alive
+    fodder = min(pool, key=lambda c: (not c.card.is_token, _value(c)))
+    _cast_from_open(p, card)
+    fodder.dead = True
+    for c in p.creatures:
+        if not c.dead:
+            c.extra |= {"hexproof", "indestructible"}
+    p.prevent_turn = p.now
+    on_cast(p, card, step, e)
+    e["events"].append(f"{p.name}: {card.name} (opfert {fodder.card.name})")
+    bury((p,), e)
+    return True
+
+
 def respond_to_attack(dfn, att, attackers, e, step):
     """Der Verteidiger reagiert auf die Angreifer: Removal-Instants auf den gefaehrlichsten Angreifer, Flash-Kreaturen
     fuer einen guten Block oder gegen Lethal. Gibt die verbleibenden Angreifer zurueck."""
     dfn.under_attack = bool(attackers)  # bis zum Rundenende (cleanup)
+    if any(c.needs_many for c in dfn.hand):  # The Needs of the Many gegen einen toedlichen Angriff
+        live = [a for a in attackers if a in att.creatures and not a.dead and not a.locked]
+        home = [b for b in dfn.creatures if not b.dead and not b.tapped]
+        if live and max_through(live, home) >= dfn.life:
+            needs_cast(dfn, e, step)
     while True:
         alive = [a for a in attackers if a in att.creatures and not a.dead and not a.locked]
         options = []
@@ -7670,10 +7872,17 @@ def attack_taps(me, opp, attackers, e):
         e["events"].append(f"{me.name}: Angriffs-Auslöser tappt {target.card.name}")
 
 
+def exile_own(p, card):
+    """Eine eigene Karte kommt ins Exil: Khan, Vengeful Heart ("You may cast this card from exile") bleibt dort
+    wirkbar (wie ein Impulse ohne Ende)."""
+    if card.cast_from_exile and not card.is_token:
+        p.impulse.append((card, 10 ** 9))
+
+
 def expire_impulse(p):
     """Ende des eigenen Zugs: Karten im Exil, deren Frist ("until the end of your next turn") abgelaufen ist, bleiben
     dort und sind nicht mehr spielbar."""
-    p.impulse = [(c, last) for c, last in p.impulse if last > p.own_turns]
+    p.impulse = [(c, last) for c, last in p.impulse if last > p.own_turns or c.cast_from_exile]  # Khan
 
 
 def _take_impulse(p, card):
@@ -8335,6 +8544,8 @@ def take_turn(me, opp, step, rnd, skip_draw):
     for w, n in res["pw"].values():  # 120.3c
         w.loyalty = max(0, w.loyalty - n)
         e["events"].append(f"{me.name}: {n} Schaden an {w.card.name} von {opp.name} (Loyalty {w.loyalty})")
+    if prevented(opp):  # The Needs of the Many
+        res["player"] = 0
     opp.life -= res["player"]
     me.dealt_combat += res["player"]
     combat_life(me, opp, res)

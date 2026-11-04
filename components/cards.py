@@ -437,6 +437,23 @@ class Card(NamedTuple):
     discard_first: bool = False  # Modus "Discard a card, then draw a card" (Captain Kirk)
     kobayashi: object = None  # Kobayashi Maru Scenario: das Officer-Token des Modus Transport
     end_dilemma_tokens: object = None  # Captain Benjamin Sisko: Token je Dilemma in diesem Zug im Endsegment
+    sac_trample_draw: bool = False  # Gowron: andere Kreatur opfern: Trample, bei einem Klingonen ziehen, 1 Leben
+    self_sac_destroy: tuple = ()  # Kirk, Commanding Officer: Kosten von "sich opfern: Artefakt/Verzauberung zerstoeren"
+    dahar_sac: bool = False  # Dahar Master: der Schaden beim Betreten nur, wenn ein Nichtland-Permanent geopfert wird
+    targ_sac: bool = False  # Targ Wrangler: hat er angegriffen, im Endsegment ein Nichtland-Permanent opfern
+    mccoy_save: bool = False  # Dr. McCoy, Surly Surgeon: andere Kreatur mit Marke: Marken weg statt zerstoert
+    bones_return: bool = False  # Bones McCoy (Modus): Nicht-Doctor-Permanent aus dem Friedhof auf die Hand
+    bones_protect: bool = False  # Bones McCoy (Modus): stirbt die Kreatur in diesem Zug, kommt sie mit Marke zurueck
+    gy_hate: bool = False  # Raffi Musiker (Modus): eine Karte aus einem Friedhof exilieren
+    etb_clue: int = 0  # Raffi Musiker (Modus): Investigate beim Betreten
+    lorca_return: tuple = ()  # Gabriel Lorca: Kosten, um ihn bei einem Dilemma aus dem Friedhof zu holen
+    needs_many: bool = False  # The Needs of the Many: Kreatur opfern, Team Hexproof/Indestructible, kein Schaden
+    threshold_exile: bool = False  # De-evolve: ab Threshold die verzauberte Kreatur in jedem Upkeep exilieren
+    tell_me: tuple = ()  # Tell Me What You See: (Leben, Surveil), sonst ziehen wir
+    dilemma_bounce_self: bool = False  # Tell Me What You See: bei einem Dilemma zurueck auf die Hand
+    cast_from_exile: bool = False  # Khan, Vengeful Heart: aus dem eigenen Exil wirkbar
+    exile_removal: bool = False  # Removal-Zauber exiliert statt zu zerstoeren ("Exile target creature")
+    sac_creature_cost: bool = False  # Zusatzkosten: eine Kreatur opfern (The Needs of the Many)
 
 
 LANDCYCLE_RE = re.compile(
@@ -1184,7 +1201,9 @@ _EXTRA_COST_RE = re.compile(r"^as an additional cost to cast this spell, [^.]*\b
 
 _GRANT_KW_RE = re.compile(r"\btarget creature(?: you control)? (?:gets [^.]*? and )?gains ([a-z ,]+?) until end of turn"
                           r"|\btarget creature[^.]*\. it gains ([a-z ,]+?) until end of turn")
-_CHOOSE_RE = re.compile(r"^(?:when (?:~|this creature|this land) enters?(?: untapped)?, )?choose (one|two|three) —$")
+_CHOOSE_RE = re.compile(r"^(?:when (?:~(?: [a-z]+)?|(?!this )[a-z.]+(?: [a-z.]+)?|this creature|this land) "
+                        r"enters?(?: untapped)?, )?choose "
+                        r"(one|two|three) —$")
 _MODE_WORD_RE = re.compile(r"^[A-Z][A-Za-z' ]{0,30} — (?=[A-Z])")
 _YOU_DRAW_LIFE_RE = re.compile(r"^you draw (a|an|one|two|three) cards? and gain (\d+) life\.", re.I)
 
@@ -2979,6 +2998,38 @@ _TRK_RES = {
     "kobayashi": re.compile(r"^at the beginning of your upkeep, choose one that hasn't been chosen —$"),
     "end_dilemma_tokens": re.compile(r"^at the beginning of your end step, (create a .+? token) for each dilemma "
                                     r"you've faced this turn\.$"),
+    "sac_trample_draw": re.compile(r"^sacrifice another creature: ~ gains trample until end of turn\. if you "
+                                  r"sacrificed a klingon this way, you draw a card and lose 1 life\.$"),
+    "self_sac_destroy": re.compile(r"^((?:\{[^}]+\})+), sacrifice ~: destroy target artifact or enchantment\.$"),
+    "dahar_sac": re.compile(r"^when (?:~|this creature) enters, you may sacrifice another nonland permanent\."
+                           r"(?: when you do, .+)?$"),
+    "targ_sac": re.compile(r"^at the beginning of your end step, if (?:~|this creature) attacked this turn, "
+                          r"sacrifice a nonland permanent\.$"),
+    "mccoy_save": re.compile(r"^if another creature you control with a \+1/\+1 counter on it would be destroyed, "
+                            r"instead remove all \+1/\+1 counters from it and all damage already dealt to it is "
+                            r"healed\.$"),
+    "bones_return": re.compile(r"^when (?:~|this creature) enters, return target non-doctor permanent card from "
+                              r"your graveyard to your hand\.$"),
+    "bones_protect": re.compile(r"^when (?:~|this creature) enters, choose up to one other target creature\. when "
+                               r"it dies this turn, return that card to the battlefield under its owner's control "
+                               r"with a \+1/\+1 counter on it at the beginning of the next end step\.$"),
+    "gy_hate": re.compile(r"^when (?:~|this creature) enters, exile up to one target card from a graveyard\. you "
+                         r"gain (\d+) life\.$"),
+    "etb_clue": re.compile(r"^when (?:~|this creature) enters, investigate\. you lose (\d+) life\.$"),
+    "lorca_return": re.compile(r"^whenever you face a dilemma, you may pay ((?:\{[^}]+\})+)\. if you do, return "
+                              r"this card from your graveyard to your hand\.$"),
+    "needs_cost": re.compile(r"^as an additional cost to cast this spell, sacrifice a creature\.$"),
+    "needs_effect": re.compile(r"^creatures you control gain hexproof and indestructible until end of turn\. you "
+                              r"gain hexproof until end of turn\. prevent all damage that would be dealt to you this "
+                              r"turn\."),
+    "threshold_exile": re.compile(r"^threshold — at the beginning of each upkeep, if there are seven or more cards "
+                                 r"in your graveyard, exile enchanted creature\.$"),
+    "tell_me": re.compile(r"^when this enchantment enters, target opponent may have you draw a card\. if they "
+                         r"don't, they lose (\d+) life and you surveil (\d+)\.$"),
+    "dilemma_bounce_self": re.compile(r"^whenever you face a dilemma, you may return this enchantment to its "
+                                     r"owner's hand\.$"),
+    "cast_from_exile": re.compile(r"^you may cast this card from exile\.$"),
+    "exile_removal": re.compile(r"\bexile (?:up to one )?target (?:[a-z ,-]*?)(?:creature|permanent)\b"),
     "mirror_copy": re.compile(r"^create a token that's a copy of target creature an opponent controls, except it "
                              r"has menace\. if this spell was kicked, instead for each creature target opponent "
                              r"controls, create a token that's a copy of that creature, except it has menace\.$"),
@@ -3317,6 +3368,7 @@ def trk_land_token_traits(card, type_line):
         out.update(trk_tap_fields(low, res))
         out.update(trk_r12_fields(low, res, lines))
         out.update(trk_r3_fields(card, low, res, lines, i))
+        out.update(trk_r4_fields(card, low, res, lines, spell))
     return out
 
 
@@ -3504,6 +3556,37 @@ def trk_r3_fields(card, low, res, lines, i):
     m = res["end_dilemma_tokens"].match(low)
     if m and _tokens_in(m.group(1) + "."):
         out["end_dilemma_tokens"] = _tokens_in(m.group(1) + ".")[0][1]
+    return out
+
+
+def trk_r4_fields(card, low, res, lines, spell):
+    """TRK Paket R4 (Opfern und Friedhof): Felder einer Zeile."""
+    out = {}
+    for key in ("sac_trample_draw", "dahar_sac", "targ_sac", "mccoy_save", "bones_return", "bones_protect",
+                "threshold_exile", "dilemma_bounce_self", "cast_from_exile"):
+        if res[key].match(low):
+            out[key] = True
+    m = res["self_sac_destroy"].match(low)
+    if m:
+        out["self_sac_destroy"] = cost_alternatives(m.group(1).upper())
+    m = res["gy_hate"].match(low)
+    if m:
+        out["gy_hate"], out["etb_life"] = True, int(m.group(1))
+    m = res["etb_clue"].match(low)
+    if m:
+        out["etb_clue"], out["life_loss"] = 1, int(m.group(1))
+    m = res["lorca_return"].match(low)
+    if m:
+        out["lorca_return"] = cost_alternatives(m.group(1).upper())
+    if res["needs_cost"].match(low):
+        out["sac_creature_cost"] = True
+    if res["needs_effect"].match(low):
+        out["needs_many"] = True
+    m = res["tell_me"].match(low)
+    if m:
+        out["tell_me"] = (int(m.group(1)), int(m.group(2)))
+    if spell and res["exile_removal"].search(low) and " until " not in low:
+        out["exile_removal"] = True
     return out
 
 
