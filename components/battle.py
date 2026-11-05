@@ -125,6 +125,7 @@ class Creature:
         old = getattr(self, "_bonus", 0)
         ctl = getattr(self, "ctl", None)
         if value > old and ctl is not None:
+            value = old + (value - old) * 2 ** sum(1 for c in ctl.creatures if c.card.mbenga and not c.dead)  # M'Benga
             value += any(c.card.counter_plus_one and not c.dead for c in ctl.creatures) + counter_boost(ctl)
         self._bonus = value
 
@@ -857,6 +858,7 @@ class Player:
         self.q_cards = []  # Q, Stacking the Deck: exilierte Karten, von denen wir Kopien wirken duerfen
         self.riker_temp = []  # Will Riker: Laender, die im Endsegment geopfert werden
         self.holo_turn = None  # The Holodeck: Schritt, in dem ein Permanent aus dem Friedhof gespielt wurde
+        self.once_turn = {}  # {T}-Faehigkeiten von Permanents: id -> Schritt der letzten Nutzung (Replicator)
         self.trap_links = []  # Exil bis zum Verlassen (610.3): {"trap", "card", "owner", "creature"}
         self.lock_links = []  # Lock-Auras dieses Spielers: {"aura", "creature"}
         self.predrawn = Counter()  # Main Phase: Karten, deren "draw N" die Planung (resolve_draws) schon gezogen hat
@@ -1109,6 +1111,9 @@ def hexproof(c):
     Kampfschaden). Effekte ohne Ziel (Schaden an allen, Edikt) treffen die Kreatur trotzdem."""
     if c.card.station and c.ctl is not None and c.ctl.turn_start == c.ctl.now and any(
             x.card.spacecraft_hexproof and not x.dead for x in c.ctl.creatures):  # Hemmer
+        return True
+    if c.ctl is not None and (c.bonus > 0 or c.stun) and any(  # Dr. M'Benga: andere eigene Kreaturen mit Marken
+            x.card.mbenga and not x.dead and x is not c for x in c.ctl.creatures):
         return True
     return c.has("hexproof") or (c.card.hexproof_until_damage and not c.dealt)
 
@@ -2059,6 +2064,10 @@ def artifact_tokens(p, kind, n, step, e):
     (614.1). Gibt True zurueck, wenn die Artefakte wirklich entstanden sind."""
     if n <= 0:
         return False
+    holo = next((c.card.holo_tokens for c in p.creatures if c.card.holo_tokens is not None and not c.dead), None)
+    if holo is not None:  # Holo-Engineer
+        make_tokens(p, [(n, holo)], step, e, p.opponent, "Holo-Engineer")
+        return False
     if any(c.card.artifact_tokens_dragons and not c.dead for c in p.creatures):
         make_tokens(p, [(n, DRAGON)], step, e, p.opponent, "Draconic Visitor")
         return False
@@ -2130,6 +2139,7 @@ def kobayashi_upkeep(p, opp, step, e):
         else:
             mode = "abandon"
             p.life = min(p.life, 0)
+            p.lost = True  # auch mit Georgiou
         used.append(mode)
         e["events"].append(f"{p.name}: {k['card'].name} – {mode}")
 
@@ -2153,6 +2163,7 @@ def upkeep_triggers(me, opp, step, e):
     me.peace = [k for k in me.peace if any(x is k["card"] for x in me.perms)]
     if opp is not None and any(k["count"] >= 12 for k in me.peace):  # Peace in Our Time: gewonnen
         opp.life = min(opp.life, 0)
+        opp.lost = True  # auch mit Georgiou
         e["events"].append(f"{me.name}: Peace in Our Time – gewonnen")
     for c in list(me.creatures):  # Vash: zu Beginn des eigenen Upkeeps Surveil
         if c.card.upkeep_surveil and not c.dead:
@@ -2169,6 +2180,10 @@ def upkeep_triggers(me, opp, step, e):
                 e["events"].append(f"{p.name}: {lock['aura'].name} exiliert {cr.card.name}")
             destroy_permanent(p, lock["aura"], e)
     for p in (me, opp):
+        if p is me:  # Troubling Tribbles: im eigenen Upkeep je eine Token-Kopie, hoechstens 20 (Nutzer 2026-11-05)
+            tribbles = [x for x in p.creatures if x.card.tribble_copy and not x.dead]
+            for c in tribbles[:max(0, 20 - len(tribbles))]:
+                make_tokens(p, [(1, c.card._replace(is_token=True))], step, e, p.opponent, c.card.name)
         for c in list(p.creatures):  # Quark: zu Beginn jedes Upkeeps ein Treasure
             if c.card.quark and not c.dead:
                 artifact_tokens(p, "treasure", 1, step, e)
@@ -3018,6 +3033,7 @@ def gain_life(p, n, events=1):
         return
     p.life += n
     p.gained += n
+    events *= 1 + sum(1 for c in p.creatures if c.card.lifegain_double and not c.dead)  # Dr. Beverly Crusher
     for _ in range(events):
         for c in p.creatures:  # Dina, Flesh Sower
             if c.card.lifegain_perpetual and not c.dead:
@@ -3510,6 +3526,20 @@ def mission_trigger(p, kind, step, e, creature=None, with_mana=True):
     return mana
 
 
+def saboteur_copy(p, new, e):
+    """Dominion Saboteur (selbst gesetzt): Kopie der staerksten Kreatur auf dem Feld (Power + Toughness mit Marken,
+    dann Manawert), nicht legendaer, mit ihren +1/+1-Marken; ohne Kreatur kommt er als er selbst."""
+    cands = [c for side in (p, p.opponent) if side is not None for c in side.creatures
+             if not c.dead and c is not new and not c.card.saboteur_copy]
+    if not cands:
+        return
+    t = max(cands, key=lambda c: (c.power + c.toughness, c.card.mv, c.card.name))
+    new.base_card = new.base_card or new.card
+    new.card = t.card._replace(legendary=False, is_token=new.card.is_token)
+    new.bonus += t.bonus
+    e["events"].append(f"{p.name}: Dominion Saboteur kommt als Kopie von {t.card.name}")
+
+
 def seen_cards(p):
     """Nichtland-Karten von p, die der Gegner gesehen hat: Feld (Kreaturen, Permanents) und Friedhof."""
     if p is None:
@@ -3547,6 +3577,8 @@ def creature_enters(p, new, step, e, opp=None, cast=True):
     in diesem Zug kam (Mabel), Team-Pump nach Artefakten (Craterclaw Colossus), Land gegen Token (Tenured
     Tethermage), Mill und Land zurueck (Primal Witchstalker), Exil aus der Hand des Gegners (Null Summoner, nur wenn
     gewirkt)."""
+    if new.card.saboteur_copy:  # Dominion Saboteur
+        saboteur_copy(p, new, e)
     card = new.card
     new.gy, new.ctl = p.graveyard, p
     new.bonus += card.enters_counters  # "enters with N +1/+1 counters" (614.1c)
@@ -6137,9 +6169,24 @@ def savvy_treasures(p, e):
         e["events"].append(f"{p.name}: {c.card.name} – Treasure")
 
 
+GEORGIOU_OFFICER = Card(False, 0, (), (), True, False, 1, 1, name="Officer", is_token=True,
+                        creature_types=("officer",))
+
+
+def game_lost(p):
+    """Hat p verloren? 0 oder weniger Leben (nicht mit Georgiou, Terran Emperor) oder ein Effekt "you lose the game"."""
+    return p.lost or (p.life <= 0 and not any(c.card.georgiou and not c.dead for c in p.creatures))
+
+
 def end_step_triggers(me, opp, e):
     """Beginn des Endsegments von me: Armus (der Gegner wirft zwei Karten ab, nur im eigenen Zug); Gul Dukat (in jedem
     Endsegment: der Gegner verliert das in diesem Zug verlorene Leben noch einmal, wir gewinnen es)."""
+    for c in list(me.creatures):  # Georgiou: 3 Leben, ziehen, bei 0 oder weniger zehn Officers
+        if c.card.georgiou and not c.dead:
+            me.life -= 3
+            _draw(me)
+            if me.life <= 0:
+                make_tokens(me, [(10, GEORGIOU_OFFICER)], me.now, e, opp, c.card.name)
     for c in list(me.creatures):  # Captain Benjamin Sisko: ein Officer je Dilemma in diesem Zug
         if c.card.end_dilemma_tokens is not None and not c.dead and me.dilemmas_turn:
             make_tokens(me, [(me.dilemmas_turn, c.card.end_dilemma_tokens)], me.now, e, opp, c.card.name)
@@ -6446,7 +6493,9 @@ def card_effects(me, opp, card, step, entry, modes=None):
 
 def make_tokens(p, tokens, step, e, opp=None, source=""):
     """Kreatur-Token ins Spiel (kommen nicht in den Friedhof, verschwinden beim Bounce)."""
+    holo = next((c.card.holo_tokens for c in p.creatures if c.card.holo_tokens is not None and not c.dead), None)
     for n, token in tokens:
+        token = holo if holo is not None else token  # Holo-Engineer: stattdessen 3/3-Illusionen (614.1)
         for _ in range(n):
             c = Creature(token, step)
             p.creatures.append(c)
@@ -7821,6 +7870,13 @@ def combat_tokens(me, opp, step, e):
             on_land(me, opp, land, step, e, with_mana=False, untapped=True)
         if lands:
             e["events"].append(f"{me.name}: {c.card.name} – {', '.join(l.name for l in lands)}")
+    if me.noncreature_cast:  # Gray and Adira: Kopie der gefaehrlichsten eigenen Kreatur
+        for src in [x for x in me.creatures if x.card.gray_copy and not x.dead]:
+            alive = [x for x in me.creatures if not x.dead]
+            if alive:
+                t = max(alive, key=danger)
+                tok = (t.base_card or t.card)._replace(is_token=True, legendary=False, haste=True, end_sacrifice=True)
+                make_tokens(me, [(1, tok)], step, e, opp, src.card.name)
     for c in [x for x in me.creatures if x.card.combat_token is not None and not x.dead]:
         make_tokens(me, [(1, c.card.combat_token)], step, e, opp, c.card.name)
 
@@ -8153,6 +8209,31 @@ def _bomb_value(p, mv):
     val = sum(max(0, c.power) + max(0, c.toughness) for c in p.creatures if not c.dead and c.card.mv == mv
               and not c.has("indestructible"))
     return val + sum(2 + x.mv for x in p.perms if not x.is_land and x.mv == mv and not x.sunburst_bomb)
+
+
+def replicator_phase(me, step, e):
+    """Replicator in Main 2 mit sonst ungenutztem Mana (selbst gesetzt), einmal je Zug ({T}): getappte Kopie des
+    gefaehrlichsten eigenen Kreatur-Tokens, sonst eines Treasure, Clue oder Food."""
+    for rep in [x for x in me.perms if x.token_copy]:
+        if me.once_turn.get(id(rep)) == me.now or free_units(me) < 2:
+            continue
+        toks = [c for c in me.creatures if c.card.is_token and not c.dead]
+        if not toks and not (me.treasures or me.clues or me.foods):
+            continue
+        if not _pay_open(me, ((2, ()),), treasure=False):
+            continue
+        me.once_turn[id(rep)] = me.now
+        if toks:
+            t = max(toks, key=danger)
+            make_tokens(me, [(1, t.card)], step, e, me.opponent, rep.name)
+            me.creatures[-1].tapped = True
+        elif me.treasures:
+            me.treasures += 1
+        elif me.clues:
+            me.clues += 1
+        else:
+            me.foods += 1
+        e["events"].append(f"{me.name}: {rep.name} – Kopie")
 
 
 def explosives_phase(me, opp, step, e):
@@ -9202,6 +9283,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     worf_counters(me, opp, step, e)
     nog_levels(me, opp, step, e)
     explosives_phase(me, opp, step, e)
+    replicator_phase(me, step, e)
     q_copies(me, opp, step, e)
     genesis_swap(me, opp, step, e)
     if me.walkers:
@@ -9323,8 +9405,8 @@ def play_game(cards_a, cards_b, a_starts, max_turns=20, mulligan=True, min_hand=
             _finish(entry, me, opp)
             result["log"].append(entry)
             result["round"] = rnd
-            if me.lost or opp.lost or opp.life <= 0 or me.life <= 0:
-                loser = me if (me.lost or me.life <= 0) else opp
+            if game_lost(me) or game_lost(opp):
+                loser = me if game_lost(me) else opp
                 result["winner"] = "b" if loser is a else "a"
                 break
         else:

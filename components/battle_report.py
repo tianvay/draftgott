@@ -538,6 +538,13 @@ RULES = [
     "Länder, für die die Bibliothek Ersatz hat, wenn eine Farbe fehlt (dünnt die Bibliothek aus). Discover wirkt "
     "die Karte gratis. Deep Space 9 legt Permanents von oben ins Spiel. The Holodeck: einmal je Zug das teuerste "
     "bald wirkbare Permanent aus dem Friedhof.",
+    "Kopien und Verdoppler (TRK): Dr. Beverly Crusher verdoppelt Lebensgewinn-Auslöser, Dr. M'Benga Marken auf "
+    "eigene Kreaturen (andere mit Marken haben Hexproof). Holo-Engineer macht aus jedem eigenen Token (auch "
+    "Treasure) eine 3/3-Illusion. Troubling Tribbles kopieren sich in jedem Upkeep (höchstens 20). Dominion Saboteur kommt als "
+    "Kopie der stärksten Kreatur auf dem Feld (mit ihren Marken). Gray and Adira kopieren nach einem "
+    "Nichtkreatur-Zauber die gefährlichste eigene Kreatur mit Haste. Replicator kopiert in Main 2 den "
+    "gefährlichsten Kreatur-Token (sonst Treasure, Clue, Food). Georgiou: kein Verlieren bei 0 Leben, solange sie "
+    "lebt. Lwaxana Troi bewusst nicht.",
     "Alchemy (YFRA): „perpetually“ ändert die Karte selbst (bleibt in Friedhof und Hand). Conjure benannter Karten "
     "(Kraken Hatchling, Mind Stone, Aria of Flame) mit ihren Texten von Scryfall. Avoided Stairwurm −1/−1 je "
     "Kreaturenkarte in der Bibliothek; Zimone macht Schaden wie mit positiver Power und wird prepared, sobald Karten "

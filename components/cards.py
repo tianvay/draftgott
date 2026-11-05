@@ -490,6 +490,14 @@ class Card(NamedTuple):
     discover: int = 0  # U.S.S. Discovery: Discover N beim Betreten und Angriff
     ds9_reveal: int = 0  # Deep Space 9: beim Betreten und im Upkeep N Karten, Permanents ins Spiel
     holodeck: bool = False  # The Holodeck: einmal je eigenem Zug ein Permanent aus dem Friedhof spielen
+    lifegain_double: bool = False  # Dr. Beverly Crusher: Lebensgewinn-Ausloeser eigener Permanents doppelt
+    tribble_copy: bool = False  # Troubling Tribbles: im Upkeep eine Token-Kopie
+    saboteur_copy: bool = False  # Dominion Saboteur: kommt als Kopie (nicht legendaer) mit den Marken
+    georgiou: bool = False  # Georgiou: kein Verlieren bei 0 Leben; Endsegment 3 Leben, ziehen, ggf. 10 Officers
+    mbenga: bool = False  # Dr. M'Benga: Marken auf eigene Kreaturen doppelt, andere mit Marken Hexproof
+    holo_tokens: object = None  # Holo-Engineer: eigene Token werden stattdessen diese 3/3-Illusion
+    gray_copy: bool = False  # Gray and Adira: nach Nichtkreatur-Zauber zu Kampfbeginn eine Kopie mit Haste
+    token_copy: bool = False  # Replicator: {2}, {T}: getappte Kopie eines eigenen Tokens
 
 
 LANDCYCLE_RE = re.compile(
@@ -3155,6 +3163,24 @@ _TRK_RES = {
                             r"your library\. put all permanent cards exiled this way onto the battlefield\.$"),
     "holodeck": re.compile(r"^once during each of your turns, you may play a permanent card you own from outside the "
                           r"game or from your graveyard\.$"),
+    "lifegain_double": re.compile(r"^if you gaining life causes a triggered ability of a permanent you control to "
+                                 r"trigger, that ability triggers an additional time\.$"),
+    "tribble_copy": re.compile(r"^at the beginning of your upkeep, create a token that's a copy of (?:~|this "
+                              r"creature)\.$"),
+    "saboteur_copy": re.compile(r"^you may have (?:~|this creature) enter as a copy of any artifact or creature on "
+                               r"the battlefield, except it isn't legendary\."),
+    "georgiou": re.compile(r"^(?:you don't lose the game for having 0 or less life|at the beginning of your end "
+                          r"step, you lose 3 life and draw a card\. then if your life total is 0 or less, create ten "
+                          r"1/1 red officer creature tokens)\.$"),
+    "mbenga": re.compile(r"^(?:other creatures you control with counters on them have hexproof|if you would put one "
+                        r"or more counters on a creature you control, put twice that many of each of those kinds "
+                        r"of counters on that creature instead)\.$"),
+    "holo_tokens": re.compile(r"^if one or more tokens would be created under your control, that many (3/3 "
+                             r"colorless illusion artifact creature tokens) are created instead\.$"),
+    "gray_copy": re.compile(r"^at the beginning of combat on your turn, if you've cast a noncreature spell this turn, "
+                           r"create a token that's a copy of target creature you control, except it isn't legendary\. "
+                           r"it gains haste until end of turn\. sacrifice it at the beginning of the next end step\.$"),
+    "token_copy": re.compile(r"^\{2\}, \{t\}: create a tapped token that's a copy of target token you control\.$"),
     "mirror_copy": re.compile(r"^create a token that's a copy of target creature an opponent controls, except it "
                              r"has menace\. if this spell was kicked, instead for each creature target opponent "
                              r"controls, create a token that's a copy of that creature, except it has menace\.$"),
@@ -3497,6 +3523,7 @@ def trk_land_token_traits(card, type_line):
         out.update(trk_r5_fields(card, low, res, lines, i))
         out.update(trk_r6_fields(low, res, lines))
         out.update(trk_r7_fields(low, res))
+        out.update(trk_r8_fields(low, res))
     return out
 
 
@@ -3806,6 +3833,19 @@ def trk_r7_fields(low, res):
     m = res["ds9_reveal"].match(low)
     if m:
         out["ds9_reveal"] = _count(m.group(1))
+    return out
+
+
+def trk_r8_fields(low, res):
+    """TRK Paket R8 (Kopien und Verdoppler): Felder einer Zeile."""
+    out = {}
+    for key in ("lifegain_double", "tribble_copy", "saboteur_copy", "georgiou", "mbenga", "gray_copy",
+                "token_copy"):
+        if res[key].match(low):
+            out[key] = True
+    m = res["holo_tokens"].match(low)
+    if m and _tokens_in("create a " + m.group(1)[:-1] + "."):
+        out["holo_tokens"] = _tokens_in("create a " + m.group(1)[:-1] + ".")[0][1]
     return out
 
 

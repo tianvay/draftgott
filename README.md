@@ -593,6 +593,8 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
   Kopier-Fähigkeit.
 - Bibliothek, Länder, Blink (TRK): Ghost of Illyria, Miles O'Brien, Q, Will Riker, Captain Janeway, Captain Pike,
   Genesis Device, U.S.S. Discovery, Deep Space 9, The Holodeck.
+- Kopien und Verdoppler (TRK): Dr. Beverly Crusher, Troubling Tribbles, Dominion Saboteur, Georgiou, Dr. M'Benga,
+  Holo-Engineer, Gray and Adira, Replicator; Lwaxana Troi bewusst nicht. Damit ist TRK vollständig (306/306).
 - Removal (Destroy/Exile, Schaden, −X/−X, Edikt, Fight, Biss, Bounce, Lock, zurück in die Bibliothek,
   Massenremoval) trifft die gefährlichste passende Kreatur; Removal-Instants vor dem Angriff, gegen Angreifer oder am
   Ende des gegnerischen Zugs.
