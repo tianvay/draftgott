@@ -591,6 +591,8 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
 - Charge-Marken und Artefakte (TRK): Warp Core, Geordi La Forge, Romulan Bird-of-Prey, Zefram Cochrane, Enterprise-D,
   Isolinear Processor, Combadge, Lieutenant Commander Data, Dathon, Seven of Nine (7/9); Gwyndala ohne
   Kopier-Fähigkeit.
+- Bibliothek, Länder, Blink (TRK): Ghost of Illyria, Miles O'Brien, Q, Will Riker, Captain Janeway, Captain Pike,
+  Genesis Device, U.S.S. Discovery, Deep Space 9, The Holodeck.
 - Removal (Destroy/Exile, Schaden, −X/−X, Edikt, Fight, Biss, Bounce, Lock, zurück in die Bibliothek,
   Massenremoval) trifft die gefährlichste passende Kreatur; Removal-Instants vor dem Angriff, gegen Angreifer oder am
   Ende des gegnerischen Zugs.

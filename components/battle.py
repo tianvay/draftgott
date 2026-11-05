@@ -852,6 +852,11 @@ class Player:
         self.peace = []  # Peace in Our Time im Spiel: {"card": eigenes Objekt in perms, "count": Marken}
         self.zefram_turn = None  # Zefram Cochrane: Schritt, in dem ein Artefakt von oben gewirkt wurde
         self.warp_used = (None, ())  # Warp Core: (Schritt, getappte Warp Cores)
+        self.ghost_back = []  # Ghost of Illyria: im naechsten Endsegment zurueck
+        self.returned_turn = None  # Schritt, in dem ein eigenes Permanent auf die Hand kam (Miles O'Brien)
+        self.q_cards = []  # Q, Stacking the Deck: exilierte Karten, von denen wir Kopien wirken duerfen
+        self.riker_temp = []  # Will Riker: Laender, die im Endsegment geopfert werden
+        self.holo_turn = None  # The Holodeck: Schritt, in dem ein Permanent aus dem Friedhof gespielt wurde
         self.trap_links = []  # Exil bis zum Verlassen (610.3): {"trap", "card", "owner", "creature"}
         self.lock_links = []  # Lock-Auras dieses Spielers: {"aura", "creature"}
         self.predrawn = Counter()  # Main Phase: Karten, deren "draw N" die Planung (resolve_draws) schon gezogen hat
@@ -2143,6 +2148,8 @@ def upkeep_triggers(me, opp, step, e):
     the Stage kommt auf die Hand, wenn ein Gegner seines Besitzers im letzten Zug Schaden ausserhalb des Kampfs
     bekam."""
     kobayashi_upkeep(me, opp, step, e)
+    for x in [x for x in me.perms if x.ds9_reveal]:  # Deep Space 9
+        ds9_reveal(me, opp, x.ds9_reveal, step, e)
     me.peace = [k for k in me.peace if any(x is k["card"] for x in me.perms)]
     if opp is not None and any(k["count"] >= 12 for k in me.peace):  # Peace in Our Time: gewonnen
         opp.life = min(opp.life, 0)
@@ -3545,6 +3552,8 @@ def creature_enters(p, new, step, e, opp=None, cast=True):
     new.bonus += card.enters_counters  # "enters with N +1/+1 counters" (614.1c)
     ally_enters(p, new)
     kira_enters(p, new)
+    for _j in [c for c in p.creatures if c.card.explore_enter and not c.dead]:  # Captain Janeway
+        explore(p, new, e)
     if card.uhura_number or card.kai_name:  # Nutzer 2026-11-05: nur nach Gesehenem (Feld und Friedhof des Gegners)
         seen = seen_cards(p.opponent)
         if card.uhura_number:
@@ -4829,6 +4838,7 @@ def _cast_removal(card, caster, victim, e, step, target=None):
         victim.creatures.remove(target)
         if not target.card.is_token:
             (target.owner or victim).hand.append(target.base_card or target.card)
+            (target.owner or victim).returned_turn = victim.now  # Miles O'Brien
         _leave(victim, target.card)
         check_auras(victim, e)
         e["events"].append(f"{caster.name}: {card.name} – {label} zurück auf die Hand")
@@ -5105,6 +5115,157 @@ def jace_instant_turn(p, opp, step, e):
                 activate_pw(p, opp, w, (opts[0][2], opts[0][3]), step, e, opts[0][4])
 
 
+def ghost_blink(p, card, step, e):
+    """Ghost of Illyria (selbst gesetzt): ein eigenes Nichtland-Permanent mit Wert beim Betreten bis zum Endsegment
+    exilieren - Nichtkreatur-Permanents und Kreaturen, die in diesem Zug nicht angreifen koennen, zuerst."""
+    cands = [(not can_attack(c, step), c.card.mv, c) for c in p.creatures if not c.dead and c.card.name != card.name
+             and not c.card.is_token and etb_value(c.base_card or c.card)]
+    perms = [x for x in p.perms if not x.is_land and not x.is_token and etb_value(x) and not x.station]
+    if perms:
+        pick = max(perms, key=lambda x: (x.mv, x.name))
+        p.perms.remove(pick)
+        p.ghost_back.append((pick, False))
+    elif cands:
+        c = max(cands, key=lambda t: (t[0], t[1]))[2]
+        p.creatures.remove(c)
+        _leave(p, c.card)
+        check_auras(p, e)
+        pick = c.base_card or c.card
+        p.ghost_back.append((pick, True))
+    else:
+        return
+    e["events"].append(f"{p.name}: {card.name} exiliert {pick.name} bis zum Endsegment")
+
+
+def explore(p, c, e):
+    """Explore (701.44): Land von oben auf die Hand, sonst eine Marke; die Karte bleibt oben, wenn wir sie bald wirken
+    koennen (Manawert hoechstens Laender + 1), sonst in den Friedhof (selbst gesetzt)."""
+    if not p.library:
+        return
+    top = p.library[0]
+    if top.is_land:
+        p.hand.append(p.library.pop(0))
+        return
+    c.bonus += 1
+    if top.mv > len(p.lands) + 1:
+        p.graveyard.append(p.library.pop(0))
+        library_to_graveyard(p)
+
+
+def q_copies(me, opp, step, e):
+    """Q in Main 2 mit sonst ungenutztem Mana (Nutzer 2026-11-05): Kopie der exilierten Karte wirken, dafuer die
+    schwaechste Handkarte exilieren - ueberzaehliges Land, sonst eine Karte, die wir nicht bald wirken koennen, sonst
+    die billigste von mehreren bald wirkbaren (nie die letzte)."""
+    progress = True
+    while progress:
+        progress = False
+        for card in list(me.q_cards):
+            alts = _alts(me, card)
+            need = min(g + sum(k for _c, k in cols) for g, cols in alts) if alts else 99
+            fodder = surplus_land(me)
+            if fodder is None:
+                soon = [c for c in me.hand if not c.is_land and c.mv <= len(me.lands) + 1]
+                late = [c for c in me.hand if not c.is_land and c.mv > len(me.lands) + 1]
+                fodder = (min(late, key=lambda c: (c.mv, c.name)) if late
+                          else min(soon, key=lambda c: (c.mv, c.name)) if len(soon) >= 2 else None)
+            if fodder is None or not legend_ok(me, card) or free_units(me) < need:
+                continue
+            if not _pay_open(me, alts, treasure=False):
+                continue
+            me.hand.remove(fodder)
+            copy = card._replace(is_token=True)
+            e["events"].append(f"{me.name}: Q – Kopie von {card.name} (exiliert {fodder.name})")
+            _resolve(me, opp, copy, step, e)
+            if copy in me.graveyard:
+                me.graveyard.remove(copy)
+            progress = True
+
+
+def genesis_swap(me, opp, step, e):
+    """Genesis Device in Main 2 (Nutzer 2026-11-05): fehlt eine Farbe, die das Deck braucht, und liegt ein passendes
+    Land in der Bibliothek, werden so viele Laender geopfert, wie die Bibliothek Laender hat (doppelte Farben zuerst),
+    und ebenso viele geholt (fehlende Farben zuerst) - das duennt die Bibliothek aus. Landfall loest aus."""
+    for dev in [x for x in me.perms if x.genesis_swap]:
+        need_cols = set()
+        for c in me.hand + me.library:
+            if not c.is_land:
+                need_cols |= colors_of_alts(c.alts)
+        have = set().union(*(l.land_colors for l in me.lands)) if me.lands else set()
+        missing = need_cols - have
+        lib_lands = [c for c in me.library if c.is_land]
+        if not any(set(l.land_colors) & missing for l in lib_lands):
+            continue
+        alts = dev.genesis_swap
+        cost = min(g + sum(k for _c, k in cols) for g, cols in alts)
+        if free_units(me) < cost or not _pay_open(me, alts, treasure=False):
+            continue
+        me.perms.remove(dev)
+        me.graveyard.append(dev)
+        k = min(len(me.lands), len(lib_lands))
+        common = Counter(l.land_colors for l in me.lands)
+        gone = sorted(me.lands, key=lambda l: -common[l.land_colors])[:k]
+        for l in gone:
+            me.lands.remove(l)
+            me.graveyard.append(l)
+        picks = []
+        for col in sorted(missing):
+            hit = next((l for l in lib_lands if col in l.land_colors and l not in picks), None)
+            if hit is not None and len(picks) < k:
+                picks.append(hit)
+        picks += [l for l in lib_lands if l not in picks][:k - len(picks)]
+        for l in picks:
+            me.library.remove(l)
+        random.shuffle(me.library)
+        e["events"].append(f"{me.name}: {dev.name} tauscht {k} Länder")
+        for l in picks:
+            me.lands.append(l)
+            on_land(me, opp, l, step, e, with_mana=False)
+
+
+def discover(p, opp, n, step, e):
+    """Discover N (701.57): bis zur ersten Nichtland-Karte mit Manawert hoechstens N exilieren, gratis wirken (oder auf
+    die Hand, wenn sie nicht sinnvoll ist), der Rest zufaellig unter die Bibliothek."""
+    seen = []
+    found = None
+    while p.library:
+        top = p.library.pop(0)
+        if not top.is_land and top.mv <= n:
+            found = top
+            break
+        seen.append(top)
+    random.shuffle(seen)
+    p.library.extend(seen)
+    if found is None:
+        return
+    useful = legend_ok(p, found) and (not found.removal or found.removal[4] == "etb" or opp is None
+                                      or has_target(found, p, opp))
+    if useful:
+        e["events"].append(f"{p.name}: Discover – wirkt {found.name}")
+        _resolve(p, opp, found, step, e)
+    else:
+        p.hand.append(found)
+
+
+def ds9_reveal(p, opp, n, step, e):
+    """Deep Space 9: die obersten N Karten exilieren, alle Permanents davon ins Spiel (der Rest bleibt im Exil)."""
+    top, p.library[:n] = p.library[:n], []
+    for card in top:
+        if card.is_instant_sorcery:
+            continue
+        if card.is_creature:
+            new = Creature(card, step)
+            p.creatures.append(new)
+            creature_enters(p, new, step, e, opp, cast=False)
+        elif card.is_land:
+            p.lands.append(card)
+            if opp is not None:
+                on_land(p, opp, card, step, e, with_mana=False)
+        else:
+            p.perms.append(card)
+            permanent_enters(p, opp, card, step, e)
+    e["events"].append(f"{p.name}: Deep Space 9 – {', '.join(c.name for c in top)}")
+
+
 def hand_exile(p, opp, card, e):
     """Salt Vampire bzw. Zero (selbst gesetzt): aus der Hand des Gegners Removal zuerst, sonst die teuerste
     Nichtland-Karte. Salt Vampire: er zieht dafuer; Zero: er darf sie fuer {2} mehr aus dem Exil spielen."""
@@ -5199,6 +5360,10 @@ def permanent_enters(p, opp, card, step, e):
             pick.auras.append(card)
             pick.extra |= set(card.aura_etb_kw)
             e["events"].append(f"{p.name}: {card.name} an {pick.card.name}")
+    if card.discover:  # U.S.S. Discovery
+        discover(p, opp, card.discover, step, e)
+    if card.ds9_reveal:  # Deep Space 9
+        ds9_reveal(p, opp, card.ds9_reveal, step, e)
     if card.peace:  # Peace in Our Time: eigenes Objekt, Marken
         live = card._replace()
         for i in range(len(p.perms) - 1, -1, -1):
@@ -5399,6 +5564,7 @@ def beam_up(p, opp, card, e):
     p.creatures.remove(c)
     if not c.card.is_token:
         (c.owner or p).hand.append(c.base_card or c.card)
+        (c.owner or p).returned_turn = p.now  # Miles O'Brien
     _leave(p, c.card)
     check_auras(p, e)
     e["events"].append(f"{p.name}: Beam me up – {c.card.name} zurück auf die Hand, {card.name} aus dem Friedhof")
@@ -5980,6 +6146,29 @@ def end_step_triggers(me, opp, e):
     for c in list(me.creatures):  # Targ Wrangler
         if c.card.targ_sac and not c.dead and c.attacked is not None and c.attacked == me.now:
             targ_sacrifice(me, c, e)
+    for land in me.riker_temp:  # Will Riker: Laender opfern
+        if land in me.lands:
+            me.lands.remove(land)
+            me.graveyard.append(land)
+    me.riker_temp = []
+    for p in (me, opp):
+        if p is None:
+            continue
+        back, p.ghost_back = p.ghost_back, []
+        for card, is_creature in back:  # Ghost of Illyria: zurueck (neues Objekt, Betreten-Effekte)
+            e["events"].append(f"{p.name}: {card.name} kehrt zurück")
+            if is_creature:
+                new = Creature(card, p.now)
+                p.creatures.append(new)
+                creature_enters(p, new, p.now, e, p.opponent, cast=False)
+            else:
+                p.perms.append(card)
+                permanent_enters(p, p.opponent, card, p.now, e)
+        if p.returned_turn is not None and p.returned_turn == p.now:  # Miles O'Brien
+            for c in p.creatures:
+                if c.card.returned_draw and not c.dead:
+                    _draw(p)
+                    e["events"].append(f"{p.name}: {c.card.name} – zieht")
     for t in me.stolen:  # Worf, Intelligence Contractor: zurueck zum Gegner
         if any(t is x for x in me.creatures) and opp is not None:
             me.creatures.remove(t)
@@ -6053,6 +6242,26 @@ def card_effects(me, opp, card, step, entry, modes=None):
             if ef[1] == "spell":
                 _jace_add(me, ef[2], entry)
         gain_life(me, card.etb_life)  # Modus beim Betreten: "you gain N life" (z. B. Archive Arbiter)
+    if card.ghost_blink:  # Ghost of Illyria
+        ghost_blink(me, card, step, entry)
+    if card.miles_bounce:  # Miles O'Brien: die billigste eigene Kreatur mit Wert beim Betreten
+        cands = [c for c in me.creatures if not c.dead and not c.card.is_token and c.card.name != card.name
+                 and etb_value(c.base_card or c.card)]
+        if cands:
+            t = min(cands, key=lambda c: (c.card.mv, c.card.name))
+            me.creatures.remove(t)
+            _leave(me, t.card)
+            (t.owner or me).hand.append(t.base_card or t.card)
+            (t.owner or me).returned_turn = me.now
+            entry["events"].append(f"{me.name}: {card.name} – {t.card.name} auf die Hand")
+    if card.q_stack:  # Q: mischen, bis zur ersten Nichtland-Karte exilieren
+        random.shuffle(me.library)
+        while me.library:
+            top = me.library.pop(0)
+            if not top.is_land:
+                me.q_cards.append(top)
+                entry["events"].append(f"{me.name}: {card.name} exiliert {top.name}")
+                break
     if card.opp_minus_power and opp is not None:  # V'Ger: bis zu unserem naechsten Zug
         for c in opp.creatures:
             if not c.dead:
@@ -7598,6 +7807,20 @@ def combat_tokens(me, opp, step, e):
         n_tok = st["card"].station_combat_token
         if n_tok and st["charge"] >= n_tok[0]:
             make_tokens(me, [(1, n_tok[1])], step, e, opp, st["card"].name)
+    for c in [x for x in me.creatures if x.card.riker_lands and not x.dead]:  # Will Riker
+        lands, rest = [], []
+        while me.library and len(lands) < c.card.riker_lands:
+            top = me.library.pop(0)
+            (lands if top.is_land else rest).append(top)
+        random.shuffle(rest)
+        me.library.extend(rest)
+        for land in lands:
+            me.lands.append(land)
+            me.open.append(land.land_colors)
+            me.riker_temp.append(land)
+            on_land(me, opp, land, step, e, with_mana=False, untapped=True)
+        if lands:
+            e["events"].append(f"{me.name}: {c.card.name} – {', '.join(l.name for l in lands)}")
     for c in [x for x in me.creatures if x.card.combat_token is not None and not x.dead]:
         make_tokens(me, [(1, c.card.combat_token)], step, e, opp, c.card.name)
 
@@ -8332,7 +8555,8 @@ def take_turn(me, opp, step, rnd, skip_draw):
     me.land_now = None
     me.noncreature_cast = opp.noncreature_cast = False
     me.ward_budget, me.ward_pool = 0, None
-    me.extra_lands = sum(1 for c in me.creatures if c.card.nog_officer and not c.dead)  # Nog als Officer
+    me.extra_lands = sum(1 for c in me.creatures if c.card.nog_officer and not c.dead) \
+        + sum(c.card.extra_land for c in me.creatures if not c.dead)  # Nog als Officer, Janeway
     me.turn_start = step
     me.own_turns += 1
     me.drawn_mark, opp.drawn_mark = me.drawn, opp.drawn
@@ -8414,6 +8638,17 @@ def take_turn(me, opp, step, rnd, skip_draw):
             fb_map[cheap] = beam_map[cheap] = c
             me.hand.append(cheap)
     overflow_keys = set()
+    holo_keys = set()  # The Holodeck: einmal je Zug ein Permanent aus dem Friedhof (ohne Finality)
+    if me.holo_turn != step and any(x.holodeck for x in me.perms):
+        cands = [c for c in dict.fromkeys(me.graveyard) if not c.is_land and not c.is_instant_sorcery and c.alts
+                 and legend_ok(me, c) and c.mv <= len(me.lands) + 1]
+        if cands:
+            best = max(cands, key=lambda c: (c.mv, c.power, c.name))
+            cheap = _discounted(best._replace(from_gy=True), disc, me)
+            if cheap not in fb_map:
+                fb_map[cheap] = best
+                me.hand.append(cheap)
+                holo_keys.add(cheap)
     for cheap, c in graveyard_casts(me):  # Storied Veteran, Overflow Submatrix: mit Finality-Marke
         fb_map[cheap] = c
         me.hand.append(cheap)
@@ -8462,6 +8697,11 @@ def take_turn(me, opp, step, rnd, skip_draw):
             mark = c._replace(from_gy=True)
             gy_lands[mark] = c
             me.hand.append(mark)
+    top_lands = {}  # Captain Pike: das oberste Land der Bibliothek, voruebergehend auf der Hand
+    if me.library and me.library[0].is_land and any(c.card.top_lands and not c.dead for c in me.creatures):
+        mark = me.library[0]._replace(impulse_mark=True)
+        top_lands[mark] = me.library[0]
+        me.hand.append(mark)
     land, tapped, forced = choose_land(me.hand, spells, pool_all, me.lands, walker_bf, jace_bf, has_creature, True)
     tapped = land_tapped(me, tapped)
     if land is not None:
@@ -8472,6 +8712,9 @@ def take_turn(me, opp, step, rnd, skip_draw):
         if land in gy_lands:
             me.graveyard.remove(gy_lands[land])
             land = gy_lands.pop(land)
+        if land in top_lands:
+            me.library.remove(top_lands[land])
+            land = top_lands.pop(land)
         me.lands.append(land)
         me.land_now = land
         e["land"] = land.name + (" (getappt)" if tapped else "")
@@ -8488,13 +8731,16 @@ def take_turn(me, opp, step, rnd, skip_draw):
         if land2 in gy_lands:
             me.graveyard.remove(gy_lands[land2])
             land2 = gy_lands.pop(land2)
+        if land2 in top_lands:
+            me.library.remove(top_lands[land2])
+            land2 = top_lands.pop(land2)
         me.lands.append(land2)
         e["land"] = (e["land"] + ", " if e["land"] else "") + land2.name
         if not tapped2:
             pool_all = pool_all + [land2.land_colors]
         pool_all = pool_all + on_land(me, opp, land2, step, e, untapped=not tapped2)
-    if gy_lands:
-        me.hand[:] = [c for c in me.hand if c not in gy_lands]
+    if gy_lands or top_lands:
+        me.hand[:] = [c for c in me.hand if c not in gy_lands and c not in top_lands]
     if walker_engine(me) and not me.jace.used:  # L2a: zeitkritische Loyalty-Faehigkeiten vor dem Zaubern
         mana = walker_phase(me, opp, step, e, "main1", pool_all, spells)
         if mana:
@@ -8675,6 +8921,9 @@ def take_turn(me, opp, step, rnd, skip_draw):
                 continue
             if c in fb_map:
                 me.graveyard.remove(fb_map[c])
+                if c in holo_keys:  # The Holodeck: normal gewirkt
+                    me.holo_turn = me.now
+                    continue
                 from_graveyard[fb_map[c]] += 1
                 if c in overflow_keys:
                     me.overflow_used = me.now
@@ -8833,6 +9082,8 @@ def take_turn(me, opp, step, rnd, skip_draw):
     attack_taps(me, opp, attackers, e)
     attack_power_triggers(me, opp, attackers, step, e)
     attack_flow(me, opp, attackers, step, e)
+    for a in [a for a in attackers if a.card.discover]:  # U.S.S. Discovery
+        discover(me, opp, a.card.discover, step, e)
     for a in attackers:  # Angriffs-Ausloeser der Kreatur selbst
         a.attacked = step
         for g in a.gear:  # Medic's Kitesail
@@ -8951,6 +9202,8 @@ def take_turn(me, opp, step, rnd, skip_draw):
     worf_counters(me, opp, step, e)
     nog_levels(me, opp, step, e)
     explosives_phase(me, opp, step, e)
+    q_copies(me, opp, step, e)
+    genesis_swap(me, opp, step, e)
     if me.walkers:
         pw_phase(me, opp, step, e, "after")
     if walker_engine(me):

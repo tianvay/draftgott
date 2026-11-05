@@ -478,6 +478,18 @@ class Card(NamedTuple):
     data_draw: tuple = ()  # Lt. Cmdr. Data: (Kosten, N Marken entfernen) - ziehen
     dathon_counter: tuple = ()  # Dathon: Kosten von "noch eine Marke auf eine eigene Verzauberung"
     seven_79: tuple = ()  # Seven of Nine: Kosten von "Grund-P/T 7/9" (ab 7 verschieden benannten Laendern)
+    ghost_blink: bool = False  # Ghost of Illyria: eigenes Nichtland-Permanent bis zum Endsegment exilieren
+    miles_bounce: bool = False  # Miles O'Brien: eigene Kreatur oder eigenes Artefakt auf die Hand
+    returned_draw: bool = False  # Miles O'Brien: ziehen, wenn in diesem Zug ein Permanent auf die Hand kam
+    q_stack: bool = False  # Q: Nichtland-Karte von oben exilieren, Kopien davon wirken
+    riker_lands: int = 0  # Will Riker: zu Kampfbeginn N Laender von oben, im Endsegment geopfert
+    extra_land: int = 0  # "You may play an additional land on each of your turns" (Janeway)
+    explore_enter: bool = False  # Captain Janeway: kommt eine eigene Kreatur, explort sie
+    top_lands: bool = False  # Captain Pike: Laender von oben spielen
+    genesis_swap: tuple = ()  # Genesis Device: Kosten von "Laender opfern, ebenso viele suchen"
+    discover: int = 0  # U.S.S. Discovery: Discover N beim Betreten und Angriff
+    ds9_reveal: int = 0  # Deep Space 9: beim Betreten und im Upkeep N Karten, Permanents ins Spiel
+    holodeck: bool = False  # The Holodeck: einmal je eigenem Zug ein Permanent aus dem Friedhof spielen
 
 
 LANDCYCLE_RE = re.compile(
@@ -3117,6 +3129,32 @@ _TRK_RES = {
     "seven_79": re.compile(r"^((?:\{[^}]+\})+): (?:~|seven of nine)'s base power and toughness become 7/9\. "
                           r"activate only if you "
                           r"control (?:seven|~) or more differently named lands\.$"),
+    "ghost_blink": re.compile(r"^when (?:~|this creature) enters, exile up to one other target nonland permanent you "
+                             r"control\. return that card to the battlefield under its owner's control at the "
+                             r"beginning of the next end step\.$"),
+    "miles_bounce": re.compile(r"^when ~ enters, return up to one other target creature or artifact you control to "
+                              r"its owner's hand\.$"),
+    "returned_draw": re.compile(r"^at the beginning of each end step, if a permanent was returned to your hand from "
+                               r"the battlefield this turn, draw a card\.$"),
+    "q_stack": re.compile(r"^when ~ enters, shuffle your library, then exile cards from the top of your library "
+                         r"until you exile a nonland card\. that nonland card gains \"exile a card from your hand: "
+                         r"create a copy of this card\."),
+    "riker_lands": re.compile(r"^at the beginning of combat on your turn, reveal cards from the top of your library "
+                             r"until you reveal (two|\d+) land cards\. put those land cards onto the battlefield and "
+                             r"the rest on the bottom of your library in a random order\. sacrifice those lands at "
+                             r"the beginning of your next end step\.$"),
+    "extra_land": re.compile(r"^you may play an additional land on each of your turns\.$"),
+    "explore_enter": re.compile(r"^whenever (?:~|~ [a-z]+|captain [a-z~]+) or another creature you control enters, "
+                               r"that creature explores\.$"),
+    "top_lands": re.compile(r"^you may play lands from the top of your library\.$"),
+    "genesis_swap": re.compile(r"^((?:\{[^}]+\})+), \{t\}, sacrifice ~: sacrifice any number of lands you control, "
+                              r"then search your library for up to that many land cards, put them onto the "
+                              r"battlefield tapped, then shuffle\. activate only as a sorcery\.$"),
+    "discover": re.compile(r"^whenever ~ enters or attacks, discover (\d+)\.$"),
+    "ds9_reveal": re.compile(r"^when ~ enters and at the beginning of your upkeep, exile the top (four|\d+) cards of "
+                            r"your library\. put all permanent cards exiled this way onto the battlefield\.$"),
+    "holodeck": re.compile(r"^once during each of your turns, you may play a permanent card you own from outside the "
+                          r"game or from your graveyard\.$"),
     "mirror_copy": re.compile(r"^create a token that's a copy of target creature an opponent controls, except it "
                              r"has menace\. if this spell was kicked, instead for each creature target opponent "
                              r"controls, create a token that's a copy of that creature, except it has menace\.$"),
@@ -3458,6 +3496,7 @@ def trk_land_token_traits(card, type_line):
         out.update(trk_r4_fields(card, low, res, lines, spell))
         out.update(trk_r5_fields(card, low, res, lines, i))
         out.update(trk_r6_fields(low, res, lines))
+        out.update(trk_r7_fields(low, res))
     return out
 
 
@@ -3743,6 +3782,30 @@ def trk_r6_fields(low, res, lines):
     m = res["seven_79"].match(low)
     if m:
         out["seven_79"] = cost_alternatives(m.group(1).upper())
+    return out
+
+
+def trk_r7_fields(low, res):
+    """TRK Paket R7 (Bibliothek, Laender, Blink): Felder einer Zeile."""
+    out = {}
+    for key in ("ghost_blink", "miles_bounce", "returned_draw", "q_stack", "explore_enter", "top_lands",
+                "holodeck"):
+        if res[key].match(low):
+            out[key] = True
+    m = res["riker_lands"].match(low)
+    if m:
+        out["riker_lands"] = _count(m.group(1))
+    if res["extra_land"].match(low):
+        out["extra_land"] = 1
+    m = res["genesis_swap"].match(low)
+    if m:
+        out["genesis_swap"] = cost_alternatives(m.group(1).upper())
+    m = res["discover"].match(low)
+    if m:
+        out["discover"] = int(m.group(1))
+    m = res["ds9_reveal"].match(low)
+    if m:
+        out["ds9_reveal"] = _count(m.group(1))
     return out
 
 

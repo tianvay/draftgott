@@ -529,6 +529,15 @@ RULES = [
     "gegnerischen Zugs. Combadge macht beim Wirken eine Kopie, beide an verschiedene Kreaturen. Data zieht am Ende "
     "des gegnerischen Zugs mit Stun-Marken, dann eigenen Marken (bleibt mindestens 3/3). Dathon: Mission, Peace, "
     "Saga (nicht vor dem letzten Kapitel). Gwyndalas Kopier-Fähigkeit bewusst nicht.",
+    "Bibliothek, Länder, Blink (TRK): Ghost of Illyria exiliert bis zum Endsegment ein eigenes Permanent mit Wert "
+    "beim Betreten (Nichtkreaturen und Kreaturen, die nicht angreifen können, zuerst); Miles O'Brien gibt die "
+    "billigste solche Kreatur auf die Hand und zieht im Endsegment, wenn in diesem Zug ein Permanent auf die Hand "
+    "kam. Q wirkt in Main 2 Kopien (überzähliges Land zuerst exilieren, nie die letzte bald wirkbare Karte). Will "
+    "Riker legt zu Kampfbeginn zwei Länder ungetappt, im Endsegment geopfert. Janeway: ein Landdrop mehr, "
+    "Explore (Karte bleibt oben, wenn bald wirkbar). Pike: Länder von oben. Genesis Device tauscht in Main 2 alle "
+    "Länder, für die die Bibliothek Ersatz hat, wenn eine Farbe fehlt (dünnt die Bibliothek aus). Discover wirkt "
+    "die Karte gratis. Deep Space 9 legt Permanents von oben ins Spiel. The Holodeck: einmal je Zug das teuerste "
+    "bald wirkbare Permanent aus dem Friedhof.",
     "Alchemy (YFRA): „perpetually“ ändert die Karte selbst (bleibt in Friedhof und Hand). Conjure benannter Karten "
     "(Kraken Hatchling, Mind Stone, Aria of Flame) mit ihren Texten von Scryfall. Avoided Stairwurm −1/−1 je "
     "Kreaturenkarte in der Bibliothek; Zimone macht Schaden wie mit positiver Power und wird prepared, sobald Karten "
