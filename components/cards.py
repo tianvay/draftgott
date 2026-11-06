@@ -498,6 +498,10 @@ class Card(NamedTuple):
     holo_tokens: object = None  # Holo-Engineer: eigene Token werden stattdessen diese 3/3-Illusion
     gray_copy: bool = False  # Gray and Adira: nach Nichtkreatur-Zauber zu Kampfbeginn eine Kopie mit Haste
     token_copy: bool = False  # Replicator: {2}, {T}: getappte Kopie eines eigenen Tokens
+    phase_lock: bool = False  # The City on the Edge of Forever: Human-Token "Permanents can't phase in"
+    sisko_dig: tuple = ()  # Captain Benjamin Sisko: Kosten von "Top 5 exilieren, Zauber bis MV = Officers gratis"
+    gwyndala_copy: tuple = ()  # Gwyndala: Kosten von "Equipment-Token werden Kopie einer Ausruestung"
+    lwaxana_echo: tuple = ()  # Lwaxana Troi: Kosten von "Ausloeser einer anderen Kreatur doppelt, solange getappt"
 
 
 LANDCYCLE_RE = re.compile(
@@ -2703,6 +2707,12 @@ _SNW_RES = (
      lambda m: ("sweep", int(m.group(1)), tuple(_tokens_in(m.group(2) + ".")))),
     (re.compile(r"^whenever (?:~|this creature) attacks, creatures you control get \+x/\+0 until end of turn"
                 + _SNW_WHERE + r"\.$"), lambda m: ("attack_team",)),
+    (re.compile(r"^when (?:~|~ [a-z]+|[a-z]+ ~) enters, each opponent exiles the top x cards of their library"
+                + _SNW_WHERE + r"\. for each opponent, choose a land card that player owns exiled this way\. you may "
+                r"play the chosen cards for as long as they remain exiled\.$"), lambda m: ("chekov",)),
+    (re.compile(r"^reveal the top x cards of your library" + _SNW_WHERE + r"\. put all permanent cards revealed this "
+                r"way onto the battlefield tapped and the rest on the bottom of your library in a random order\.$"),
+     lambda m: ("branching",)),
 )
 _WARP_RES = (  # Warp Speed (TRK), kein Strange new worlds
     (re.compile(r"^lands you control enter untapped\.$"), lambda m: ("lands_untapped",)),
@@ -2767,6 +2777,9 @@ def snw_stripped(card):
 
 _ROMAN = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5, "VI": 6}
 _CHAPTER_RE = re.compile(r"^((?:I|II|III|IV|V|VI)(?:, (?:I|II|III|IV|V|VI))*) — (.+)$")
+_CITY_HUMAN = token_card("Human", True, 0, 1, False, types=("Human",))._replace(phase_lock=True,
+                                                                               cant_block=True)
+# The City on the Edge of Forever: "Permanents can't phase in"; blockt nie (sonst phast alles wieder ein, selbst gesetzt)
 _CHAPTER_RES = (  # Kapitel, die der Zauber-Parser nicht liest (TRK)
     (r"investigate\.", lambda m: (("clue", 1),)),
     (r"each opponent sacrifices a nontoken (creature|permanent) of their choice\.", lambda m: (("edict", m.group(1)),)),
@@ -2793,7 +2806,16 @@ _CHAPTER_RES = (  # Kapitel, die der Zauber-Parser nicht liest (TRK)
     (r"sacrifice a land\.", lambda m: (("sac_land",),)),
     (r"you may sacrifice an artifact or creature\. if you do, (create .+ tokens?)\.",
      lambda m: (("sac_for_tokens", tuple(_tokens_in(m.group(1) + "."))),)),
+    (r"all artifacts and creatures phase out\. create a 0/1 white human creature token with \"permanents can't phase "
+     r"in\.\"", lambda m: (("phase_out", _CITY_HUMAN),)),
+    (r"choose target creature\. whenever it deals combat damage to a player this turn, you draw that many cards\.",
+     lambda m: (("inner_light",),)),
+    (r"choose up to two target cards in graveyards\. the owners of those cards shuffle them into their libraries\.",
+     lambda m: (("gy_shuffle", 2),)),
 )
+_STEAL_RE = re.compile(r"(.+? deals \d+ damage to target creature an opponent controls\.) at the beginning of the next "
+                       r"combat this turn, gain control of that creature until end of turn\. untap it\. it gains haste "
+                       r"until end of turn\.", re.I)  # The Wrath of Khan I
 
 
 def saga_traits(card):
@@ -2817,11 +2839,14 @@ def saga_traits(card):
         if atoms is not None:
             chapters.append((nums, None, atoms))
             continue
+        steal = _STEAL_RE.fullmatch(body)
+        if steal:  # Schaden wie ein Zauber, dazu die Kontrollübernahme, wenn das Ziel ueberlebt
+            body = steal.group(1)
         sub = card_info({"name": card["name"], "type_line": "Sorcery", "mana_cost": "", "cmc": 0, "colors": [],
                          "oracle_text": re.sub(r"\bthis saga\b", card["name"], body, flags=re.I), "keywords": [],
                          "layout": "normal"})[0]
         if any(getattr(sub, f) != getattr(empty, f) for f in sub._fields if f != "removal_points"):
-            chapters.append((nums, sub, ()))
+            chapters.append((nums, sub, (("steal",),) if steal else ()))
     m = re.search(r"Sacrifice after ((?:I|II|III|IV|V|VI))\.", text)
     return ((_ROMAN[m.group(1)] if m else last), tuple(chapters)) if chapters else ()
 
@@ -3181,6 +3206,15 @@ _TRK_RES = {
                            r"create a token that's a copy of target creature you control, except it isn't legendary\. "
                            r"it gains haste until end of turn\. sacrifice it at the beginning of the next end step\.$"),
     "token_copy": re.compile(r"^\{2\}, \{t\}: create a tapped token that's a copy of target token you control\.$"),
+    "sisko_dig": re.compile(r"^((?:\{[^}]+\})+), \{t\}: exile the top five cards of your library\. you may cast any "
+                           r"number of spells with mana value less than or equal to the number of officers you control "
+                           r"from among those cards without paying their mana costs\.$"),
+    "gwyndala_copy": re.compile(r"^((?:\{[^}]+\})+): each equipment token you control becomes a copy of target "
+                               r"equipment you control until end of turn\.$"),
+    "lwaxana_echo": re.compile(r"^((?:\{[^}]+\})+), \{t\}: choose another target creature you control\. for as long as "
+                              r"~ remains tapped, if a triggered ability of that creature triggers, that ability "
+                              r"triggers an additional time\.$"),
+    "lwaxana_untap": re.compile(r"^you may choose not to untap ~ during your untap step\.$"),
     "mirror_copy": re.compile(r"^create a token that's a copy of target creature an opponent controls, except it "
                              r"has menace\. if this spell was kicked, instead for each creature target opponent "
                              r"controls, create a token that's a copy of that creature, except it has menace\.$"),
@@ -3524,6 +3558,7 @@ def trk_land_token_traits(card, type_line):
         out.update(trk_r6_fields(low, res, lines))
         out.update(trk_r7_fields(low, res))
         out.update(trk_r8_fields(low, res))
+        out.update(trk_rest_fields(low, res))
     return out
 
 
@@ -3846,6 +3881,19 @@ def trk_r8_fields(low, res):
     m = res["holo_tokens"].match(low)
     if m and _tokens_in("create a " + m.group(1)[:-1] + "."):
         out["holo_tokens"] = _tokens_in("create a " + m.group(1)[:-1] + ".")[0][1]
+    return out
+
+
+def trk_rest_fields(low, res):
+    """TRK Restpaket (Nutzer 2026-11-06): Sisko, Gwyndala, Lwaxana. "You may choose not to untap" gehoert zu
+    Lwaxanas Faehigkeit (ohne sie bleibt sie nie getappt) und setzt dasselbe Feld."""
+    out = {}
+    for key in ("sisko_dig", "gwyndala_copy", "lwaxana_echo"):
+        m = res[key].match(low)
+        if m:
+            out[key] = cost_alternatives(m.group(1).upper())
+    if res["lwaxana_untap"].match(low):
+        out["lwaxana_echo"] = ((2, ()),)
     return out
 
 

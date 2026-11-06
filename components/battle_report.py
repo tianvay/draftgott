@@ -394,8 +394,9 @@ RULES = [
     "gegnerische als eigene Kreaturen tötet (oder ab X = 6 die Token bringt, ohne eigene zu töten). Suus Mahna "
     "tappt zu Beginn des eigenen Kampfs den Blocker, der unseren stärksten Angreifer aufhalten würde (wie „tap target "
     "creature defending player controls“). Warp Speed: Länder kommen ungetappt, beim Betreten ein Basic Land auf die "
-    "Hand, Opfern zum Ziehen am Ende des gegnerischen Zugs mit übrigem Mana. Ensign Pavel Chekov und Branching "
-    "Timeline bewusst nicht.",
+    "Hand, Opfern zum Ziehen am Ende des gegnerischen Zugs mit übrigem Mana. Ensign Pavel Chekov: der Gegner "
+    "exiliert X Karten, von den Ländern darunter bleibt eines für uns spielbar (das mit den meisten fehlenden Farben, "
+    "dann ein neuer Name). Branching Timeline legt die Permanents von oben getappt ins Spiel.",
     "Beam me up (TRK): Sorceries aus dem Friedhof in der eigenen Main Phase wie Flashback, zusätzlich geht eine "
     "eigene Kreatur auf die Hand: die mit dem wertvollsten Betreten-Effekt, sonst die billigste, Token zuletzt; nie "
     "eine, ohne die ein tödlicher Gegenangriff möglich wird. Scotty: jede Sorcery im Friedhof hat Beam me up zu ihren "
@@ -405,8 +406,13 @@ RULES = [
     "({2}, opfern: ziehen) am Ende des gegnerischen Zugs mit übrigem Mana. „Sacrifices a nontoken creature“: die "
     "schwächste; „nontoken permanent“: ab 6 Ländern ein Land, sonst die schwächste Kreatur, sonst das billigste "
     "Permanent. „You may sacrifice an artifact or creature“ für zwei 2/2: Clue, Treasure, sonst eine Kreatur unter "
-    "4 Stärke+Widerstand. „You may exile a card from your hand“: nur ein überzähliges Land. Bewusst nicht: City on "
-    "the Edge of Forever I (Phasing), Inner Light II, Those Old Scientists III, Wrath of Khan I nur der Schaden.",
+    "4 Stärke+Widerstand. „You may exile a card from your hand“: nur ein überzähliges Land. The City on the Edge of "
+    "Forever wird nur gewirkt, wenn der Gegner an Kreaturen und Artefakten mindestens 3 Manawert vorne liegt; "
+    "Kapitel I phast alle Artefakte und Kreaturen aus, bis der Human-Token geht (er blockt nie; Kapitel III opfert "
+    "lieber einen anderen Token, solange die Gegnerseite mehr wert ist). The Inner Light II wählt die stärkste "
+    "Kreatur, die kein Gegner blocken kann. Those Old Scientists III mischt gegnerische Karten mit Friedhofs-Nutzen "
+    "in seine Bibliothek. The Wrath of Khan I: überlebt das Ziel die 4 Schaden (sonst die gefährlichste Kreatur), "
+    "übernehmen wir es bis Rundenende, enttappt und mit Haste.",
     "Länder und Token (TRK): Planeten-Länder geben beim Betreten Leben; Länder mit „When this land enters untapped, "
     "choose one“ wählen ihren Modus nur, wenn sie ungetappt kommen (Rang wie bei modalen Karten; Flying oder Pump für "
     "den besten Angreifer, The Unicomplex legt die teuerste Kreatur aus dem Friedhof oben auf die Bibliothek). "
@@ -493,7 +499,7 @@ RULES = [
     "Gegenangriff fehlt, die schwächsten zuerst; Worf zuerst Clues und Nichtkreatur-Artefakte; Picard holt das "
     "teuerste Raumschiff. Kira Nerys: Kreaturen, die nach dem Erklären der Angreifer kommen, greifen mit an. Nog "
     "steigt in Main 2 mit sonst ungenutztem Mana auf (Scout, dann Officer: Länder aus dem Friedhof, ein Landdrop "
-    "mehr). Lwaxana Troi ist noch nicht modelliert.",
+    "mehr).",
     "Marken und Leben (TRK): Pure Energy legt beide Marken auf die beste Kreatur; Picard, Leading by Example "
     "pumpt in Main 1 mit freiem Mana die gefährlichste andere angriffsbereite Kreatur (Picard greift dann nicht "
     "an); Jadzia Dax gibt ihr {G} in Main 1, Transfer Symbiont ist ein Kampftrick aus der Hand; General Chang "
@@ -505,8 +511,9 @@ RULES = [
     "2/1-Token mit Haste, das im Endsegment geopfert wird; L'Rell opfert es vorher mit sonst ungenutztem Mana für "
     "Surveil. Captain Kirk wählt den wertvollsten Modus, ohne Handkarten alle. Kobayashi Maru Scenario wird nur "
     "gewirkt, wenn unsere Kreaturen das Leben des Gegners in höchstens drei Angriffen schaffen; Modi: Hail mit "
-    "Ziel, sonst Sensors, dann Transport, im vierten Upkeep verloren. Sisko: ein Officer je Dilemma (die "
-    "Fünffarben-Fähigkeit bewusst nicht). The Naked Time III opfert ein Land der häufigsten Farbe.",
+    "Ziel, sonst Sensors, dann Transport, im vierten Upkeep verloren. Sisko: ein Officer je Dilemma; die "
+    "Fünffarben-Fähigkeit vor dem Angriff mit freiem Mana ab zwei Officers, alle sinnvollen Zauber von den "
+    "obersten fünf gratis, teuerste zuerst. The Naked Time III opfert ein Land der häufigsten Farbe.",
     "Opfern und Friedhof (TRK): Gowron und Kirk, Commanding Officer opfern nur, was ohnehin stirbt (Removal, "
     "sterbender Blocker); Kirk zerstört dabei das wertvollste Artefakt bzw. die wertvollste Verzauberung des "
     "Gegners. Dahar Master opfert nur Clue, kleinen Token oder Food, und nur für einen Kill oder Lethal; Targ "
@@ -528,7 +535,8 @@ RULES = [
     "nächsten Stufe am nächsten ist; Isolinear Processor: {C} nur für Artefakt-Zauber, Loot am Ende des "
     "gegnerischen Zugs. Combadge macht beim Wirken eine Kopie, beide an verschiedene Kreaturen. Data zieht am Ende "
     "des gegnerischen Zugs mit Stun-Marken, dann eigenen Marken (bleibt mindestens 3/3). Dathon: Mission, Peace, "
-    "Saga (nicht vor dem letzten Kapitel). Gwyndalas Kopier-Fähigkeit bewusst nicht.",
+    "Saga (nicht vor dem letzten Kapitel). Gwyndala: vor dem Angriff wird ein angelegter "
+    "Equipment-Token bis Rundenende zur Kopie der besten anderen eigenen Ausrüstung, wenn das mehr bringt.",
     "Bibliothek, Länder, Blink (TRK): Ghost of Illyria exiliert bis zum Endsegment ein eigenes Permanent mit Wert "
     "beim Betreten (Nichtkreaturen und Kreaturen, die nicht angreifen können, zuerst); Miles O'Brien gibt die "
     "billigste solche Kreatur auf die Hand und zieht im Endsegment, wenn in diesem Zug ein Permanent auf die Hand "
@@ -544,7 +552,8 @@ RULES = [
     "Kopie der stärksten Kreatur auf dem Feld (mit ihren Marken). Gray and Adira kopieren nach einem "
     "Nichtkreatur-Zauber die gefährlichste eigene Kreatur mit Haste. Replicator kopiert in Main 2 den "
     "gefährlichsten Kreatur-Token (sonst Treasure, Clue, Food). Georgiou: kein Verlieren bei 0 Leben, solange sie "
-    "lebt. Lwaxana Troi bewusst nicht.",
+    "lebt. Lwaxana Troi: vor dem Angriff auf die eigene Kreatur mit den meisten "
+    "Angriffs- und Kampfschaden-Auslösern (nur diese werden verdoppelt); sie bleibt getappt, solange das Ziel lebt.",
     "Alchemy (YFRA): „perpetually“ ändert die Karte selbst (bleibt in Friedhof und Hand). Conjure benannter Karten "
     "(Kraken Hatchling, Mind Stone, Aria of Flame) mit ihren Texten von Scryfall. Avoided Stairwurm −1/−1 je "
     "Kreaturenkarte in der Bibliothek; Zimone macht Schaden wie mit positiver Power und wird prepared, sobald Karten "

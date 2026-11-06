@@ -131,18 +131,7 @@ ON_PURPOSE = {
     "Winter, Team Player": re.compile(r"^convoke$"),  # FRA abgeschlossen: nicht vollstaendig modelliert
     "Tam, the Possibility": re.compile(r"proliferate x times"),
     "Extrapolate the Impossible": re.compile(r"from outside the game"),
-    # TRK (Nutzer 2026-10-30): Strange-new-worlds-Sonderfaelle vorerst nicht; Saga-Kapitel ohne Gegenstueck im Modell
-    "Lwaxana Troi, Charming Guest": re.compile(r"choose not to untap|remains tapped, if a triggered ability"),
-    # Nutzer 2026-11-05: Lwaxana Troi bewusst nicht (Ausloeser beliebiger Kreaturen verdoppeln)
-    "Gwyndala, the Progeny": re.compile(r"each equipment token you control becomes a copy of target equipment"),
-    # Nutzer 2026-11-05: Gwyndalas Kopier-Faehigkeit bewusst nicht
-    "Captain Benjamin Sisko": re.compile(r"exile the top five cards of your library\. you may cast any number of "
-                                         r"spells"),  # Nutzer 2026-11-03: Fuenffarben-Faehigkeit bewusst nicht
-    "Ensign Pavel Chekov": re.compile(r"each opponent exiles the top x cards of their library"),
-    "Branching Timeline": re.compile(r"reveal the top x cards of your library"),
-    "The City on the Edge of Forever": re.compile(r"^i — all artifacts and creatures phase out"),
-    "The Inner Light": re.compile(r"^ii — choose target creature\. whenever it deals combat damage"),
-    "Those Old Scientists": re.compile(r"^iii — choose up to two target cards in graveyards"),
+    # TRK: seit 2026-11-06 alle Zeilen modelliert (Restpaket, Nutzer)
 }
 KEYWORD_SPLIT = re.compile(r"[,;]")
 

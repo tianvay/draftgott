@@ -2,8 +2,8 @@
 (714.3b); nach dem letzten Kapitel wird die Saga geopfert (714.4). Jedes Kapitel wird wie ein kleiner Zauber gelesen
 (Removal, Ziehen, Leben, Token, Zurueckholen ...), dazu eigene Bausteine fuer TRK: Investigate (Clue-Token: {2},
 opfern: ziehen - am Ende des gegnerischen Zugs mit offenem Mana), Edikte "nontoken", Exil von der Hand, "each player
-draws/loses", Opfern fuer Token. Bewusst nicht: The City on the Edge of Forever I (Phasing), The Inner Light II, Those
-Old Scientists III, die Kontrollübernahme von The Wrath of Khan I. Nur Kampfmodell. Kartentexte aus TRK."""
+draws/loses", Opfern fuer Token. City I, Inner Light II, Scientists III und die Kontrollübernahme von The Wrath of
+Khan I seit 2026-11-06 modelliert (tests/test_trk_rest.py). Nur Kampfmodell. Kartentexte aus TRK."""
 import unittest
 
 from components import battle as bt
@@ -103,8 +103,8 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(sub.removal[:2], ("damage", 4))
 
     def test_on_purpose_chapters_missing(self):
-        self.assertEqual([ch for ch, _s, _a in C["city"].saga[1]], [(2,), (3,)])
-        self.assertEqual([ch for ch, _s, _a in C["innerlight"].saga[1]], [(1,), (3,)])
+        self.assertEqual([ch for ch, _s, _a in C["city"].saga[1]], [(1,), (2,), (3,)])  # Nutzer 2026-11-06
+        self.assertEqual([ch for ch, _s, _a in C["innerlight"].saga[1]], [(1,), (2,), (3,)])
 
     def test_not_a_saga(self):
         self.assertEqual((BEAR.saga, PEEK.saga), ((), ()))
@@ -239,12 +239,13 @@ class ChapterTests(unittest.TestCase):
     def test_city(self):
         me, opp = pair()
         enter(me, opp, "city")
-        self.assertEqual(me.creatures, [])  # Kapitel I bewusst nicht
+        self.assertEqual([c.card.name for c in me.creatures], ["Human"])  # Kapitel I: Phasing (Nutzer 2026-11-06)
+        self.assertTrue(me.creatures[0].card.phase_lock)
         lore(me, opp)
         self.assertEqual((len(me.hand), me.life, opp.life), (2, 18, 18))
         on_board(me, CADET)
         lore(me, opp)
-        self.assertEqual((me.creatures, me.life), ([], 23))
+        self.assertEqual(([c.card.name for c in me.creatures], me.life), (["Cadet"], 23))  # der Human geht
 
     def test_inner_light(self):
         me, opp = pair()

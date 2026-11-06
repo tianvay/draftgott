@@ -48,7 +48,7 @@ class Creature:
     __slots__ = ("card", "entered", "_tapped", "_damage", "_bonus", "pump", "land_source", "attacked", "ramp_pending",
                  "base_card", "dead", "touched", "locked", "prepared",
                  "tpump", "extra", "lifted", "owner", "at_jace", "gy", "dealt", "finality", "ctl", "once", "stun", "gear",
-                 "tdraw", "auras", "exile_step", "at_pw", "lasting", "crew")
+                 "tdraw", "auras", "exile_step", "at_pw", "lasting", "crew", "echo", "light")
 
     def __init__(self, card, entered=0):
         self.card = card
@@ -83,6 +83,8 @@ class Creature:
         self.at_pw = None     # greift in diesem Kampf diesen echten Planeswalker (Walker) an
         self.lasting = []     # -P/-T bis zum naechsten Zug des Verursachers: (P, T, Verursacher, Schritt)
         self.crew = []        # gecrewtes Fahrzeug: die Kreaturen, die dafuer getappt wurden
+        self.echo = False     # Ziel von Lwaxana Troi: ihre Angriffs- und Kampfschaden-Ausloeser doppelt
+        self.light = None     # The Inner Light II: Schritt, in dem sie fuer Kampfschaden am Spieler ziehen laesst
 
     @property
     def damage(self):
@@ -314,6 +316,7 @@ class Creature:
         c.auras, c.exile_step = list(self.auras), self.exile_step
         c.at_pw, c.lasting = self.at_pw, list(self.lasting)
         c.land_source, c.attacked, c.base_card = self.land_source, self.attacked, self.base_card
+        c.echo, c.light = self.echo, self.light
         return c
 
     def label(self):
@@ -849,6 +852,9 @@ class Player:
         self.prevent_turn = None  # The Needs of the Many: Schritt, in dem aller Schaden an uns verhindert wird
         self.bones_back = []  # Bones McCoy: Karten, die im naechsten Endsegment mit Marke zurueckkommen
         self.stolen = []  # Worf, Intelligence Contractor: bis Rundenende uebernommene Kreaturen
+        self.phased = None  # The City on the Edge of Forever: ausgephaste Objekte (702.26) bis der Human-Token geht
+        self.gwyn_revert = []  # Gwyndala: (Kopie, Equipment-Token) bis Rundenende
+        self.lwax = []  # Lwaxana Troi: (Lwaxana, Ziel), solange sie getappt bleibt
         self.explosives = []  # Engineered Explosives im Spiel: {"card", "charge", "since"}
         self.peace = []  # Peace in Our Time im Spiel: {"card": eigenes Objekt in perms, "count": Marken}
         self.zefram_turn = None  # Zefram Cochrane: Schritt, in dem ein Artefakt von oben gewirkt wurde
@@ -4119,6 +4125,7 @@ def bury(players, e):
             pick = max(alive, key=lambda x: (can_attack(x, p.now + 1), danger(x)))
             pick.bonus += n
             e["events"].append(f"{p.name}: {name} – {n} Marke(n) auf {pick.card.name}")
+    phase_check(players, e)
 
 
 def death_watchers(players, died, e):
@@ -5507,6 +5514,38 @@ def snw_effects(me, opp, card, step, entry):
                 make_tokens(me, list(atom[2]), step, entry, opp, card.name)
         elif kind == "etb_basic":  # Warp Speed: Basic Land (oder Planet) auf die Hand
             search_basics(me, 1, entry, card.name)
+        elif kind == "chekov" and opp is not None:  # Gegner exiliert X, ein Land davon bleibt fuer uns spielbar
+            top, opp.library[:x] = opp.library[:x], []
+            lands = [c for c in top if c.is_land]
+            entry["events"].append(f"{me.name}: {card.name} – {opp.name} exiliert {len(top)} Karte(n)")
+            if lands:
+                pick = chekov_land(me, lands)
+                me.impulse.append((pick, 10 ** 9))
+                entry["events"].append(f"{me.name}: {card.name} – {pick.name} spielbar")
+        elif kind == "branching":  # Permanents von oben getappt ins Spiel, der Rest zufaellig unter die Bibliothek
+            top, me.library[:x] = me.library[:x], []
+            rest = []
+            for c in top:
+                if c.is_instant_sorcery:
+                    rest.append(c)
+                elif c.is_creature:
+                    new = Creature(c, step)
+                    new.tapped = True
+                    me.creatures.append(new)
+                    creature_enters(me, new, step, entry, opp, cast=False)
+                elif c.is_land:
+                    me.lands.append(c)
+                    if opp is not None:
+                        on_land(me, opp, c, step, entry, with_mana=False)
+                elif c.is_planeswalker and c.loyalty_start > 0:
+                    me.walkers.append(Walker(c, step))
+                    permanent_enters(me, opp, c, step, entry)
+                else:
+                    me.perms.append(c)
+                    permanent_enters(me, opp, c, step, entry)
+            random.shuffle(rest)
+            me.library.extend(rest)
+            entry["events"].append(f"{me.name}: {card.name} – {', '.join(c.name for c in top)}")
 
 
 def praxis_ok(me, opp, card):
@@ -5625,7 +5664,9 @@ def saga_lore(p, opp, st, step, e):
     for nums, sub, atoms in chapters:
         if st["lore"] in nums:
             e["events"].append(f"{p.name}: {card.name} – Kapitel {st['lore']}")
-            if sub is not None:
+            if sub is not None and ("steal",) in atoms and opp is not None:
+                saga_steal(p, opp, sub, step, e)
+            elif sub is not None:
                 card_effects(p, opp, sub, step, e)
                 bury((p, opp) if opp is not None else (p,), e)
             for atom in atoms:
@@ -5731,6 +5772,12 @@ def saga_atom(p, opp, st, atom, step, e):
                 pl.life -= atom[1]
     elif kind == "sac_token_life":
         tokens = [c for c in p.creatures if not c.dead and c.card.is_token]
+        locks = [c for c in tokens if c.card.phase_lock]
+        others = [c for c in tokens if not c.card.phase_lock]
+        if locks and others and opp is not None and phased_value(opp) > phased_value(p):
+            tokens = others  # The City on the Edge of Forever: der Gegner bleibt ausgephast
+        elif locks:
+            tokens = locks  # unsere Seite ist mehr wert: alles phast wieder ein
         if tokens:
             min(tokens, key=_value).dead = True
             bury((p,), e)
@@ -5766,6 +5813,21 @@ def saga_atom(p, opp, st, atom, step, e):
         owner, back = st["temp"]
         st["temp"] = None
         put_back(owner, back, "battlefield", step, e, p)
+    elif kind == "phase_out":  # The City on the Edge of Forever I
+        phase_out_all(p, opp, e, card.name)
+        make_tokens(p, [(1, atom[1])], step, e, opp, card.name)
+    elif kind == "inner_light":  # The Inner Light II
+        t = light_target(p, opp, step)
+        if t is not None:
+            t.light = step
+            e["events"].append(f"{p.name}: {card.name} – {t.card.name} zieht bei Kampfschaden")
+    elif kind == "gy_shuffle" and opp is not None:  # Those Old Scientists III
+        picks = sorted((c for c in opp.graveyard if _gy_worth(c)[0]), key=lambda c: (c.mv, c.name),
+                       reverse=True)[:atom[1]]
+        for c in picks:
+            opp.graveyard.remove(c)
+            opp.library.insert(random.randint(0, len(opp.library)), c)
+            e["events"].append(f"{p.name}: {card.name} – {c.name} in die Bibliothek von {opp.name}")
     elif kind == "naked_turn":  # The Naked Time II
         p.naked_turn = p.now
     elif kind == "sac_land":  # The Naked Time III: ein Land der haeufigsten Farbe (selbst gesetzt)
@@ -5788,6 +5850,225 @@ def saga_atom(p, opp, st, atom, step, e):
         else:
             return
         make_tokens(p, list(atom[1]), step, e, opp, card.name)
+
+
+def saga_steal(p, opp, sub, step, e):
+    """The Wrath of Khan I: 4 Schaden an der gefaehrlichsten Kreatur, die daran stirbt; sonst an der gefaehrlichsten
+    ueberhaupt. Ueberlebt sie, uebernehmen wir sie bis Rundenende, enttappt und mit Haste (Ruecktausch wie Worf in
+    end_step_triggers). Vereinfacht: die Uebernahme gilt gleich, nicht erst zu Beginn des Kampfs."""
+    target = choose_target(sub.removal, p, opp)
+    if target is None:
+        cands = [c for c in opp.creatures if not c.dead and not hexproof(c) and ward_ok(p, c)]
+        target = max(cands, key=danger) if cands else None
+    if target is None:
+        return
+    cast_removal(sub, p, opp, e, step, target=target)
+    bury((p, opp), e)
+    if target.dead or not any(target is x for x in opp.creatures):
+        return
+    opp.creatures.remove(target)
+    target.owner = target.owner or opp
+    target.ctl, target.gy, target.tapped = p, p.graveyard, False
+    target.extra.add("haste")
+    p.creatures.append(target)
+    p.stolen.append(target)
+    e["events"].append(f"{p.name}: The Wrath of Khan übernimmt {target.card.name}")
+
+
+def _board_mv(p):
+    return sum(max(c.card.mv, 1) for c in p.creatures if not c.dead) \
+        + sum(x.mv for x in p.perms if isinstance(x, Card) and x.is_artifact)
+
+
+def city_ok(me, opp, card):
+    """The City on the Edge of Forever (selbst gesetzt): nur, wenn der Gegner an Kreaturen und Artefakten mindestens 3
+    Manawert mehr hat als wir und mindestens eine Kreatur."""
+    if not card.saga or not any(a[0] == "phase_out" for _n, _s, atoms in card.saga[1] for a in atoms):
+        return True
+    return opp is not None and any(not c.dead for c in opp.creatures) and _board_mv(opp) - _board_mv(me) >= 3
+
+
+def phased_value(p):
+    if not p.phased:
+        return 0
+    return sum(max(c.card.mv, 1) for c in p.phased["creatures"]) + sum(x.mv for x in p.phased["perms"])
+
+
+def phase_out_all(p, opp, e, source):
+    """702.26: alle Artefakte und Kreaturen phasen aus (mit dem, was an ihnen haengt); sie bleiben dieselben Objekte
+    und kommen ohne Betreten-Ausloeser zurueck, sobald kein Token "Permanents can't phase in" mehr da ist."""
+    for pl in (p, opp):
+        if pl is None:
+            continue
+        gone = [c for c in pl.creatures if not c.dead]
+        attached = {id(a) for c in gone for a in list(c.auras) + list(c.gear)}
+        perms = [x for x in pl.perms if isinstance(x, Card) and (x.is_artifact or id(x) in attached)]
+        ids = {id(x) for x in perms}
+        saved = pl.phased or {"creatures": [], "perms": [], "vehicles": [], "stations": [], "explosives": []}
+        saved["stations"] += [st for st in pl.stations if id(st.get("live", st["card"])) in ids
+                              or any(st["creature"] is c for c in gone)]
+        saved["explosives"] += [x for x in pl.explosives if id(x["card"]) in ids]
+        saved["creatures"] += gone
+        saved["perms"] += perms
+        saved["vehicles"] += list(pl.vehicles)
+        pl.creatures[:] = [c for c in pl.creatures if c.dead]
+        pl.perms[:] = [x for x in pl.perms if id(x) not in ids]
+        pl.vehicles[:] = []
+        pl.stations[:] = [st for st in pl.stations if not any(st is x for x in saved["stations"])]
+        pl.explosives[:] = [x for x in pl.explosives if not any(x is y for y in saved["explosives"])]
+        pl.phased = saved
+        if gone or perms:
+            e["events"].append(f"{pl.name}: {source} – {len(gone) + len(perms)} Permanent(s) phasen aus")
+
+
+def phase_check(players, e):
+    """Ohne lebenden Token "Permanents can't phase in" phasen alle ausgephasten Objekte wieder ein (702.26d)."""
+    sides = []
+    for p in players:
+        for pl in (p, p.opponent):
+            if pl is not None and not any(pl is x for x in sides):
+                sides.append(pl)
+    if not any(pl.phased for pl in sides):
+        return
+    if any(c.card.phase_lock and not c.dead for pl in sides for c in pl.creatures):
+        return
+    for pl in sides:
+        saved, pl.phased = pl.phased, None
+        if not saved:
+            continue
+        pl.creatures.extend(saved["creatures"])
+        pl.perms.extend(saved["perms"])
+        pl.vehicles.extend(saved["vehicles"])
+        pl.stations.extend(saved["stations"])
+        pl.explosives.extend(saved["explosives"])
+        e["events"].append(f"{pl.name}: {len(saved['creatures']) + len(saved['perms'])} Permanent(s) phasen ein")
+
+
+def light_target(p, opp, step):
+    """The Inner Light II: die staerkste Kreatur, die angreifen kann und kein ungetappter Gegner blocken kann; sonst
+    die staerkste Angreiferin."""
+    alive = [c for c in p.creatures if not c.dead]
+    pool = [c for c in alive if can_attack(c, step)] or alive
+    if not pool:
+        return None
+    blockers = [b for b in opp.creatures if not b.dead] if opp is not None else []
+    return max(pool, key=lambda c: (not any(can_block(b, c) for b in blockers), c.dmg))
+
+
+def chekov_land(p, lands):
+    """Ensign Pavel Chekov: das Land mit den meisten Farben, die uns fehlen, dann eines mit neuem Namen (Strange new
+    worlds), dann eines, das ungetappt kommt."""
+    have = {col for land in p.lands for col in land.land_colors}
+    names = {land.name for land in p.lands}
+    return max(lands, key=lambda c: (len(set(c.land_colors) - have), c.name not in names, not enters_tapped(c, p.lands),
+                                     c.name))
+
+
+def sisko_dig(me, opp, step, e):
+    """Captain Benjamin Sisko (selbst gesetzt): vor dem Angriff mit freiem Mana aller fuenf Farben, ab zwei Officers;
+    von den obersten fuenf alle sinnvollen Zauber mit Manawert hoechstens Officers gratis wirken, teuerste zuerst. Der
+    Rest bleibt im Exil."""
+    for c in list(me.creatures):
+        if not c.card.sisko_dig or c.dead or not tap_ready(me, c) or not me.library:
+            continue
+        officers = sum(1 for x in me.creatures if not x.dead and "officer" in (t.lower() for t in x.card.creature_types))
+        if officers < 2 or not _pay_open(me, c.card.sisko_dig, treasure=False):
+            continue
+        c.tapped = True
+        top, me.library[:5] = me.library[:5], []
+        e["events"].append(f"{me.name}: {c.card.name} – exiliert {', '.join(x.name for x in top)}")
+        casts = [x for x in top if not x.is_land and x.mv <= officers and legend_ok(me, x)
+                 and (not x.removal or x.removal[4] == "etb" or opp is None or has_target(x, me, opp))]
+        for x in sorted(casts, key=lambda x: (-x.mv, x.name)):
+            e["events"].append(f"{me.name}: {c.card.name} – wirkt {x.name} gratis")
+            _resolve(me, opp, x, step, e)
+
+
+def _gear_value(g):
+    return g.equip[1] + g.equip[2] + 2 * len(g.equip_kw) + g.equip_attack_life
+
+
+def gwyndala_copy(me, step, e):
+    """Gwyndala (selbst gesetzt): vor dem Angriff mit freiem Mana, wenn ein angelegter Equipment-Token als Kopie der
+    besten anderen eigenen Ausruestung mehr bringt; bis Rundenende (gwyndala_revert)."""
+    src = next((c for c in me.creatures if c.card.gwyndala_copy and not c.dead), None)
+    if src is None:
+        return
+    tokens = [g for g in me.perms if isinstance(g, Card) and g.equip and g.is_token]
+    hosted = [g for g in tokens if any(any(g is x for x in c.gear) and not c.dead and can_attack(c, step)
+                                       for c in me.creatures)]
+    others = [g for g in me.perms if isinstance(g, Card) and g.equip and not any(g is t for t in tokens)]
+    if not hosted or not others:
+        return
+    best = max(others, key=lambda g: (_gear_value(g), g.name))
+    if _gear_value(best) <= max(_gear_value(g) for g in hosted):
+        return
+    if not _pay_open(me, src.card.gwyndala_copy, treasure=False):
+        return
+    for g in tokens:
+        new = best._replace(is_token=True)
+        _swap_gear(me, g, new)
+        me.gwyn_revert.append((new, g))
+    e["events"].append(f"{me.name}: {src.card.name} – Equipment-Token werden {best.name}")
+
+
+def _swap_gear(p, old, new):
+    for i, x in enumerate(p.perms):
+        if x is old:
+            p.perms[i] = new
+    for c in p.creatures:
+        c.gear[:] = [new if x is old else x for x in c.gear]
+
+
+def gwyndala_revert(p):
+    for new, old in p.gwyn_revert:
+        _swap_gear(p, new, old)
+    p.gwyn_revert = []
+
+
+def _echo_rank(c):
+    """Lwaxana Troi: wie viele modellierte Angriffs- und Kampfschaden-Ausloeser die Kreatur hat."""
+    card = c.card
+    return sum(bool(x) for x in (card.combat_draw, card.attack_loot, card.attack_drain, card.attack_exile_gy,
+                                 card.discover))
+
+
+def lwaxana_holds(p, lw):
+    """Lwaxana bleibt getappt, solange ihr Ziel bei uns lebt; sonst endet die Verbindung und sie enttappt."""
+    for link in list(p.lwax):
+        if link[0] is lw:
+            t = link[1]
+            if not t.dead and any(t is x for x in p.creatures):
+                return True
+            t.echo = False
+            p.lwax.remove(link)
+    return False
+
+
+def echo_times(p, c):
+    """Wie oft die Angriffs- und Kampfschaden-Ausloeser von c ausloesen (Lwaxana Troi getappt: zweimal)."""
+    if not c.echo:
+        return 1
+    live = any(t is c and lw.tapped and not lw.dead and any(lw is x for x in p.creatures) for lw, t in p.lwax)
+    return 2 if live else 1
+
+
+def lwaxana_echo(me, step, e):
+    """Lwaxana Troi (selbst gesetzt): vor dem Angriff mit freiem Mana auf die eigene Kreatur mit den meisten
+    modellierten Angriffs- und Kampfschaden-Ausloesern (verdoppelt werden nur diese); ohne solche Kreatur nicht."""
+    for lw in list(me.creatures):
+        if not lw.card.lwaxana_echo or lw.dead or not tap_ready(me, lw):
+            continue
+        cands = [c for c in me.creatures if c is not lw and not c.dead and not c.echo and _echo_rank(c)]
+        if not cands:
+            continue
+        t = max(cands, key=lambda c: (_echo_rank(c), can_attack(c, step), danger(c)))
+        if not _pay_open(me, lw.card.lwaxana_echo, treasure=False):
+            continue
+        lw.tapped = True
+        t.echo = True
+        me.lwax.append((lw, t))
+        e["events"].append(f"{me.name}: {lw.card.name} – Auslöser von {t.card.name} doppelt")
 
 
 def use_clues(p, e):
@@ -6643,7 +6924,7 @@ def main_phase_spells(me, opp):
             and (not c.rummage_spell or surplus_land(me) is not None)
             and (not c.twin or twin_host(me, opp) is not None)
             and (not c.mirror_copy or (opp is not None and any(not x.dead for x in opp.creatures)))
-            and sweep_etb_ok(me, opp, c) and kobayashi_ok(me, opp, c) and not c.sunburst_bomb
+            and sweep_etb_ok(me, opp, c) and kobayashi_ok(me, opp, c) and not c.sunburst_bomb and city_ok(me, opp, c)
             and (not c.infiltrate or (opp is not None and any(not x.dead for x in opp.creatures)))
             and (not c.cast_threshold or threshold(me))
             and (not c.entrust or entrust_pick(me) is not None)
@@ -8658,6 +8939,8 @@ def take_turn(me, opp, step, rnd, skip_draw):
             continue
         if c.card.no_untap:  # Traxos
             continue
+        if c.card.lwaxana_echo and c.tapped and lwaxana_holds(me, c):  # bleibt getappt, solange das Ziel lebt
+            continue
         c.tapped = False
     upkeep(me)
     upkeep_triggers(me, opp, step, e)
@@ -9075,7 +9358,10 @@ def take_turn(me, opp, step, rnd, skip_draw):
     stun_from_graveyard(me, opp, step, e)
     aerid_pump(me, opp, step, e)
     perm_abilities(me, opp, step, e)
+    sisko_dig(me, opp, step, e)
     equip_gear(me, step, e)
+    gwyndala_copy(me, step, e)
+    lwaxana_echo(me, step, e)
     puppetbeast_sac(me, step, e)
     hall_of_echoes(me, step, e)
     # Faehigkeiten vor dem Angriff: Marken und Empower mit freiem Mana, Flying/Menace fuer den Angriff
@@ -9164,7 +9450,8 @@ def take_turn(me, opp, step, rnd, skip_draw):
     attack_power_triggers(me, opp, attackers, step, e)
     attack_flow(me, opp, attackers, step, e)
     for a in [a for a in attackers if a.card.discover]:  # U.S.S. Discovery
-        discover(me, opp, a.card.discover, step, e)
+        for _rep in range(echo_times(me, a)):
+            discover(me, opp, a.card.discover, step, e)
     for a in attackers:  # Angriffs-Ausloeser der Kreatur selbst
         a.attacked = step
         for g in a.gear:  # Medic's Kitesail
@@ -9175,24 +9462,26 @@ def take_turn(me, opp, step, rnd, skip_draw):
                 kw = "deathtouch" if tough else "trample"
                 a.extra.add(kw)
                 e["events"].append(f"{me.name}: {a.card.name} – {g.name}: {kw}")
-        if a.card.attack_loot:  # Sphinx of False Conclusions: ziehen, dann abwerfen
-            _draw(me)
-            gone = choose_discard(me)
-            if gone is not None:
-                me.hand.remove(gone)
-                me.graveyard.append(gone)
-                e["events"].append(f"{me.name}: {a.card.name} – Loot, wirft {gone.name} ab")
-                discarded(me, e, [gone])
-        if a.card.attack_drain:  # Screeching Soulbreaker
-            dmg, life = a.card.attack_drain
-            deal_noncombat(me, opp, dmg, e)
-            gain_life(me, life)
-            e["events"].append(f"{me.name}: {a.card.name} – {dmg} Schaden, {life} Leben")
-        if a.card.attack_exile_gy:  # Afterthought Sentry
-            pick = gy_exile_target(opp)
-            if pick is not None:
-                opp.graveyard.remove(pick)
-                e["events"].append(f"{me.name}: {a.card.name} exiliert {pick.name} aus dem Friedhof von {opp.name}")
+        for _rep in range(echo_times(me, a)):  # Lwaxana Troi: Ausloeser der Kreatur doppelt
+            if a.card.attack_loot:  # Sphinx of False Conclusions: ziehen, dann abwerfen
+                _draw(me)
+                gone = choose_discard(me)
+                if gone is not None:
+                    me.hand.remove(gone)
+                    me.graveyard.append(gone)
+                    e["events"].append(f"{me.name}: {a.card.name} – Loot, wirft {gone.name} ab")
+                    discarded(me, e, [gone])
+            if a.card.attack_drain:  # Screeching Soulbreaker
+                dmg, life = a.card.attack_drain
+                deal_noncombat(me, opp, dmg, e)
+                gain_life(me, life)
+                e["events"].append(f"{me.name}: {a.card.name} – {dmg} Schaden, {life} Leben")
+            if a.card.attack_exile_gy:  # Afterthought Sentry
+                pick = gy_exile_target(opp)
+                if pick is not None:
+                    opp.graveyard.remove(pick)
+                    e["events"].append(f"{me.name}: {a.card.name} exiliert {pick.name} aus dem Friedhof von "
+                                       f"{opp.name}")
     ping = sum(c.card.attack_ping for c in me.creatures if not c.dead) * len(attackers)
     if ping:  # "Whenever a creature you control attacks, that creature deals 1 damage to each opponent"
         for a in attackers:  # je Angreifer ein Schadensereignis
@@ -9242,8 +9531,12 @@ def take_turn(me, opp, step, rnd, skip_draw):
     counter_hit_draws(me, [a for a, _bs in blocks if res["to_player"].get(id(a))], e)
     for a, _bs in blocks:  # "deals combat damage to a player, draw ..." (Frostbite Pyromental)
         if (a.card.combat_draw or a.tdraw) and res["to_player"].get(id(a)):
-            _draw(me, a.card.combat_draw + a.tdraw)
-            e["events"].append(f"{me.name}: {a.card.name} zieht {a.card.combat_draw + a.tdraw}")
+            n = (a.card.combat_draw + a.tdraw) * echo_times(me, a)  # Lwaxana Troi: doppelt
+            _draw(me, n)
+            e["events"].append(f"{me.name}: {a.card.name} zieht {n}")
+        if a.light == step and res["to_player"].get(id(a)):  # The Inner Light II: so viele, wie Schaden
+            _draw(me, res["to_player"][id(a)])
+            e["events"].append(f"{me.name}: The Inner Light – zieht {res['to_player'][id(a)]}")
         if a.card.combat_land_return and res["to_player"].get(id(a)):  # Carnivorous Cultivator
             lands = gy_candidates(me, "land")
             if lands:
@@ -9360,6 +9653,7 @@ def hand_limit(p, e, size=7):
 def cleanup(players):
     """Rundenende: Schaden, Pumps und verliehene Schluesselwoerter verfallen."""
     for p in players:
+        gwyndala_revert(p)
         for v in list(p.vehicles):  # Crew endet: wieder ein Artefakt (gestorbene Fahrzeuge sind weg)
             if v["crewed"] is not None:
                 if any(c is v["crewed"] for c in p.creatures):
