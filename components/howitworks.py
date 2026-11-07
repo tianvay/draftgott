@@ -344,7 +344,7 @@ def _drafthelper_help():
             "werden wie andere Karten je Kopie zugeordnet.",
             "Der Stand wird im Browser gemerkt, und zwar je Inhalt der Pool-Datei: ein anderer Pool startet neu."]))
         + _panel("Archetypen des Sets", _ul([
-            "Sind für das Set des Pools Archetypen hinterlegt (derzeit TRK), stehen sie über den Karten: je Farbpaar "
+            "Sind für das Set des Pools Archetypen hinterlegt (derzeit TRK und FRA), stehen sie über den Karten: je Farbpaar "
             "der englische Titel und Hinweise zum Deckbau. Das Set ist das häufigste Set der Nicht-Länder "
             "im Pool.",
             "Hervorgehoben ist der Archetyp der Core-Farben: die zwei Farben mit den meisten Core-Karten (Kopien, ohne "

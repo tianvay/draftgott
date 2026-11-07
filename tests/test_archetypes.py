@@ -39,9 +39,19 @@ class DataTests(unittest.TestCase):
         self.assertIn("+1/+1 counters", " ".join(by["GW"]["tips"]))
         self.assertIn("2-Drops", " ".join(by["RW"]["tips"]))
 
+    def test_fra_has_all_ten_color_pairs_with_english_titles(self):
+        fra = arch.for_set("fra")
+        self.assertEqual({a["colors"] for a in fra}, set(arch.PAIRS))
+        by = {a["colors"]: a for a in fra}
+        self.assertEqual(by["WU"]["name"], "Fatehold Surveil Aggro")
+        self.assertEqual(by["UG"]["name"], "Empower Jace")
+        self.assertEqual(by["WB"]["name"], "Liliana's Graveyard")
+        self.assertIn("Prowess", " ".join(by["UR"]["tips"]))
+        self.assertTrue(all(a["tips"] for a in fra))
+
     def test_set_code_is_case_insensitive_and_unknown_sets_have_none(self):
         self.assertEqual(arch.for_set("TRK"), arch.for_set("trk"))
-        self.assertIsNone(arch.for_set("fra"))
+        self.assertIsNone(arch.for_set("spm"))
         self.assertIsNone(arch.for_set(""))
         self.assertIsNone(arch.for_set(None))
 
@@ -69,7 +79,7 @@ class SetDetectionTests(unittest.TestCase):
         self.assertEqual(arch.info(rows)["set"], "TRK")
 
     def test_info_without_archetypes_is_none(self):
-        self.assertIsNone(arch.info([{"set": "fra", "qty": 3, "land": False}]))
+        self.assertIsNone(arch.info([{"set": "spm", "qty": 3, "land": False}]))
 
 
 class MainPairTests(unittest.TestCase):
@@ -157,7 +167,7 @@ class ReportTests(unittest.TestCase):
         self.assertIn("Weitere Archetypen", html)
 
     def test_no_panel_for_sets_without_archetypes(self):
-        self.assertEqual(render_archetype_panel(_deck(self.NAMES, "fra")), "")
+        self.assertEqual(render_archetype_panel(_deck(self.NAMES, "spm")), "")
 
     def test_mono_colored_deck_has_no_main_archetype(self):
         html = render_archetype_panel(_deck({"White Bear": 8, "Quick Spell": 4, "Plains": 17}, "trk"))

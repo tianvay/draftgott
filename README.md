@@ -103,7 +103,7 @@ einer Meldung ab, die beschreibt, wie die Datei aussehen muss.
   Browser-Speicherständen werden beim ersten Start einmal übernommen. Zuordnung, Standardländer, Zielgröße und
   Farben merkt sich weiter der Browser je Pool.
 - **Archetypen des Sets:** Sind für das Set des Pools (häufigstes Set der Nicht-Länder) Archetypen in
-  `components/archetypes.py` hinterlegt (derzeit TRK), zeigt die Seite sie über den Karten mit Hinweisen zum
+  `components/archetypes.py` hinterlegt (derzeit TRK und FRA), zeigt die Seite sie über den Karten mit Hinweisen zum
   Deckbau; der Archetyp der Core-Farben (die zwei Farben mit den meisten Core-Karten) ist hervorgehoben. Der
   Bericht zeigt im Abschnitt „Deck“ den Archetyp der Hauptfarben des Decks.
 - **Deckvorschlag (eigenes drittes Deck):** Über den Karten stehen **Zielgröße** (Standard 40, wählbar 10 bis 200,
