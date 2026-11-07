@@ -53,7 +53,7 @@ def build_deck(entry, data, args):
                       "empower": bool(card.empower), "points": empower_points(card.empower),
                       "prepared": bool(card.prepared), **{k: True for k in keyword_flags(sc)},
                       "removal": removal_info(sc), "ramp": bool(card.mana_src or card.treasure),
-                      "gy": gy_info(sc), "gy_enabler": gy_enabler(sc)}
+                      "gy": gy_info(sc), "gy_enabler": gy_enabler(sc), "set": sc.get("set") or ""}
         cards += [card] * qty
     if len(cards) < 7 + args.turns:
         sys.exit(f"Zu wenige Karten im Deck {entry['name']}.")

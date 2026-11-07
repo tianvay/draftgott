@@ -65,6 +65,7 @@ Projektordner geklärt; Abweichungen davon stehen mit Regelnummer im Code bzw. i
 | `components/landadvice.py` | Land-Empfehlung und „Farben und Quellen“ |
 | `components/mana.py` | Kosten, Hybrid/Phyrexian, Bezahlbarkeit, Farbprüfungen (`pip_checks`) |
 | `components/suggest.py` | Deckvorschlag und Zuordnung nach Kategorien im Drafthelper |
+| `components/archetypes.py` | Archetypen je Set (Farbpaare mit Deckbau-Hinweisen) für Drafthelper und Bericht |
 | `components/ratings.py` | Kartenbewertung des Drafthelpers (`kartenbewertung.json`, je Kartenname) |
 | `components/symbols.py` | Original-Manasymbole von Scryfall (Cache `scryfall_symbols.json`) |
 | `components/stats.py` | Ampel-Schwellen, Zeitkennzahlen, Signifikanz-Rechnung |
@@ -101,6 +102,10 @@ einer Meldung ab, die beschreibt, wie die Datei aussehen muss.
   bearbeitbar. Mit `--bewertung DATEI` gilt eine andere Datei (z. B. je Nutzer). Kategorien aus älteren
   Browser-Speicherständen werden beim ersten Start einmal übernommen. Zuordnung, Standardländer, Zielgröße und
   Farben merkt sich weiter der Browser je Pool.
+- **Archetypen des Sets:** Sind für das Set des Pools (häufigstes Set der Nicht-Länder) Archetypen in
+  `components/archetypes.py` hinterlegt (derzeit TRK), zeigt die Seite sie über den Karten mit Hinweisen zum
+  Deckbau; der Archetyp der Core-Farben (die zwei Farben mit den meisten Core-Karten) ist hervorgehoben. Der
+  Bericht zeigt im Abschnitt „Deck“ den Archetyp der Hauptfarben des Decks.
 - **Deckvorschlag (eigenes drittes Deck):** Über den Karten stehen **Zielgröße** (Standard 40, wählbar 10 bis 200,
   alle Länder zählen mit), die **Farben** (W U B R G, vorbelegt mit den Farben des Cores) und der Button
   **Deckvorschlag erstellen**. Der Vorschlag baut aus den Kategorien ein eigenes Deck und lässt deine Zuordnung

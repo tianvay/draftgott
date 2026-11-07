@@ -13,7 +13,7 @@ from components.mana import required_colors
 from components.mulligan import MULL_COLORS, MULL_LANDS_HIGH, MULL_LANDS_LOW
 from components.report_sections import render_compare_section, render_jace_section, render_logic_section
 from components.coverage import METRIC_ORDER, STATUS_TEXT, metrics_of, summarize
-from components.report_cards import (all_colors_row, avail_level, render_color_availability, render_color_curves,
+from components.report_cards import (all_colors_row, render_archetype_panel, avail_level, render_color_availability, render_color_curves,
                                      render_graveyard_table, render_removal_table, render_type_table)
 from components.simulation import card_label
 from components.stats import TRAFFIC, lethal_level, timing_stats, traffic_level
@@ -346,8 +346,10 @@ def render_details(ctx, suffix="", switch=None):
     if ctx["unsure"]:
         unsure = ('<div class="warnbox">Getappt-Bedingung nicht modelliert (als immer getappt gezählt): '
                   + esc(", ".join(ctx["unsure"])) + "</div>")
+    archetype = render_archetype_panel(ctx)
     body = (f'<div class="grid g4">{kpi_html}</div>'
-            f'<div style="margin-top:14px">{render_color_curves(ctx)}</div>'
+            + (f'<div style="margin-top:14px">{archetype}</div>' if archetype else "")
+            + f'<div style="margin-top:14px">{render_color_curves(ctx)}</div>'
             f'<div class="grid g2" style="margin-top:14px">'
             f'{render_type_table(ctx)}'
             f'<div class="panel"><b>Farbverteilung</b>{col_table}</div></div>'

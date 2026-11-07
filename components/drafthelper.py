@@ -33,6 +33,7 @@ from components.removal import keyword_flags, removal_info
 from components.symbols import active as active_symbols, symbol_css
 from components.scryfall import card_image_url, fetch_cards_cached, fetch_printing_images
 from components.suggest import WUBRG, propose, suggest
+from components import archetypes as set_archetypes
 from components import ratings as card_ratings
 
 PORT = 8765
@@ -262,7 +263,7 @@ def make_handler(app):
             elif path == "/api/pool":
                 self._json({"cards": app["pool"], "basics": app["basics"], "sims": app["args"].sims,
                             "options": app["options"], "file": app["file"],
-                            "signature": app["signature"]})
+                            "signature": app["signature"], "archetypes": set_archetypes.info(app["pool"])})
             elif path == "/howitworks.html":
                 self._send(render_help_page())
             elif path == "/api/status":
@@ -603,6 +604,16 @@ h2 small{color:var(--muted);font-weight:400}
 .ccleg{display:flex;flex-wrap:wrap;gap:3px 10px;font-size:11.5px;color:var(--muted);margin-top:8px}
 .ccleg i{display:inline-block;width:10px;height:10px;border:1px solid rgba(0,0,0,.25);margin-right:4px;border-radius:2px}
 .ccnote{font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.4}
+#archetypes{display:none;margin-bottom:6px}
+#archetypes summary{cursor:pointer;font-weight:700}
+#archetypes .agrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;margin-top:10px}
+#archetypes .arch{border:1px solid var(--line);border-radius:10px;padding:8px 12px;background:#fafbfc}
+#archetypes .arch.main{border:2px solid var(--core);background:#eef4fd}
+#archetypes .arch .ahead{font-weight:700}
+#archetypes .arch .aen{color:var(--muted);font-size:12.5px}
+#archetypes .arch .amain{color:var(--core);font-size:12.5px;font-weight:700}
+#archetypes .arch ul{margin:4px 0 0;padding-left:18px;font-size:13.5px}
+#archetypes .anote{color:var(--muted);font-size:12.5px;margin-top:8px}
 .err{background:#fef3f2;border:1px solid #fda29b;color:#b42318;border-radius:10px;padding:12px 16px;margin:10px 0;display:none}
 /*SYMBOL_CSS*/
 </style></head><body>
@@ -623,6 +634,10 @@ h2 small{color:var(--muted);font-weight:400}
     <b>Aus</b>), wähle bei Bedarf eine <b>Kategorie</b> und stelle oben die Standardländer ein. Danach auf
     <b>Simulieren</b> klicken. Alle Regeln (Zuordnung, Kategorien, Deckvorschlag, Übersichten):
     <a href="/howitworks.html#hiw-drafthelper" target="_blank">So funktioniert es</a>.</div>
+  <details class="help" id="archetypes" open><summary id="archtitle">Archetypen</summary>
+    <div class="agrid" id="archlist"></div>
+    <div class="anote">Hervorgehoben: der Archetyp deiner Core-Farben (die zwei Farben mit den meisten Core-Karten,
+      ohne Länder; mehrfarbige zählen für jede ihrer Farben).</div></details>
   <div class="err" id="err"></div>
   <div class="layout">
     <aside class="side"><h3>Übersicht nach Farbe</h3><div id="overview"></div>
@@ -807,7 +822,32 @@ function summary(){
   s.appendChild(document.createTextNode("Splash-Variante: "));s.appendChild(el("b",null,a+" Karten"));
   s.appendChild(document.createTextNode(" · NoSplash-Variante: "));s.appendChild(el("b",null,b+" Karten"));
   if(a!==b)s.appendChild(el("span","warn","  – unterschiedlich groß"));
-  overview();curve();typeOverview();renderColorCurve();scheduleColors();
+  overview();curve();typeOverview();renderColorCurve();scheduleColors();renderArchetypes();
+}
+// Archetypen des Sets (components/archetypes.py); Hauptfarben wie archetypes.main_pair, aus den Core-Karten
+const PAIRS=["WU","UB","BR","RG","GW","WB","UR","BG","RW","UG"],COLOR_DE={W:"Weiß",U:"Blau",B:"Schwarz",R:"Rot",G:"Grün"};
+let archetypes=null;
+function mainPair(counts){
+  const top=[...WUBRG].filter(c=>(counts[c]||0)>0).sort((a,b)=>counts[b]-counts[a]||WUBRG.indexOf(a)-WUBRG.indexOf(b)).slice(0,2);
+  if(top.length<2)return null;
+  const [a,b]=top.sort((x,y)=>WUBRG.indexOf(x)-WUBRG.indexOf(y));
+  return PAIRS.includes(a+b)?a+b:b+a;
+}
+function renderArchetypes(){
+  const box=$("archetypes");if(!archetypes){box.style.display="none";return}
+  box.style.display="block";
+  $("archtitle").textContent="Archetypen von "+archetypes.set;
+  const counts={};
+  state.forEach(t=>{if(t.mark==="core"&&!t.card.land)(t.card.colors||[]).forEach(c=>counts[c]=(counts[c]||0)+1)});
+  const pair=mainPair(counts),list=$("archlist");list.textContent="";
+  for(const a of archetypes.list){
+    const d=el("div","arch"+(a.colors===pair?" main":"")),h=el("div","ahead");
+    [...a.colors].forEach(c=>{const s=manaSym(c);if(s)h.appendChild(s)});
+    h.append(" "+a.name);d.appendChild(h);
+    d.appendChild(el("div","aen",[...a.colors].map(c=>COLOR_DE[c]).join("/")));
+    if(a.colors===pair)d.appendChild(el("div","amain","passt zu deinen Core-Farben"));
+    const ul=el("ul");a.tips.forEach(t=>ul.appendChild(el("li",null,t)));d.appendChild(ul);
+    list.appendChild(d)}
 }
 // Farben und Quellen: gerechnet auf dem Server (components/landadvice.py, wie Land-Empfehlung und Bericht)
 let colorTimer=null,colorData=null;
@@ -1309,7 +1349,9 @@ $("quit").onclick=async()=>{if(!confirm("Draft-Helper beenden?"))return;
   try{await api("/api/quit",{})}catch(e){}
   document.body.innerHTML="<main><h2>Draft-Helper wurde beendet.</h2><p>Du kannst dieses Fenster jetzt schließen.</p></main>"};
 (async()=>{
-  const d=await api("/api/pool");pool=d.cards;
+  const d=await api("/api/pool");pool=d.cards;archetypes=d.archetypes||null;
+  try{if(localStorage.getItem("dh-archclosed")==="1")$("archetypes").open=false}catch(e){}
+  $("archetypes").addEventListener("toggle",()=>{try{localStorage.setItem("dh-archclosed",$("archetypes").open?"0":"1")}catch(e){}});
   // Speicherstand je Inhalt der Pool-Datei: ein anderer Kartenpool startet mit den Vorgaben der Datei
   storeKey="draft3:"+d.signature;
   try{Object.keys(localStorage).filter(k=>/^draft2?:/.test(k)).forEach(k=>localStorage.removeItem(k))}catch(e){}

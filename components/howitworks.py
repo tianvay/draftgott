@@ -343,6 +343,15 @@ def _drafthelper_help():
             "Nicht-Standardländer stehen direkt darunter in einem eigenen Bereich (aus Deck und Sideboard der Datei) und "
             "werden wie andere Karten je Kopie zugeordnet.",
             "Der Stand wird im Browser gemerkt, und zwar je Inhalt der Pool-Datei: ein anderer Pool startet neu."]))
+        + _panel("Archetypen des Sets", _ul([
+            "Sind für das Set des Pools Archetypen hinterlegt (derzeit TRK), stehen sie über den Karten: je Farbpaar "
+            "der englische Titel und Hinweise zum Deckbau. Das Set ist das häufigste Set der Nicht-Länder "
+            "im Pool.",
+            "Hervorgehoben ist der Archetyp der Core-Farben: die zwei Farben mit den meisten Core-Karten (Kopien, ohne "
+            "Länder, mehrfarbige zählen für jede ihrer Farben). Der Bericht zeigt im Abschnitt „Deck“ denselben "
+            "Archetyp, dort nach den Nicht-Länder-Karten des Decks.",
+            "Der Kasten lässt sich zuklappen; der Browser merkt sich das. Neue Sets werden in "
+            "<code>components/archetypes.py</code> ergänzt."]))
         + _panel("Kategorien", _ul([
             "<b>★ Splashworthy</b> – entscheidet Spiele allein, soll auf jeden Fall rein, auch wenn wir die Farbe nicht "
             "spielen.",

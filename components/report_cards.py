@@ -3,7 +3,8 @@ Die Zaehllogik ist dieselbe wie in der Seitenleiste des Drafthelpers (components
 import math
 
 from components.cardkinds import FLOW_ORDER, color_curve
-from components.html_base import esc, h_level_td, h_table
+from components import archetypes as arch
+from components.html_base import esc, h_level_td, h_table, html_cost
 from components.removal import removal_level
 
 COLOR_HEX = {"W": "#f1e7b8", "U": "#3b82d6", "B": "#4a4a4a", "R": "#d6453b", "G": "#3f9b4f", "M": "#d9a400",
@@ -204,6 +205,45 @@ def render_type_table(ctx):
     rows = [[_label_cell(label, cls), _td(vals[0])] for label, cls, vals in spec]
     return (f'<div class="panel"><b>Kartentypen</b>{h_table(["Art", "Karten"], rows)}'
 '</div>')
+
+
+def _archetype_html(a, tips=True):
+    head = (f'{html_cost("".join("{" + c + "}" for c in a["colors"]))} <b>{esc(a["name"])}</b> '
+            f'<span class="tag">{esc(arch.pair_label(a["colors"]))}</span>')
+    if not tips:
+        return head
+    return head + "<ul style=\"margin:6px 0 0;padding-left:20px\">" + "".join(
+        f"<li>{esc(t)}</li>" for t in a["tips"]) + "</ul>"
+
+
+def render_archetype_panel(ctx):
+    """Archetyp des Sets zu den Hauptfarben des Decks (die zwei Farben mit den meisten Nichtland-Kopien, wie im
+    Drafthelper aus den Core-Karten) und darunter die weiteren Archetypen des Sets. Leer, wenn fuer das Set des Decks
+    (haeufigstes Set der Nichtland-Karten) keine Archetypen definiert sind."""
+    info = ctx.get("info") or {}
+    rows = [{"set": (info.get(n) or {}).get("set", ""), "qty": q, "land": card.is_land}
+            for n, q, card, _shown in ctx["rows"]]
+    found = arch.info(rows)
+    if not found:
+        return ""
+    counts = {}
+    for n, q, card, _shown in ctx["rows"]:
+        if not card.is_land:
+            for c in (info.get(n) or {}).get("colors", []):
+                counts[c] = counts.get(c, 0) + q
+    pair = arch.main_pair(counts)
+    main = [a for a in found["list"] if a["colors"] == pair]
+    others = [a for a in found["list"] if a["colors"] != pair]
+    body = (_archetype_html(main[0]) if main else
+            '<div class="note" style="margin-top:4px">Das Deck hat kein Farbpaar als Hauptfarben (weniger als zwei '
+            'Farben).</div>')
+    rest = "".join(f'<div style="margin:3px 0">{_archetype_html(a, tips=False)}</div>' for a in others)
+    return (f'<div class="panel"><b>Archetyp ({esc(found["set"])})</b>'
+            f'<div style="margin-top:8px">{body}</div>'
+            f'<details style="margin-top:10px"><summary class="note" style="cursor:pointer">Weitere Archetypen des '
+            f'Sets</summary>{rest}</details>'
+            '<div class="note">Hauptfarben: die zwei Farben mit den meisten Nichtland-Karten (Kopien, mehrfarbige '
+            'zählen für jede ihrer Farben).</div></div>')
 
 
 def render_types_compare(decks):
