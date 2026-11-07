@@ -24,7 +24,7 @@ from collections import Counter
 from components.cards import card_info, land_produced
 from components.cardkinds import (FLOW_ORDER, empower_points, flow_kinds,  # noqa: F401 (auch von Tests benutzt)
                                   type_kinds)
-from components.battle_server import enemy_decks as _enemy_decks, game_fragment, start_battle
+from components.battle_server import FIGHT_COUNTS, enemy_decks as _enemy_decks, game_fragment, start_battle
 from components.deckfile import parse_pool
 from components.howitworks import render_help_page
 from components.landadvice import color_overview, recommend
@@ -193,6 +193,28 @@ def parse_proposal_spec(spec):
 MIN_PROPOSAL_CARDS = 8  # kleiner ist ein Deck nicht simulierbar (7 Starthandkarten plus ziehen)
 
 
+def checked_proposal(body, pool, marks, cats):
+    """Deckvorschlag zum Mitsimulieren (Angabe "proposal" der Anfrage) oder None; ValueError, wenn er zu klein ist."""
+    if not body.get("proposal"):
+        return None
+    colors, target, sort = parse_proposal_spec(body["proposal"])
+    proposal = propose(pool, marks, cats, colors, target, sort)
+    if proposal["summary"]["size"] < MIN_PROPOSAL_CARDS:
+        raise ValueError("Der Deckvorschlag ist zu klein zum Simulieren (weniger als "
+                         f"{MIN_PROPOSAL_CARDS} Karten): Bitte Farben und Kategorien prüfen.")
+    return proposal
+
+
+def variant_entries(pool, marks, basics, cats, proposal=None):
+    """Deck-Eintraege fuer Simulation und Kampf: die Varianten der Zuordnung, dazu ggf. der Deckvorschlag."""
+    entries = entries_from_marks(pool, marks, basics, cats)
+    if proposal:
+        deck = dict(proposal["deck"])
+        entries.append({"path": "", "name": "Vorschlag", "deck": deck, "parts": [("Vorschlag", deck)],
+                        "cats": dict(cats), "role": "proposal"})
+    return entries
+
+
 class Job:
     """Eine Simulation im Hintergrund; Zustand fuer die Statusabfrage der Seite."""
 
@@ -271,7 +293,7 @@ def make_handler(app):
             elif path == "/game":
                 self._send(game_fragment(app, self.path.partition("?")[2]))
             elif path == "/report":
-                rep = app.get("report_html") or app["job"].report
+                rep = app.get("report_html")  # nicht job.report: der letzte Job kann ein Kampf gewesen sein
                 self._send(rep if rep else "<p>Noch kein Bericht vorhanden.</p>")
             elif path == "/battle":
                 self._send(app.get("battle_html") or "<p>Noch kein Kampfbericht vorhanden.</p>")
@@ -317,13 +339,7 @@ def make_handler(app):
                     sims = int(body.get("sims") or app["args"].sims)
                     if not 100 <= sims <= 100000:
                         raise ValueError("Anzahl der Spiele muss zwischen 100 und 100000 liegen")
-                    proposal = None
-                    if body.get("proposal"):
-                        colors, target, sort = parse_proposal_spec(body["proposal"])
-                        proposal = propose(pool, marks, cats, colors, target, sort)
-                        if proposal["summary"]["size"] < MIN_PROPOSAL_CARDS:
-                            raise ValueError("Der Deckvorschlag ist zu klein zum Simulieren (weniger als "
-                                             f"{MIN_PROPOSAL_CARDS} Karten): Bitte Farben und Kategorien prüfen.")
+                    proposal = checked_proposal(body, pool, marks, cats)
             except (ValueError, KeyError, TypeError) as e:
                 self._json({"ok": False, "error": str(e)}, 400)
                 return
@@ -345,11 +361,7 @@ def make_handler(app):
             run_args.sims, run_args.core = sims, "Core"  # core: Herkunft der Karten (Core/Splash/NoSplash) im Bericht
 
             def work(progress):
-                entries = entries_from_marks(pool, marks, basics, cats)
-                if proposal:
-                    deck = dict(proposal["deck"])
-                    entries.append({"path": "", "name": "Vorschlag", "deck": deck, "parts": [("Vorschlag", deck)],
-                                    "cats": dict(cats), "role": "proposal"})
+                entries = variant_entries(pool, marks, basics, cats, proposal)
                 html = app["simulate"](entries, run_args, progress)
                 app["save"](html, run_args)
                 app["report_html"] = html
@@ -394,7 +406,21 @@ def make_handler(app):
                 body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
             except ValueError:
                 body = {}
+            previous = app.get("last_entries"), app.get("last_args")
+            if isinstance(body, dict) and "marks" in body:  # Kampf ohne Goldfish: Varianten aus der Zuordnung
+                pool = app["pool"]
+                try:
+                    marks, basics, cats = parse_state(body, pool)
+                    entries = variant_entries(pool, marks, basics, cats, checked_proposal(body, pool, marks, cats))
+                except (ValueError, KeyError, TypeError) as e:
+                    self._json({"ok": False, "error": str(e)}, 400)
+                    return
+                run_args = argparse.Namespace(**vars(app["args"]))
+                run_args.core = "Core"
+                app["last_entries"], app["last_args"] = entries, run_args
             code, answer = start_battle(app, body, SCRIPT_DIR)
+            if code != 200:  # abgelehnt: der Stand des letzten Berichts bleibt
+                app["last_entries"], app["last_args"] = previous
             self._json(answer, code)
 
     return Handler
@@ -459,6 +485,8 @@ button{font:inherit;cursor:pointer}
 .btn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:8px 14px}
 .btn.primary{background:var(--core);border-color:var(--core);color:#fff;font-weight:700;padding:9px 20px}
 .btn:disabled{opacity:.55;cursor:default}
+.dk{display:none;gap:6px;align-items:center}
+.dk.show{display:inline-flex}
 select{font:inherit;padding:7px;border-radius:8px;border:1px solid var(--line);background:#fff}
 main{padding:16px 20px 60px;max-width:1500px;margin:0 auto}
 .help{background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 16px;margin-bottom:6px}
@@ -627,6 +655,10 @@ h2 small{color:var(--muted);font-weight:400}
   <label>Spiele pro Modus <select id="sims"></select></label>
   <button class="btn" id="export" title="Deckliste der Varianten zum Kopieren oder Speichern">Deckliste exportieren</button>
   <button class="btn primary" id="go">Simulieren</button>
+  <span class="dk" id="dk" title="Kampf der Varianten gegen ein Gegnerdeck, ohne vorher den Goldfish zu simulieren">
+    <select id="dkenemy" title="Gegnerdecks im Ordner enemydecks"></select>
+    <select id="dkcount" title="Kämpfe je Deck und Modus (On the Play und On the Draw)"><!--DK_COUNTS--></select>
+    <button class="btn" id="dkgo">Kampf ohne Goldfish</button></span>
   <button class="btn" id="quit" title="Draft-Helper beenden">Beenden</button>
 </header>
 <main>
@@ -1302,14 +1334,34 @@ async function api(path,body){
   const r=await fetch(path,body?{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}:undefined);
   return r.json();
 }
-async function simulate(){
-  showErr("");$("go").disabled=true;
+let battleRun=false;  // laufender Job ist ein Kampf ohne Goldfish: danach den Kampfbericht zeigen
+function deckBody(){
   const marks=[];let i=0;for(const c of pool){const ms=[];for(let k=0;k<c.qty;k++)ms.push(state[i++].mark);marks.push(ms)}
   const bs={};basics.forEach(b=>bs[b.name]={core:b.core,splash:b.splash,nosplash:b.nosplash});
   const prop=$("simprop").checked?{colors:chosenColors(),target:+$("target").value||40,sort:sortKey}:undefined;
-  const r=await api("/api/simulate",{marks,basics:bs,cats,sims:+$("sims").value,proposal:prop});
-  if(!r.ok){showErr(r.error||"Fehler");$("go").disabled=false;return}
-  $("overlay").classList.add("show");poll();
+  return {marks,basics:bs,cats,proposal:prop};
+}
+function busy(on){$("go").disabled=on;$("dkgo").disabled=on}
+async function simulate(){
+  showErr("");busy(true);
+  const r=await api("/api/simulate",{...deckBody(),sims:+$("sims").value});
+  if(!r.ok){showErr(r.error||"Fehler");busy(false);return}
+  battleRun=false;$("overlay").classList.add("show");poll();
+}
+async function battleDirect(){
+  showErr("");busy(true);
+  try{localStorage.setItem("fbcount",$("dkcount").value)}catch(e){}
+  const r=await api("/api/battle",{...deckBody(),enemy:$("dkenemy").value,games:+$("dkcount").value});
+  if(!r.ok){showErr(r.error||"Fehler");busy(false);return}
+  battleRun=true;$("overlay").classList.add("show");poll();
+}
+async function loadEnemies(){
+  let d;try{d=await api("/api/enemies")}catch(e){return}
+  const list=d.enemies||[];if(!list.length)return;
+  list.forEach(e=>{const o=el("option",null,e.name);o.value=e.file;$("dkenemy").appendChild(o)});
+  try{const n=localStorage.getItem("fbcount");if(n&&$("dkcount").querySelector('option[value="'+n+'"]'))$("dkcount").value=n}
+  catch(e){}
+  $("dk").classList.add("show");
 }
 async function poll(){
   let s;try{s=await api("/api/status")}catch(e){setTimeout(poll,1500);return}
@@ -1317,12 +1369,14 @@ async function poll(){
     $("ovmsg").textContent=s.message;const t=Math.round(s.elapsed);
     $("ovtime").textContent="vergangene Zeit: "+Math.floor(t/60)+":"+String(t%60).padStart(2,"0");
     setTimeout(poll,1000);return}
-  $("overlay").classList.remove("show");$("go").disabled=false;
-  if(s.state==="done"){$("frame").src="/report?"+Date.now();$("results").classList.add("show");
-    $("rnote").textContent="Der Bericht wurde auch als Datei gespeichert."}
+  $("overlay").classList.remove("show");busy(false);
+  if(s.state==="done"){$("frame").src=(battleRun?"/battle?":"/report?")+Date.now();$("results").classList.add("show");
+    $("rnote").textContent=battleRun?"Kampf ohne Goldfish: Der Kampfbericht wurde auch als Datei gespeichert."
+      :"Der Bericht wurde auch als Datei gespeichert."}
   else if(s.state==="error")showErr(s.message);
 }
 $("go").onclick=simulate;
+$("dkgo").onclick=battleDirect;
 $("catfilter").onchange=()=>state.forEach(paint);
 $("search").oninput=()=>{searchQ=$("search").value.trim().toLowerCase();state.forEach(paint)};
 $("sort").onchange=()=>{sortKey=$("sort").value;applySort()};
@@ -1363,7 +1417,7 @@ $("quit").onclick=async()=>{if(!confirm("Draft-Helper beenden?"))return;
   const sel=$("sims");d.options.forEach(o=>{const op=el("option",null,o.toLocaleString("de-DE"));op.value=o;
     if(o===d.sims)op.selected=true;sel.appendChild(op)});
   await loadRatings();
-  build();fixBar();
+  build();loadEnemies();fixBar();
   if(!colorsFromSave)setColors(defaultColors());
 })();
 </script></body></html>
@@ -1376,5 +1430,7 @@ SYMBOL_KEYS = ("W", "U", "B", "R", "G", "C")
 def render_page():
     """Die Seite mit den vorhandenen Original-Manasymbolen (Farben und Farblos) als eingebettetem CSS."""
     have = [k for k in SYMBOL_KEYS if k in active_symbols()]
-    return (PAGE.replace("/*SYMBOL_CSS*/", symbol_css(have))
+    counts = "".join(f'<option value="{n}"' + (" selected" if n == 500 else "") + f'>{n} Kämpfe</option>'
+                     for n in FIGHT_COUNTS)
+    return (PAGE.replace("/*SYMBOL_CSS*/", symbol_css(have)).replace("<!--DK_COUNTS-->", counts)
             .replace("const SYMBOLS=[];", "const SYMBOLS=" + json.dumps(have, separators=(",", ":")) + ";"))

@@ -405,6 +405,9 @@ def _drafthelper_help():
         + _panel("Simulieren und Export", _ul([
             "„Simulieren“ vergleicht Core + Splash mit Core + NoSplash (und optional den Deckvorschlag); der Bericht "
             "erscheint auf der Seite und wird zusätzlich als Datei gespeichert.",
+            "„Kampf ohne Goldfish“ (neben „Simulieren“, nur wenn Gegnerdecks im Ordner enemydecks liegen): dieselben "
+            "Varianten kämpfen direkt gegen das gewählte Gegnerdeck, ohne vorher den Goldfish zu simulieren. Es "
+            "zählt die aktuelle Zuordnung, nicht der letzte Bericht; der Kampfbericht wird auch als Datei gespeichert.",
             "„Deckliste exportieren“: jede Variante im Importformat von MTG Arena und MTGO (Deck und Sideboard)."])))
 
 
