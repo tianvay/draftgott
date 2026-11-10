@@ -1,0 +1,43 @@
+Deck
+1 Savvy Profiteer (TRK) 171
+1 Cold-Blooded Crew (TRK) 189
+1 Khaaaaaaaaaaaannn! (TRK) 154
+1 MACO Strike Team (TRK) 206
+1 Planetary Bombardment (TRK) 162
+1 Ferenginar (TRK) 283
+2 Stray from History (TRK) 130
+1 Boarding Action (TRK) 139
+1 Eject the Warp Core (TRK) 105
+5 Forest (SPM) 198
+6 Mountain (SPM) 197
+1 Cleveland Booker, Empath (TRK) 229
+2 Vash, Freelance Archaeologist (TRK) 255
+1 Dal R'El, Augment Orphan (TRK) 231
+1 The Naked Time (TRK) 159
+2 Plasma Cascade (TRK) 164
+1 Saru, Unthreatened (TRK) 212
+1 Xenobotanist (TRK) 224
+5 Swamp (SPM) 196
+1 Georgiou, Terran Emperor (TRK) 110
+2 Moopsy (TRK) 207
+1 Horta (TRK) 152
+1 U.S.S. Voyager, Lone Wanderer (TRK) 222
+
+Sideboard
+1 Stray from History (TRK) 130
+1 Exploratory Mission (TRK) 150
+1 Malfunctioning Holodeck (TRK) 22
+1 Quark's Bar (TRK) 292
+1 Silicate Surveyor (TRK) 172
+1 Genesis Effect (TRK) 151
+1 Locutus, the One Who Speaks (TRK) 245
+1 A Good Day to Die (TRK) 111
+1 Perils of the Past (TRK) 161
+1 Planetary Patrol (TRK) 163
+1 Deanna Troi, Psychic Counsel (TRK) 11
+1 Temporal Conqueror (TRK) 219
+1 I'm a Doctor, Not a . . . (TRK) 203
+1 Interstellar Effigy (TRK) 66
+1 Assault Drone (TRK) 92
+1 Reckless Impulse (TRK) 168
+1 Federation Probe (TRK) 59
