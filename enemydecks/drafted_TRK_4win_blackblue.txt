@@ -1,0 +1,43 @@
+Deck
+1 H.M.S. Bounty, Unlikely Timeship (TRK) 63
+1 D'Ghor Bloodletter (TRK) 101
+1 Tell Me What You See (TRK) 132
+2 Make It So (TRK) 71
+1 Lore, Positronic Provocateur (TRK) 246
+1 Resistance Is Futile (TRK) 125
+1 Salt Vampire (TRK) 127
+1 Scotty, Miracle Worker (TRK) 79
+8 Swamp (SPM) 196
+1 Impossible Choice (TRK) 116
+2 Suurok-Class Science Vessel (TRK) 83
+1 Cloistered Telepath (TRK) 50
+1 Rogue Artificial Intelligence (TRK) 126
+1 Interstellar Effigy (TRK) 66
+1 Consider the Prime Directive (TRK) 51
+1 He's Dead, Jim (TRK) 114
+1 Stray from History (TRK) 130
+1 Obsidian Order Operative (TRK) 120
+2 Cetacean Ops (TRK) 48
+1 V'Ger, the Intruder (TRK) 87
+1 Test of Priorities (TRK) 85
+9 Island (SPM) 195
+
+Sideboard
+1 Malfunctioning Holodeck (TRK) 22
+1 Hive Mind Coprocessor (TRK) 115
+1 Command Decision (TRK) 8
+1 Make It So (TRK) 71
+1 Una Chin-Riley, Number One (TRK) 42
+1 Storied Veteran (TRK) 129
+1 Fugitive Listener (TRK) 107
+1 Cloistered Telepath (TRK) 50
+1 Battle-Scarred Survivalist (TRK) 95
+1 The Duras Sisters (TRK) 235
+1 Artificial Anomaly (TRK) 276
+1 Cha'DIch Investigator (TRK) 97
+1 Relentless Drednok (TRK) 124
+1 Tenacious Drone (TRK) 133
+1 A Good Day to Die (TRK) 111
+1 Ferenginar (TRK) 283
+1 Species 8472 (TRK) 214
+1 Dominion Assault Force (TRK) 194
