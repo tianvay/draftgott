@@ -1,0 +1,43 @@
+Deck
+1 Automated Warfare System (TRK) 93
+2 Locutus, the One Who Speaks (TRK) 245
+1 In the Pale Moonlight (TRK) 117
+1 Federation Field Medic (TRK) 17
+1 Qo'noS (TRK) 291
+1 Bajor (TRK) 277
+1 Battle-Scarred Survivalist (TRK) 95
+1 Emergency Medical Hologram (TRK) 15
+1 Fugitive Listener (TRK) 107
+1 Vengeance Mission (TRK) 136
+7 Plains (SPM) 194
+1 Worf, Honor-Bound Warrior (TRK) 256
+1 Ghost of Illyria (TRK) 20
+1 Overflow Submatrix (TRK) 122
+1 The Naked Time (TRK) 159
+1 Tal Shiar Operative (TRK) 131
+1 Tactical Officer (TRK) 38
+1 Plasma Cascade (TRK) 164
+1 Q, Stacking the Deck (TRK) 165
+1 The Doctor, EMH (TRK) 234
+2 Mountain (SPM) 197
+1 Oberth-Class Starship (TRK) 26
+2 DOT-7 Repair Squad (TRK) 12
+1 Conquest Mission (TRK) 10
+6 Swamp (SPM) 196
+1 70,000 Light-Years from Home (TRK) 1
+
+Sideboard
+1 Dal R'El, Augment Orphan (TRK) 231
+2 Beckett Mariner, Impetuous Ensign (TRK) 138
+1 Jake Sisko, War Correspondent (TRK) 205
+2 Reckless Impulse (TRK) 168
+1 The Holodeck (TRK) 265
+1 Cantankerous Captain (TRK) 141
+1 Tea, Earl Grey, Hot (TRK) 269
+1 Brazen Bluff (TRK) 140
+1 Captain Sisay (SDS) 22
+1 First Contact (TRK) 199
+1 Adversary by Algorithm (TRK) 182
+1 Silicate Surveyor (TRK) 172
+1 Tricorder (TRK) 270
+1 Starfleet Spanner Jockey (TRK) 81
