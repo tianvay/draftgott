@@ -64,7 +64,7 @@ def build_deck(entry, data, args):
     return dict(
         double_pips=double_pip_colors(nonlands), pip_checks=pip_checks(nonlands),
         name=entry["name"], deck=entry["deck"], parts=entry.get("parts", []), rows=rows, cards=cards, missing=missing,
-        cats=entry.get("cats", {}), role=entry.get("role"), coverage=coverage, info=info,
+        cats=entry.get("cats", {}), cardarch=entry.get("cardarch", {}), role=entry.get("role"), coverage=coverage, info=info,
         n_lands=len(cards) - len(nonlands),
         avg_mv=sum(c.mv for c in nonlands) / len(nonlands) if nonlands else 0,
         unsure=sorted({n for n, _, c, _ in rows if c.is_land and c.tap_mode == "tapped?"}),
@@ -235,8 +235,14 @@ def save_report(html, args):
 
 
 def run(args):
+    if args.overlay is not None:  # nur das Seitenfenster des Live-Drafts
+        from components.overlay import run as run_overlay
+        run_overlay(args.overlay)
+        return
     if args.drafthelper is not None:
-        from components.drafthelper import pool_path
+        from components.drafthelper import live_pool_file, pool_path
+        if args.live:
+            live_pool_file(args.drafthelper)  # Live-Draft: Pool-Datei anlegen, falls sie fehlt
         pool_path(args.drafthelper)  # fehlt der Kartenpool: sofort abbrechen, noch vor Scryfall
     fetch_symbols(args.neu_laden)  # Original-Manasymbole (einmalig von Scryfall, danach aus dem Cache)
     if args.drafthelper is not None:

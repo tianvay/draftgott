@@ -4,6 +4,7 @@ import math
 
 from components.cardkinds import FLOW_ORDER, color_curve
 from components import archetypes as arch
+from components import cardarchetypes as cardarch
 from components.html_base import esc, h_level_td, h_table, html_cost
 from components.removal import removal_level
 
@@ -216,6 +217,26 @@ def _archetype_html(a, tips=True):
         f"<li>{esc(t)}</li>" for t in a["tips"]) + "</ul>"
 
 
+def _assignment_html(ctx, archetypes):
+    """Eigene Archetyp-Zuordnung der Deckkarten (Drafthelper, kartenarchetypen.json) und der daraus erkannte
+    Archetyp (components/cardarchetypes.py, wie im Live-Draft). Leer ohne Zuordnung."""
+    assign = ctx.get("cardarch") or {}
+    info = ctx.get("info") or {}
+    cards = [{"name": n, "qty": q, "colors": (info.get(n) or {}).get("colors", []), "land": card.is_land}
+             for n, q, card, _shown in ctx["rows"]]
+    if not any(assign.get(c["name"]) for c in cards if not c["land"]):
+        return ""
+    found = cardarch.detect(cards, assign, ctx.get("cats") or {}, archetypes)
+    counts = [f'{esc(s["name"])}: {s["assigned"]} Karte{"n" if s["assigned"] != 1 else ""}'
+              for s in sorted(found["scores"], key=lambda s: -s["assigned"]) if s["assigned"]]
+    main = next((s for s in found["scores"] if s["colors"] == found["main"]), None)
+    detected = (f'<b>{esc(main["name"])}</b> ({main["score"]} Punkte)' if main else
+                'noch offen (kein Archetyp liegt allein vorn mit mindestens '
+                f'{cardarch.MIN_POINTS} Punkten)')
+    return ('<div style="margin-top:10px"><b>Deine Zuordnung:</b> ' + " · ".join(counts) + '</div>'
+            f'<div style="margin-top:4px">Erkannt aus Zuordnung, Farben und Kategorien: {detected}</div>')
+
+
 def render_archetype_panel(ctx):
     """Archetyp des Sets zu den Hauptfarben des Decks (die zwei Farben mit den meisten Nichtland-Kopien, wie im
     Drafthelper aus den Core-Karten) und darunter die weiteren Archetypen des Sets. Leer, wenn fuer das Set des Decks
@@ -239,7 +260,7 @@ def render_archetype_panel(ctx):
             'Farben).</div>')
     rest = "".join(f'<div style="margin:3px 0">{_archetype_html(a, tips=False)}</div>' for a in others)
     return (f'<div class="panel"><b>Archetyp ({esc(found["set"])})</b>'
-            f'<div style="margin-top:8px">{body}</div>'
+            f'<div style="margin-top:8px">{body}</div>' + _assignment_html(ctx, found["list"]) +
             f'<details style="margin-top:10px"><summary class="note" style="cursor:pointer">Weitere Archetypen des '
             f'Sets</summary>{rest}</details>'
             '<div class="note">Hauptfarben: die zwei Farben mit den meisten Nichtland-Karten (Kopien, mehrfarbige '

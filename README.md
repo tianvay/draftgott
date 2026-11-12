@@ -67,6 +67,10 @@ Projektordner geklärt; Abweichungen davon stehen mit Regelnummer im Code bzw. i
 | `components/suggest.py` | Deckvorschlag und Zuordnung nach Kategorien im Drafthelper |
 | `components/archetypes.py` | Archetypen je Set (Farbpaare mit Deckbau-Hinweisen) für Drafthelper und Bericht |
 | `components/ratings.py` | Kartenbewertung des Drafthelpers (`kartenbewertung.json`, je Kartenname) |
+| `components/cardarchetypes.py` | Archetyp-Zuordnung je Karte (`kartenarchetypen.json`), Archetyp-Erkennung und Rangliste des Packs |
+| `components/arenalog.py` | MTG Arena: Packs und Picks aus `Player.log`, Kartennamen aus Arenas Kartendatenbank |
+| `components/livedraft.py` | Live-Draft: Protokoll mitlesen, Picks in die Pool-Datei, Pack bewerten |
+| `components/overlay.py` | Seitenfenster des Live-Drafts (tkinter, immer im Vordergrund) |
 | `components/symbols.py` | Original-Manasymbole von Scryfall (Cache `scryfall_symbols.json`) |
 | `components/stats.py` | Ampel-Schwellen, Zeitkennzahlen, Signifikanz-Rechnung |
 | `components/html_base.py` | Gemeinsames Design (CSS im Stil des Drafthelpers), Seitenlayout, Tabellen, SVG-Diagramme |
@@ -168,7 +172,7 @@ einer Meldung ab, die beschreibt, wie die Datei aussehen muss.
 - **Start per Doppelklick (Windows):** `draftgott.bat` im Projektordner doppelklicken. Ein Menü fragt nach der
   Betriebsart: **1 = Analyse** (simuliert `_normaldeck.txt` mit 10 000 Spielen, schreibt `meinbericht.html` und
   zeigt ihn über den Berichts-Server, damit „Kampf simulieren“ im Bericht funktioniert) oder **2 = Drafthelper**
-  (Kartenseite mit `_draftedcardpool.txt`). Das Skript sucht Python selbst (`py` oder `python`). In beiden Fällen
+  (Kartenseite mit `_draftedcardpool.txt`) oder **3 = Live-Draft** (siehe unten). Das Skript sucht Python selbst (`py` oder `python`). In beiden Fällen
   das schwarze Fenster offen lassen und zum Beenden den Button „Beenden“ auf der Seite benutzen oder das Fenster
   schließen. Weitere Parameter werden an den gewählten Aufruf angehängt (`draftgott.bat --sims 1000`).
 - **Simulieren** baut die Varianten *Core + Splash* und *Core + NoSplash*, simuliert beide und zeigt den
@@ -178,6 +182,31 @@ einer Meldung ab, die beschreibt, wie die Datei aussehen muss.
   sich auf der Seite ändern.
 - Der Server läuft nur lokal (127.0.0.1, Port 8765, ist er belegt, ein freier Port). Beenden: Button „Beenden“ oder Strg+C im Terminal.
 - Wird weder Splash noch NoSplash markiert, wird nur das Core-Deck simuliert.
+- **Archetyp-Zuordnung je Karte:** Unter jeder Karte eines Sets mit Archetypen stehen Knöpfe mit den Farbpaaren der
+  Archetypen; ein Klick ordnet die Karte zu (mehrere möglich). Gespeichert je Kartenname in `kartenarchetypen.json`
+  (nicht im Git, `--archetypen DATEI`). Der Archetyp-Kasten zählt die zugeordneten Core-Karten und hebt den
+  erkannten Archetyp hervor (Regel siehe „Live-Draft“), der Bericht zeigt dasselbe.
+- **Set-Karten bewerten:** lädt alle Karten eines Sets von Scryfall (Cache `scryfall_set_cache.json`), um Kategorie
+  und Archetypen schon vor dem Draft festzulegen.
+
+### Live-Draft (`--live`)
+
+Menüpunkt **3** in `draftgott.bat` oder `python mtg_sim.py --drafthelper _livedraft.txt --live`. Der Drafthelper
+liest das Protokoll von MTG Arena mit (`Player.log`, wie 17Lands oder Untapped; das Spiel selbst wird nicht berührt).
+In Arena muss unter Optionen → Konto „Detailed Logs (Plugin Support)“ eingeschaltet sein.
+
+- **Picks:** landen sofort in der Kartenpool-Datei (`_livedraft.txt`, nicht im Git); die Seite lädt neu und zeigt
+  den Pool. Ein neuer Draft beginnt die Datei von vorn, ein laufender Draft wird beim Start nachgelesen. Kartennamen
+  aus Arenas Kartendatenbank im Installationsordner, sonst über die `arena_id` von Scryfall.
+- **Aktuelles Pack:** oben auf der Seite als Rangliste. Punkte = Kategorie (★ 4, MustPlay 3, ohne 1,5, Filler 1) + 3,
+  wenn die Karte dem Archetyp zugeordnet ist (grün), sonst + 1, wenn ihre Farben passen; NeverPlay immer 0.
+  Kategorie und Archetypen lassen sich direkt am Pack festlegen.
+- **Archetyp:** jeder Pick zählt mit dem Gewicht seiner Kategorie (★/MustPlay 2, ohne/Filler 1, NeverPlay 0) für
+  jeden Archetyp, in dessen Farben er liegt, und noch einmal für jeden, dem er zugeordnet ist. Erkannt ist der
+  Archetyp mit den meisten Punkten (mindestens 3, allein vorn), sonst „noch offen“. Selbst festlegen über die Auswahl.
+- **Seitenfenster:** kleines Fenster, immer im Vordergrund, mit Archetyp und Rangliste (● zugeordnet, ○ Farben
+  passen). Arena im Fenster oder randlosen Vollbild spielen. `--kein-overlay` schaltet es ab, `--overlay URL` öffnet
+  es einzeln, `--arena-log DATEI` nimmt ein anderes Protokoll.
 
 ## Schnellstart
 
@@ -320,6 +349,11 @@ Aktivierung pro Runde sind fest im Skript (siehe „Feste Annahmen“).
 | Parameter | Standard | Wirkung |
 |---|---|---|
 | `--bewertung DATEI` | `kartenbewertung.json` | Drafthelper: Datei mit der Kategorie je Kartenname (nicht im Git). |
+| `--archetypen DATEI` | `kartenarchetypen.json` | Drafthelper: Datei mit der Archetyp-Zuordnung je Kartenname (nicht im Git). |
+| `--live` | aus | Drafthelper im Live-Draft: Arena-Protokoll mitlesen, Picks in die Pool-Datei, Pack bewerten, Seitenfenster. |
+| `--arena-log DATEI` | `…/LocalLow/Wizards Of The Coast/MTGA/Player.log` | Live-Draft: Pfad des Arena-Protokolls. |
+| `--kein-overlay` | aus | Live-Draft ohne Seitenfenster. |
+| `--overlay URL` | | Nur das Seitenfenster für einen laufenden Live-Draft öffnen. |
 | `--neu-laden` | aus | Kartendaten werden in `scryfall_cache.json` neben dem Script gespeichert, bei späteren Läufen werden nur unbekannte Karten nachgeladen. Mit `--neu-laden` wird alles frisch von Scryfall geholt. |
 | `--ausgabe DATEI` (auch `--html DATEI`) | `mtg_bericht.html` | Name und Ort des HTML-Berichts. Eine vorhandene Datei wird überschrieben. |
 | `--nicht-oeffnen` | aus (Bericht wird geöffnet) | Der Bericht wird nur gespeichert, der Browser öffnet sich nicht. |

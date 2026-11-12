@@ -329,7 +329,46 @@ def _sections():
             "Diese Annahmen gelten für den Goldfish (ohne Gegner). Das Kampfmodell spielt gegen ein Gegnerdeck mit "
             "Blockern, Removal, Instants und Planeswalkern; seine Regeln stehen im Kampfbericht."]))),
         ("drafthelper", "Drafthelper", _drafthelper_help()),
+        ("live", "Live-Draft", _live_help()),
     ]
+
+
+def _live_help():
+    return (
+        _panel("Start", _ul([
+            "Menüpunkt <b>3</b> in <code>draftgott.bat</code> oder <code>python mtg_sim.py --drafthelper "
+            "_livedraft.txt --live</code>. Der Drafthelper liest das Protokoll von MTG Arena mit "
+            "(<code>Player.log</code> unter <code>AppData/LocalLow/Wizards Of The Coast/MTGA</code>, anderer Pfad mit "
+            "<code>--arena-log DATEI</code>). Gelesen wird nur diese Datei, das Spiel selbst wird nicht berührt.",
+            "In Arena muss unter Optionen → Konto „Detailed Logs (Plugin Support)“ eingeschaltet sein (danach Arena "
+            "neu starten).",
+            "Die Kartennamen kommen aus Arenas eigener Kartendatenbank (im Installationsordner), sonst aus Scryfall.",
+            "Jeder Pick landet sofort in der Kartenpool-Datei (<code>_livedraft.txt</code>, Format wie der "
+            "Deck-Export von Arena); die Seite lädt danach neu und zeigt den Pool wie gewohnt. Ein neuer Draft "
+            "beginnt die Datei von vorn. Auch ein schon laufender Draft wird beim Start nachgelesen."]))
+        + _panel("Aktuelles Pack", _ul([
+            "Oben auf der Seite steht das Pack, aus dem du gerade wählst, als Rangliste. Punkte je Karte: Kategorie "
+            "(★ Splashworthy 4, MustPlay 3, ohne Kategorie 1,5, Filler 1) + 3, wenn die Karte dem Archetyp "
+            "zugeordnet ist (grün hervorgehoben, „passt zu …“), sonst + 1, wenn ihre Farben in den Farben des "
+            "Archetyps liegen (hellgrün). NeverPlay hat immer 0 Punkte.",
+            "Kategorie und Archetypen lassen sich direkt an den Pack-Karten festlegen; das gilt sofort.",
+            "Pick Two: beide gewählten Karten zählen als Picks."]))
+        + _panel("Archetyp erkennen", _ul([
+            "Jeder Pick zählt mit dem Gewicht seiner Kategorie (Splashworthy und MustPlay 2, ohne Kategorie und Filler "
+            "1, NeverPlay 0) für jeden Archetyp, in dessen Farben alle seine Farben liegen, und noch einmal für jeden "
+            "Archetyp, dem er zugeordnet ist. Farblose Karten zählen nur über die Zuordnung, Länder gar nicht.",
+            "Erkannt ist der Archetyp mit den meisten Punkten, wenn er mindestens 3 Punkte hat und allein vorn "
+            "liegt; sonst ist er noch offen und es wird nichts hervorgehoben.",
+            "Mit der Auswahl <b>Archetyp</b> lässt er sich auch selbst festlegen (zurück mit „Automatisch“). Dazu "
+            "stehen die Hinweise zum Archetyp und die Punkte der führenden Archetypen."]))
+        + _panel("Seitenfenster", _ul([
+            "Startet mit dem Live-Draft (abschalten mit <code>--kein-overlay</code>): ein kleines Fenster, das immer im "
+            "Vordergrund bleibt, mit Pick-Nummer, Archetyp und der Rangliste des Packs (● dem Archetyp zugeordnet, "
+            "○ Farben passen, dazu Farben, Kategorie und zugeordnete Archetypen).",
+            "Arena dafür im Fenster oder im randlosen Vollbild spielen; über exklusivem Vollbild liegt kein Fenster. "
+            "Das Fenster lässt sich verschieben und schließt sich, wenn der Drafthelper beendet wird. Einzeln: "
+            "<code>python mtg_sim.py --overlay http://127.0.0.1:8765/</code>."]))
+    )
 
 
 def _drafthelper_help():
@@ -352,6 +391,18 @@ def _drafthelper_help():
             "Archetyp, dort nach den Nicht-Länder-Karten des Decks.",
             "Der Kasten lässt sich zuklappen; der Browser merkt sich das. Neue Sets werden in "
             "<code>components/archetypes.py</code> ergänzt."]))
+        + _panel("Archetyp-Zuordnung je Karte", _ul([
+            "Unter jeder Karte eines Sets mit Archetypen stehen Knöpfe mit den Farbpaaren der Archetypen (Mauszeiger "
+            "darüber: Name). Ein Klick ordnet die Karte dem Archetyp zu oder nimmt die Zuordnung zurück; eine Karte "
+            "kann zu mehreren Archetypen passen.",
+            "Die Zuordnung gilt je Kartenname für jeden Pool und den Live-Draft und steht in "
+            "<code>kartenarchetypen.json</code> im Projektordner (nicht im Git, anderer Name mit "
+            "<code>--archetypen DATEI</code>).",
+            "<b>Set-Karten bewerten</b> (oben) lädt alle Karten eines Sets von Scryfall: Kategorie und Archetypen "
+            "lassen sich so schon vor dem Draft festlegen. Filter: ohne Kategorie, ohne Archetyp, je Farbe.",
+            "Erkannter Archetyp: aus den Core-Karten wie im Live-Draft (siehe dort). Im Archetyp-Kasten steht je "
+            "Archetyp, wie viele Core-Karten ihm zugeordnet sind; der erkannte ist grün umrandet, seine Karten "
+            "tragen die Plakette „Archetyp“. Der Bericht zeigt dieselbe Zählung und Erkennung im Archetyp-Kasten."]))
         + _panel("Kategorien", _ul([
             "<b>★ Splashworthy</b> – entscheidet Spiele allein, soll auf jeden Fall rein, auch wenn wir die Farbe nicht "
             "spielen.",

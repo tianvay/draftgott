@@ -3,6 +3,8 @@ rem draftgott: Startmenue fuer den MTG-Simulator per Doppelklick.
 rem   1 = Analyse    (Deckliste _normaldeck.txt simulieren, Bericht meinbericht.html; laeuft weiter fuer den
 rem                   Kampf aus dem Bericht, bis "Beenden" geklickt wird)
 rem   2 = Drafthelper (Kartenseite im Browser mit _draftedcardpool.txt)
+rem   3 = Live-Draft  (Drafthelper liest MTG Arena mit: Picks nach _livedraft.txt, Pack mit Bewertung und
+rem                   Archetyp auf der Seite und im Seitenfenster ueber Arena)
 rem Zusaetzliche Parameter werden an den gewaehlten Aufruf angehaengt,
 rem z. B.:  draftgott.bat --sims 1000
 setlocal
@@ -27,8 +29,10 @@ echo  draftgott
 echo  ---------
 echo   1 = Analyse       (_normaldeck.txt simulieren, Bericht meinbericht.html, Kampf im Bericht)
 echo   2 = Drafthelper   (Karten aus _draftedcardpool.txt auswaehlen und vergleichen)
+echo   3 = Live-Draft    (Arena mitlesen: Pack bewerten, Archetyp erkennen, Seitenfenster)
 echo.
-choice /c 12 /n /m "Auswahl (1 oder 2): "
+choice /c 123 /n /m "Auswahl (1, 2 oder 3): "
+if errorlevel 3 goto live
 if errorlevel 2 goto drafthelper
 if errorlevel 1 goto analyse
 exit /b 1
@@ -48,6 +52,17 @@ echo Dieses Fenster bitte offen lassen. Zum Beenden: Button "Beenden" auf der Se
 echo oder dieses Fenster schliessen.
 echo.
 %PY% mtg_sim.py --drafthelper _draftedcardpool.txt %*
+goto ende
+
+:live
+echo.
+echo Live-Draft: Der Drafthelper liest das Protokoll von MTG Arena mit (Player.log).
+echo Die Picks landen in _livedraft.txt, das Seitenfenster bleibt ueber Arena im Vordergrund.
+echo Arena bitte im Fenster oder randlosen Vollbild spielen. In Arena muss unter Optionen - Konto
+echo "Detailed Logs (Plugin Support)" eingeschaltet sein.
+echo Dieses Fenster bitte offen lassen. Zum Beenden: Button "Beenden" auf der Seite.
+echo.
+%PY% mtg_sim.py --drafthelper _livedraft.txt --live %*
 goto ende
 
 :ende

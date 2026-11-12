@@ -114,3 +114,41 @@ def fetch_printing_images(specs):
         except OSError as e:
             print(f"Bild-Cache konnte nicht gespeichert werden: {e}", file=sys.stderr)
     return {k: v for k, v in cache.items() if k in {f"{s_}/{n}" for s_, n in specs}}
+
+
+SET_CACHE_FILE = pathlib.Path(__file__).resolve().parent.parent / "scryfall_set_cache.json"
+
+
+def fetch_set_cards(code, refresh=False):
+    """Alle Karten eines Sets ohne Standardlaender (Scryfall-Suche, seitenweise), fuer die Set-Ansicht des
+    Drafthelpers. Merkt sich die Liste je Setcode in scryfall_set_cache.json; Netzwerkfehler geben [] (bzw. den
+    alten Stand aus dem Cache)."""
+    import urllib.parse
+    code = (code or "").lower()
+    cache = {}
+    if SET_CACHE_FILE.exists():
+        try:
+            cache = json.loads(SET_CACHE_FILE.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            cache = {}
+    if code in cache and not refresh:
+        return cache[code]
+    # ohne "is:booster": vor dem Erscheinen eines Sets fehlt diese Markierung bei Scryfall noch
+    query = urllib.parse.urlencode({"q": f"e:{code} -t:basic", "unique": "cards", "order": "set"})
+    url, cards = f"https://api.scryfall.com/cards/search?{query}", []
+    try:
+        while url:
+            req = urllib.request.Request(url, headers=HEADERS)
+            with urllib.request.urlopen(req) as r:
+                data = json.load(r)
+            cards += data.get("data", [])
+            url = data.get("next_page") if data.get("has_more") else None
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        print(f"Set {code.upper()} konnte nicht geladen werden: {e}", file=sys.stderr)
+        return cache.get(code, [])
+    cache[code] = cards
+    try:
+        SET_CACHE_FILE.write_text(json.dumps(cache), encoding="utf-8")
+    except OSError as e:
+        print(f"Set-Cache konnte nicht gespeichert werden: {e}", file=sys.stderr)
+    return cards

@@ -34,7 +34,11 @@ from components.symbols import active as active_symbols, symbol_css
 from components.scryfall import card_image_url, fetch_cards_cached, fetch_printing_images
 from components.suggest import WUBRG, propose, suggest
 from components import archetypes as set_archetypes
+from components import cardarchetypes
 from components import ratings as card_ratings
+from components.arenalog import default_log_path
+from components.livedraft import LiveDraft, card_summary
+from components.scryfall import fetch_set_cards
 
 PORT = 8765
 MARKS = ("core", "splash", "nosplash", "off")
@@ -64,14 +68,25 @@ def pool_path(path):
     return p
 
 
-def load_pool(path, refresh=False):
-    """Liest die Pool-Datei und ergaenzt Typ, Manawert und Bild-URL von Scryfall.
+def live_pool_file(path):
+    """Live-Draft: legt die Pool-Datei (relativ zum Projektordner) leer an, falls sie fehlt. Gibt den Pfad zurueck."""
+    p = pathlib.Path(path)
+    if not p.is_absolute() and not p.exists():
+        p = SCRIPT_DIR / p
+    if not p.exists():
+        p.write_text("Deck\n", encoding="utf-8")
+    return p
+
+
+def load_pool(path, refresh=False, allow_empty=False):
+    """Liest die Pool-Datei und ergaenzt Typ, Manawert und Bild-URL von Scryfall (allow_empty: Live-Draft, der
+    Pool darf leer sein).
     Gibt (cards, basics, signature) zurueck: cards ohne Standardlaender (Reihenfolge Deck, Sideboard), basics mit
     allen fuenf Standardlaendern (Startwert Core = Anzahl im Deck der Datei, 'pool' = Anzahl in Deck und Sideboard)
     und eine Signatur des Dateiinhalts (die Seite speichert ihren Stand je Signatur, nicht je Dateiname)."""
     p = pool_path(path)
     rows = parse_pool(p.read_text(encoding="utf-8"))
-    if not rows:
+    if not rows and not allow_empty:
         sys.exit(f"Keine Karten in {p} gefunden (erwartet: Abschnitte 'Deck' und 'Sideboard').")
     signature = hashlib.sha1(json.dumps(rows, sort_keys=True).encode("utf-8")).hexdigest()[:16]
     print(f"Kartenpool: {sum(r['qty'] for r in rows)} Karten aus {p}", file=sys.stderr)
@@ -205,13 +220,18 @@ def checked_proposal(body, pool, marks, cats):
     return proposal
 
 
-def variant_entries(pool, marks, basics, cats, proposal=None):
-    """Deck-Eintraege fuer Simulation und Kampf: die Varianten der Zuordnung, dazu ggf. der Deckvorschlag."""
+def variant_entries(pool, marks, basics, cats, proposal=None, cardarch=None):
+    """Deck-Eintraege fuer Simulation und Kampf: die Varianten der Zuordnung, dazu ggf. der Deckvorschlag.
+    cardarch: Archetyp-Zuordnung je Kartenname (nur die Karten des Pools kommen in die Eintraege, fuer den Bericht)."""
     entries = entries_from_marks(pool, marks, basics, cats)
     if proposal:
         deck = dict(proposal["deck"])
         entries.append({"path": "", "name": "Vorschlag", "deck": deck, "parts": [("Vorschlag", deck)],
                         "cats": dict(cats), "role": "proposal"})
+    names = {c["name"] for c in pool}
+    mine = {n: list(v) for n, v in (cardarch or {}).items() if n in names}
+    for e in entries:
+        e["cardarch"] = dict(mine)
     return entries
 
 
@@ -283,9 +303,19 @@ def make_handler(app):
             if path == "/":
                 self._send(render_page())
             elif path == "/api/pool":
+                self._reload_live_pool()
+                names = {c["name"] for c in app["pool"]}
                 self._json({"cards": app["pool"], "basics": app["basics"], "sims": app["args"].sims,
                             "options": app["options"], "file": app["file"],
-                            "signature": app["signature"], "archetypes": set_archetypes.info(app["pool"])})
+                            "signature": app["signature"], "archetypes": set_archetypes.info(app["pool"]),
+                            "cardarch": {n: v for n, v in self._assign().items() if n in names},
+                            "archsets": {code: [{"colors": a["colors"], "name": a["name"]} for a in lst]
+                                         for code, lst in set_archetypes.ARCHETYPES.items()},
+                            "live": bool(app.get("live")), "pool_version": app.get("pool_version", 0)})
+            elif path == "/api/live":
+                self._json(self._live_snapshot())
+            elif path == "/api/setcards":
+                self._set_cards(self.path.partition("?")[2])
             elif path == "/howitworks.html":
                 self._send(render_help_page())
             elif path == "/api/status":
@@ -316,7 +346,11 @@ def make_handler(app):
             if path in ("/api/rating", "/api/ratings/import"):
                 self._rating(path)
                 return
-            if path not in ("/api/simulate", "/api/suggest", "/api/propose", "/api/lands", "/api/colors"):
+            if path in ("/api/cardarch", "/api/live/archetype"):
+                self._card_archetype(path)
+                return
+            if path not in ("/api/simulate", "/api/suggest", "/api/propose", "/api/lands", "/api/colors",
+                            "/api/archdetect"):
                 self._send("Nicht gefunden", "text/plain; charset=utf-8", 404)
                 return
             pool = app["pool"]
@@ -353,6 +387,13 @@ def make_handler(app):
             if path == "/api/colors":
                 self._json({"ok": True, **color_overview(pool, marks, basics)})
                 return
+            if path == "/api/archdetect":  # Archetyp aus den Core-Karten (Zuordnung, Farben, Kategorien)
+                found = set_archetypes.info(pool)
+                core = [dict(c, qty=ms.count("core")) for c, ms in zip(pool, marks) if "core" in ms]
+                self._json({"ok": True, "set": found["set"] if found else None,
+                            "detect": cardarchetypes.detect(core, self._assign(), cats,
+                                                            found["list"] if found else None)})
+                return
             if path == "/api/propose":
                 result = propose(pool, marks, cats, colors, target, sort)
                 self._json({"ok": True, "deck": result["deck"], "summary": result["summary"]})
@@ -360,8 +401,10 @@ def make_handler(app):
             run_args = argparse.Namespace(**vars(app["args"]))
             run_args.sims, run_args.core = sims, "Core"  # core: Herkunft der Karten (Core/Splash/NoSplash) im Bericht
 
+            cardarch = self._assign()
+
             def work(progress):
-                entries = variant_entries(pool, marks, basics, cats, proposal)
+                entries = variant_entries(pool, marks, basics, cats, proposal, cardarch)
                 html = app["simulate"](entries, run_args, progress)
                 app["save"](html, run_args)
                 app["report_html"] = html
@@ -389,7 +432,7 @@ def make_handler(app):
                     raise ValueError("Keine Bewertungsdatei")
                 if path == "/api/rating":
                     name, cat = body.get("name"), body.get("cat") or ""
-                    if name not in {c["name"] for c in app["pool"]}:
+                    if name not in self._known_names():
                         raise ValueError("Unbekannte Karte")
                     data = card_ratings.set_rating(app["ratings"], name, cat)
                 else:
@@ -399,6 +442,68 @@ def make_handler(app):
                 self._json({"ok": False, "error": str(exc)}, 400)
                 return
             self._json({"ok": True, "ratings": self._pool_ratings(data)})
+
+        def _assign(self):
+            """Archetyp-Zuordnung aller Karten (aus der Datei, leer ohne Datei)."""
+            return cardarchetypes.load_assign(app["cardarch"]) if app.get("cardarch") else {}
+
+        def _known_names(self):
+            """Karten, die bewertet und zugeordnet werden duerfen: Pool, Live-Draft und geladene Set-Karten."""
+            names = {c["name"] for c in app["pool"]} | app.get("setnames", set())
+            return names | (app["live"].known_names() if app.get("live") else set())
+
+        def _reload_live_pool(self):
+            """Live-Draft: nach neuen Picks die Pool-Datei neu laden."""
+            live = app.get("live")
+            if live and app.get("pool_version", 0) != live.version and app.get("reload_pool"):
+                version = live.version
+                app["pool"], app["basics"], app["signature"] = app["reload_pool"]()
+                app["pool_version"] = version
+
+        def _live_snapshot(self):
+            if not app.get("live"):
+                return {"status": "off", "message": "Kein Live-Draft (Drafthelper mit --live starten)."}
+            ratings = card_ratings.load_ratings(app["ratings"]) if app.get("ratings") else {}
+            return app["live"].snapshot(ratings, self._assign(), app.get("live_manual"))
+
+        def _card_archetype(self, path):
+            """Archetypen einer Karte speichern (/api/cardarch) bzw. den Archetyp des Live-Drafts selbst festlegen
+            (/api/live/archetype, leer = automatisch erkennen)."""
+            try:
+                body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
+                if path == "/api/live/archetype":
+                    choice = body.get("arch") or ""
+                    if choice and choice not in set_archetypes.PAIRS:
+                        raise ValueError("Unbekannter Archetyp")
+                    app["live_manual"] = choice or None
+                    self._json({"ok": True})
+                    return
+                if not app.get("cardarch"):
+                    raise ValueError("Keine Datei für die Archetyp-Zuordnung")
+                name = body.get("name")
+                if name not in self._known_names():
+                    raise ValueError("Unbekannte Karte")
+                data = cardarchetypes.set_assign(app["cardarch"], name, body.get("arch") or [])
+            except (ValueError, TypeError, OSError) as exc:
+                self._json({"ok": False, "error": str(exc)}, 400)
+                return
+            self._json({"ok": True, "cardarch": data})
+
+        def _set_cards(self, query):
+            """Alle Karten eines Sets (Scryfall) fuer die Set-Ansicht: Bewertung und Archetypen vorab festlegen."""
+            code = (dict(p.split("=", 1) for p in query.split("&") if "=" in p).get("set") or "").lower()
+            if not re.fullmatch(r"[a-z0-9]{2,6}", code):
+                self._json({"ok": False, "error": "Unbekanntes Set"}, 400)
+                return
+            raw = (app.get("fetch_set") or fetch_set_cards)(code)
+            cards = [card_summary(sc, sc["name"], code, sc.get("collector_number") or "") for sc in raw
+                     if sc.get("name")]
+            names = {c["name"] for c in cards}
+            app["setnames"] = app.get("setnames", set()) | names
+            ratings = card_ratings.load_ratings(app["ratings"]) if app.get("ratings") else {}
+            self._json({"ok": True, "set": code.upper(), "cards": cards,
+                        "cardarch": {n: v for n, v in self._assign().items() if n in names},
+                        "ratings": {n: v for n, v in ratings.items() if n in names}})
 
         def _battle(self):
             """Kampf der Varianten des letzten Berichts gegen ein Gegnerdeck (Hintergrund-Job, battle_server)."""
@@ -411,7 +516,8 @@ def make_handler(app):
                 pool = app["pool"]
                 try:
                     marks, basics, cats = parse_state(body, pool)
-                    entries = variant_entries(pool, marks, basics, cats, checked_proposal(body, pool, marks, cats))
+                    entries = variant_entries(pool, marks, basics, cats, checked_proposal(body, pool, marks, cats),
+                                              self._assign())
                 except (ValueError, KeyError, TypeError) as e:
                     self._json({"ok": False, "error": str(e)}, 400)
                     return
@@ -432,13 +538,39 @@ def ratings_path(args):
     return path if path.is_absolute() else SCRIPT_DIR / path
 
 
+def archetypes_path(args):
+    """Datei der Archetyp-Zuordnung: wie angegeben, ein relativer Name liegt im Projektordner."""
+    path = pathlib.Path(getattr(args, "archetypen", None) or "kartenarchetypen.json")
+    return path if path.is_absolute() else SCRIPT_DIR / path
+
+
+def start_overlay(url):
+    """Seitenfenster in einem eigenen Prozess (tkinter braucht den Hauptthread)."""
+    import subprocess
+    try:
+        subprocess.Popen([sys.executable, str(SCRIPT_DIR / "mtg_sim.py"), "--overlay", url])
+    except OSError as e:
+        print(f"Seitenfenster konnte nicht gestartet werden: {e}", file=sys.stderr)
+
+
 def serve(args, simulate, save, battle=None, save_battle=None):
-    pool, basics, signature = load_pool(args.drafthelper, args.neu_laden)
+    live_mode = getattr(args, "live", False)
+    pool, basics, signature = load_pool(args.drafthelper, args.neu_laden, allow_empty=live_mode)
     options = sorted(set(SIM_OPTIONS) | {args.sims})
     app = {"pool": pool, "basics": basics, "args": args, "simulate": simulate, "save": save, "job": Job(), "options": options,
            "battle": battle, "save_battle": save_battle,
            "file": pathlib.Path(args.drafthelper).name, "signature": signature,
-           "ratings": ratings_path(args)}
+           "ratings": ratings_path(args), "cardarch": archetypes_path(args)}
+    if live_mode:
+        log = pathlib.Path(args.arena_log) if args.arena_log else default_log_path()
+        live = LiveDraft(log, pool_path(args.drafthelper))
+        print(f"Live-Draft: lese {log}", file=sys.stderr)
+        live.step()  # bisheriger Stand des Protokolls (laufender Draft), danach im Hintergrund weiter
+        app["live"], app["pool_version"] = live, live.version
+        app["reload_pool"] = lambda: load_pool(args.drafthelper, allow_empty=True)
+        if live.version:
+            app["pool"], app["basics"], app["signature"] = app["reload_pool"]()
+        live.start()
     try:
         server = LocalServer(("127.0.0.1", PORT), make_handler(app))
     except OSError:  # Port belegt: freien Port waehlen lassen
@@ -452,6 +584,8 @@ def serve(args, simulate, save, battle=None, save_battle=None):
             webbrowser.open(url)
         except Exception:
             pass
+    if live_mode and not args.kein_overlay:
+        start_overlay(url)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
@@ -642,6 +776,49 @@ h2 small{color:var(--muted);font-weight:400}
 #archetypes .arch .amain{color:var(--core);font-size:12.5px;font-weight:700}
 #archetypes .arch ul{margin:4px 0 0;padding-left:18px;font-size:13.5px}
 #archetypes .anote{color:var(--muted);font-size:12.5px;margin-top:8px}
+.achips{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:3px;margin-top:5px}
+.achips button{border:1px solid var(--line);background:#f8f9fb;border-radius:6px;padding:2px 0;font-size:10.5px;
+  display:flex;align-items:center;justify-content:center;gap:0;min-height:20px;min-width:0;color:var(--muted);overflow:hidden}
+.achips button .m.ms{margin:0;width:11px;height:11px;vertical-align:middle}
+.achips button.on{background:#e3f4ea;border-color:#2e9e5b;color:#146c3d;font-weight:700}
+.achips button.main{box-shadow:0 0 0 2px #2e9e5b}
+.abadge{position:absolute;top:6px;right:6px;border-radius:999px;padding:2px 8px;font-size:11.5px;font-weight:700;
+  color:#fff;background:#1f7a45;box-shadow:0 1px 3px rgba(0,0,0,.35);display:none}
+.tile.a-main .abadge,.mtile.lv-arch .abadge{display:block}
+.tile.a-main{outline:3px solid #2e9e5b;outline-offset:1px}
+#archetypes .arch .adet{font-size:12.5px;margin-top:2px;color:var(--muted)}
+#archetypes .arch.det{border:2px solid #2e9e5b;background:#eefaf2}
+#archetypes .arch .adet b{color:#146c3d}
+#live{display:none;background:#fff;border:2px solid #2e9e5b;border-radius:12px;padding:12px 16px;margin-bottom:10px}
+#live.show{display:block}
+#live .lhead{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center}
+#live .lhead h2{margin:0;font-size:18px}
+#live .lscores{display:flex;flex-wrap:wrap;gap:6px;font-size:12.5px}
+#live .lscores span{border:1px solid var(--line);border-radius:999px;padding:1px 9px;background:#fafbfc}
+#live .lscores span.main{border-color:#2e9e5b;background:#e3f4ea;font-weight:700}
+#live .lmsg{color:var(--muted);margin:8px 0 0;font-size:13.5px}
+#live .ltips{margin:6px 0 0;padding-left:20px;font-size:13px;color:#33415c}
+.mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-top:10px}
+.mtile{background:var(--card);border:3px solid var(--line);border-radius:12px;padding:6px;position:relative}
+.mtile.lv-arch{border-color:#2e9e5b;box-shadow:0 0 0 3px #2e9e5b55;background:#f2fbf5}
+.mtile.lv-color{border-color:#9fc5ae}
+.mtile.c-neverplay img{filter:grayscale(.75)}
+.mtile img{width:100%;display:block;border-radius:8px;cursor:zoom-in;aspect-ratio:488/680;background:#e9edf3}
+.mtile .rank{position:absolute;top:-9px;left:-9px;background:var(--ink);color:#fff;border-radius:999px;width:24px;
+  height:24px;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;z-index:2}
+.mtile .pts{color:var(--muted);font-size:11.5px;white-space:nowrap}
+.mtile .why{font-size:11.5px;color:#146c3d;font-weight:700;margin:0 2px 2px}
+.mtile.c-splashworthy .badge{background:#e0a800;color:#2d2100}.mtile.c-mustplay .badge{background:#2e9e5b}
+.mtile.c-filler .badge{background:#6b7d99}.mtile.c-neverplay .badge{background:#8b2f2f}
+#setview{display:none;position:fixed;inset:0;z-index:12;background:var(--bg);flex-direction:column}
+#setview.show{display:flex}
+#setview .sbar{padding:10px 20px;background:#fff;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:8px 12px;
+  align-items:center}
+#setview .sbar input[type=text]{width:70px;font:inherit;padding:6px 8px;border-radius:8px;border:1px solid var(--line);
+  text-transform:uppercase}
+#setview .sbar input[type=search]{flex:1;min-width:180px;font:inherit;padding:6px 10px;border-radius:8px;border:1px solid var(--line)}
+#setview .sbody{flex:1;overflow:auto;padding:4px 20px 40px}
+#setview .snote{color:var(--muted);font-size:13px;margin-top:10px}
 .err{background:#fef3f2;border:1px solid #fda29b;color:#b42318;border-radius:10px;padding:12px 16px;margin:10px 0;display:none}
 /*SYMBOL_CSS*/
 </style></head><body>
@@ -653,6 +830,7 @@ h2 small{color:var(--muted);font-weight:400}
     <select id="catfilter" title="Blendet Karten anderer Kategorien aus"></select></label>
   <div class="spacer"></div>
   <label>Spiele pro Modus <select id="sims"></select></label>
+  <button class="btn" id="setbtn" title="Alle Karten eines Sets: Kategorie und Archetypen vorab festlegen">Set-Karten bewerten</button>
   <button class="btn" id="export" title="Deckliste der Varianten zum Kopieren oder Speichern">Deckliste exportieren</button>
   <button class="btn primary" id="go">Simulieren</button>
   <span class="dk" id="dk" title="Kampf der Varianten gegen ein Gegnerdeck, ohne vorher den Goldfish zu simulieren">
@@ -666,6 +844,15 @@ h2 small{color:var(--muted);font-weight:400}
     <b>Aus</b>), wähle bei Bedarf eine <b>Kategorie</b> und stelle oben die Standardländer ein. Danach auf
     <b>Simulieren</b> klicken. Alle Regeln (Zuordnung, Kategorien, Deckvorschlag, Übersichten):
     <a href="/howitworks.html#hiw-drafthelper" target="_blank">So funktioniert es</a>.</div>
+  <section id="live"><div class="lhead"><h2 id="lhead">Live-Draft</h2>
+      <label class="filter">Archetyp <select id="lmanual" title="Automatisch erkennen oder selbst festlegen"></select></label>
+      <div class="lscores" id="lscores"></div></div>
+    <div class="lmsg" id="lmsg"></div><ul class="ltips" id="ltips"></ul>
+    <div class="mgrid" id="lpack"></div>
+    <div class="lmsg">Reihenfolge: Kategorie (★ 4, MP 3, ohne 1,5, Fi 1, NP immer 0) + 3, wenn die Karte dem
+      Archetyp zugeordnet ist (grün), sonst + 1, wenn ihre Farben passen (hellgrün). Archetyp: aus deinen Picks
+      (Farben, Zuordnung, Kategorien), siehe <a href="/howitworks.html#hiw-live" target="_blank">So funktioniert es</a>.
+      Die Picks landen in der Kartenpool-Datei, die Karten unten zeigen den Pool.</div></section>
   <details class="help" id="archetypes" open><summary id="archtitle">Archetypen</summary>
     <div class="agrid" id="archlist"></div>
     <div class="anote">Hervorgehoben: der Archetyp deiner Core-Farben (die zwei Farben mit den meisten Core-Karten,
@@ -729,6 +916,18 @@ h2 small{color:var(--muted);font-weight:400}
   <p class="xnote">Format wie beim Import in MTG Arena und MTGO (Abschnitte Deck und Sideboard). Das Deck besteht aus
     Core plus der Gruppe der Variante samt Standardländern; Sideboard sind alle übrigen Karten aus Deck und Sideboard der Datei.</p>
   <div class="xcols" id="xcols"></div></div></div>
+<div id="setview"><div class="sbar"><b>Set-Karten bewerten</b>
+  <label>Set <input type="text" id="setcode" maxlength="6"></label><button class="btn" id="setload">Laden</button>
+  <input type="search" id="setsearch" placeholder="Karte suchen (Name oder Typ)">
+  <label class="filter">Zeigen <select id="setfilter"><option value="">Alle Karten</option>
+    <option value="nocat">Ohne Kategorie</option><option value="noarch">Ohne Archetyp</option>
+    <option value="W">Weiß</option><option value="U">Blau</option><option value="B">Schwarz</option>
+    <option value="R">Rot</option><option value="G">Grün</option><option value="M">Mehrfarbig</option>
+    <option value="C">Farblos</option></select></label>
+  <button class="btn" id="setclose">← Zurück zu den Karten</button></div>
+  <div class="sbody"><div class="snote" id="setnote">Kategorie und Archetypen gelten je Kartenname für jeden
+    Pool und den Live-Draft (Dateien kartenbewertung.json und kartenarchetypen.json).</div>
+    <div class="mgrid" id="setgrid"></div></div></div>
 <div id="results"><div class="rbar"><button class="btn" id="back">← Zurück zu den Karten</button>
   <span id="rnote" style="color:var(--muted)"></span></div><iframe id="frame" title="Bericht"></iframe></div>
 <script>
@@ -829,19 +1028,22 @@ function tile(t){
   const o0=el("option",null,"Kategorie: –");o0.value="";sel.appendChild(o0);
   for(const c of CATS){const o=el("option",null,c.abbr+" "+c.label);o.value=c.key;o.title=c.hint;sel.appendChild(o)}
   sel.onchange=()=>setCat(t.card.name,sel.value);t.sel=sel;d.appendChild(sel);
+  w.appendChild(el("div","abadge","Archetyp"));
+  t.chips=archChips(t.card);if(t.chips)d.appendChild(t.chips);
   paint(t);return d;
 }
 function paint(t){
   const k=catOf(t.card.name),c=CATS.find(x=>x.key===k),f=$("catfilter").value;
   const hidden=(f&&(f==="none"?k:k!==f))||(searchQ&&!((t.card.name+" "+(t.card.type||"")).toLowerCase().includes(searchQ)));
-  t.node.className="tile m-"+t.mark+(k?" c-"+k:"");
+  t.node.className="tile m-"+t.mark+(k?" c-"+k:"")+(mainArch()&&(cardarch[t.card.name]||[]).includes(mainArch())?" a-main":"");
+  if(t.chips)paintChips(t.chips,t.card);
   t.badge.textContent=c?c.abbr+" "+c.label:"";t.badge.style.display=c?"":"none";
   t.sel.value=k;
   t.node.querySelectorAll(".seg button").forEach(b=>b.classList.toggle("on",b.dataset.m===t.mark));
   t.node.style.display=hidden?"none":""}
 function setCat(name,key){
   if(key)cats[name]=key;else delete cats[name];
-  state.filter(t=>t.card.name===name).forEach(paint);summary();save();storeRating(name,key)}
+  state.filter(t=>t.card.name===name).forEach(paint);summary();save();storeRating(name,key);renderAux()}
 function refresh(){state.forEach(paint);summary()}
 function summary(){
   const n={core:0,splash:0,nosplash:0,off:0};state.forEach(t=>n[t.mark]++);
@@ -854,7 +1056,7 @@ function summary(){
   s.appendChild(document.createTextNode("Splash-Variante: "));s.appendChild(el("b",null,a+" Karten"));
   s.appendChild(document.createTextNode(" · NoSplash-Variante: "));s.appendChild(el("b",null,b+" Karten"));
   if(a!==b)s.appendChild(el("span","warn","  – unterschiedlich groß"));
-  overview();curve();typeOverview();renderColorCurve();scheduleColors();renderArchetypes();
+  overview();curve();typeOverview();renderColorCurve();scheduleColors();renderArchetypes();scheduleDetect();
 }
 // Archetypen des Sets (components/archetypes.py); Hauptfarben wie archetypes.main_pair, aus den Core-Karten
 const PAIRS=["WU","UB","BR","RG","GW","WB","UR","BG","RW","UG"],COLOR_DE={W:"Weiß",U:"Blau",B:"Schwarz",R:"Rot",G:"Grün"};
@@ -878,6 +1080,10 @@ function renderArchetypes(){
     h.append(" "+a.name);d.appendChild(h);
     d.appendChild(el("div","aen",[...a.colors].map(c=>COLOR_DE[c]).join("/")));
     if(a.colors===pair)d.appendChild(el("div","amain","passt zu deinen Core-Farben"));
+    const sc=poolDetect&&poolDetect.scores.find(s=>s.colors===a.colors);
+    if(sc&&(sc.assigned||poolDetect.main===a.colors)){const x=el("div","adet");
+      if(poolDetect.main===a.colors){d.classList.add("det");x.appendChild(el("b",null,"Erkannt: "))}
+      x.append(sc.assigned+" Core-Karten zugeordnet, "+sc.score+" Punkte");d.appendChild(x)}
     const ul=el("ul");a.tips.forEach(t=>ul.appendChild(el("li",null,t)));d.appendChild(ul);
     list.appendChild(d)}
 }
@@ -1375,6 +1581,105 @@ async function poll(){
       :"Der Bericht wurde auch als Datei gespeichert."}
   else if(s.state==="error")showErr(s.message);
 }
+// ---- Archetyp-Zuordnung je Karte (kartenarchetypen.json), Erkennung, Live-Draft, Set-Ansicht ----
+let cardarch={},archsets={},poolDetect=null,detectTimer=null,live=null,liveJson="",liveVersion=0,setCards=[];
+const RATING_SHORT={splashworthy:"★ Splashworthy",mustplay:"MP MustPlay",filler:"Fi Filler",neverplay:"NP NeverPlay"};
+// Archetyp, nach dem hervorgehoben wird: im Live-Draft der des Drafts, sonst der aus den Core-Karten erkannte
+function mainArch(){return live&&live.detect?live.detect.main:(poolDetect?poolDetect.main:null)}
+function archName(colors){for(const list of Object.values(archsets)){const a=list.find(x=>x.colors===colors);if(a)return a.name}
+  return colors}
+function archChips(card){
+  const list=archsets[(card.set||"").toLowerCase()];if(!list)return null;
+  const box=el("div","achips");box.title="Archetypen dieser Karte (mehrere möglich, gilt für alle Pools)";
+  for(const a of list){const b=el("button");b.dataset.a=a.colors;b.title=a.name;
+    [...a.colors].forEach(c=>b.appendChild(manaSym(c)||document.createTextNode(c)));
+    b.onclick=()=>toggleArch(card.name,a.colors);box.appendChild(b)}
+  paintChips(box,card);return box}
+function paintChips(box,card){const mine=cardarch[card.name]||[],m=mainArch();
+  box.querySelectorAll("button").forEach(b=>{b.classList.toggle("on",mine.includes(b.dataset.a));
+    b.classList.toggle("main",b.dataset.a===m)})}
+async function toggleArch(name,colors){
+  const mine=cardarch[name]||[],next=mine.includes(colors)?mine.filter(x=>x!==colors):[...mine,colors];
+  let r=null;try{r=await api("/api/cardarch",{name,arch:next})}catch(e){}
+  if(!r||!r.ok){showErr("Archetyp nicht gespeichert: "+((r&&r.error)||"Fehler"));return}
+  cardarch=r.cardarch||{};state.forEach(paint);scheduleDetect();renderAux();if(live)pollLive(true)}
+function scheduleDetect(){clearTimeout(detectTimer);detectTimer=setTimeout(loadDetect,250)}
+async function loadDetect(){
+  if(!archetypes){poolDetect=null;return}
+  try{const r=await api("/api/archdetect",{marks:marksPerCard(),basics:basicsBody(),cats});
+    if(r.ok){poolDetect=r.detect;renderArchetypes();if(!live)state.forEach(paint)}}catch(e){}}
+function miniTile(c,info){
+  const k=catOf(c.name),d=el("div","mtile"+(info.level?" lv-"+info.level:"")+(k?" c-"+k:""));
+  if(info.rank)d.appendChild(el("div","rank",String(info.rank)));
+  const w=el("div","imgw");
+  if(c.image){const im=el("img");im.src=c.image;im.alt=c.name;im.loading="lazy";
+    im.onclick=()=>{$("lightbox").querySelector("img").src=c.large||c.image;$("lightbox").classList.add("show")};w.appendChild(im)}
+  else w.appendChild(el("div","ph",c.name));
+  const badge=el("div","badge",k?RATING_SHORT[k]:"");badge.style.display=k?"":"none";w.appendChild(badge);
+  w.appendChild(el("div","abadge","Archetyp"));d.appendChild(w);
+  const cap=el("div","cap");cap.appendChild(el("b",null,c.name));
+  if(info.points!=null)cap.appendChild(el("span","pts",String(info.points).replace(".",",")+" P."));d.appendChild(cap);
+  if(info.level==="arch")d.appendChild(el("div","why","passt zu "+archName(mainArch())));
+  const sel=el("select","catsel");sel.title="Kategorie dieser Karte";
+  const o0=el("option",null,"Kategorie: –");o0.value="";sel.appendChild(o0);
+  for(const x of CATS){const o=el("option",null,x.abbr+" "+x.label);o.value=x.key;o.title=x.hint;sel.appendChild(o)}
+  sel.value=k;sel.onchange=()=>setCat(c.name,sel.value);d.appendChild(sel);
+  const chips=archChips(c);if(chips)d.appendChild(chips);
+  return d}
+function renderAux(){renderLive();renderSet()}
+// Live-Draft: Stand von /api/live (components/livedraft.py), neues Pack ohne Neuladen, neue Picks laden die Seite neu
+async function pollLive(once){
+  let r=null;try{r=await (await fetch("/api/live")).json()}catch(e){}
+  if(r){if(r.version!==undefined&&r.version!==liveVersion){location.reload();return}
+    Object.assign(cardarch,r.cardarch||{});for(const [n,v] of Object.entries(r.ratings||{}))cats[n]=v;
+    const j=JSON.stringify(r);if(j!==liveJson){liveJson=j;live=r;renderLive();state.forEach(paint)}}
+  if(!once)setTimeout(()=>pollLive(false),1500)}
+function renderLive(){
+  const box=$("live");if(!live)return;box.classList.add("show");
+  const det=live.detect||{},m=det.main,sel=$("lmanual");
+  $("lhead").textContent=live.status==="pack"||live.status==="waiting"?
+    "Live-Draft · Pick "+live.pick+(live.set?" · "+live.set:""):"Live-Draft";
+  const want=["",...(live.archetypes||[]).map(a=>a.colors)].join("|");
+  if(sel.dataset.k!==want){sel.dataset.k=want;sel.textContent="";const o=el("option",null,"Automatisch");o.value="";sel.appendChild(o);
+    for(const a of live.archetypes||[]){const x=el("option",null,a.name+" ("+a.colors+")");x.value=a.colors;sel.appendChild(x)}}
+  sel.value=det.manual?m:"";sel.parentNode.style.display=(live.archetypes||[]).length?"":"none";
+  const sc=$("lscores");sc.textContent="";
+  if(live.archetypes)sc.appendChild(el("span",m?"main":null,m?"Archetyp: "+archName(m)+(det.manual?" (eigene Wahl)":""):"Archetyp: noch offen"));
+  (det.scores||[]).filter(s=>s.score).slice(0,4).forEach(s=>sc.appendChild(el("span",null,s.name+" "+String(s.score).replace(".",","))));
+  const msg=live.status==="waiting"?"Warte auf das nächste Pack …":(live.message||"");
+  $("lmsg").textContent=msg+(live.unknown&&live.unknown.length?" ("+live.unknown.length+" Karten ohne Namen: Arena-Kartendatenbank nicht gefunden?)":"");
+  const tips=$("ltips");tips.textContent="";
+  const a=(live.archetypes||[]).find(x=>x.colors===m);if(a)a.tips.forEach(t=>tips.appendChild(el("li",null,t)));
+  const g=$("lpack");g.textContent="";
+  (live.pack||[]).forEach((c,i)=>g.appendChild(miniTile(c,{level:c.level,points:c.points,rank:i+1})))}
+$("lmanual").onchange=async()=>{try{await api("/api/live/archetype",{arch:$("lmanual").value})}catch(e){}pollLive(true)};
+// Set-Ansicht: alle Karten eines Sets von Scryfall, Kategorie und Archetypen vorab festlegen
+function openSet(){$("setview").classList.add("show");
+  if(!$("setcode").value)$("setcode").value=(live&&live.set)||(archetypes&&archetypes.set)||Object.keys(archsets)[0]||"";
+  if(!setCards.length)loadSet()}
+async function loadSet(){
+  const code=$("setcode").value.trim().toLowerCase();if(!code)return;
+  $("setnote").textContent="Lade Set "+code.toUpperCase()+" von Scryfall …";$("setgrid").textContent="";
+  let r=null;try{r=await (await fetch("/api/setcards?set="+encodeURIComponent(code))).json()}catch(e){}
+  if(!r||!r.ok){$("setnote").textContent="Set konnte nicht geladen werden: "+((r&&r.error)||"Fehler");return}
+  setCards=r.cards;Object.assign(cardarch,r.cardarch||{});for(const [n,v] of Object.entries(r.ratings||{}))cats[n]=v;
+  renderSet()}
+function renderSet(){
+  if(!$("setview").classList.contains("show"))return;
+  const q=$("setsearch").value.trim().toLowerCase(),f=$("setfilter").value,g=$("setgrid");g.textContent="";
+  const shown=setCards.filter(c=>{const cs=c.colors||[];
+    if(q&&!(c.name+" "+(c.type||"")).toLowerCase().includes(q))return false;
+    if(f==="nocat")return !catOf(c.name);if(f==="noarch")return !(cardarch[c.name]||[]).length;
+    if(f==="M")return cs.length>1;if(f==="C")return !cs.length;if(f)return cs.length===1&&cs[0]===f;return true});
+  shown.forEach(c=>g.appendChild(miniTile(c,{})));
+  const rated=setCards.filter(c=>catOf(c.name)).length,assigned=setCards.filter(c=>(cardarch[c.name]||[]).length).length;
+  $("setnote").textContent=setCards.length?("Set "+$("setcode").value.toUpperCase()+": "+setCards.length+" Karten, "+rated+
+    " mit Kategorie, "+assigned+" mit Archetyp; gezeigt: "+shown.length+". Kategorie und Archetypen gelten je Kartenname für jeden Pool und den Live-Draft."):
+    "Keine Karten gefunden."}
+$("setbtn").onclick=openSet;$("setload").onclick=()=>{setCards=[];loadSet()};
+$("setclose").onclick=()=>{$("setview").classList.remove("show");state.forEach(paint)};
+$("setsearch").oninput=renderSet;$("setfilter").onchange=renderSet;
+$("setcode").onkeydown=e=>{if(e.key==="Enter"){setCards=[];loadSet()}};
 $("go").onclick=simulate;
 $("dkgo").onclick=battleDirect;
 $("catfilter").onchange=()=>state.forEach(paint);
@@ -1404,6 +1709,7 @@ $("quit").onclick=async()=>{if(!confirm("Draft-Helper beenden?"))return;
   document.body.innerHTML="<main><h2>Draft-Helper wurde beendet.</h2><p>Du kannst dieses Fenster jetzt schließen.</p></main>"};
 (async()=>{
   const d=await api("/api/pool");pool=d.cards;archetypes=d.archetypes||null;
+  cardarch=d.cardarch||{};archsets=d.archsets||{};liveVersion=d.pool_version||0;
   try{if(localStorage.getItem("dh-archclosed")==="1")$("archetypes").open=false}catch(e){}
   $("archetypes").addEventListener("toggle",()=>{try{localStorage.setItem("dh-archclosed",$("archetypes").open?"0":"1")}catch(e){}});
   // Speicherstand je Inhalt der Pool-Datei: ein anderer Kartenpool startet mit den Vorgaben der Datei
@@ -1419,6 +1725,7 @@ $("quit").onclick=async()=>{if(!confirm("Draft-Helper beenden?"))return;
   await loadRatings();
   build();loadEnemies();fixBar();
   if(!colorsFromSave)setColors(defaultColors());
+  if(d.live)pollLive(false);
 })();
 </script></body></html>
 """
