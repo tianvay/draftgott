@@ -831,6 +831,15 @@ h2 small{color:var(--muted);font-weight:400}
 #linfo{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;font-size:12.5px}
 #linfo span{background:#f3f6fb;border:1px solid var(--line);border-radius:8px;padding:2px 9px}
 #linfo span b{color:var(--ink)}
+#lmap{margin-top:10px;display:none}
+#lmap.show{display:block}
+#lmap table{border-collapse:collapse;font-size:13px;width:100%}
+#lmap th,#lmap td{padding:4px 8px;border-bottom:1px solid #eef0f4;text-align:left;vertical-align:top}
+#lmap th{font-size:12px;color:var(--muted)}
+#lmap tr.main td{background:#eefaf2}
+#lmap td.pk b{color:#146c3d}
+#lmap .mnote{font-size:12px;color:var(--muted);margin-top:4px}
+.mtile .anames{font-size:11.5px;color:#146c3d;font-weight:700;margin:0 2px 2px}
 #lgame{display:none;margin-top:10px}
 #lgame.show{display:block}
 #lgame .gtop{font-size:15px;font-weight:700;margin-bottom:6px}
@@ -894,6 +903,7 @@ h2 small{color:var(--muted);font-weight:400}
       <div class="lscores" id="lscores"></div>
       <button class="btn" id="ldeck" title="Schreibt das in Arena abgegebene Deck (Deck und Sideboard) in die Kartenpool-Datei">Deck + Sideboard übernehmen</button></div>
     <div id="linfo"></div>
+    <div id="lmap"></div>
     <div id="lgame"></div>
     <div class="lmsg" id="lmsg"></div><ul class="ltips" id="ltips"></ul>
     <div class="mgrid" id="lpack"></div>
@@ -1682,6 +1692,8 @@ function miniTile(c,info){
     rt.title="Removal-Punkte der Karte (wie im Bericht)";cap.appendChild(rt)}
   const stl=statLine(c.stats||cardstats[c.name]);if(stl)d.appendChild(stl);
   if(info.level==="arch")d.appendChild(el("div","why","passt zu "+archName(mainArch())));
+  const mine=cardarch[c.name]||[];
+  if(info.rank&&mine.length)d.appendChild(el("div","anames","Archetyp: "+mine.map(archName).join(" · ")));
   const sel=el("select","catsel");sel.title="Kategorie dieser Karte";
   const o0=el("option",null,"Kategorie: –");o0.value="";sel.appendChild(o0);
   for(const x of CATS){const o=el("option",null,x.abbr+" "+x.label);o.value=x.key;o.title=x.hint;sel.appendChild(o)}
@@ -1717,7 +1729,7 @@ function renderLive(){
   $("lmsg").textContent=msg+(live.unknown&&live.unknown.length?" ("+live.unknown.length+" Karten ohne Namen: Arena-Kartendatenbank nicht gefunden?)":"");
   const tips=$("ltips");tips.textContent="";
   const a=(live.archetypes||[]).find(x=>x.colors===m);if(a)a.tips.forEach(t=>tips.appendChild(el("li",null,t)));
-  renderInfo();renderGame();
+  renderInfo();renderMap();renderGame();
   const g=$("lpack");g.textContent="";
   if(live.game&&live.game.active)return;
   (live.pack||[]).forEach((c,i)=>g.appendChild(miniTile(c,{level:c.level,points:c.points,rank:i+1})))}
@@ -1735,6 +1747,20 @@ function renderInfo(){
   const m=live.detect&&live.detect.main;
   if(i.arch&&m){add("In "+archName(m),i.arch.cards+" Karten");add("Kreaturen",String(i.arch.creatures));
     add("Removal",i.arch.removal+" ("+num(i.arch.removal_points)+" P.)");add("Kartenfluss",String(i.arch.flow))}}
+// Archetypen im Draft (cardarchetypes.archetype_map): je Archetyp die zugeordneten Picks und Pack-Karten
+function renderMap(){
+  const box=$("lmap"),m=live.archmap||[];box.textContent="";
+  const show=m.length&&!(live.game&&live.game.active);box.classList.toggle("show",!!show);if(!show)return;
+  const t=el("table"),h=el("tr");["Archetyp","Picks","Im Pack"].forEach(x=>h.appendChild(el("th",null,x)));t.appendChild(h);
+  const main=live.detect&&live.detect.main;
+  for(const a of m){const tr=el("tr",a.colors===main?"main":null),n=el("td");
+    [...a.colors].forEach(c=>{const s=manaSym(c);if(s)n.appendChild(s)});n.append(" "+a.name);
+    const p=el("td");p.appendChild(el("b",null,String(a.count)));
+    if(a.picks.length)p.append(": "+a.picks.map(x=>(x.n>1?x.n+"× ":"")+x.name).join(", "));
+    const k=el("td","pk");if(a.pack.length)k.appendChild(el("b",null,a.pack.join(", ")));else k.append("–");
+    tr.append(n,p,k);t.appendChild(tr)}
+  box.appendChild(t);
+  box.appendChild(el("div","mnote","Nach deiner Zuordnung (Knöpfe unter den Karten); Karten ohne Zuordnung gehören keinem Archetyp an, eine Karte kann zu mehreren gehören."))}
 // Im Spiel (components/gamestate.py): Chancen je Gruppe und Karten der Bibliothek
 function renderGame(){
   const box=$("lgame"),g=live.game;box.textContent="";

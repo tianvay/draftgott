@@ -359,6 +359,14 @@ def _live_help():
             "explorieren). Ist ein Archetyp erkannt, dieselben Zahlen noch einmal nur für Karten in seinen Farben "
             "(farblose zählen mit).",
             "Pack-Karten mit Removal tragen ihre Removal-Punkte (im Seitenfenster „R1,5“)."]))
+        + _panel("Archetypen im Draft", _ul([
+            "Eine Tabelle zeigt je Archetyp, welche deiner Picks und welche Karten des aktuellen Packs ihm "
+            "zugeordnet sind (Picks mit Anzahl). Grün: der erkannte Archetyp. Das Seitenfenster zeigt dasselbe "
+            "kurz („Sacrifice: 3 Picks · im Pack: …“).",
+            "Es zählt nur deine eigene Zuordnung (Knöpfe unter den Karten, kartenarchetypen.json): Karten ohne "
+            "Zuordnung gehören keinem Archetyp an, eine Karte kann zu mehreren gehören. Archetypen ohne Karten "
+            "fehlen.",
+            "Pack-Karten nennen ihre Archetypen zusätzlich unter dem Namen."]))
         + _panel("Im Spiel: Ziehchancen", _ul([
             "Während eines Spiels zeigen Seite und Seitenfenster statt des Packs die eigene Bibliothek. Arena meldet "
             "beim Spielstart das Deck des Spiels und danach laufend, wo die eigenen Karten liegen; Bibliothek = Deck "
@@ -406,7 +414,12 @@ def _live_help():
             "(<code>Player-prev.log</code>) nachgelesen. Dasselbe Protokoll zweimal gelesen zählt nicht doppelt.",
             "An jeder Karte (Pool, Pack, Set-Ansicht) und im Seitenfenster: wie oft gedraftet, in wie vielen Decks, "
             "und die Siegquote der Games mit der Karte im Hauptdeck. Unter 20 Games ist sie grau: nur ein Hinweis.",
-            "Der Bericht zeigt die Zahlen der Deckkarten im Abschnitt „Deck“ (Kasten „Deine Draft-Statistik“)."]))
+            "Der Bericht zeigt die Zahlen der Deckkarten im Abschnitt „Deck“ (Kasten „Deine Draft-Statistik“).",
+            "Pick Two und Drafts mit Menschen: Beim Draften nennt das Protokoll nur eine Draft-Kennung, kein Event. Das Set "
+            "kommt dann aus den Karten; das erste Deck des Events, dessen Karten zu mindestens 80 % aus den Picks stammen, "
+            "gehört zu diesem Draft und nennt das Event. Mit <code>python mtg_sim.py --statistik-neu</code> wird die "
+            "Statistik aus <code>Player-prev.log</code> und <code>Player.log</code> neu aufgebaut (alte Datei als "
+            "<code>draftstatistik.backup.json</code>)."]))
         + _panel("Setauswertung", _ul([
             "Menüpunkt <b>4</b> in <code>draftgott.bat</code> oder <code>python mtg_sim.py --setauswertung "
             "[SET]</code>: schreibt <code>setauswertung_&lt;set&gt;.html</code> und öffnet sie (ohne SET das Set mit "

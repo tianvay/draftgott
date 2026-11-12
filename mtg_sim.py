@@ -235,6 +235,11 @@ def save_report(html, args):
 
 
 def run(args):
+    if args.statistik_neu:  # Draft-Statistik aus den Arena-Protokollen neu aufbauen
+        from components.livedraft import rebuild_stats
+        rebuild_stats(args)
+        if args.setauswertung is None:
+            return
     if args.setauswertung is not None:  # Setauswertung aus der Draft-Statistik
         from components.setreport import run as run_set_report
         run_set_report(args)

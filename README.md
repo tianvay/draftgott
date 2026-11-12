@@ -212,6 +212,9 @@ In Arena muss unter Optionen → Konto „Detailed Logs (Plugin Support)“ eing
   es einzeln, `--arena-log DATEI` nimmt ein anderes Protokoll.
 - **Kennzahlen der Picks:** Kreaturen, Removal (Karten und Punkte wie im Bericht) und Kartenfluss der Picks, mit
   erkanntem Archetyp zusätzlich nur in dessen Farben. Pack-Karten zeigen ihre Removal-Punkte.
+- **Archetypen im Draft:** Tabelle (und im Seitenfenster kurz) je Archetyp mit den zugeordneten Picks und
+  Pack-Karten. Nur die eigene Zuordnung zählt: Karten ohne Zuordnung gehören keinem Archetyp an, eine Karte kann zu
+  mehreren gehören.
 - **Im Spiel: Ziehchancen:** Während eines Spiels zeigen Seite und Seitenfenster die eigene Bibliothek (Deck beim
   Spielstart minus Hand, Spielfeld, Friedhof, Exil, Stapel): je Gruppe (Land, Kreatur, Removal, Quellen je Farbe)
   und je Karte die Chance für die nächste Karte und für mindestens eine unter den nächsten 3 Karten
@@ -223,7 +226,9 @@ In Arena muss unter Optionen → Konto „Detailed Logs (Plugin Support)“ eing
 - **Draft-Statistik:** Je Draft werden Picks, abgegebenes Deck und Match-Ergebnisse (je Game und Match) in
   `draftstatistik.json` gesammelt (nicht im Git, `--statistik DATEI`), nur Draft- und Sealed-Events. Beim Start wird
   auch `Player-prev.log` nachgelesen; doppelt Gelesenes zählt nicht doppelt. An jeder Karte, im Seitenfenster und
-  im Bericht: gedraftet, im Deck, Siegquote der Games mit der Karte im Hauptdeck (unter 20 Games grau).
+  im Bericht: gedraftet, im Deck, Siegquote der Games mit der Karte im Hauptdeck (unter 20 Games grau). Bei Pick Two
+  und Drafts mit Menschen nennt das Protokoll beim Draften kein Event: das Set kommt dann aus den Karten, das Event
+  mit dem ersten passenden Deck. `--statistik-neu` baut die Statistik aus beiden Protokolldateien neu auf.
 
 ### Setauswertung (`--setauswertung [SET]`)
 
@@ -379,6 +384,7 @@ Aktivierung pro Runde sind fest im Skript (siehe „Feste Annahmen“).
 | `--kein-overlay` | aus | Live-Draft ohne Seitenfenster. |
 | `--overlay URL` | | Nur das Seitenfenster für einen laufenden Live-Draft öffnen. |
 | `--statistik DATEI` | `draftstatistik.json` | Draft-Statistik des Live-Drafts (nicht im Git). |
+| `--statistik-neu` | | Draft-Statistik aus `Player-prev.log` und `Player.log` neu aufbauen (alte Datei als `draftstatistik.backup.json`). |
 | `--setauswertung [SET]` | | Setauswertung als HTML-Seite `setauswertung_<set>.html` (ohne SET: Set mit den meisten Drafts). |
 | `--neu-laden` | aus | Kartendaten werden in `scryfall_cache.json` neben dem Script gespeichert, bei späteren Läufen werden nur unbekannte Karten nachgeladen. Mit `--neu-laden` wird alles frisch von Scryfall geholt. |
 | `--ausgabe DATEI` (auch `--html DATEI`) | `mtg_bericht.html` | Name und Ort des HTML-Berichts. Eine vorhandene Datei wird überschrieben. |

@@ -90,6 +90,11 @@ def rows_for(snap):
         rows.append((" · ".join(f"{s['name']} {s['score']:g}" for s in scores), "sub"))
     if snap.get("draftinfo") and snap["draftinfo"].get("cards"):
         rows += info_rows(snap["draftinfo"], _arch_name(snap, main) if main else None)
+    for a in snap.get("archmap") or []:
+        text = f"{a['name']}: {a['count']} Pick{'s' if a['count'] != 1 else ''}"
+        if a["pack"]:
+            text += " · im Pack: " + ", ".join(a["pack"])
+        rows.append((text, "arch" if a["pack"] and a["colors"] == main else ("color" if a["pack"] else "sub")))
     if status == "waiting" or not snap.get("pack"):
         rows.append(("Warte auf das nächste Pack …", "msg"))
         return rows

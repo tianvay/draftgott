@@ -33,6 +33,9 @@ def parse_args(argv=None):
     ap.add_argument("--statistik", default="draftstatistik.json", metavar="DATEI",
                     help="Draft-Statistik des Live-Drafts (Picks, Decks, Matches je Draft; Standard: "
                          "draftstatistik.json, nicht im Git)")
+    ap.add_argument("--statistik-neu", action="store_true",
+                    help="Draft-Statistik aus den Arena-Protokollen (Player-prev.log und Player.log) neu aufbauen; die "
+                         "alte Datei bleibt als <Name>.backup.json erhalten")
     ap.add_argument("--setauswertung", nargs="?", const="", default=None, metavar="SET",
                     help="Setauswertung: die Draft-Statistik eines Sets als HTML-Seite setauswertung_<set>.html "
                          "(ohne SET: das Set mit den meisten Drafts)")
@@ -86,6 +89,7 @@ def parse_args(argv=None):
     ap.add_argument("--nicht-oeffnen", action="store_true",
                     help="HTML-Bericht nicht automatisch im Browser oeffnen")
     args = ap.parse_args(argv)
-    if not args.deckfile and args.drafthelper is None and args.overlay is None and args.setauswertung is None:
+    if not args.deckfile and args.drafthelper is None and args.overlay is None and args.setauswertung is None \
+            and not args.statistik_neu:
         ap.error("Bitte eine Deckliste angeben oder --drafthelper verwenden")
     return args

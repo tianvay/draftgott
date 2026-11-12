@@ -6,13 +6,17 @@ Datei: {"version": 1, "drafts": [{"event", "set", "draft_id", "started", "picks"
 "deck": {"main": {Name: Anzahl}, "side": {...}} oder None, "matches": [{"id", "team", "deck": {Name: Anzahl},
 "games": [gewonnen?], "win": gewonnen? oder None}]}]}
 
-Zuordnung: Matches und Decks gehoeren zum letzten Draft desselben Events (Eventname wie "PickTwoDraft_TRK_20261110").
-Fehlt der Draft (nicht mitgelesen), entsteht ein Eintrag ohne Picks. Dasselbe Protokoll ein zweites Mal gelesen
+Zuordnung: Bei Pick Two und Drafts mit Menschen steht beim Draften nur eine Draft-Kennung im Protokoll, kein
+Eventname; das Set kommt dann aus den Karten (set_lookup). Das erste Deck eines Events nach so einem Draft gehoert zu
+ihm (wenn mindestens DECK_MATCH seiner Karten aus den Picks stammen), der Draft bekommt dabei den Eventnamen. Matches
+und spaetere Decks gehoeren zum letzten Draft desselben Events (Eventname wie "PickTwoDraft_TRK_20261110"). Fehlt der
+Draft (nicht mitgelesen), entsteht ein Eintrag ohne Picks. Leere Decks (Event ohne Deck) zaehlen nicht. Dasselbe Protokoll ein zweites Mal gelesen
 (draftgott neu gestartet) aendert nichts: Matches zaehlen je Match-Kennung, Picks nur, wenn sie die bekannten
 fortsetzen.
 
 Zahlen je Karte (card_stats): gedraftet (Kopien), Drafts, Decks (im Hauptdeck), Games/Siege und Matches/Siege mit der
-Karte im Hauptdeck des Matches, Durchschnitt der Pick-Nummer im Pack (1 = erster Pick aus einem vollen Pack).
+Karte im Hauptdeck des Matches, Durchschnitt der Pick-Nummer im Pack (1 = erster Pick aus einem vollen Pack; bei Pick
+Two zaehlen Picks, nicht Karten).
 Standardlaender zaehlen nicht.
 """
 import datetime
@@ -26,6 +30,7 @@ from components import archetypes as set_archetypes
 from components import cardarchetypes
 
 BASICS = {"Plains", "Island", "Swamp", "Mountain", "Forest", "Wastes"}
+DECK_MATCH = 0.8
 _DATE = re.compile(r"\b(\d{1,2})\.(\d{1,2})\.(\d{4}) \d{1,2}:\d{2}")
 
 
@@ -63,8 +68,9 @@ def _prefix(a, b):
 class Tracker:
     """Liest Protokollzeilen (feed_line) und schreibt Aenderungen sofort in die Datei. lookup(GrpId) -> Name."""
 
-    def __init__(self, path, lookup):
-        self.path, self.lookup = pathlib.Path(path), lookup
+    def __init__(self, path, lookup, set_lookup=None):
+        """lookup(GrpId) -> Name, set_lookup(GrpId) -> Setcode (fuer Drafts ohne Eventnamen)."""
+        self.path, self.lookup, self.set_lookup = pathlib.Path(path), lookup, set_lookup
         self.data = load_stats(path)
         self.state = arenalog.DraftState()
         self.user = None
@@ -105,19 +111,46 @@ class Tracker:
             rec["event"], rec["set"], changed = event, arenalog.set_from_event(event) or "", True
         if len(picks) > len(rec["picks"]):
             rec["picks"], rec["pick_sizes"], changed = picks, list(st.pick_sizes), True
+        if not rec.get("set") and self.set_lookup:
+            sets = {}
+            for g in st.picks:
+                code = (self.set_lookup(g) or "").upper()
+                if code:
+                    sets[code] = sets.get(code, 0) + 1
+            if sets:
+                rec["set"], changed = max(sets, key=sets.get), True
         return changed
+
+    def _fits(self, rec, deck):
+        """Stammen mindestens DECK_MATCH der Deckkarten (ohne Standardlaender) aus den Picks des Drafts?"""
+        names = {}
+        for part in ("main", "side"):
+            for n, q in deck[part].items():
+                if n not in BASICS:
+                    names[n] = names.get(n, 0) + q
+        if not rec["picks"]:
+            return True
+        picks = {}
+        for n in rec["picks"]:
+            picks[n] = picks.get(n, 0) + 1
+        total = sum(names.values())
+        return total > 0 and sum(min(q, picks.get(n, 0)) for n, q in names.items()) >= DECK_MATCH * total
 
     def _deck(self, ev):
         if not is_limited(ev["event"]):
             return False
         deck = {"main": {self._name(g): q for g, q in ev["main"].items()},
                 "side": {self._name(g): q for g, q in ev["side"].items()}}
+        if not deck["main"]:
+            return False
         self.decks[ev["event"]] = deck
-        rec = self._latest(ev["event"])
-        if rec is None:  # Draft mit Menschen: Eventname kommt erst mit dem Deck
-            rec = next((r for r in reversed(self.data["drafts"]) if not r.get("event") and not r.get("deck")), None)
-            if rec is not None:
-                rec["event"], rec["set"] = ev["event"], arenalog.set_from_event(ev["event"]) or ""
+        last = self.data["drafts"][-1] if self.data["drafts"] else None
+        if last and not last.get("event") and not last.get("deck") and self._fits(last, deck):
+            last["event"] = ev["event"]  # Draft ohne Eventnamen: das Deck nennt ihn
+            last["set"] = arenalog.set_from_event(ev["event"]) or last.get("set") or ""
+            rec = last
+        else:
+            rec = self._latest(ev["event"])
         if rec is None:
             rec = self._new(ev["event"])
         if rec.get("deck") == deck:
@@ -169,6 +202,27 @@ class Tracker:
         return changed
 
 
+def rebuild(path, logs, lookup, set_lookup=None):
+    """Baut die Statistik aus Protokolldateien neu auf (aelteste zuerst; fehlende werden uebersprungen). Die alte
+    Datei bleibt als <Name>.backup.json erhalten. Gibt den Pfad der Sicherung zurueck (None ohne alte Datei)."""
+    path = pathlib.Path(path)
+    backup = None
+    if path.exists():
+        backup = path.with_name(path.stem + ".backup.json")
+        backup.write_bytes(path.read_bytes())
+    save_stats(path, empty())
+    tracker = Tracker(path, lookup, set_lookup)
+    for log in logs:
+        try:
+            text = pathlib.Path(log).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        for line in text.split("\n"):
+            tracker.feed_line(line)
+    save_stats(path, tracker.data)
+    return backup
+
+
 def _in_set(rec, set_code):
     return not set_code or (rec.get("set") or "").lower() == set_code.lower()
 
@@ -191,6 +245,9 @@ def card_stats(data, set_code=None):
         all_sizes = list(rec.get("pick_sizes") or [])
         sizes = [s for s in all_sizes if s]
         full = max(sizes) if sizes else None
+        per_pick = 1  # Karten je Pick (Pick Two: 2): so viele Picks am Anfang kommen aus dem vollen Pack
+        while full and per_pick < len(all_sizes) and all_sizes[per_pick] == full:
+            per_pick += 1
         seen = set()
         for i, name in enumerate(rec.get("picks") or []):
             if name in BASICS or name.startswith("#"):
@@ -200,7 +257,7 @@ def card_stats(data, set_code=None):
             seen.add(name)
             size = all_sizes[i] if i < len(all_sizes) else None
             if full and size:
-                st["_picks"].append(full - size + 1)
+                st["_picks"].append((full - size) / per_pick + 1)
         for name in seen:
             out[name]["drafts"] += 1
         for name in ((rec.get("deck") or {}).get("main") or {}):

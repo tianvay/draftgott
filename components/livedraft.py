@@ -87,11 +87,31 @@ def default_names(log_path):
     return names
 
 
+def rebuild_stats(args):
+    """--statistik-neu: Draft-Statistik aus Player-prev.log und Player.log neu aufbauen (Sicherung der alten Datei)."""
+    root = pathlib.Path(__file__).resolve().parent.parent
+    path = pathlib.Path(args.statistik)
+    path = path if path.is_absolute() else root / path
+    log = pathlib.Path(args.arena_log) if args.arena_log else arenalog.default_log_path()
+    names = default_names(log)
+
+    def lookup(grp):
+        return (names.get(grp) or {}).get("name")
+
+    def set_lookup(grp):
+        return (names.get(grp) or {}).get("set")
+
+    backup = draftstats.rebuild(path, [log.with_name("Player-prev.log"), log], lookup, set_lookup)
+    data = draftstats.load_stats(path)
+    print(f"Draft-Statistik neu aufgebaut: {path} ({len(data['drafts'])} Drafts)"
+          + (f", alte Datei gesichert als {backup.name}" if backup else ""), file=sys.stderr)
+
+
 class LiveDraft:
     def __init__(self, log_path, pool_file, names=None, fetch=fetch_cards_cached, stats=None):
         """stats: Pfad der Draft-Statistik (components/draftstats.py) oder None (keine Statistik)."""
         self.log_path, self.pool_file = pathlib.Path(log_path), pathlib.Path(pool_file)
-        self.tracker = draftstats.Tracker(stats, self._lookup) if stats else None
+        self.tracker = draftstats.Tracker(stats, self._lookup, self._set_lookup) if stats else None
         self._names, self.fetch = names, fetch
         self.follower = arenalog.LogFollower(log_path)
         self.state = arenalog.DraftState()
@@ -102,6 +122,10 @@ class LiveDraft:
         self.game = gamestate.GameState()  # laufendes Spiel (Ziehchancen)
         self.deck = None  # zuletzt in Arena abgegebenes Deck eines Draft-Events {"main", "side"} (GrpId -> Anzahl)
         self.seen = set()  # Arena-Nummern aller Karten, die in Packs dieses Programmlaufs zu sehen waren
+
+    def _set_lookup(self, grp):
+        info = self.names().get(grp)
+        return info["set"] if info else None
 
     def _lookup(self, grp):
         info = self.names().get(grp)
@@ -304,6 +328,9 @@ class LiveDraft:
         found = set_archetypes.for_set(code)
         detect = cardarchetypes.detect([dict(c, qty=1) for c in picks], assign, ratings, found, manual)
         draftinfo = pool_info(picks, detect["main"])
+        archmap = cardarchetypes.archetype_map(found, assign, [c["name"] for c in picks],
+                                               [c["name"] for c in cardarchetypes.rank(pack, ratings, assign,
+                                                                                      detect["main"])])
         ranked = cardarchetypes.rank(pack, ratings, assign, detect["main"])
         for c in ranked:
             c["stats"] = (cardstats or {}).get(c["name"])
@@ -312,7 +339,7 @@ class LiveDraft:
                 "event": event or "", "set": code or "", "pick": n_picks + 1, "pack": ranked,
                 "picks": [c["name"] for c in picks], "unknown": unknown, "detect": detect,
                 "deck": deck, "complete": deck["ready"] or n_picks >= DRAFT_PICKS, "game": game,
-                "draftinfo": draftinfo,
+                "draftinfo": draftinfo, "archmap": archmap,
                 "archetypes": found,
                 "cardarch": {n: v for n, v in (assign or {}).items() if n in names},
                 "ratings": {n: v for n, v in (ratings or {}).items() if n in names}}
