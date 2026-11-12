@@ -351,6 +351,16 @@ def make_handler(app):
             if path in ("/api/rating", "/api/ratings/import"):
                 self._rating(path)
                 return
+            if path == "/api/live/deck":  # Deck mit Sideboard aus Arena in die Pool-Datei
+                try:
+                    if not app.get("live"):
+                        raise ValueError("Kein Live-Draft")
+                    app["live"].apply_deck()
+                except (ValueError, OSError) as exc:
+                    self._json({"ok": False, "error": str(exc)}, 400)
+                    return
+                self._json({"ok": True})
+                return
             if path in ("/api/cardarch", "/api/live/archetype"):
                 self._card_archetype(path)
                 return
@@ -815,6 +825,9 @@ h2 small{color:var(--muted);font-weight:400}
 #live .lscores{display:flex;flex-wrap:wrap;gap:6px;font-size:12.5px}
 #live .lscores span{border:1px solid var(--line);border-radius:999px;padding:1px 9px;background:#fafbfc}
 #live .lscores span.main{border-color:#2e9e5b;background:#e3f4ea;font-weight:700}
+#ldeck{display:none;background:#1f7a45;border-color:#1f7a45;color:#fff;font-weight:700}
+#ldeck.show{display:inline-block}
+#ldeck:disabled{background:#e9edf3;border-color:var(--line);color:var(--muted);opacity:1}
 #live .lmsg{color:var(--muted);margin:8px 0 0;font-size:13.5px}
 #live .ltips{margin:6px 0 0;padding-left:20px;font-size:13px;color:#33415c}
 .mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-top:10px}
@@ -865,7 +878,8 @@ h2 small{color:var(--muted);font-weight:400}
     <a href="/howitworks.html#hiw-drafthelper" target="_blank">So funktioniert es</a>.</div>
   <section id="live"><div class="lhead"><h2 id="lhead">Live-Draft</h2>
       <label class="filter">Archetyp <select id="lmanual" title="Automatisch erkennen oder selbst festlegen"></select></label>
-      <div class="lscores" id="lscores"></div></div>
+      <div class="lscores" id="lscores"></div>
+      <button class="btn" id="ldeck" title="Schreibt das in Arena abgegebene Deck (Deck und Sideboard) in die Kartenpool-Datei">Deck + Sideboard übernehmen</button></div>
     <div class="lmsg" id="lmsg"></div><ul class="ltips" id="ltips"></ul>
     <div class="mgrid" id="lpack"></div>
     <div class="lmsg">Reihenfolge: Kategorie (★ 4, MP 3, ohne 1,5, Fi 1, NP immer 0) + 3, wenn die Karte dem
@@ -1677,12 +1691,20 @@ function renderLive(){
   const sc=$("lscores");sc.textContent="";
   if(live.archetypes)sc.appendChild(el("span",m?"main":null,m?"Archetyp: "+archName(m)+(det.manual?" (eigene Wahl)":""):"Archetyp: noch offen"));
   (det.scores||[]).filter(s=>s.score).slice(0,4).forEach(s=>sc.appendChild(el("span",null,s.name+" "+String(s.score).replace(".",","))));
-  const msg=live.status==="waiting"?"Warte auf das nächste Pack …":(live.message||"");
+  const db=$("ldeck"),dk=live.deck||{};db.classList.toggle("show",!!live.complete);
+  db.disabled=!dk.ready||dk.applied;
+  db.textContent=dk.applied?"Deck übernommen ✓":dk.ready?"Deck + Sideboard übernehmen ("+dk.main+" + "+dk.side+")":
+    "Nach „Fertig“ in Arena: Deck + Sideboard übernehmen";
+  const msg=live.complete&&!dk.ready?"Draft fertig. Sobald du in Arena den Deckbau mit „Fertig“ abschließt, lässt sich das Deck mit Sideboard übernehmen.":
+    live.status==="waiting"?"Warte auf das nächste Pack …":(live.message||"");
   $("lmsg").textContent=msg+(live.unknown&&live.unknown.length?" ("+live.unknown.length+" Karten ohne Namen: Arena-Kartendatenbank nicht gefunden?)":"");
   const tips=$("ltips");tips.textContent="";
   const a=(live.archetypes||[]).find(x=>x.colors===m);if(a)a.tips.forEach(t=>tips.appendChild(el("li",null,t)));
   const g=$("lpack");g.textContent="";
   (live.pack||[]).forEach((c,i)=>g.appendChild(miniTile(c,{level:c.level,points:c.points,rank:i+1})))}
+$("ldeck").onclick=async()=>{let r=null;try{r=await api("/api/live/deck",{})}catch(e){}
+  if(!r||!r.ok){showErr("Deck nicht übernommen: "+((r&&r.error)||"Fehler"));return}
+  pollLive(true)};
 $("lmanual").onchange=async()=>{try{await api("/api/live/archetype",{arch:$("lmanual").value})}catch(e){}pollLive(true)};
 // Set-Ansicht: alle Karten eines Sets von Scryfall, Kategorie und Archetypen vorab festlegen
 function openSet(){$("setview").classList.add("show");

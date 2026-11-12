@@ -15,7 +15,11 @@ from components import arenalog
 from components import archetypes as set_archetypes
 from components import cardarchetypes
 from components import draftstats
+from components.deckfile import parse_pool
 from components.scryfall import CACHE_FILE, card_image_url, fetch_cards_cached
+
+DRAFT_PICKS = 42  # 3 Packs zu 14 Karten: danach ist der Draft fertig (auch ohne Deck aus Arena)
+DECK_MATCH = 0.8  # so viel des Arena-Decks (ohne Standardlaender) muss aus den Picks stammen
 
 DETAILED_LOGS = ("In Arena unter Optionen → Konto „Detailed Logs (Plugin Support)“ einschalten und Arena neu "
                  "starten.")
@@ -69,6 +73,7 @@ class LiveDraft:
         self.version = 0  # steigt mit jedem Schreiben der Pool-Datei
         self.lock = threading.Lock()
         self._written = None
+        self.deck = None  # zuletzt in Arena abgegebenes Deck eines Draft-Events {"main", "side"} (GrpId -> Anzahl)
         self.seen = set()  # Arena-Nummern aller Karten, die in Packs dieses Programmlaufs zu sehen waren
 
     def _lookup(self, grp):
@@ -119,23 +124,80 @@ class LiveDraft:
             if data is not None or name not in self.cards:
                 self.cards[name] = card_summary(sc, name, info["set"], info["number"])
 
-    def _write_pool(self):
+    def _lines(self, counts):
+        """Zeilen "Anzahl Name (SET) Nummer" fuer [(GrpId, Anzahl)] in dieser Reihenfolge, gleiche Drucke zusammen."""
         count, first = Counter(), {}
-        for grp in self.state.picks:
+        for grp, qty in counts:
             info = self.names().get(grp)
             if not info:
                 continue
             key = (info["name"], info["set"], info["number"])
-            count[key] += 1
+            count[key] += qty
             first.setdefault(key, len(first))
-        lines = ["Deck"]
-        for key in sorted(count, key=first.get):
-            name, code, number = key
-            lines.append(f"{count[key]} {name}" + (f" ({code}) {number}" if code and number else ""))
+        return [f"{count[k]} {k[0]}" + (f" ({k[1]}) {k[2]}" if k[1] and k[2] else "") for k in sorted(count, key=first.get)]
+
+    def _save(self, text):
         tmp = self.pool_file.with_name(self.pool_file.name + ".tmp")
-        tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        tmp.write_text(text, encoding="utf-8")
         tmp.replace(self.pool_file)
         self.version += 1
+
+    def _same_cards(self):
+        """Enthaelt die Pool-Datei schon genau die Picks (z. B. als uebernommenes Deck mit Sideboard)?"""
+        try:
+            rows = parse_pool(self.pool_file.read_text(encoding="utf-8"))
+        except OSError:
+            return False
+        have = Counter()
+        for r in rows:
+            if r["name"] not in draftstats.BASICS:
+                have[r["name"]] += r["qty"]
+        want = Counter(c["name"] for c in (self._card(g) for g in self.state.picks) if c)
+        return bool(want) and have == want
+
+    def _write_pool(self):
+        if self._same_cards():  # nicht mit der einfachen Pick-Liste ueberschreiben
+            return
+        self._save("\n".join(["Deck"] + self._lines((g, 1) for g in self.state.picks)) + "\n")
+
+    def _deck_valid(self):
+        """Gehoert das zuletzt abgegebene Deck zum laufenden Draft? (Ohne mitgelesene Picks: ja.)"""
+        if not self.deck:
+            return False
+        names = Counter()
+        for part in ("main", "side"):
+            for grp, qty in self.deck[part].items():
+                info = self.names().get(grp)
+                if info and info["name"] not in draftstats.BASICS:
+                    names[info["name"]] += qty
+        if not self.state.picks:
+            return bool(names)
+        picks = Counter(c["name"] for c in (self._card(g) for g in self.state.picks) if c)
+        total = sum(names.values())
+        return total > 0 and sum((names & picks).values()) >= DECK_MATCH * total
+
+    def _deck_text(self):
+        return ("\n".join(["Deck"] + self._lines(self.deck["main"].items()) + ["", "Sideboard"]
+                          + self._lines(self.deck["side"].items())) + "\n")
+
+    def _deck_info(self):
+        if not self._deck_valid():
+            return {"ready": False, "main": 0, "side": 0, "applied": False}
+        try:
+            applied = self.pool_file.read_text(encoding="utf-8") == self._deck_text()
+        except OSError:
+            applied = False
+        return {"ready": True, "main": sum(self.deck["main"].values()), "side": sum(self.deck["side"].values()),
+                "applied": applied}
+
+    def apply_deck(self):
+        """Schreibt das in Arena abgegebene Deck (Abschnitte Deck und Sideboard) in die Pool-Datei; ValueError, wenn
+        es noch keines gibt (in Arena den Deckbau mit "Fertig" abschliessen)."""
+        with self.lock:
+            if not self._deck_valid():
+                raise ValueError("Noch kein Deck aus Arena: In Arena den Deckbau mit „Fertig“ abschließen, dann "
+                                 "erscheint es hier.")
+            self._save(self._deck_text())
 
     def step(self):
         """Liest neue Protokollzeilen; True, wenn sich Pack oder Picks geaendert haben."""
@@ -151,9 +213,17 @@ class LiveDraft:
                     changed = self.state.feed(ev) or changed
                     if ev["kind"] == "pack":
                         self.seen.update(ev["cards"])
+            for ev in arenalog.scan_match_line(line):
+                if ev["kind"] == "deck" and draftstats.is_limited(ev["event"]):
+                    deck = {"main": ev["main"], "side": ev["side"]}
+                    if deck != self.deck:
+                        with self.lock:
+                            self.deck = deck
+                        changed = True
         if not changed:
             return False
-        self._load_cards(self.state.pack + self.state.picks)
+        self._load_cards(self.state.pack + self.state.picks + list((self.deck or {}).get("main", {}))
+                         + list((self.deck or {}).get("side", {})))
         with self.lock:
             if (self.state.draft or self.state.event) and self.state.picks != self._written:
                 self._write_pool()
@@ -196,6 +266,7 @@ class LiveDraft:
             picks = [c for c in (self._card(g) for g in self.state.picks) if c]
             unknown = [g for g in self.state.pack + self.state.picks if g not in self.names()]
             waiting, n_picks, event = self.state.waiting, len(self.state.picks), self.state.event
+            deck = self._deck_info()
         code = self._set_code(pack + picks)
         found = set_archetypes.for_set(code)
         detect = cardarchetypes.detect([dict(c, qty=1) for c in picks], assign, ratings, found, manual)
@@ -206,6 +277,7 @@ class LiveDraft:
         return {"status": "waiting" if waiting or not pack else "pack", "version": self.version, "message": "",
                 "event": event or "", "set": code or "", "pick": n_picks + 1, "pack": ranked,
                 "picks": [c["name"] for c in picks], "unknown": unknown, "detect": detect,
+                "deck": deck, "complete": deck["ready"] or n_picks >= DRAFT_PICKS,
                 "archetypes": found,
                 "cardarch": {n: v for n, v in (assign or {}).items() if n in names},
                 "ratings": {n: v for n, v in (ratings or {}).items() if n in names}}

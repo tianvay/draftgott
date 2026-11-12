@@ -54,6 +54,28 @@ def rows_for(snap):
     return rows
 
 
+def deck_button(snap):
+    """(Beschriftung, klickbar?) des Knopfs "Deck uebernehmen" nach dem Draft, sonst None."""
+    if not snap or not snap.get("complete"):
+        return None
+    deck = snap.get("deck") or {}
+    if deck.get("applied"):
+        return ("Deck übernommen ✓", False)
+    if deck.get("ready"):
+        return (f"Deck + Sideboard übernehmen ({deck.get('main', 0)} + {deck.get('side', 0)})", True)
+    return ("Nach „Fertig“ in Arena: Deck + Sideboard übernehmen", False)
+
+
+def send_deck(url, timeout=3):
+    req = urllib.request.Request(url.rstrip("/") + "/api/live/deck", data=b"{}",
+                                 headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.loads(r.read().decode("utf-8"))
+    except (urllib.error.URLError, OSError, ValueError):
+        return None
+
+
 def fetch(url, timeout=0.8):
     try:
         with urllib.request.urlopen(url.rstrip("/") + "/api/live", timeout=timeout) as r:
@@ -77,6 +99,9 @@ def run(url, interval_ms=1000):
     root.geometry(f"360x520+{max(0, root.winfo_screenwidth() - 380)}+80")
     text = tk.Text(root, bg=COLORS["bg"], fg=COLORS["ink"], bd=0, highlightthickness=0, wrap="word",
                    font=("Segoe UI", 11), padx=10, pady=8, cursor="arrow")
+    button = tk.Button(root, font=("Segoe UI", 11, "bold"), bg="#1f7a45", fg="#ffffff", activebackground="#2e9e5b",
+                       disabledforeground="#c8d3cc", relief="flat", padx=10, pady=6,
+                       command=lambda: send_deck(url))
     text.pack(fill="both", expand=True)
     text.tag_configure("head", foreground=COLORS["head"], font=("Segoe UI", 12, "bold"), spacing3=2)
     text.tag_configure("sub", foreground=COLORS["muted"], font=("Segoe UI", 9), spacing3=6)
@@ -96,6 +121,13 @@ def run(url, interval_ms=1000):
                 return
         else:
             state["seen"], state["misses"] = True, 0
+        btn = deck_button(snap)
+        if btn is None:
+            button.pack_forget()
+        else:
+            button.configure(text=btn[0], state="normal" if btn[1] else "disabled")
+            if not button.winfo_ismapped():
+                button.pack(fill="x", side="bottom", before=text)
         rows = rows_for(snap)
         if rows != state["last"]:
             state["last"] = rows

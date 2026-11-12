@@ -353,6 +353,18 @@ def _live_help():
             "Archetyps liegen (hellgrün). NeverPlay hat immer 0 Punkte.",
             "Kategorie und Archetypen lassen sich direkt an den Pack-Karten festlegen; das gilt sofort.",
             "Pick Two: beide gewählten Karten zählen als Picks."]))
+        + _panel("Deck nach dem Draft übernehmen", _ul([
+            "Nach dem Draft (42 Picks oder sobald Arena ein Deck meldet) erscheint oben im Live-Bereich und im "
+            "Seitenfenster der Knopf <b>Deck + Sideboard übernehmen</b>. In Arena selbst lässt sich kein Knopf "
+            "einblenden.",
+            "Klickbar wird er, sobald du in Arena den Deckbau mit „Fertig“ abschließt: Arena schreibt dann Deck und "
+            "Sideboard ins Protokoll. Ein Klick schreibt beides in die Kartenpool-Datei (Abschnitte Deck und "
+            "Sideboard, Standardländer im Deck); der Drafthelper lädt neu, Deckkarten und Länder stehen auf Core, "
+            "das Sideboard auf Aus.",
+            "Ein Deck zählt nur, wenn mindestens 80 % seiner Karten (ohne Standardländer) aus deinen Picks stammen; "
+            "ein altes Deck desselben Events bleibt so außen vor. Die übernommene Datei wird nicht mehr mit der "
+            "einfachen Pick-Liste überschrieben, auch nicht nach einem Neustart; erst ein neuer Draft beginnt sie "
+            "neu."]))
         + _panel("Archetyp erkennen", _ul([
             "Jeder Pick zählt mit dem Gewicht seiner Kategorie (Splashworthy und MustPlay 2, ohne Kategorie und Filler "
             "1, NeverPlay 0) für jeden Archetyp, in dessen Farben alle seine Farben liegen, und noch einmal für jeden "

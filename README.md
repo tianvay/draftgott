@@ -209,6 +209,10 @@ In Arena muss unter Optionen → Konto „Detailed Logs (Plugin Support)“ eing
 - **Seitenfenster:** kleines Fenster, immer im Vordergrund, mit Archetyp und Rangliste (● zugeordnet, ○ Farben
   passen). Arena im Fenster oder randlosen Vollbild spielen. `--kein-overlay` schaltet es ab, `--overlay URL` öffnet
   es einzeln, `--arena-log DATEI` nimmt ein anderes Protokoll.
+- **Deck übernehmen:** Nach dem Draft (42 Picks oder sobald Arena ein Deck meldet) erscheint auf der Seite und im
+  Seitenfenster der Knopf „Deck + Sideboard übernehmen“. Er wird klickbar, sobald der Deckbau in Arena mit „Fertig“
+  abgeschlossen ist, und schreibt Deck (mit Standardländern) und Sideboard in die Kartenpool-Datei: Deckkarten auf
+  Core, Sideboard auf Aus. Das Deck zählt nur, wenn mindestens 80 % seiner Karten aus den Picks stammen.
 - **Draft-Statistik:** Je Draft werden Picks, abgegebenes Deck und Match-Ergebnisse (je Game und Match) in
   `draftstatistik.json` gesammelt (nicht im Git, `--statistik DATEI`), nur Draft- und Sealed-Events. Beim Start wird
   auch `Player-prev.log` nachgelesen; doppelt Gelesenes zählt nicht doppelt. An jeder Karte, im Seitenfenster und
