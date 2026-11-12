@@ -375,6 +375,14 @@ def _live_help():
             "für die nächste Karte und für mindestens eine unter den nächsten 3 Karten (hypergeometrisch: 1 − "
             "C(L − n, k) / C(L, k) bei L Karten in der Bibliothek, n passenden, k gezogenen).",
             "Removal: übrige Karten und Punkte im Vergleich zum ganzen Deck.",
+            "<b>Spielbar</b> (oben in der Liste): Karten der Bibliothek, die du mit deinen Ländern auf dem Spielfeld "
+            "bezahlen kannst (das Mana dieses Zuges, getappt oder nicht; Hybrid und Phyrexian werden berücksichtigt, "
+            "X zählt 0). Länder selbst und andere Manaquellen (Kreaturen, Treasure) zählen nicht. Spielbare Karten "
+            "tragen einen Haken.",
+            "Im Spiel ist der Knopf „Deck + Sideboard übernehmen“ ausgeblendet.",
+            "Das Seitenfenster lässt sich mit dem Knopf oben rechts (oder einem Doppelklick) zu einem kleinen Kasten "
+            "minimieren: im Spiel nur die Chancen auf Removal, Land und Kreatur für die nächste Karte, im Draft Pick, "
+            "Archetyp und beste Karte. Noch einmal klicken klappt es in der alten Größe wieder auf.",
             "Karten, die per Mulligan oder Scry unter die Bibliothek gelegt wurden, zählen wie alle anderen (ihre "
             "Lage ist nicht bekannt). Passt die Rechnung nicht genau zur Bibliothek (z. B. durch Token oder "
             "Sideboard), steht ein Hinweis dabei."]))

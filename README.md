@@ -219,6 +219,9 @@ In Arena muss unter Optionen → Konto „Detailed Logs (Plugin Support)“ eing
   Spielstart minus Hand, Spielfeld, Friedhof, Exil, Stapel): je Gruppe (Land, Kreatur, Removal, Quellen je Farbe)
   und je Karte die Chance für die nächste Karte und für mindestens eine unter den nächsten 3 Karten
   (hypergeometrisch), dazu übriges Removal (Karten und Punkte). Gilt für jedes Spiel (`components/gamestate.py`).
+  „Spielbar“: Karten, die mit den eigenen Ländern auf dem Spielfeld bezahlbar sind (Haken an der Karte).
+- **Seitenfenster minimieren:** Knopf oben rechts oder Doppelklick: kleiner Kasten mit den Chancen auf Removal, Land
+  und Kreatur (im Draft Pick, Archetyp, beste Karte). Im Spiel ist der Knopf „Deck übernehmen“ ausgeblendet.
 - **Deck übernehmen:** Nach dem Draft (42 Picks oder sobald Arena ein Deck meldet) erscheint auf der Seite und im
   Seitenfenster der Knopf „Deck + Sideboard übernehmen“. Er wird klickbar, sobald der Deckbau in Arena mit „Fertig“
   abgeschlossen ist, und schreibt Deck (mit Standardländern) und Sideboard in die Kartenpool-Datei: Deckkarten auf

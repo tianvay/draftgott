@@ -847,7 +847,7 @@ h2 small{color:var(--muted);font-weight:400}
 #lgame th,#lgame td{padding:3px 10px;border-bottom:1px solid #eef0f4;text-align:right}
 #lgame th{font-size:12px;color:var(--muted)}
 #lgame td.l,#lgame th.l{text-align:left}
-#lgame tr.land td{background:#f2f7f3}#lgame tr.rem td{background:#fff6e6}
+#lgame tr.land td{background:#f2f7f3}#lgame tr.cast td{font-weight:700;background:#eef4fd}#lgame tr.rem td{background:#fff6e6}
 #lgame .gcols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:4px 24px}
 .mtile .rtag{background:#fff3d6;color:#7a5200;border-radius:6px;padding:0 5px;font-size:11px;font-weight:700}
 #live .lmsg{color:var(--muted);margin:8px 0 0;font-size:13.5px}
@@ -1720,7 +1720,8 @@ function renderLive(){
   const sc=$("lscores");sc.textContent="";
   if(live.archetypes)sc.appendChild(el("span",m?"main":null,m?"Archetyp: "+archName(m)+(det.manual?" (eigene Wahl)":""):"Archetyp: noch offen"));
   (det.scores||[]).filter(s=>s.score).slice(0,4).forEach(s=>sc.appendChild(el("span",null,s.name+" "+String(s.score).replace(".",","))));
-  const db=$("ldeck"),dk=live.deck||{};db.classList.toggle("show",!!live.complete);
+  const playing=!!(live.game&&live.game.active);  // im Spiel stoert der Knopf nur
+  const db=$("ldeck"),dk=live.deck||{};db.classList.toggle("show",!!live.complete&&!playing);
   db.disabled=!dk.ready||dk.applied;
   db.textContent=dk.applied?"Deck übernommen ✓":dk.ready?"Deck + Sideboard übernehmen ("+dk.main+" + "+dk.side+")":
     "Nach „Fertig“ in Arena: Deck + Sideboard übernehmen";
@@ -1766,10 +1767,13 @@ function renderGame(){
   const box=$("lgame"),g=live.game;box.textContent="";
   box.classList.toggle("show",!!(g&&g.active));if(!g||!g.active)return;
   box.appendChild(el("div","gtop","Im Spiel · Zug "+g.turn+" · Bibliothek "+g.library+" Karten · Hand "+g.hand));
+  const mn=g.mana||{},mc=Object.entries(mn.colors||{}).sort((a,b)=>"WUBRGC".indexOf(a[0])-"WUBRGC".indexOf(b[0]));
+  box.appendChild(el("div","lmsg","Mana "+(mn.lands||0)+(mc.length?" ("+mc.map(([c,n])=>c+"×"+n).join(" ")+")":"")+
+    " · Spielbar: Karten, die du mit deinen Ländern auf dem Spielfeld bezahlen kannst (✓)"));
   const cols=el("div","gcols"),left=el("div"),right=el("div");cols.append(left,right);box.appendChild(cols);
   const t1=el("table"),h1=el("tr");
   [["Gruppe","l"],["übrig",""],["nächste Karte",""],["in 3 Karten",""]].forEach(([x,c])=>h1.appendChild(el("th",c||null,x)));t1.appendChild(h1);
-  for(const r of g.groups){const tr=el("tr",r.key==="land"?"land":r.key==="removal"?"rem":null);
+  for(const r of g.groups){const tr=el("tr",r.key==="land"?"land":r.key==="removal"?"rem":r.key==="castable"?"cast":null);
     tr.append(el("td","l",r.label),el("td",null,String(r.n)),el("td",null,pc(r.next)),el("td",null,pc(r.in3)));t1.appendChild(tr)}
   left.appendChild(t1);
   const rm=g.removal||{};
@@ -1778,7 +1782,8 @@ function renderGame(){
   if(!g.consistent)left.appendChild(el("div","lmsg","Die Bibliothek passt nicht genau zum Deck (z. B. Token oder Sideboard): Werte ungefähr."));
   const t2=el("table"),h2=el("tr");
   [["Karte","l"],["übrig",""],["nächste Karte",""],["in 3 Karten",""]].forEach(([x,c])=>h2.appendChild(el("th",c||null,x)));t2.appendChild(h2);
-  for(const c of g.cards){const tr=el("tr",c.land?"land":c.removal?"rem":null),n=el("td","l",c.name);
+  for(const c of g.cards){const tr=el("tr",c.land?"land":c.removal?"rem":null),n=el("td","l",(c.castable?"✓ ":"")+c.name);
+    if(c.castable)n.title="Mit deinen Ländern auf dem Spielfeld bezahlbar";
     if(c.removal)n.append(" ",el("span","rtag","R"+num(c.removal)));
     tr.append(n,el("td",null,c.n+" / "+c.deck),el("td",null,pc(c.next)),el("td",null,pc(c.in3)));t2.appendChild(tr)}
   right.appendChild(t2)}

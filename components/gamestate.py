@@ -10,12 +10,18 @@ Bibliothek = Deck minus alle bekannten eigenen Karten ausserhalb der Bibliothek 
 zaehlen nicht, sie sind Doppel). Die Groesse der Bibliothek kommt direkt aus ihrer Zone. Karten, die per Mulligan
 oder Scry unter die Bibliothek gelegt wurden, zaehlen wie alle anderen (ihre Lage ist nicht bekannt).
 
+Spielbar: Karten der Bibliothek, die mit den eigenen Laendern auf dem Spielfeld (getappt oder nicht, also dem Mana
+dieses Zuges) bezahlt werden koennen (Hybrid und Phyrexian ueber components/mana.py, X = 0). Laender selbst zaehlen
+nicht als spielbar. Andere Manaquellen (Kreaturen, Treasure) zaehlen nicht.
+
 Chancen (hypergeometrisch): mindestens eine von n passenden Karten unter den naechsten k Karten einer Bibliothek
 mit L Karten = 1 - C(L - n, k) / C(L, k).
 """
 import json
 import math
 from collections import Counter
+
+from components.mana import can_pay, cost_alternatives
 
 KNOWN_ZONES = {"ZoneType_Hand", "ZoneType_Battlefield", "ZoneType_Graveyard", "ZoneType_Exile", "ZoneType_Stack",
                "ZoneType_Command"}
@@ -30,6 +36,11 @@ def at_least_one(n, library, k):
     if library - n < k:
         return 1.0
     return 1 - math.comb(library - n, k) / math.comb(library, k)
+
+
+def can_cast(cost, producing):
+    """Kann eine Karte mit diesen Laendern (je Land die Menge seiner Farben) bezahlt werden?"""
+    return any(can_pay(list(producing), g, Counter(dict(req))) for g, req in cost_alternatives(cost or ""))
 
 
 def pct(p):
@@ -64,7 +75,8 @@ class GameState:
                                            "ids": list(z.get("objectInstanceIds") or [])}
         for o in g.get("gameObjects") or []:
             if isinstance(o, dict) and "instanceId" in o:
-                self.objects[o["instanceId"]] = {"grp": o.get("grpId"), "owner": o.get("ownerSeatId")}
+                self.objects[o["instanceId"]] = {"grp": o.get("grpId"), "owner": o.get("ownerSeatId"),
+                                                 "controller": o.get("controllerSeatId", o.get("ownerSeatId"))}
         for iid in g.get("diffDeletedInstanceIds") or []:
             self.objects.pop(iid, None)
         turn = (g.get("turnInfo") or {}).get("turnNumber")
@@ -119,6 +131,17 @@ class GameState:
         remaining = {g: n - known[g] for g, n in self.deck.items() if n - known[g] > 0}
         return size, remaining
 
+    def lands_in_play(self):
+        """Arena-Nummern der Objekte auf dem Spielfeld, die man selbst kontrolliert."""
+        out = []
+        for z in self.zones.values():
+            if z["type"] == "ZoneType_Battlefield":
+                for iid in z["ids"]:
+                    o = self.objects.get(iid)
+                    if o and o["controller"] == self.seat:
+                        out.append(o["grp"])
+        return out
+
     def hand_size(self):
         hand = self._zone("ZoneType_Hand")
         return len(hand["ids"]) if hand else 0
@@ -142,7 +165,18 @@ def game_view(game, info):
     lands = sum(n for g, n in remaining.items() if card(g)["land"])
     creatures = sum(n for g, n in remaining.items() if card(g).get("creature"))
     removal = sum(n for g, n in remaining.items() if card(g).get("removal"))
-    groups = [_group("land", "Land", lands, library), _group("creature", "Kreatur", creatures, library),
+    producing, mana_colors = [], Counter()
+    for g in game.lands_in_play():
+        c = info.get(g)
+        if c and c["land"]:
+            colors = set(c.get("produces") or []) or {"C"}
+            producing.append(colors)
+            for col in colors:
+                mana_colors[col] += 1
+    castable_grps = {g for g in remaining if not card(g)["land"] and can_cast(card(g).get("cost"), producing)}
+    castable = sum(remaining[g] for g in castable_grps)
+    groups = [_group("castable", "Spielbar", castable, library),
+              _group("land", "Land", lands, library), _group("creature", "Kreatur", creatures, library),
               _group("removal", "Removal", removal, library)]
     deck_colors = set()
     for g in game.deck:
@@ -161,10 +195,12 @@ def game_view(game, info):
         c = card(g)
         cards.append({"name": c["name"], "n": n, "deck": game.deck[g], "next": at_least_one(n, library, 1),
                       "in3": at_least_one(n, library, LOOK_AHEAD), "land": c["land"],
-                      "creature": bool(c.get("creature")), "removal": c.get("removal", 0)})
+                      "creature": bool(c.get("creature")), "removal": c.get("removal", 0),
+                      "castable": g in castable_grps})
     cards.sort(key=lambda c: (c["land"], -c["n"], -c["removal"], c["name"]))
     return {"active": True, "turn": game.turn, "library": library, "hand": game.hand_size(),
             "deck": sum(game.deck.values()), "groups": groups,
+            "mana": {"lands": len(producing), "colors": dict(mana_colors)},
             "removal": {"left": removal, "total": rem_total, "points_left": round(points_left, 2),
                         "points_total": round(points_total, 2)},
             "cards": cards, "consistent": sum(remaining.values()) == library}
