@@ -46,7 +46,7 @@ MARKS = ("core", "splash", "nosplash", "off")
 GROUPS = ("core", "splash", "nosplash")
 BASIC_LANDS = ("Plains", "Island", "Swamp", "Mountain", "Forest")
 MAX_BASICS = 40  # je Land und Gruppe
-CATEGORIES = ("splashworthy", "mustplay", "filler", "neverplay")  # Kategorie je Karte, hoechstens eine
+CATEGORIES = ("matchwinner", "splashworthy", "mustplay", "filler", "neverplay")  # Kategorie je Karte, hoechstens eine
 SORTS = ("mv", "name", "color", "mark", "cat")  # Sortierungen der Seite (fuer die Filler-Reihenfolge)
 SIM_OPTIONS = (1000, 5000, 10000)
 SCRIPT_DIR = pathlib.Path(__file__).resolve().parent.parent
@@ -696,16 +696,18 @@ h2 small{color:var(--muted);font-weight:400}
 .imgw{position:relative}
 .badge{position:absolute;top:6px;left:6px;border-radius:999px;padding:2px 9px;font-size:12px;font-weight:700;
   color:#fff;box-shadow:0 1px 3px rgba(0,0,0,.35)}
+.tile.c-matchwinner .badge,.cdot.matchwinner{background:#8e2bd6}
 .tile.c-splashworthy .badge,.cdot.splashworthy{background:#e0a800;color:#2d2100}
 .tile.c-mustplay .badge,.cdot.mustplay{background:#2e9e5b}
 .tile.c-filler .badge,.cdot.filler{background:#6b7d99}
 .tile.c-neverplay .badge,.cdot.neverplay{background:#8b2f2f}
+.tile.c-matchwinner{box-shadow:0 0 0 3px #8e2bd688}
 .tile.c-splashworthy{box-shadow:0 0 0 3px #ffc83d88}
 .tile.c-mustplay{box-shadow:0 0 0 3px #2e9e5b55}
 .tile.c-neverplay img{filter:grayscale(.75)}
 .catsel{width:100%;margin-top:5px;padding:4px 6px;font-size:12.5px}
 .chip.cat{color:#fff}
-.chip.cat.splashworthy{background:#e0a800;color:#2d2100}.chip.cat.mustplay{background:#2e9e5b}
+.chip.cat.matchwinner{background:#8e2bd6}.chip.cat.splashworthy{background:#e0a800;color:#2d2100}.chip.cat.mustplay{background:#2e9e5b}
 .chip.cat.filler{background:#6b7d99}.chip.cat.neverplay{background:#8b2f2f}
 .filter{display:flex;align-items:center;gap:6px;font-size:13px}
 .layout{display:grid;grid-template-columns:400px 1fr;gap:20px;align-items:start;margin-top:14px}
@@ -862,7 +864,7 @@ h2 small{color:var(--muted);font-weight:400}
   height:24px;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;z-index:2}
 .mtile .pts{color:var(--muted);font-size:11.5px;white-space:nowrap}
 .mtile .why{font-size:11.5px;color:#146c3d;font-weight:700;margin:0 2px 2px}
-.mtile.c-splashworthy .badge{background:#e0a800;color:#2d2100}.mtile.c-mustplay .badge{background:#2e9e5b}
+.mtile.c-matchwinner .badge{background:#8e2bd6}.mtile.c-splashworthy .badge{background:#e0a800;color:#2d2100}.mtile.c-mustplay .badge{background:#2e9e5b}
 .mtile.c-filler .badge{background:#6b7d99}.mtile.c-neverplay .badge{background:#8b2f2f}
 #setview{display:none;position:fixed;inset:0;z-index:12;background:var(--bg);flex-direction:column}
 #setview.show{display:flex}
@@ -955,7 +957,7 @@ h2 small{color:var(--muted);font-weight:400}
         <button class="btn" id="undo" style="display:none">↶ Rückgängig</button>
         <span class="hint">Deckvorschlag: eigenes Deck aus den Kategorien in den gewählten Farben, mit Ländern auf die
           Faustregel aufgefüllt; die Zuordnung bleibt unverändert. MustPlay und Filler nur in den gewählten Farben,
-          Splashworthy auch außerhalb.</span>
+          Matchwinner und Splashworthy auch außerhalb.</span>
       </div>
       <div class="notice" id="proposal"></div>
       <div class="notice" id="notice"></div>
@@ -999,6 +1001,7 @@ const el=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className
 const GROUPS=["core","splash","nosplash"];
 // Kategorie je Karte (nicht je Kopie), hoechstens eine. Weitere Kategorien: hier einen Eintrag ergaenzen.
 const CATS=[
+ {key:"matchwinner",abbr:"♛",label:"Matchwinner",hint:"Bombe: entscheidet ein Match allein – kommt immer rein, notfalls als Splash"},
  {key:"splashworthy",abbr:"★",label:"Splashworthy",hint:"Entscheidet Spiele allein – soll auf jeden Fall rein, auch wenn wir die Farbe nicht spielen"},
  {key:"mustplay",abbr:"MP",label:"MustPlay",hint:"Wird auf jeden Fall gespielt, wenn wir diese Farbe spielen"},
  {key:"filler",abbr:"Fi",label:"Filler",hint:"Füllt das Deck auf, wenn wir die Farbe spielen und nicht splashen"},
@@ -1547,7 +1550,7 @@ async function suggestDeck(){
   state.forEach(paint);summary();save();updateUndo();
   const m=r.summary,a=m.assigned,f=m.filler;
   showNotice("Zuordnung nach Kategorien gesetzt",[
-    "Nach Kategorie: "+a.core+" → Core (MustPlay), "+a.splash+" → Splash (Splashworthy), "+a.off+" → Aus (NeverPlay).",
+    "Nach Kategorie: "+a.core+" → Core (MustPlay), "+a.splash+" → Splash (Matchwinner, Splashworthy), "+a.off+" → Aus (NeverPlay).",
     "Filler: "+f.core+" → Core, "+f.nosplash+" → NoSplash, "+f.off+" nicht benötigt (Aus).",
     "Größe: Splash-Variante "+m.sizes.splash+", NoSplash-Variante "+m.sizes.nosplash+" Karten (Ziel "+m.target+").",
     "Mit „Rückgängig“ stellst du den vorherigen Stand wieder her."],m.warnings);
@@ -1652,7 +1655,7 @@ function statLine(st){
   if(st.games){d.append(" · ");d.appendChild(el("b",null,Math.round(100*st.wins/st.games)+" %"));d.append(" in "+st.games+" G.")}
   return d}
 let cardarch={},archsets={},poolDetect=null,detectTimer=null,live=null,liveJson="",liveVersion=0,setCards=[];
-const RATING_SHORT={splashworthy:"★ Splashworthy",mustplay:"MP MustPlay",filler:"Fi Filler",neverplay:"NP NeverPlay"};
+const RATING_SHORT={matchwinner:"♛ Matchwinner",splashworthy:"★ Splashworthy",mustplay:"MP MustPlay",filler:"Fi Filler",neverplay:"NP NeverPlay"};
 // Archetyp, nach dem hervorgehoben wird: im Live-Draft der des Drafts, sonst der aus den Core-Karten erkannte
 function mainArch(){return live&&live.detect?live.detect.main:(poolDetect?poolDetect.main:null)}
 function archName(colors){for(const list of Object.values(archsets)){const a=list.find(x=>x.colors===colors);if(a)return a.name}
@@ -1711,8 +1714,8 @@ async function pollLive(once){
 function renderLive(){
   const box=$("live");if(!live)return;box.classList.add("show");
   const det=live.detect||{},m=det.main,sel=$("lmanual");
-  $("lhead").textContent=live.status==="pack"||live.status==="waiting"?
-    "Live-Draft · Pick "+live.pick+(live.set?" · "+live.set:""):"Live-Draft";
+  $("lhead").textContent=live.complete?"Live-Draft · Draft fertig"+(live.set?" · "+live.set:""):
+    live.status==="pack"||live.status==="waiting"?"Live-Draft · Pick "+live.pick+(live.set?" · "+live.set:""):"Live-Draft";
   const want=["",...(live.archetypes||[]).map(a=>a.colors)].join("|");
   if(sel.dataset.k!==want){sel.dataset.k=want;sel.textContent="";const o=el("option",null,"Automatisch");o.value="";sel.appendChild(o);
     for(const a of live.archetypes||[]){const x=el("option",null,a.name+" ("+a.colors+")");x.value=a.colors;sel.appendChild(x)}}

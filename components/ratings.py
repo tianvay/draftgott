@@ -1,10 +1,10 @@
-"""Kartenbewertung fuer den Drafthelper: je Kartenname eine Kategorie (Splashworthy, MustPlay, Filler, NeverPlay) in
+"""Kartenbewertung fuer den Drafthelper: je Kartenname eine Kategorie (Matchwinner, Splashworthy, MustPlay, Filler, NeverPlay) in
 einer eigenen JSON-Datei (Standard kartenbewertung.json, nicht im Git). Sie gilt fuer jeden Kartenpool."""
 import json
 import os
 import pathlib
 
-CATEGORIES = ("splashworthy", "mustplay", "filler", "neverplay")
+CATEGORIES = ("matchwinner", "splashworthy", "mustplay", "filler", "neverplay")
 
 
 def load_ratings(path):

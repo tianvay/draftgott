@@ -2,7 +2,7 @@
 
 Regeln:
     MustPlay    -> Core
-    Splashworthy-> Splash
+    Splashworthy-> Splash (Matchwinner ebenso)
     NeverPlay   -> Aus
     Filler      -> fuellt auf die Zielgroesse (alle Laender zaehlen mit):
                    zuerst Core, damit beide Varianten gleich gross werden, dann die NoSplash-Gruppe als Ersatz
@@ -37,6 +37,9 @@ def _primary(card, prev_mark, sort):
     return (1 if card.get("land") else 0, card.get("mv") or 0)  # "mv" und unbekannte Werte
 
 
+SPLASH_CATS = ("matchwinner", "splashworthy")  # kommen immer rein, ausserhalb der Farben als Splash
+
+
 def suggest(cards, marks, basics, cats, target=40, sort="mv"):
     """cards: Pool-Karten (name, qty, colors, mv, land); marks: je Karte eine Liste mit einer Markierung je Kopie;
     basics: {Landname: {core, splash, nosplash}}; cats: {Kartenname: Kategorie}.
@@ -49,7 +52,7 @@ def suggest(cards, marks, basics, cats, target=40, sort="mv"):
         qty = card["qty"]
         if cat == "mustplay":
             new[ci], assigned["core"] = ["core"] * qty, assigned["core"] + qty
-        elif cat == "splashworthy":
+        elif cat in SPLASH_CATS:
             new[ci], assigned["splash"] = ["splash"] * qty, assigned["splash"] + qty
         elif cat == "neverplay":
             new[ci], assigned["off"] = ["off"] * qty, assigned["off"] + qty
@@ -171,8 +174,8 @@ def _distribute(n, weights, chosen, splash_colors):
 
 
 def propose(cards, marks, cats, colors, target=40, sort="mv"):
-    """Baut ein eigenes Deck aus den Kategorien: MustPlay und Filler nur in den gewaehlten Farben, Splashworthy auch
-    ausserhalb (dann als Splash), NeverPlay und Karten ohne Kategorie nicht. Standardlaender werden passend zur
+    """Baut ein eigenes Deck aus den Kategorien: MustPlay und Filler nur in den gewaehlten Farben, Matchwinner und
+    Splashworthy auch ausserhalb (dann als Splash), NeverPlay und Karten ohne Kategorie nicht. Standardlaender werden passend zur
     Faustregel ergaenzt und nach Farbsymbolen verteilt, Nicht-Standardlaender zaehlen als Laender.
     Gibt {"deck": {Name: Anzahl}, "summary": {...}} zurueck; die Eingaben werden nicht veraendert."""
     chosen = {c for c in colors if c in WUBRG}
@@ -188,7 +191,7 @@ def propose(cards, marks, cats, colors, target=40, sort="mv"):
             ignored += qty
         elif cat == "mustplay" and in_colors(card):
             deck[name] = deck.get(name, 0) + qty
-        elif cat == "splashworthy":
+        elif cat in SPLASH_CATS:
             deck[name] = deck.get(name, 0) + qty
             if not in_colors(card):
                 splash_cards[name] = splash_cards.get(name, 0) + qty

@@ -174,6 +174,18 @@ class Tracker:
     def _latest(self, event):
         return next((r for r in reversed(self.data["drafts"]) if r.get("event") == event), None)
 
+    def record(self, draft_id, event):
+        """Bilanz des Drafts {"wins", "losses", "matches"} (laufende Matches zaehlen nur bei "matches"): der Eintrag mit
+        dieser draft_id, sonst der juengste des Events; None, wenn es keinen gibt."""
+        rec = next((r for r in reversed(self.data["drafts"]) if draft_id and r.get("draft_id") == draft_id), None)
+        if rec is None and not draft_id and event:
+            rec = self._latest(event)
+        if rec is None:
+            return None
+        ms = rec.get("matches") or []
+        return {"wins": sum(1 for m in ms if m.get("win") is True),
+                "losses": sum(1 for m in ms if m.get("win") is False), "matches": len(ms)}
+
     def _draft_update(self):
         st = self.state
         event = st.event if is_limited(st.event) else None

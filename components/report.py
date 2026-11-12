@@ -137,14 +137,14 @@ def sidebar_kpis(ctx):
     return h_table([""] + [esc(short.get(l, l)) for l in labels], rows)
 
 
-CAT_LABEL = {"splashworthy": "★ Splashworthy", "mustplay": "MustPlay", "filler": "Filler", "neverplay": "NeverPlay"}
+CAT_LABEL = {"matchwinner": "♛ Matchwinner", "splashworthy": "★ Splashworthy", "mustplay": "MustPlay", "filler": "Filler", "neverplay": "NeverPlay"}
 
 
 def render_great(ctx):
-    """Abschnitt 'Great in this deck!': Splashworthy- und MustPlay-Karten des Decks, dazu Hinweise, was fehlt.
+    """Abschnitt 'Great in this deck!': Matchwinner-, Splashworthy- und MustPlay-Karten des Decks, dazu Hinweise, was fehlt.
     Gibt '' zurueck, wenn keine Kategorien gesetzt sind (z. B. ohne Draft-Helper)."""
     cats = ctx.get("cats") or {}
-    great = {n: c for n, c in cats.items() if c in ("splashworthy", "mustplay")}
+    great = {n: c for n, c in cats.items() if c in ("matchwinner", "splashworthy", "mustplay")}
     never_in_deck = sorted(n for n, c in cats.items() if c == "neverplay" and n in ctx["deck"])
     if not great and not never_in_deck:
         return ""
@@ -159,7 +159,7 @@ def render_great(ctx):
             lab_of.setdefault(n, []).append(lab)
     rows_g = []
     for name, qty, card, shown in sorted((r for r in ctx["rows"] if r[0] in great),
-                                         key=lambda r: (great[r[0]] != "splashworthy", r[2].is_land, r[2].mv, r[0])):
+                                         key=lambda r: (("matchwinner", "splashworthy", "mustplay").index(great[r[0]]), r[2].is_land, r[2].mv, r[0])):
         tags = "".join(f'<span class="tag t{min(order.index(l), 2) if l in order else 0}">{esc(l)}</span> '
                        for l in lab_of.get(name, []))
         props = "".join(f'<span class="tag">{html_cost(t)}</span>' for t in re.findall(r"\[([^\]]*)\]", shown))
@@ -171,9 +171,9 @@ def render_great(ctx):
         parts.append(h_table(["Karte", "Kategorie", "Anz.", "Bereich", "Kosten", "Eigenschaften"], rows_g,
                              left=(0, 1, 3, 4, 5)))
     else:
-        parts.append('<p class="muted">Keine Splashworthy- oder MustPlay-Karten in diesem Deck.</p>')
+        parts.append('<p class="muted">Keine Matchwinner-, Splashworthy- oder MustPlay-Karten in diesem Deck.</p>')
     expected = [] if ctx.get("role") == "proposal" else [
-        n for n, c in great.items() if c == "mustplay" or (c == "splashworthy" and ctx.get("role") == "splash")]
+        n for n, c in great.items() if c == "mustplay" or (c in ("matchwinner", "splashworthy") and ctx.get("role") == "splash")]
     missing = sorted(n for n in expected if n not in ctx["deck"])
     if missing:
         parts.append('<div class="warnbox" style="margin-top:12px"><b>Fehlt in diesem Deck:</b> '
@@ -395,7 +395,7 @@ def render_details(ctx, suffix="", switch=None):
     great_html = render_great(ctx)
     if great_html:
         add("great", "Great in this deck!",
-            "Als Splashworthy oder MustPlay gekennzeichnete Karten dieses Decks (Draft-Helper).", great_html)
+            "Als Matchwinner, Splashworthy oder MustPlay gekennzeichnete Karten dieses Decks (Draft-Helper).", great_html)
 
     # ---------------- Modell-Abdeckung (Karten mit Effekten, die noch nicht simuliert werden)
     if ctx.get("coverage") is not None:

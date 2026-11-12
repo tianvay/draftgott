@@ -118,9 +118,9 @@ def _sections():
              "„Ø höchster Manawert“ ist für Karten wie Hapatra wichtig: X = höchster Manawert im Friedhof, wenn sie ins "
              "Spiel kommt (Ø X und wie oft X ≥ 3 bzw. ≥ 5)."]))),
         ("great", "Great in this deck!", _panel("Was hier steht", _ul([
-            "Karten mit der Kategorie ★ Splashworthy oder MustPlay aus dem Drafthelper, mit Bereich, Kosten und "
+            "Karten mit der Kategorie ♛ Matchwinner, ★ Splashworthy oder MustPlay aus dem Drafthelper, mit Bereich, Kosten und "
             "Eigenschaften.",
-            "„Fehlt in diesem Deck“: eine MustPlay-Karte fehlt (in jeder Variante) oder eine Splashworthy-Karte fehlt "
+            "„Fehlt in diesem Deck“: eine MustPlay-Karte fehlt (in jeder Variante) oder eine Matchwinner- oder Splashworthy-Karte fehlt "
             "in der Splash-Variante. Für den Deckvorschlag gibt es diesen Hinweis nicht, weil er nach Farbregeln gebaut "
             "wird.",
             "„NeverPlay-Karten im Deck“: Karten, die als NeverPlay gekennzeichnet und trotzdem im Deck sind."]))),
@@ -348,7 +348,7 @@ def _live_help():
             "beginnt die Datei von vorn. Auch ein schon laufender Draft wird beim Start nachgelesen."]))
         + _panel("Aktuelles Pack", _ul([
             "Oben auf der Seite steht das Pack, aus dem du gerade wählst, als Rangliste. Punkte je Karte: Kategorie "
-            "(★ Splashworthy 4, MustPlay 3, ohne Kategorie 1,5, Filler 1) + 3, wenn die Karte dem Archetyp "
+            "(♛ Matchwinner 5, ★ Splashworthy 4, MustPlay 3, ohne Kategorie 1,5, Filler 1) + 3, wenn die Karte dem Archetyp "
             "zugeordnet ist (grün hervorgehoben, „passt zu …“), sonst + 1, wenn ihre Farben in den Farben des "
             "Archetyps liegen (hellgrün). NeverPlay hat immer 0 Punkte.",
             "Kategorie und Archetypen lassen sich direkt an den Pack-Karten festlegen; das gilt sofort.",
@@ -383,6 +383,11 @@ def _live_help():
             "Das Seitenfenster lässt sich mit dem Knopf oben rechts (oder einem Doppelklick) zu einem kleinen Kasten "
             "minimieren: im Spiel nur die Chancen auf Removal, Land und Kreatur für die nächste Karte, im Draft Pick, "
             "Archetyp und beste Karte. Noch einmal klicken klappt es in der alten Größe wieder auf.",
+            "Nach dem Draft und zwischen den Spielen zeigt das Seitenfenster statt „Pick 43“ eine kurze "
+            "<b>Deck-Übersicht</b>: Archetyp und Bilanz (Siege–Niederlagen), Karten, Länder und Zauber mit Ø Manawert, "
+            "Mana-Kurve, Kreaturen, Removal (Karten und Punkte), Kartenfluss, Zauber je Farbe und die Bomben (eigene "
+            "Bewertung Matchwinner oder Splashworthy; Must-Play zählt nicht). Grundlage ist das in Arena abgegebene Hauptdeck, vorher alle "
+            "Picks. Minimiert: Bilanz, Kreaturen und Removal.",
             "Karten, die per Mulligan oder Scry unter die Bibliothek gelegt wurden, zählen wie alle anderen (ihre "
             "Lage ist nicht bekannt). Passt die Rechnung nicht genau zur Bibliothek (z. B. durch Token oder "
             "Sideboard), steht ein Hinweis dabei."]))
@@ -399,7 +404,7 @@ def _live_help():
             "einfachen Pick-Liste überschrieben, auch nicht nach einem Neustart; erst ein neuer Draft beginnt sie "
             "neu."]))
         + _panel("Archetyp erkennen", _ul([
-            "Jeder Pick zählt mit dem Gewicht seiner Kategorie (Splashworthy und MustPlay 2, ohne Kategorie und Filler "
+            "Jeder Pick zählt mit dem Gewicht seiner Kategorie (Matchwinner 3, Splashworthy und MustPlay 2, ohne Kategorie und Filler "
             "1, NeverPlay 0) für jeden Archetyp, in dessen Farben alle seine Farben liegen, und noch einmal für jeden "
             "Archetyp, dem er zugeordnet ist. Farblose Karten zählen nur über die Zuordnung, Länder gar nicht.",
             "Erkannt ist der Archetyp mit den meisten Punkten, wenn er mindestens 3 Punkte hat und allein vorn "
@@ -483,15 +488,17 @@ def _drafthelper_help():
             "Archetyp, wie viele Core-Karten ihm zugeordnet sind; der erkannte ist grün umrandet, seine Karten "
             "tragen die Plakette „Archetyp“. Der Bericht zeigt dieselbe Zählung und Erkennung im Archetyp-Kasten."]))
         + _panel("Kategorien", _ul([
+            "<b>♛ Matchwinner</b> – die Bombe: entscheidet ein Match allein und kommt immer rein, notfalls als "
+            "Splash (beim Deckbau wie Splashworthy, im Draft und in der Deck-Übersicht ganz oben).",
             "<b>★ Splashworthy</b> – entscheidet Spiele allein, soll auf jeden Fall rein, auch wenn wir die Farbe nicht "
             "spielen.",
             "<b>MustPlay</b> – wird auf jeden Fall gespielt, wenn wir diese Farbe spielen.",
             "<b>Filler</b> – füllt das Deck auf, wenn wir die Farbe spielen und nicht splashen.",
             "<b>NeverPlay</b> – zu schlecht oder zu situativ.",
-            "Eine Kategorie gilt für alle Kopien einer Karte und beeinflusst die Simulation nicht; ★ Splashworthy und "
+            "Eine Kategorie gilt für alle Kopien einer Karte und beeinflusst die Simulation nicht; ♛ Matchwinner, ★ Splashworthy und "
             "MustPlay erscheinen im Bericht in einem eigenen Abschnitt („Great in this deck“)."]))
         + _panel("Zuordnung nach Kategorien setzen", _ul([
-            "MustPlay → Core, Splashworthy → Splash, NeverPlay → Aus, Karten ohne Kategorie bleiben unverändert.",
+            "MustPlay → Core, Matchwinner und Splashworthy → Splash, NeverPlay → Aus, Karten ohne Kategorie bleiben unverändert.",
             "Filler füllt auf die Zielgröße auf (alle Länder zählen mit): zuerst Core, damit beide Varianten gleich groß "
             "werden, dann die NoSplash-Gruppe als Ersatz für die Splash-Karten; übrige Filler → Aus.",
             "Reihenfolge der Filler: nach der gewählten Sortierung, dann Farben, die schon im Deck sind, dann Manawert "
@@ -515,7 +522,7 @@ def _drafthelper_help():
             "Karte."]))
         + _panel("Deckvorschlag", _ul([
             "Ein eigenes Deck aus den Kategorien; die Zuordnung bleibt unverändert.",
-            "MustPlay und Filler nur, wenn alle Farben der Karte gewählt sind (Farblos immer); Splashworthy immer, "
+            "MustPlay und Filler nur, wenn alle Farben der Karte gewählt sind (Farblos immer); Matchwinner und Splashworthy immer, "
             "außerhalb der gewählten Farben als Splash; NeverPlay und Karten ohne Kategorie nicht.",
             "Länder: Nicht-Standardländer zählen als Länder; Standardländer werden auf die Faustregel ergänzt (40 Karten: "
             "17 Länder, Bereich 15 bis 17; 60 Karten: 22, Bereich 20 bis 24; dazwischen linear) und nach den "

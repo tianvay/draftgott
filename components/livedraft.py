@@ -66,6 +66,37 @@ def pool_info(cards, main):
     return out
 
 
+TOP_RATINGS = ("matchwinner", "splashworthy")
+
+
+def deck_summary(cards, ratings, source):
+    """Kurze Deck-Uebersicht nach dem Draft (wie auf der Drafthelper-Seite). cards: Kartenangaben mit "qty";
+    source: "arena" (in Arena abgegebenes Hauptdeck) oder "picks" (noch kein Deck, alle Picks). curve: Zauber je
+    Manawert <=1, 2, 3, 4, 5, 6+; colors: Zauber je Farbe (mehrfarbige zaehlen fuer jede); top: die Bomben (eigene
+    Bewertung Matchwinner, dann Splashworthy), hoechstens drei."""
+    ratings = ratings or {}
+    spells = [c for c in cards if not c.get("land")]
+    n = sum(c.get("qty", 1) for c in spells)
+    curve = [0] * 6
+    colors = {}
+    for c in spells:
+        q = c.get("qty", 1)
+        curve[min(5, max(0, int(c.get("mv") or 0) - 1))] += q
+        for col in c.get("colors") or []:
+            colors[col] = colors.get(col, 0) + q
+    top = sorted({c["name"] for c in spells if ratings.get(c["name"]) in TOP_RATINGS},
+                 key=lambda name: (TOP_RATINGS.index(ratings[name]), name))[:3]
+    return {"source": source, "cards": sum(c.get("qty", 1) for c in cards), "lands": sum(c.get("qty", 1) for c in cards if c.get("land")), "spells": n,
+            "avg_mv": round(sum((c.get("mv") or 0) * c.get("qty", 1) for c in spells) / n, 2) if n else 0,
+            "curve": curve,
+            "creatures": sum(c.get("qty", 1) for c in spells if c.get("creature")),
+            "removal": sum(c.get("qty", 1) for c in spells if c.get("removal")),
+            "removal_points": round(sum((c.get("removal") or 0) * c.get("qty", 1) for c in spells), 2),
+            "flow": sum(c.get("qty", 1) for c in spells if c.get("flow")),
+            "colors": dict(sorted(colors.items(), key=lambda kv: (-kv[1], "WUBRG".find(kv[0])))),
+            "top": top}
+
+
 def default_names(log_path):
     """{GrpId: Name, Set, Nummer}: Arenas Kartendatenbank (Ordner aus dem Protokoll), ergaenzt um die arena_id aus
     dem Scryfall-Cache."""
@@ -339,6 +370,8 @@ class LiveDraft:
             unknown = [g for g in self.state.pack + self.state.picks if g not in self.names()]
             waiting, n_picks, event = self.state.waiting, len(self.state.picks), self.state.event
             deck = self._deck_info()
+            main_deck = [(g, q) for g, q in self.deck["main"].items()] if deck["ready"] else None
+            draft_id = self.state.draft
         code = self._set_code(pack + picks)
         found = set_archetypes.for_set(code)
         detect = cardarchetypes.detect([dict(c, qty=1) for c in picks], assign, ratings, found, manual)
@@ -350,10 +383,20 @@ class LiveDraft:
         for c in ranked:
             c["stats"] = (cardstats or {}).get(c["name"])
         names = {c["name"] for c in pack + picks}
+        complete = deck["ready"] or n_picks >= DRAFT_PICKS
+        deckinfo = None
+        if complete:
+            if main_deck is not None:
+                cards = [dict(c, qty=q) for c, q in ((self._card(g), q) for g, q in main_deck) if c]
+                deckinfo = deck_summary(cards, ratings, "arena")
+            else:
+                deckinfo = deck_summary([dict(c, qty=1) for c in picks], ratings, "picks")
+            deckinfo["record"] = self.tracker.record(draft_id, event) if self.tracker else None
+            names |= {c["name"] for c in (self._card(g) for g, _ in main_deck or []) if c}
         return {"status": "waiting" if waiting or not pack else "pack", "version": self.version, "message": "",
                 "event": event or "", "set": code or "", "pick": n_picks + 1, "pack": ranked,
                 "picks": [c["name"] for c in picks], "unknown": unknown, "detect": detect,
-                "deck": deck, "complete": deck["ready"] or n_picks >= DRAFT_PICKS, "game": game,
+                "deck": deck, "complete": complete, "deckinfo": deckinfo, "game": game,
                 "draftinfo": draftinfo, "archmap": archmap, "enemy_saved": self._saved(),
                 "archetypes": found,
                 "cardarch": {n: v for n, v in (assign or {}).items() if n in names},

@@ -25,9 +25,9 @@ OUT_DIR = SCRIPT_DIR
 MIN_GAMES = 20  # darunter gilt eine Siegquote nur als Hinweis
 TOP_GAMES = 10  # Mindestzahl Games fuer "beste und schwaechste Karten"
 GOOD, BAD = 0.55, 0.45  # Siegquote: gruen ab 55 %, rot unter 45 %
-CAT_LABEL = {"splashworthy": "★ Splashworthy", "mustplay": "MustPlay", "filler": "Filler", "neverplay": "NeverPlay",
+CAT_LABEL = {"matchwinner": "♛ Matchwinner", "splashworthy": "★ Splashworthy", "mustplay": "MustPlay", "filler": "Filler", "neverplay": "NeverPlay",
              "": "ohne Kategorie"}
-CAT_CLASS = {"splashworthy": "c-sw", "mustplay": "c-mp", "filler": "c-fi", "neverplay": "c-np", "": "c-no"}
+CAT_CLASS = {"matchwinner": "c-mw", "splashworthy": "c-sw", "mustplay": "c-mp", "filler": "c-fi", "neverplay": "c-np", "": "c-no"}
 RARITY = {"common": "C", "uncommon": "U", "rare": "R", "mythic": "M"}
 CSS = """
 main{padding-bottom:40px}
@@ -94,7 +94,7 @@ table.cards td:nth-child(2){font-weight:600;min-width:130px;max-width:170px}
 .rar.common{background:#2b2b2b}.rar.uncommon{background:#9fb2c2}.rar.rare{background:#d4a72c}
 .rar.mythic{background:#e2531f}
 .cat{border-radius:99px;padding:1px 7px;font-size:11px;font-weight:700;white-space:nowrap}
-.cat.c-sw{background:#ffe7a3;color:#5a4100}.cat.c-mp{background:#d9f3e4;color:#146c3d}
+.cat.c-mw{background:#ead7fb;color:#5b1a8f}.cat.c-sw{background:#ffe7a3;color:#5a4100}.cat.c-mp{background:#d9f3e4;color:#146c3d}
 .cat.c-fi{background:#e6ebf3;color:#4a5a73}.cat.c-np{background:#f6dcdc;color:#8b2f2f}
 td.cost{white-space:nowrap}
 td.cost .m.ms{width:16px;height:16px}
@@ -343,7 +343,7 @@ def _card_table(stats, cards, assign, ratings, arch_names):
 
 def _ratings_vs_results(stats, ratings):
     rows = []
-    for cat in ("splashworthy", "mustplay", "filler", "neverplay", ""):
+    for cat in ("matchwinner", "splashworthy", "mustplay", "filler", "neverplay", ""):
         names = [n for n in stats if ratings.get(n, "") == cat]
         played = [n for n in names if stats[n]["games"]]
         games = sum(stats[n]["games"] for n in names)

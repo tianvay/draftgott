@@ -4,14 +4,14 @@ Die Zuordnung steht je Kartenname in einer eigenen JSON-Datei (Standard kartenar
 Liste von Archetyp-Schluesseln, das sind die Farbpaare aus components/archetypes.py (z. B. ["BR", "RW"]). Eine Karte
 kann zu mehreren Archetypen passen.
 
-Erkennung (detect): Jede Nichtland-Karte zaehlt mit dem Gewicht ihrer Bewertung (Splashworthy und MustPlay 2,
+Erkennung (detect): Jede Nichtland-Karte zaehlt mit dem Gewicht ihrer Bewertung (Matchwinner 3, Splashworthy und MustPlay 2,
 unbewertet und Filler 1, NeverPlay 0) je Kopie
   - fuer jeden Archetyp, in dessen Farben alle ihre Farben liegen (farblose Karten zaehlen hier nicht), und
   - noch einmal fuer jeden Archetyp, dem sie zugeordnet ist.
 Erkannt ist der Archetyp mit den meisten Punkten, wenn er mindestens MIN_POINTS hat und allein vorn liegt; sonst ist
 der Archetyp noch offen. Eine eigene Wahl (manual) geht vor.
 
-Pack (rank): Punkte je Karte = Bewertung (Splashworthy 4, MustPlay 3, unbewertet 1,5, Filler 1) + 3, wenn sie dem
+Pack (rank): Punkte je Karte = Bewertung (Matchwinner 5, Splashworthy 4, MustPlay 3, unbewertet 1,5, Filler 1) + 3, wenn sie dem
 erkannten Archetyp zugeordnet ist, sonst + 1, wenn ihre Farben in dessen Farben liegen. NeverPlay hat immer 0.
 """
 import json
@@ -20,9 +20,9 @@ import pathlib
 
 from components.archetypes import PAIRS
 
-WEIGHT = {"splashworthy": 2, "mustplay": 2, "filler": 1, "neverplay": 0}  # unbewertet: 1
-POINTS = {"splashworthy": 4, "mustplay": 3, "filler": 1, "neverplay": 0}  # unbewertet: 1.5
-RATING_ORDER = {"splashworthy": 0, "mustplay": 1, "": 2, "filler": 3, "neverplay": 4}
+WEIGHT = {"matchwinner": 3, "splashworthy": 2, "mustplay": 2, "filler": 1, "neverplay": 0}  # unbewertet: 1
+POINTS = {"matchwinner": 5, "splashworthy": 4, "mustplay": 3, "filler": 1, "neverplay": 0}  # unbewertet: 1.5
+RATING_ORDER = {"matchwinner": -1, "splashworthy": 0, "mustplay": 1, "": 2, "filler": 3, "neverplay": 4}
 LEVEL_POINTS = {"arch": 3, "color": 1, "": 0}
 MIN_POINTS = 3
 

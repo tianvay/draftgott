@@ -1,0 +1,39 @@
+Deck
+1 Dr. McCoy, Surly Surgeon (TRK) 14
+1 Phlox, Unorthodox Doctor (TRK) 250
+1 Oberth-Class Starship (TRK) 26
+2 Xindi Surveyors (TRK) 225
+2 I'm a Doctor, Not a . . . (TRK) 203
+1 Malfunctioning Holodeck (TRK) 22
+1 Picard, Leading by Example (TRK) 29
+1 Vexing Drone (TRK) 45
+1 Mugato (TRK) 208
+1 The Needs of the Many (TRK) 25
+1 Miles O'Brien, Transporter Ops (TRK) 24
+1 Una Chin-Riley, Number One (TRK) 42
+1 70,000 Light-Years from Home (TRK) 1
+3 Command Decision (TRK) 8
+1 Loot, Exuberant Explorer (SDS) 13
+1 Stable Wormhole (TRK) 215
+1 Saurian Explorer (TRK) 213
+1 Cold-Blooded Crew (TRK) 189
+1 Culber and Stamets, Star-Crossed (TRK) 191
+8 Forest (SPM) 198
+9 Plains (SPM) 194
+
+Sideboard
+1 Oberth-Class Starship (TRK) 26
+1 Vexing Drone (TRK) 45
+2 Data, New Life (TRK) 52
+2 Jake Sisko, War Correspondent (TRK) 205
+1 Nyota Uhura, Communications (TRK) 75
+1 Test of Loyalty (TRK) 134
+1 Stray from History (TRK) 130
+1 Hoshi Sato, Exolinguist (TRK) 64
+1 First Contact (TRK) 199
+1 Perils of the Past (TRK) 161
+1 Andromedan Automatons (TRK) 2
+1 Melkotian Adjudicator (TRK) 73
+1 Blastoneuron (TRK) 96
+1 Obsidian Order Operative (TRK) 120
+1 Consider the Prime Directive (TRK) 51

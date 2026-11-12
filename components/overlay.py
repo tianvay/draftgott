@@ -15,14 +15,14 @@ import random
 import urllib.error
 import urllib.request
 
-RATING_ABBR = {"splashworthy": "★", "mustplay": "MP", "filler": "Fi", "neverplay": "NP"}
+RATING_ABBR = {"matchwinner": "♛", "splashworthy": "★", "mustplay": "MP", "filler": "Fi", "neverplay": "NP"}
 MARK = {"arch": "●", "color": "○", "": "  "}
 COLORS = {"bg": "#161b24", "ink": "#e8ecf3", "muted": "#8d97a8", "arch": "#1f7a45", "color": "#2c3a52",
           "head": "#ffd166", "never": "#6b7280"}
 
 
 def _arch_name(snap, colors):
-    for s in (snap.get("detect") or {}).get("scores") or []:
+    for s in ((snap.get("detect") or {}).get("scores") or []) + (snap.get("archetypes") or []):
         if s["colors"] == colors:
             return s["name"]
     return colors
@@ -175,6 +175,35 @@ def game_rows(g):
     return rows
 
 
+def _record(info):
+    r = info.get("record")
+    return f"Bilanz {r['wins']}–{r['losses']}" if r and r.get("matches") else ""
+
+
+def deck_rows(snap):
+    """Deck-Uebersicht nach dem Draft und zwischen den Spielen (statt "Pick 43"): Archetyp und Bilanz, Karten,
+    Kurve, Kreaturen, Removal, Kartenfluss, Farben, Bomben."""
+    info = snap["deckinfo"]
+    main = (snap.get("detect") or {}).get("main")
+    head = "Dein Deck" + (f" · {_arch_name(snap, main)} ({main})" if main else "")
+    if _record(info):
+        head += " · " + _record(info)
+    rows = [(head, "head")]
+    if info.get("source") == "picks":
+        rows.append(("Noch kein Deck in Arena abgegeben: Zahlen über alle Picks", "msg"))
+    rows.append((f"{info['cards']} Karten · {info['lands']} Länder · {info['spells']} Zauber · Ø Manawert "
+                 f"{info['avg_mv']:.2f}".replace(".", ","), "sub"))
+    labels = ("≤1", "2", "3", "4", "5", "6+")
+    rows.append(("Kurve " + " ".join(f"{lab}:{n}" for lab, n in zip(labels, info["curve"])), "sub"))
+    rows.append((f"Kreaturen {info['creatures']} · Removal {info['removal']} ({_num(info['removal_points'])} P.) · "
+                 f"Kartenfluss {info['flow']}", "arch"))
+    if info.get("colors"):
+        rows.append(("Farben " + " · ".join(f"{c} {n}" for c, n in info["colors"].items()), "color"))
+    if info.get("top"):
+        rows.append(("Bomben: " + ", ".join(info["top"]), "head2"))
+    return rows
+
+
 MINI_KEYS = (("removal", "Removal"), ("land", "Land"), ("creature", "Kreatur"))
 
 
@@ -188,6 +217,10 @@ def mini_rows(snap):
         by = {r["key"]: r for r in g.get("groups") or []}
         return [(f"{label} {_pct(by[key]['next'])}", {"land": "color", "removal": "arch"}.get(key, "plain"))
                 for key, label in MINI_KEYS if key in by]
+    if snap.get("complete") and snap.get("deckinfo"):
+        info = snap["deckinfo"]
+        return [(_record(info) or "Dein Deck", "head"),
+                (f"Kreaturen {info['creatures']} · Removal {info['removal']}", "arch")]
     if snap.get("status") in ("pack", "waiting"):
         main = (snap.get("detect") or {}).get("main")
         head = f"Pick {snap.get('pick', 1)} · " + (_arch_name(snap, main) if main else "offen")
@@ -225,6 +258,8 @@ def rows_for(snap):
     status = snap.get("status")
     if status in ("nolog", "idle", "off"):
         return [("draftgott Live", "head"), (snap.get("message") or "Kein Live-Draft.", "msg")]
+    if snap.get("complete") and snap.get("deckinfo"):
+        return deck_rows(snap)
     detect = snap.get("detect") or {}
     main = detect.get("main")
     head = f"Pick {snap.get('pick', 1)} · " + (

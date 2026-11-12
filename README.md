@@ -98,7 +98,8 @@ einer Meldung ab, die beschreibt, wie die Datei aussehen muss.
 
 - Jede Kopie einer Karte (außer Standardländern) wird einzeln als **Core**, **Splash**, **NoSplash** oder **Aus** markiert. Vorbelegung:
   Deck = Core, Sideboard = Aus.
-- **Kategorie je Karte** (Auswahl unter dem Bild, gilt für alle Kopien, höchstens eine): **★ Splashworthy**
+- **Kategorie je Karte** (Auswahl unter dem Bild, gilt für alle Kopien, höchstens eine): **♛ Matchwinner** (die Bombe:
+  entscheidet ein Match allein, kommt immer rein, notfalls als Splash), **★ Splashworthy**
   (entscheidet Spiele allein, soll auf jeden Fall rein, auch wenn wir die Farbe nicht spielen), **MustPlay**
   (wird gespielt, wenn wir diese Farbe spielen), **Filler** (füllt auf, wenn wir die Farbe spielen und nicht
   splashen) und **NeverPlay** (zu schlecht oder zu situativ). Die Kategorie ist unabhängig von
@@ -128,7 +129,7 @@ einer Meldung ab, die beschreibt, wie die Datei aussehen muss.
   Mit dem Haken **mitsimulieren** wird der Vorschlag beim Simulieren als weitere Variante („Vorschlag“) neben Splash
   und NoSplash verglichen, und die Deckliste-Export-Ansicht zeigt ihn als dritte Spalte.
 - **Zuordnung nach Kategorien setzen:** Der frühere Deck-Vorschlag: schreibt die Kategorien in die Zuordnung
-  (MustPlay → Core, Splashworthy → Splash, NeverPlay → Aus, Filler füllt zuerst Core, dann NoSplash auf die
+  (MustPlay → Core, Matchwinner und Splashworthy → Splash, NeverPlay → Aus, Filler füllt zuerst Core, dann NoSplash auf die
   Zielgröße). **↶ Rückgängig** stellt den Stand davor wieder her.
 - **Übersicht links:** Karten je Farbe (Weiß, Blau, Schwarz, Rot, Grün, Mehrfarbig, Farblos, Länder) mit Pool-Menge,
   Zuordnung (Core/Splash/NoSplash) und Kategorien. Gezählt werden Kopien ohne Standardländer.
@@ -222,6 +223,9 @@ In Arena muss unter Optionen → Konto „Detailed Logs (Plugin Support)“ eing
   „Spielbar“: Karten, die mit den eigenen Ländern auf dem Spielfeld bezahlbar sind (Haken an der Karte).
 - **Seitenfenster minimieren:** Knopf oben rechts oder Doppelklick: kleiner Kasten mit den Chancen auf Removal, Land
   und Kreatur (im Draft Pick, Archetyp, beste Karte). Im Spiel ist der Knopf „Deck übernehmen“ ausgeblendet.
+- **Deck-Übersicht nach dem Draft:** Nach dem Draft und zwischen den Spielen zeigt das Seitenfenster statt „Pick 43“
+  Archetyp und Bilanz, Karten/Länder/Zauber mit Ø Manawert, Mana-Kurve, Kreaturen, Removal, Kartenfluss, Zauber je
+  Farbe und die Bomben (Matchwinner, Splashworthy) des in Arena abgegebenen Hauptdecks (vorher: aller Picks).
 - **Deck übernehmen:** Nach dem Draft (42 Picks oder sobald Arena ein Deck meldet) erscheint auf der Seite und im
   Seitenfenster der Knopf „Deck + Sideboard übernehmen“. Er wird klickbar, sobald der Deckbau in Arena mit „Fertig“
   abgeschlossen ist, und schreibt Deck (mit Standardländern) und Sideboard in die Kartenpool-Datei: Deckkarten auf
