@@ -108,10 +108,12 @@ def rebuild_stats(args):
 
 
 class LiveDraft:
-    def __init__(self, log_path, pool_file, names=None, fetch=fetch_cards_cached, stats=None):
-        """stats: Pfad der Draft-Statistik (components/draftstats.py) oder None (keine Statistik)."""
+    def __init__(self, log_path, pool_file, names=None, fetch=fetch_cards_cached, stats=None, enemy_dir=None):
+        """stats: Pfad der Draft-Statistik (components/draftstats.py) oder None (keine Statistik); enemy_dir: Ordner
+        fuer Decks mit 4 Siegen (Gegnerdecks)."""
         self.log_path, self.pool_file = pathlib.Path(log_path), pathlib.Path(pool_file)
-        self.tracker = draftstats.Tracker(stats, self._lookup, self._set_lookup) if stats else None
+        self.tracker = draftstats.Tracker(stats, self._lookup, self._set_lookup, enemy_dir=enemy_dir,
+                                          card_info=self._card_info) if stats else None
         self._names, self.fetch = names, fetch
         self.follower = arenalog.LogFollower(log_path)
         self.state = arenalog.DraftState()
@@ -122,6 +124,16 @@ class LiveDraft:
         self.game = gamestate.GameState()  # laufendes Spiel (Ziehchancen)
         self.deck = None  # zuletzt in Arena abgegebenes Deck eines Draft-Events {"main", "side"} (GrpId -> Anzahl)
         self.seen = set()  # Arena-Nummern aller Karten, die in Packs dieses Programmlaufs zu sehen waren
+
+    def _card_info(self, grp):
+        """Name, Set, Nummer und Farben (Scryfall, sonst ohne Farben) fuer die Gegnerdeck-Datei."""
+        info = self.names().get(grp)
+        if not info:
+            return None
+        if info["name"] not in self.cards:
+            self._load_cards([grp])
+        card = self.cards.get(info["name"]) or {}
+        return dict(info, colors=card.get("colors") or [], cost=card.get("cost") if card.get("found") else None)
 
     def _set_lookup(self, grp):
         info = self.names().get(grp)
@@ -296,6 +308,9 @@ class LiveDraft:
                 time.sleep(interval)
         threading.Thread(target=loop, daemon=True).start()
 
+    def _saved(self):
+        return self.tracker.last_saved if self.tracker else None
+
     def known_names(self):
         with self.lock:
             return {c["name"] for c in (self._card(g) for g in self.seen | set(self.state.picks)) if c}
@@ -316,7 +331,7 @@ class LiveDraft:
                 return {"status": "nolog", "version": self.version,
                         "message": f"Arena-Protokoll nicht gefunden: {self.log_path}. {DETAILED_LOGS}"}
             if not (self.state.draft or self.state.event):
-                return {"status": "idle", "version": self.version, "game": game,
+                return {"status": "idle", "version": self.version, "game": game, "enemy_saved": self._saved(),
                         "message": "Noch kein Draft im Protokoll – starte einen Draft in Arena. Erscheint auch dann "
                                    "nichts: " + DETAILED_LOGS}
             pack = [c for c in (self._card(g) for g in self.state.pack) if c]
@@ -339,7 +354,7 @@ class LiveDraft:
                 "event": event or "", "set": code or "", "pick": n_picks + 1, "pack": ranked,
                 "picks": [c["name"] for c in picks], "unknown": unknown, "detect": detect,
                 "deck": deck, "complete": deck["ready"] or n_picks >= DRAFT_PICKS, "game": game,
-                "draftinfo": draftinfo, "archmap": archmap,
+                "draftinfo": draftinfo, "archmap": archmap, "enemy_saved": self._saved(),
                 "archetypes": found,
                 "cardarch": {n: v for n, v in (assign or {}).items() if n in names},
                 "ratings": {n: v for n, v in (ratings or {}).items() if n in names}}

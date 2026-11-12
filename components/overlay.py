@@ -1,12 +1,17 @@
 """Seitenfenster fuer den Live-Draft (--overlay URL): ein kleines Fenster, das immer im Vordergrund bleibt und das
 aktuelle Pack als Rangliste zeigt (Stand von /api/live des Drafthelpers, jede Sekunde neu).
 
+Holt ein Deck seinen 4. Sieg (Gegnerdeck gespeichert), feiert das Fenster kurz mit Pokal und Konfetti
+(celebrate) und meldet die Aufnahme in die "Hall of Game" der Gegnerdecks.
+
 Der Knopf oben rechts (oder ein Doppelklick ins Fenster) minimiert es zu einem kleinen Kasten (mini_rows): im Spiel
 nur die Chancen auf Removal, Land und Kreatur, im Draft Pick, Archetyp und beste Karte. Noch einmal klicken klappt es
 wieder auf. Arena muss dafuer im Fenster oder im randlosen Vollbild laufen; ueber exklusivem Vollbild liegt kein Fenster.
 Nur Standardbibliothek (tkinter). Das Fenster schliesst sich, wenn der Drafthelper beendet wurde.
 """
 import json
+import math
+import random
 import urllib.error
 import urllib.request
 
@@ -21,6 +26,110 @@ def _arch_name(snap, colors):
         if s["colors"] == colors:
             return s["name"]
     return colors
+
+
+CONFETTI_COLORS = ("#ffd166", "#ef476f", "#06d6a0", "#118ab2", "#f78c6b", "#c77dff", "#ffffff")
+GRAVITY = 260.0  # Pixel je Sekunde^2
+PARTY_SECONDS = 7
+
+
+def new_celebration(last, snap):
+    """Name des Gegnerdecks, das neu gefeiert werden soll (anders als das zuletzt gefeierte), sonst None."""
+    name = (snap or {}).get("enemy_saved")
+    return name if name and name != last else None
+
+
+def celebration_lines(name):
+    """Texte der Feier (nur Zeichen, die tkinter darstellen kann: keine Emoji)."""
+    short = name[:-4] if name.endswith(".txt") else name
+    return ["4 Siege!", "Aufgenommen in die Hall of Game", "der Gegnerdecks", short]
+
+
+def make_confetti(n, width, height, rng):
+    """n Konfetti-Teile oberhalb des Fensters: Lage, Geschwindigkeit, Groesse, Farbe, Drehung."""
+    return [{"x": rng.uniform(0, width), "y": rng.uniform(-height, -5), "vx": rng.uniform(-40, 40),
+             "vy": rng.uniform(20, 90), "w": rng.uniform(5, 10), "h": rng.uniform(3, 6),
+             "color": rng.choice(CONFETTI_COLORS), "angle": rng.uniform(0, 6.28), "spin": rng.uniform(-6, 6)}
+            for _ in range(n)]
+
+
+def step_confetti(parts, dt):
+    """Bewegt die Teile um dt Sekunden (Schwerkraft, leichtes Flattern, Drehung)."""
+    for p in parts:
+        p["vy"] += GRAVITY * dt * 0.35
+        p["x"] += (p["vx"] + 25 * math.sin(p["angle"])) * dt
+        p["y"] += p["vy"] * dt
+        p["angle"] += p["spin"] * dt
+    return parts
+
+
+def celebrate(root, name, seconds=PARTY_SECONDS):
+    """Kleines Fenster ueber dem Seitenfenster: Pokal, fallendes Konfetti und die Nachricht; schliesst sich nach
+    einigen Sekunden oder per Klick."""
+    import tkinter as tk
+    w, h = 380, 330
+    top = tk.Toplevel(root)
+    top.overrideredirect(True)
+    top.attributes("-topmost", True)
+    x = max(0, root.winfo_rootx() + root.winfo_width() - w)
+    top.geometry(f"{w}x{h}+{x}+{max(0, root.winfo_rooty())}")
+    cv = tk.Canvas(top, width=w, height=h, bg="#161b24", highlightthickness=2, highlightbackground="#ffd166")
+    cv.pack()
+    gold, dark = "#f4c430", "#b8860b"
+    cx, cy = w // 2, 120
+
+    def trophy(dy):
+        cv.delete("trophy")
+        t = ("trophy",)
+        cv.create_arc(cx - 70, cy - 55 + dy, cx - 20, cy + 5 + dy, start=90, extent=180, style="arc", width=7,
+                      outline=dark, tags=t)
+        cv.create_arc(cx + 20, cy - 55 + dy, cx + 70, cy + 5 + dy, start=270, extent=180, style="arc", width=7,
+                      outline=dark, tags=t)
+        cv.create_polygon(cx - 45, cy - 60 + dy, cx + 45, cy - 60 + dy, cx + 32, cy + 5 + dy, cx + 10, cy + 22 + dy,
+                          cx - 10, cy + 22 + dy, cx - 32, cy + 5 + dy, fill=gold, outline=dark, width=2, tags=t)
+        cv.create_oval(cx - 45, cy - 68 + dy, cx + 45, cy - 52 + dy, fill="#ffe08a", outline=dark, width=2, tags=t)
+        cv.create_rectangle(cx - 7, cy + 22 + dy, cx + 7, cy + 42 + dy, fill=gold, outline=dark, tags=t)
+        cv.create_rectangle(cx - 30, cy + 42 + dy, cx + 30, cy + 54 + dy, fill=dark, outline=dark, tags=t)
+        cv.create_text(cx, cy - 22 + dy, text="4", font=("Segoe UI", 26, "bold"), fill="#7a5200", tags=t)
+
+    lines = celebration_lines(name)
+    cv.create_text(cx, 210, text=lines[0], font=("Segoe UI", 20, "bold"), fill="#ffd166")
+    cv.create_text(cx, 245, text=lines[1], font=("Segoe UI", 13, "bold"), fill="#e8ecf3")
+    cv.create_text(cx, 267, text=lines[2], font=("Segoe UI", 13, "bold"), fill="#e8ecf3")
+    cv.create_text(cx, 298, text=lines[3], font=("Segoe UI", 9), fill="#8d97a8", width=w - 20)
+    parts = make_confetti(70, w, h, random.Random())
+    import time
+    state = {"t": 0.0, "alive": True, "start": time.monotonic(), "last": time.monotonic()}
+
+    def close(_e=None):
+        if state["alive"]:
+            state["alive"] = False
+            top.destroy()
+
+    def frame():
+        if not state["alive"]:
+            return
+        now = time.monotonic()  # echte Zeit: das Zeichnen darf dauern, die Feier endet trotzdem puenktlich
+        dt, state["last"], state["t"] = min(0.1, now - state["last"]), now, now - state["start"]
+        trophy(-6 * abs(math.sin(state["t"] * 3)))
+        step_confetti(parts, dt)
+        cv.delete("confetti")
+        for p in parts:
+            if p["y"] > h + 10:  # unten raus: oben neu, solange gefeiert wird
+                if state["t"] < seconds - 2:
+                    p["y"], p["vy"] = -10, 40
+                continue
+            dx, dy = math.cos(p["angle"]) * p["w"] / 2, math.sin(p["angle"]) * p["w"] / 2
+            cv.create_line(p["x"] - dx, p["y"] - dy, p["x"] + dx, p["y"] + dy, width=p["h"], fill=p["color"],
+                           tags=("confetti",))
+        if state["t"] >= seconds:
+            close()
+            return
+        top.after(33, frame)
+
+    cv.bind("<Button-1>", close)
+    frame()
+    return top
 
 
 def _num(x):
@@ -109,6 +218,10 @@ def rows_for(snap):
         return [("draftgott Live", "head"), ("Drafthelper nicht erreichbar …", "msg")]
     if (snap.get("game") or {}).get("active"):
         return game_rows(snap["game"])
+    if snap.get("enemy_saved"):
+        return ([("★ 4 Siege: aufgenommen in die Hall of Game der Gegnerdecks", "head2"),
+                 (f"Gegnerdeck gespeichert: {snap['enemy_saved']}", "arch")]
+                + rows_for(dict(snap, enemy_saved=None)))
     status = snap.get("status")
     if status in ("nolog", "idle", "off"):
         return [("draftgott Live", "head"), (snap.get("message") or "Kein Live-Draft.", "msg")]
@@ -213,7 +326,8 @@ def run(url, interval_ms=1000):
         text.tag_configure("mini_" + tag, font=("Segoe UI", 13, "bold"), spacing1=3, spacing3=3,
                            background=COLORS.get(tag, COLORS["bg"]) if tag in ("arch", "color") else COLORS["bg"],
                            foreground=COLORS["head"] if tag == "head" else COLORS["ink"])
-    state = {"last": None, "seen": False, "misses": 0, "mini": False, "big": None, "snap": None}
+    state = {"last": None, "seen": False, "misses": 0, "mini": False, "big": None, "snap": None,
+             "party": None, "first": True}
 
     def set_mini(mini):
         x, y = root.winfo_x(), root.winfo_y()
@@ -267,6 +381,16 @@ def run(url, interval_ms=1000):
             state["seen"], state["misses"] = True, 0
         state["snap"] = snap
         render()
+        party = new_celebration(state["party"], snap)
+        if party:
+            state["party"] = party
+            if not state["first"]:  # beim Start nicht fuer ein schon gespeichertes Deck feiern
+                try:
+                    celebrate(root, party)
+                except tk.TclError:
+                    pass
+        if snap is not None:
+            state["first"] = False
         root.after(interval_ms, tick)
 
     tick()

@@ -589,7 +589,7 @@ def serve(args, simulate, save, battle=None, save_battle=None):
            "ratings": ratings_path(args), "cardarch": archetypes_path(args), "stats": stats_path(args)}
     if live_mode:
         log = pathlib.Path(args.arena_log) if args.arena_log else default_log_path()
-        live = LiveDraft(log, pool_path(args.drafthelper), stats=app["stats"])
+        live = LiveDraft(log, pool_path(args.drafthelper), stats=app["stats"], enemy_dir=SCRIPT_DIR / "enemydecks")
         print(f"Live-Draft: lese {log}, Draft-Statistik in {app['stats']}", file=sys.stderr)
         live.read_previous(log.with_name("Player-prev.log"))
         live.step()  # bisheriger Stand des Protokolls (laufender Draft), danach im Hintergrund weiter
@@ -1725,8 +1725,10 @@ function renderLive(){
   db.disabled=!dk.ready||dk.applied;
   db.textContent=dk.applied?"Deck übernommen ✓":dk.ready?"Deck + Sideboard übernehmen ("+dk.main+" + "+dk.side+")":
     "Nach „Fertig“ in Arena: Deck + Sideboard übernehmen";
-  const msg=live.complete&&!dk.ready?"Draft fertig. Sobald du in Arena den Deckbau mit „Fertig“ abschließt, lässt sich das Deck mit Sideboard übernehmen.":
-    live.status==="waiting"?"Warte auf das nächste Pack …":(live.message||"");
+  const saved=live.enemy_saved?"🏆 4 Siege: aufgenommen in die Hall of Game der Gegnerdecks ("+live.enemy_saved+") · ":"";
+  if(live.enemy_saved&&live.enemy_saved!==window.lastSaved){window.lastSaved=live.enemy_saved;loadEnemies()}
+  const msg=saved+(live.complete&&!dk.ready?"Draft fertig. Sobald du in Arena den Deckbau mit „Fertig“ abschließt, lässt sich das Deck mit Sideboard übernehmen.":
+    live.status==="waiting"?"Warte auf das nächste Pack …":(live.message||""));
   $("lmsg").textContent=msg+(live.unknown&&live.unknown.length?" ("+live.unknown.length+" Karten ohne Namen: Arena-Kartendatenbank nicht gefunden?)":"");
   const tips=$("ltips");tips.textContent="";
   const a=(live.archetypes||[]).find(x=>x.colors===m);if(a)a.tips.forEach(t=>tips.appendChild(el("li",null,t)));

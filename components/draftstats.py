@@ -14,6 +14,13 @@ Draft (nicht mitgelesen), entsteht ein Eintrag ohne Picks. Leere Decks (Event oh
 (draftgott neu gestartet) aendert nichts: Matches zaehlen je Match-Kennung, Picks nur, wenn sie die bekannten
 fortsetzen.
 
+Gegnerdeck (enemy_dir): Holt ein Draft seinen 4. Match-Sieg, wird das Deck dieses Matches (mit dem Sideboard des
+Drafts) einmal als enemydecks/drafted_<SET>_4wins_<Farben>_<JJJJ-MM-TT>_<hhmm>.txt gespeichert (Zeit des 4. Siegs aus
+dem Protokoll). Farben (color_name): aus den Nicht-Land-Karten des Hauptdecks, nach den Farben, die ihre Manakosten
+verlangen (cost_colors; zweifarbige Hybridsymbole zaehlen fuer eine Farbe, die das Deck ohnehin spielt, {2/W} und
+Phyrexian gar nicht), die mit den meisten Karten zuerst (Gleichstand: WUBRG); eine Farbe mit hoechstens SPLASH_MAX Karten heisst "splash<farbe>", wenn es eine staerkere gibt.
+Eine vorhandene Datei wird nie ueberschrieben; der Draft merkt sich den Namen ("enemy_deck").
+
 Zahlen je Karte (card_stats): gedraftet (Kopien), Drafts, Decks (im Hauptdeck), Games/Siege und Matches/Siege mit der
 Karte im Hauptdeck des Matches, Durchschnitt der Pick-Nummer im Pack (1 = erster Pick aus einem vollen Pack; bei Pick
 Two zaehlen Picks, nicht Karten).
@@ -24,6 +31,7 @@ import json
 import os
 import pathlib
 import re
+import sys
 
 from components import arenalog
 from components import archetypes as set_archetypes
@@ -31,7 +39,77 @@ from components import cardarchetypes
 
 BASICS = {"Plains", "Island", "Swamp", "Mountain", "Forest", "Wastes"}
 DECK_MATCH = 0.8
-_DATE = re.compile(r"\b(\d{1,2})\.(\d{1,2})\.(\d{4}) \d{1,2}:\d{2}")
+ENEMY_WINS = 4
+SPLASH_MAX = 2
+COLOR_WORD = {"W": "white", "U": "blue", "B": "black", "R": "red", "G": "green"}
+_DATE_DE = re.compile(r"\b(\d{1,2})\.(\d{1,2})\.(\d{4}) (\d{1,2}):(\d{2})")
+_DATE_EN = re.compile(r"\b(\d{1,2})/(\d{1,2})/(\d{4}) (\d{1,2}):(\d{2}):\d{2}(?: ?([AP]M))?")
+
+
+def log_stamp(line):
+    """"JJJJ-MM-TT hh:mm" aus dem Zeitstempel einer Protokollzeile (deutsch 12.11.2026 20:47:13 oder englisch
+    11/12/2026 8:47:13 PM) oder None."""
+    head = (line or "")[:90]
+    m = _DATE_DE.search(head)
+    if m:
+        d, mo, y, h, mi = m.groups()
+    else:
+        m = _DATE_EN.search(head)
+        if not m:
+            return None
+        mo, d, y, h, mi, ampm = m.groups()
+        h = int(h) % 12 + (12 if ampm == "PM" else 0) if ampm else int(h)
+    return f"{y}-{int(mo):02d}-{int(d):02d} {int(h):02d}:{mi}"
+
+
+def cost_colors(cost):
+    """Farben, die Manakosten verlangen: ["W", "U"] fuer {W}{U}; zweifarbiges Hybrid als "G/W"; {2/W} und Phyrexian
+    ({W/P}) sind auch ohne die Farbe bezahlbar und fehlen."""
+    out = []
+    for sym in re.findall(r"\{([^}]+)\}", cost or ""):
+        parts = sym.upper().split("/")
+        colored = [p for p in parts if p in COLOR_WORD]
+        if len(parts) == 1 and colored:
+            token = colored[0]
+        elif len(parts) == 2 and len(colored) == 2:
+            token = "/".join(colored)
+        else:
+            continue
+        if token not in out:
+            out.append(token)
+    return out
+
+
+def color_name(main, colors):
+    """Farben eines Hauptdecks ({Name: Anzahl}) fuer den Dateinamen, z. B. "redwhite", "whitesplashred", "red".
+    colors: je Name die Farben (Hybrid als "G/W", siehe cost_colors)."""
+    count, hybrid = {}, []
+    for name, qty in main.items():
+        cs = colors.get(name) or []
+        plain = [c for c in cs if c in COLOR_WORD]
+        for c in plain:
+            count[c] = count.get(c, 0) + qty
+        if not plain:
+            options = [c for token in cs if "/" in token for c in token.split("/") if c in COLOR_WORD]
+            if options:
+                hybrid.append((options, qty))
+    for options, qty in hybrid:  # Hybrid: fuer die staerkste Farbe, die das Deck schon spielt, sonst die erste
+        known = [c for c in options if c in count]
+        c = max(known, key=lambda x: count[x]) if known else options[0]
+        count[c] = count.get(c, 0) + qty
+    if not count:
+        return "colorless"
+    order = sorted(count, key=lambda c: (-count[c], "WUBRG".index(c)))
+    top = count[order[0]]
+    main_colors = [c for c in order if count[c] > SPLASH_MAX or top <= SPLASH_MAX]
+    splash = [c for c in order if c not in main_colors]
+    return "".join(COLOR_WORD[c] for c in main_colors) + "".join("splash" + COLOR_WORD[c] for c in splash)
+
+
+def enemy_file_name(set_code, colors, stamp):
+    """drafted_<SET>_4wins_<Farben>_<JJJJ-MM-TT>_<hhmm>.txt"""
+    day, _, clock = stamp.partition(" ")
+    return f"drafted_{set_code.upper()}_{ENEMY_WINS}wins_{colors}_{day}_{clock.replace(':', '')}.txt"
 
 
 def empty():
@@ -68,9 +146,14 @@ def _prefix(a, b):
 class Tracker:
     """Liest Protokollzeilen (feed_line) und schreibt Aenderungen sofort in die Datei. lookup(GrpId) -> Name."""
 
-    def __init__(self, path, lookup, set_lookup=None):
-        """lookup(GrpId) -> Name, set_lookup(GrpId) -> Setcode (fuer Drafts ohne Eventnamen)."""
+    def __init__(self, path, lookup, set_lookup=None, enemy_dir=None, card_info=None):
+        """lookup(GrpId) -> Name, set_lookup(GrpId) -> Setcode (fuer Drafts ohne Eventnamen); enemy_dir: Ordner fuer
+        Decks mit 4 Siegen (None: nichts speichern), card_info(GrpId) -> {"name", "set", "number", "colors"}."""
         self.path, self.lookup, self.set_lookup = pathlib.Path(path), lookup, set_lookup
+        self.enemy_dir, self.card_info = (pathlib.Path(enemy_dir) if enemy_dir else None), card_info
+        self.prints, self.colors = {}, {}  # Name -> (Set, Nummer) bzw. Farben, aus den Decks
+        self.stamp = None
+        self.last_saved = None
         self.data = load_stats(path)
         self.state = arenalog.DraftState()
         self.user = None
@@ -82,7 +165,8 @@ class Tracker:
 
     def _new(self, event, draft_id=None):
         rec = {"event": event, "set": arenalog.set_from_event(event) or "", "draft_id": draft_id,
-               "started": self.date or datetime.date.today().isoformat(), "picks": [], "pick_sizes": [],
+               "started": (self.stamp or "")[:10] or datetime.date.today().isoformat(), "picks": [],
+               "pick_sizes": [],
                "deck": None, "matches": []}
         self.data["drafts"].append(rec)
         return rec
@@ -141,6 +225,13 @@ class Tracker:
             return False
         deck = {"main": {self._name(g): q for g, q in ev["main"].items()},
                 "side": {self._name(g): q for g, q in ev["side"].items()}}
+        if self.card_info:
+            for g in list(ev["main"]) + list(ev["side"]):
+                info = self.card_info(g)
+                if info:
+                    self.prints[info["name"]] = (info.get("set") or "", info.get("number") or "")
+                    self.colors[info["name"]] = (cost_colors(info["cost"]) if info.get("cost") is not None
+                                                 else list(info.get("colors") or []))
         if not deck["main"]:
             return False
         self.decks[ev["event"]] = deck
@@ -176,14 +267,46 @@ class Tracker:
                 if m["id"] == ev["match"] and m["win"] is None and ev["winner"] is not None:
                     m["games"] = [w == m["team"] for w in ev["games"]] or [ev["winner"] == m["team"]]
                     m["win"] = ev["winner"] == m["team"]
+                    if m["win"]:
+                        self._save_enemy(r, m)
                     return True
         return False
 
+    def _line(self, name, qty):
+        code, number = self.prints.get(name, ("", ""))
+        return f"{qty} {name}" + (f" ({code}) {number}" if code and number else "")
+
+    def _save_enemy(self, rec, match):
+        """Beim 4. Sieg das Deck des Matches einmal als Gegnerdeck speichern (siehe Modulbeschreibung)."""
+        wins = sum(1 for m in rec["matches"] if m.get("win"))
+        if not self.enemy_dir or wins != ENEMY_WINS or rec.get("enemy_deck") or not match.get("deck"):
+            return
+        main = match["deck"]
+        side = (rec.get("deck") or {}).get("side") or {}
+        colors = color_name({n: q for n, q in main.items() if n not in BASICS}, self.colors)
+        stamp = self.stamp or datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        name = enemy_file_name(rec.get("set") or "XXX", colors, stamp)
+        rec["enemy_deck"] = name
+        path = self.enemy_dir / name
+        if path.exists():
+            return
+        lines = ["Deck"] + [self._line(n, q) for n, q in main.items()]
+        if side:
+            lines += ["", "Sideboard"] + [self._line(n, q) for n, q in side.items()]
+        try:
+            self.enemy_dir.mkdir(exist_ok=True)
+            path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        except OSError as e:
+            print(f"Gegnerdeck nicht gespeichert: {e}", file=sys.stderr)
+            return
+        self.last_saved = name
+        print(f"Gegnerdeck gespeichert: {path}", file=sys.stderr)
+
     def feed_line(self, line):
         """Verarbeitet eine Protokollzeile; True (und Datei geschrieben), wenn sich die Statistik geaendert hat."""
-        m = _DATE.search(line[:80]) if line else None
-        if m:
-            self.date = f"{m.group(3)}-{int(m.group(2)):02d}-{int(m.group(1)):02d}"
+        stamp = log_stamp(line)
+        if stamp:
+            self.stamp = stamp
         changed = False
         for ev in arenalog.scan_line(line):
             if self.state.feed(ev):

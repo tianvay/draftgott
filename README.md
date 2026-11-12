@@ -233,6 +233,12 @@ In Arena muss unter Optionen → Konto „Detailed Logs (Plugin Support)“ eing
   und Drafts mit Menschen nennt das Protokoll beim Draften kein Event: das Set kommt dann aus den Karten, das Event
   mit dem ersten passenden Deck. `--statistik-neu` baut die Statistik aus beiden Protokolldateien neu auf.
 
+- **Gegnerdecks aus 4-Sieg-Decks:** Holt ein mitgelesener Draft seinen 4. Match-Sieg, wird sein Deck (mit
+  Sideboard) einmal als `enemydecks/drafted_<SET>_4wins_<Farben>_<JJJJ-MM-TT>_<hhmm>.txt` gespeichert. Farben aus den
+  Nicht-Land-Karten des Hauptdecks, die stärkste zuerst; bis 2 Karten als Splash (`redwhitesplashblue`). Vorhandene
+  Dateien werden nie überschrieben. Das Seitenfenster feiert die Aufnahme in die „Hall of Game“ mit Pokal und
+  Konfetti.
+
 ### Setauswertung (`--setauswertung [SET]`)
 
 Menüpunkt **4** in `draftgott.bat`: schreibt `setauswertung_<set>.html` aus der Draft-Statistik und öffnet sie
