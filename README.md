@@ -71,6 +71,8 @@ Projektordner geklärt; Abweichungen davon stehen mit Regelnummer im Code bzw. i
 | `components/arenalog.py` | MTG Arena: Packs und Picks aus `Player.log`, Kartennamen aus Arenas Kartendatenbank |
 | `components/livedraft.py` | Live-Draft: Protokoll mitlesen, Picks in die Pool-Datei, Pack bewerten |
 | `components/overlay.py` | Seitenfenster des Live-Drafts (tkinter, immer im Vordergrund) |
+| `components/draftstats.py` | Draft-Statistik (`draftstatistik.json`): Decks und Matches sammeln, Zahlen je Karte |
+| `components/setreport.py` | Setauswertung als HTML-Seite (`--setauswertung`) |
 | `components/symbols.py` | Original-Manasymbole von Scryfall (Cache `scryfall_symbols.json`) |
 | `components/stats.py` | Ampel-Schwellen, Zeitkennzahlen, Signifikanz-Rechnung |
 | `components/html_base.py` | Gemeinsames Design (CSS im Stil des Drafthelpers), Seitenlayout, Tabellen, SVG-Diagramme |
@@ -172,7 +174,7 @@ einer Meldung ab, die beschreibt, wie die Datei aussehen muss.
 - **Start per Doppelklick (Windows):** `draftgott.bat` im Projektordner doppelklicken. Ein Menü fragt nach der
   Betriebsart: **1 = Analyse** (simuliert `_normaldeck.txt` mit 10 000 Spielen, schreibt `meinbericht.html` und
   zeigt ihn über den Berichts-Server, damit „Kampf simulieren“ im Bericht funktioniert) oder **2 = Drafthelper**
-  (Kartenseite mit `_draftedcardpool.txt`) oder **3 = Live-Draft** (siehe unten). Das Skript sucht Python selbst (`py` oder `python`). In beiden Fällen
+  (Kartenseite mit `_draftedcardpool.txt`), **3 = Live-Draft** oder **4 = Setauswertung** (siehe unten). Das Skript sucht Python selbst (`py` oder `python`). In allen Fällen
   das schwarze Fenster offen lassen und zum Beenden den Button „Beenden“ auf der Seite benutzen oder das Fenster
   schließen. Weitere Parameter werden an den gewählten Aufruf angehängt (`draftgott.bat --sims 1000`).
 - **Simulieren** baut die Varianten *Core + Splash* und *Core + NoSplash*, simuliert beide und zeigt den
@@ -207,6 +209,17 @@ In Arena muss unter Optionen → Konto „Detailed Logs (Plugin Support)“ eing
 - **Seitenfenster:** kleines Fenster, immer im Vordergrund, mit Archetyp und Rangliste (● zugeordnet, ○ Farben
   passen). Arena im Fenster oder randlosen Vollbild spielen. `--kein-overlay` schaltet es ab, `--overlay URL` öffnet
   es einzeln, `--arena-log DATEI` nimmt ein anderes Protokoll.
+- **Draft-Statistik:** Je Draft werden Picks, abgegebenes Deck und Match-Ergebnisse (je Game und Match) in
+  `draftstatistik.json` gesammelt (nicht im Git, `--statistik DATEI`), nur Draft- und Sealed-Events. Beim Start wird
+  auch `Player-prev.log` nachgelesen; doppelt Gelesenes zählt nicht doppelt. An jeder Karte, im Seitenfenster und
+  im Bericht: gedraftet, im Deck, Siegquote der Games mit der Karte im Hauptdeck (unter 20 Games grau).
+
+### Setauswertung (`--setauswertung [SET]`)
+
+Menüpunkt **4** in `draftgott.bat`: schreibt `setauswertung_<set>.html` aus der Draft-Statistik und öffnet sie
+(ohne SET das Set mit den meisten Drafts). Abschnitte: Überblick, Archetypen, beste und schwächste Karten (ab 10
+Games), alle Karten (sortierbar: gedraftet, Ø Pick-Nummer im Pack, im Deck, Games, Siegquote, Matches), Bewertung
+gegen Ergebnis je Kategorie, Liste der Drafts.
 
 ## Schnellstart
 
@@ -354,6 +367,8 @@ Aktivierung pro Runde sind fest im Skript (siehe „Feste Annahmen“).
 | `--arena-log DATEI` | `…/LocalLow/Wizards Of The Coast/MTGA/Player.log` | Live-Draft: Pfad des Arena-Protokolls. |
 | `--kein-overlay` | aus | Live-Draft ohne Seitenfenster. |
 | `--overlay URL` | | Nur das Seitenfenster für einen laufenden Live-Draft öffnen. |
+| `--statistik DATEI` | `draftstatistik.json` | Draft-Statistik des Live-Drafts (nicht im Git). |
+| `--setauswertung [SET]` | | Setauswertung als HTML-Seite `setauswertung_<set>.html` (ohne SET: Set mit den meisten Drafts). |
 | `--neu-laden` | aus | Kartendaten werden in `scryfall_cache.json` neben dem Script gespeichert, bei späteren Läufen werden nur unbekannte Karten nachgeladen. Mit `--neu-laden` wird alles frisch von Scryfall geholt. |
 | `--ausgabe DATEI` (auch `--html DATEI`) | `mtg_bericht.html` | Name und Ort des HTML-Berichts. Eine vorhandene Datei wird überschrieben. |
 | `--nicht-oeffnen` | aus (Bericht wird geöffnet) | Der Bericht wird nur gespeichert, der Browser öffnet sich nicht. |

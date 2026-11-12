@@ -10,6 +10,11 @@ Die Formate unterscheiden sich je Draft-Art und Arena-Version; erkannt werden da
             zaehlen Deck-Skins ("GrpId") und Spielnachrichten ("CardId") nicht
   - Bisher gewaehlt: "PickedCards" (Quick Draft / Pick Two, gilt dann als vollstaendige Liste)
   - Draft-Kennung "draftId"/"DraftId", Event "EventName"/"EventId"/"InternalEventName"
+Fuer die Draft-Statistik (scan_match_line):
+  - eigene Kennung: "authenticateResponse" -> "clientId" bzw. Zeilen "Match to <Kennung>:"
+  - Deck eines Events: "Deck" oder "CourseDeck" mit "MainDeck"/"Sideboard" ([{cardId, quantity}]) und Eventname
+  - Match-Beginn: "reservedPlayers" (userId, teamId, eventId) mit "matchId"
+  - Match-Ende: "finalMatchResult" mit "resultList" (je Game und fuer das Match das Siegerteam)
 Eingebettetes JSON in Textfeldern ("request", "Payload") wird mit gelesen. Karten stehen als Arena-Nummern (GrpId)
 drin; die Namen kommen aus Arenas Kartendatenbank (Raw_CardDatabase_*.mtga, SQLite) oder aus den arena_id von
 Scryfall.
@@ -27,6 +32,8 @@ NUMBER_KEYS = ("Pick", "PickNumber", "SelfPick", "Pack", "PackNumber")  # ein Pi
 DRAFT_KEYS = ("draftId", "DraftId")
 EVENT_KEYS = ("EventName", "EventId", "InternalEventName")
 _HINTS = ("Pack", "Pick", "Draft")  # schnelle Vorauswahl: nur solche Zeilen werden als JSON gelesen
+_MATCH_HINTS = ("authenticateResponse", "MainDeck", "reservedPlayers", "finalMatchResult")
+_MATCH_TO = re.compile(r"Match to ([A-Z0-9]{16,}):")
 _DECODER = json.JSONDecoder()
 INSTALL_DIRS = (  # uebliche Installationsorte (Rueckfall, wenn das Protokoll keinen Pfad nennt)
     "C:/Program Files/Wizards of the Coast/MTGA/MTGA_Data",
@@ -135,6 +142,64 @@ def scan_line(line):
     return events
 
 
+def _deck_counts(value):
+    """{GrpId: Anzahl} aus [{"cardId", "quantity"}] oder None, wenn es keine solche Liste ist."""
+    if not isinstance(value, list):
+        return None
+    out = {}
+    for item in value:
+        if not isinstance(item, dict) or not isinstance(item.get("cardId"), int):
+            return None
+        q = item.get("quantity", 1)
+        out[item["cardId"]] = out.get(item["cardId"], 0) + (q if isinstance(q, int) else 1)
+    return out
+
+
+def scan_match_line(line):
+    """Ereignisse fuer die Draft-Statistik: [{"kind": "user"|"deck"|"match_start"|"match_end", ...}]
+    (siehe Modulbeschreibung)."""
+    if not line:
+        return []
+    m = _MATCH_TO.search(line)
+    if m:
+        return [{"kind": "user", "id": m.group(1)}]
+    if not any(h in line for h in _MATCH_HINTS):
+        return []
+    dicts = [d for obj in _json_values(line) for d in _walk(obj)]
+    if not dicts:
+        return []
+    events = []
+    event = _first(dicts, EVENT_KEYS)
+    for d in dicts:
+        auth = d.get("authenticateResponse")
+        if isinstance(auth, dict) and isinstance(auth.get("clientId"), str):
+            events.append({"kind": "user", "id": auth["clientId"]})
+        for key in ("Deck", "CourseDeck"):
+            deck = d.get(key)
+            if isinstance(deck, dict) and event:
+                main = _deck_counts(deck.get("MainDeck"))
+                if main is not None:
+                    events.append({"kind": "deck", "event": event, "main": main,
+                                   "side": _deck_counts(deck.get("Sideboard")) or {}})
+        players = d.get("reservedPlayers")
+        if isinstance(players, list) and isinstance(d.get("matchId"), str):
+            found = [{"user": p.get("userId"), "team": p.get("teamId")} for p in players if isinstance(p, dict)]
+            ev = next((p.get("eventId") for p in players if isinstance(p, dict) and p.get("eventId")), None)
+            events.append({"kind": "match_start", "match": d["matchId"], "event": ev, "players": found})
+        result = d.get("finalMatchResult")
+        if isinstance(result, dict) and isinstance(result.get("matchId"), str):
+            games, winner = [], None
+            for r in result.get("resultList") or []:
+                if not isinstance(r, dict):
+                    continue
+                if r.get("scope") == "MatchScope_Game":
+                    games.append(r.get("winningTeamId"))
+                elif r.get("scope") == "MatchScope_Match":
+                    winner = r.get("winningTeamId")
+            events.append({"kind": "match_end", "match": result["matchId"], "games": games, "winner": winner})
+    return events
+
+
 def set_from_event(name):
     """Setcode aus einem Eventnamen wie "PickTwoDraft_TRK_20261110" oder None."""
     m = re.search(r"_([A-Z0-9]{3})_", name or "")
@@ -148,11 +213,12 @@ class DraftState:
     def __init__(self):
         self.draft = self.event = None
         self.pack, self.picks = [], []
+        self.pick_sizes = []  # je Pick: Groesse des Packs, aus dem gewaehlt wurde (None: unbekannt)
         self.waiting = False
         self._packs = []  # [(Kartenmenge, schon gewaehlt?)] der gesehenen Packs, neueste zuletzt
 
     def _reset(self):
-        self.pack, self.picks, self.waiting, self._packs = [], [], False, []
+        self.pack, self.picks, self.pick_sizes, self.waiting, self._packs = [], [], [], False, []
 
     def feed(self, ev):
         """Verarbeitet ein Ereignis aus scan_line; True, wenn sich etwas geaendert hat."""
@@ -169,6 +235,10 @@ class DraftState:
                 self.pack, self.waiting = cards, False
                 self._packs.append([set(cards), False])
         elif ev["kind"] == "picked":
+            if cards[:len(self.picks)] == self.picks:
+                self.pick_sizes = self.pick_sizes[:len(self.picks)] + [None] * (len(cards) - len(self.picks))
+            else:
+                self.pick_sizes = [None] * len(cards)
             self.picks = cards
         elif ev["kind"] == "pick":
             source = next((p for p in reversed(self._packs) if set(cards) <= p[0]), None)
@@ -176,10 +246,12 @@ class DraftState:
                 if not source[1]:
                     source[1] = True
                     self.picks += cards
+                    self.pick_sizes += [len(source[0])] * len(cards)
                 if source is self._packs[-1]:
                     self.pack, self.waiting = [], True
             else:  # Pack nicht gesehen (Protokoll erst mitten im Draft): Pick trotzdem merken
                 self.picks += cards
+                self.pick_sizes += [None] * len(cards)
                 self.pack, self.waiting = [], True
         return before != (self.draft, self.event, self.pack, self.picks, self.waiting)
 

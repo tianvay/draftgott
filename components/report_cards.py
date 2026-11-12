@@ -237,6 +237,29 @@ def _assignment_html(ctx, archetypes):
             f'<div style="margin-top:4px">Erkannt aus Zuordnung, Farben und Kategorien: {detected}</div>')
 
 
+def render_stats_panel(ctx):
+    """Draft-Statistik der Deckkarten (aus dem Live-Draft, components/draftstats.py): gedraftet, im Deck, Games und
+    Siegquote mit der Karte im Hauptdeck. Leer, wenn keine Deckkarte Zahlen hat."""
+    stats = ctx.get("cardstats") or {}
+    rows = []
+    names = sorted({n for n, _q, card, _s in ctx["rows"] if not card.is_land and stats.get(n)},
+                   key=lambda n: (-stats[n].get("games", 0), -stats[n].get("drafted", 0), n))
+    for n in names:
+        st = stats[n]
+        g, w = st.get("games", 0), st.get("wins", 0)
+        rate = f"{round(100 * w / g)} %" if g else "–"
+        cls = ' class="note"' if g and g < 20 else ""
+        rows.append([f'<td class="l">{esc(n)}</td>', f'<td>{st.get("drafted", 0)}</td>', f'<td>{st.get("decks", 0)}</td>',
+                     f'<td>{g}</td>', f'<td{cls}>{rate}</td>'])
+    if not rows:
+        return ""
+    return ('<div class="panel"><b>Deine Draft-Statistik</b>'
+            + h_table(["Karte", "Gedraftet", "Im Deck", "Games", "Games gewonnen"], rows)
+            + '<div class="note">Aus den mitgelesenen Live-Drafts (draftstatistik.json): Games mit der Karte im '
+              'Hauptdeck. Grau: weniger als 20 Games, nur ein Hinweis. Ganze Auswertung: Setauswertung '
+              '(Menüpunkt 4).</div></div>')
+
+
 def render_archetype_panel(ctx):
     """Archetyp des Sets zu den Hauptfarben des Decks (die zwei Farben mit den meisten Nichtland-Kopien, wie im
     Drafthelper aus den Core-Karten) und darunter die weiteren Archetypen des Sets. Leer, wenn fuer das Set des Decks

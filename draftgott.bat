@@ -5,6 +5,7 @@ rem                   Kampf aus dem Bericht, bis "Beenden" geklickt wird)
 rem   2 = Drafthelper (Kartenseite im Browser mit _draftedcardpool.txt)
 rem   3 = Live-Draft  (Drafthelper liest MTG Arena mit: Picks nach _livedraft.txt, Pack mit Bewertung und
 rem                   Archetyp auf der Seite und im Seitenfenster ueber Arena)
+rem   4 = Setauswertung (Draft-Statistik des Live-Drafts als HTML-Seite)
 rem Zusaetzliche Parameter werden an den gewaehlten Aufruf angehaengt,
 rem z. B.:  draftgott.bat --sims 1000
 setlocal
@@ -30,8 +31,10 @@ echo  ---------
 echo   1 = Analyse       (_normaldeck.txt simulieren, Bericht meinbericht.html, Kampf im Bericht)
 echo   2 = Drafthelper   (Karten aus _draftedcardpool.txt auswaehlen und vergleichen)
 echo   3 = Live-Draft    (Arena mitlesen: Pack bewerten, Archetyp erkennen, Seitenfenster)
+echo   4 = Setauswertung (Statistik der Drafts eines Sets als HTML-Seite)
 echo.
-choice /c 123 /n /m "Auswahl (1, 2 oder 3): "
+choice /c 1234 /n /m "Auswahl (1, 2, 3 oder 4): "
+if errorlevel 4 goto setauswertung
 if errorlevel 3 goto live
 if errorlevel 2 goto drafthelper
 if errorlevel 1 goto analyse
@@ -63,6 +66,15 @@ echo "Detailed Logs (Plugin Support)" eingeschaltet sein.
 echo Dieses Fenster bitte offen lassen. Zum Beenden: Button "Beenden" auf der Seite.
 echo.
 %PY% mtg_sim.py --drafthelper _livedraft.txt --live %*
+goto ende
+
+:setauswertung
+echo.
+echo Setauswertung: die gesammelten Drafts (draftstatistik.json) als HTML-Seite.
+echo Ohne Angabe nimmt sie das Set mit den meisten Drafts, ein anderes z. B. mit:  draftgott.bat TRK
+echo (dann 4 waehlen). Die Seite oeffnet sich danach im Browser.
+echo.
+%PY% mtg_sim.py --setauswertung %*
 goto ende
 
 :ende

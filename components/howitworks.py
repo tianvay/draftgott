@@ -368,6 +368,24 @@ def _live_help():
             "Arena dafür im Fenster oder im randlosen Vollbild spielen; über exklusivem Vollbild liegt kein Fenster. "
             "Das Fenster lässt sich verschieben und schließt sich, wenn der Drafthelper beendet wird. Einzeln: "
             "<code>python mtg_sim.py --overlay http://127.0.0.1:8765/</code>."]))
+        + _panel("Draft-Statistik", _ul([
+            "Solange der Live-Draft läuft, sammelt er je Draft die Picks, das abgegebene Deck und die Ergebnisse der "
+            "Matches (je Game und fürs Match) in <code>draftstatistik.json</code> im Projektordner (nicht im Git, "
+            "anderer Name mit <code>--statistik DATEI</code>). Gezählt werden nur Draft- und Sealed-Events.",
+            "Matches und Decks gehören zum letzten Draft desselben Events. Wurde der Draft nicht mitgelesen, zählt "
+            "das Event trotzdem, nur ohne Picks. Beim Start wird auch die vorherige Protokolldatei "
+            "(<code>Player-prev.log</code>) nachgelesen. Dasselbe Protokoll zweimal gelesen zählt nicht doppelt.",
+            "An jeder Karte (Pool, Pack, Set-Ansicht) und im Seitenfenster: wie oft gedraftet, in wie vielen Decks, "
+            "und die Siegquote der Games mit der Karte im Hauptdeck. Unter 20 Games ist sie grau: nur ein Hinweis.",
+            "Der Bericht zeigt die Zahlen der Deckkarten im Abschnitt „Deck“ (Kasten „Deine Draft-Statistik“)."]))
+        + _panel("Setauswertung", _ul([
+            "Menüpunkt <b>4</b> in <code>draftgott.bat</code> oder <code>python mtg_sim.py --setauswertung "
+            "[SET]</code>: schreibt <code>setauswertung_&lt;set&gt;.html</code> und öffnet sie (ohne SET das Set mit "
+            "den meisten Drafts).",
+            "Inhalt: Überblick (Drafts, Matches und Games mit Bilanz), Archetypen (je Draft erkannt wie im "
+            "Live-Draft, aus dem Hauptdeck), beste und schwächste Karten (ab 10 Games), alle Karten als sortierbare "
+            "Tabelle (gedraftet, Ø Pick-Nummer im Pack, im Deck, Games, Siegquote, Matches), Bewertung gegen "
+            "Ergebnis je Kategorie und die Liste der Drafts."]))
     )
 
 

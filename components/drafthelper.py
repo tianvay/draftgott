@@ -35,6 +35,7 @@ from components.scryfall import card_image_url, fetch_cards_cached, fetch_printi
 from components.suggest import WUBRG, propose, suggest
 from components import archetypes as set_archetypes
 from components import cardarchetypes
+from components import draftstats
 from components import ratings as card_ratings
 from components.arenalog import default_log_path
 from components.livedraft import LiveDraft, card_summary
@@ -220,9 +221,10 @@ def checked_proposal(body, pool, marks, cats):
     return proposal
 
 
-def variant_entries(pool, marks, basics, cats, proposal=None, cardarch=None):
+def variant_entries(pool, marks, basics, cats, proposal=None, cardarch=None, cardstats=None):
     """Deck-Eintraege fuer Simulation und Kampf: die Varianten der Zuordnung, dazu ggf. der Deckvorschlag.
-    cardarch: Archetyp-Zuordnung je Kartenname (nur die Karten des Pools kommen in die Eintraege, fuer den Bericht)."""
+    cardarch: Archetyp-Zuordnung je Kartenname, cardstats: Zahlen der Draft-Statistik je Kartenname (beides nur fuer
+    die Karten des Pools, fuer den Bericht)."""
     entries = entries_from_marks(pool, marks, basics, cats)
     if proposal:
         deck = dict(proposal["deck"])
@@ -230,8 +232,10 @@ def variant_entries(pool, marks, basics, cats, proposal=None, cardarch=None):
                         "cats": dict(cats), "role": "proposal"})
     names = {c["name"] for c in pool}
     mine = {n: list(v) for n, v in (cardarch or {}).items() if n in names}
+    stats = {n: dict(v) for n, v in (cardstats or {}).items() if n in names}
     for e in entries:
         e["cardarch"] = dict(mine)
+        e["cardstats"] = dict(stats)
     return entries
 
 
@@ -309,6 +313,7 @@ def make_handler(app):
                             "options": app["options"], "file": app["file"],
                             "signature": app["signature"], "archetypes": set_archetypes.info(app["pool"]),
                             "cardarch": {n: v for n, v in self._assign().items() if n in names},
+                            "cardstats": {n: v for n, v in self._stats().items() if n in names},
                             "archsets": {code: [{"colors": a["colors"], "name": a["name"]} for a in lst]
                                          for code, lst in set_archetypes.ARCHETYPES.items()},
                             "live": bool(app.get("live")), "pool_version": app.get("pool_version", 0)})
@@ -401,10 +406,10 @@ def make_handler(app):
             run_args = argparse.Namespace(**vars(app["args"]))
             run_args.sims, run_args.core = sims, "Core"  # core: Herkunft der Karten (Core/Splash/NoSplash) im Bericht
 
-            cardarch = self._assign()
+            cardarch, cardstats = self._assign(), self._stats()
 
             def work(progress):
-                entries = variant_entries(pool, marks, basics, cats, proposal, cardarch)
+                entries = variant_entries(pool, marks, basics, cats, proposal, cardarch, cardstats)
                 html = app["simulate"](entries, run_args, progress)
                 app["save"](html, run_args)
                 app["report_html"] = html
@@ -443,6 +448,10 @@ def make_handler(app):
                 return
             self._json({"ok": True, "ratings": self._pool_ratings(data)})
 
+        def _stats(self):
+            """Zahlen je Karte aus der Draft-Statistik (alle Sets; leer ohne Datei)."""
+            return draftstats.card_stats(draftstats.load_stats(app["stats"])) if app.get("stats") else {}
+
         def _assign(self):
             """Archetyp-Zuordnung aller Karten (aus der Datei, leer ohne Datei)."""
             return cardarchetypes.load_assign(app["cardarch"]) if app.get("cardarch") else {}
@@ -464,7 +473,7 @@ def make_handler(app):
             if not app.get("live"):
                 return {"status": "off", "message": "Kein Live-Draft (Drafthelper mit --live starten)."}
             ratings = card_ratings.load_ratings(app["ratings"]) if app.get("ratings") else {}
-            return app["live"].snapshot(ratings, self._assign(), app.get("live_manual"))
+            return app["live"].snapshot(ratings, self._assign(), app.get("live_manual"), self._stats())
 
         def _card_archetype(self, path):
             """Archetypen einer Karte speichern (/api/cardarch) bzw. den Archetyp des Live-Drafts selbst festlegen
@@ -503,6 +512,7 @@ def make_handler(app):
             ratings = card_ratings.load_ratings(app["ratings"]) if app.get("ratings") else {}
             self._json({"ok": True, "set": code.upper(), "cards": cards,
                         "cardarch": {n: v for n, v in self._assign().items() if n in names},
+                        "cardstats": {n: v for n, v in self._stats().items() if n in names},
                         "ratings": {n: v for n, v in ratings.items() if n in names}})
 
         def _battle(self):
@@ -517,7 +527,7 @@ def make_handler(app):
                 try:
                     marks, basics, cats = parse_state(body, pool)
                     entries = variant_entries(pool, marks, basics, cats, checked_proposal(body, pool, marks, cats),
-                                              self._assign())
+                                              self._assign(), self._stats())
                 except (ValueError, KeyError, TypeError) as e:
                     self._json({"ok": False, "error": str(e)}, 400)
                     return
@@ -535,6 +545,12 @@ def make_handler(app):
 def ratings_path(args):
     """Bewertungsdatei: wie angegeben, ein relativer Name liegt im Projektordner."""
     path = pathlib.Path(getattr(args, "bewertung", None) or "kartenbewertung.json")
+    return path if path.is_absolute() else SCRIPT_DIR / path
+
+
+def stats_path(args):
+    """Datei der Draft-Statistik: wie angegeben, ein relativer Name liegt im Projektordner."""
+    path = pathlib.Path(getattr(args, "statistik", None) or "draftstatistik.json")
     return path if path.is_absolute() else SCRIPT_DIR / path
 
 
@@ -560,11 +576,12 @@ def serve(args, simulate, save, battle=None, save_battle=None):
     app = {"pool": pool, "basics": basics, "args": args, "simulate": simulate, "save": save, "job": Job(), "options": options,
            "battle": battle, "save_battle": save_battle,
            "file": pathlib.Path(args.drafthelper).name, "signature": signature,
-           "ratings": ratings_path(args), "cardarch": archetypes_path(args)}
+           "ratings": ratings_path(args), "cardarch": archetypes_path(args), "stats": stats_path(args)}
     if live_mode:
         log = pathlib.Path(args.arena_log) if args.arena_log else default_log_path()
-        live = LiveDraft(log, pool_path(args.drafthelper))
-        print(f"Live-Draft: lese {log}", file=sys.stderr)
+        live = LiveDraft(log, pool_path(args.drafthelper), stats=app["stats"])
+        print(f"Live-Draft: lese {log}, Draft-Statistik in {app['stats']}", file=sys.stderr)
+        live.read_previous(log.with_name("Player-prev.log"))
         live.step()  # bisheriger Stand des Protokolls (laufender Draft), danach im Hintergrund weiter
         app["live"], app["pool_version"] = live, live.version
         app["reload_pool"] = lambda: load_pool(args.drafthelper, allow_empty=True)
@@ -776,6 +793,8 @@ h2 small{color:var(--muted);font-weight:400}
 #archetypes .arch .amain{color:var(--core);font-size:12.5px;font-weight:700}
 #archetypes .arch ul{margin:4px 0 0;padding-left:18px;font-size:13.5px}
 #archetypes .anote{color:var(--muted);font-size:12.5px;margin-top:8px}
+.stl{font-size:11.5px;color:#33415c;margin:-2px 2px 4px;line-height:1.3}
+.stl b{color:#146c3d}.stl.few b{color:var(--muted);font-weight:600}
 .achips{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:3px;margin-top:5px}
 .achips button{border:1px solid var(--line);background:#f8f9fb;border-radius:6px;padding:2px 0;font-size:10.5px;
   display:flex;align-items:center;justify-content:center;gap:0;min-height:20px;min-width:0;color:var(--muted);overflow:hidden}
@@ -1020,6 +1039,7 @@ function tile(t){
   const cap=el("div","cap");cap.appendChild(el("b",null,t.card.name));
   if(t.card.qty>1)cap.appendChild(el("span",null,t.copy+"/"+t.card.qty));
   d.appendChild(cap);
+  const stl=statLine(cardstats[t.card.name]);if(stl)d.appendChild(stl);
   const seg=el("div","seg");
   for(const m of ["core","splash","nosplash","off"]){
     const b=el("button",null,LABEL[m]);b.dataset.m=m;b.onclick=()=>{t.mark=m;paint(t);summary();save()};seg.appendChild(b)}
@@ -1582,6 +1602,16 @@ async function poll(){
   else if(s.state==="error")showErr(s.message);
 }
 // ---- Archetyp-Zuordnung je Karte (kartenarchetypen.json), Erkennung, Live-Draft, Set-Ansicht ----
+// Draft-Statistik je Karte (components/draftstats.py): gedraftet, im Deck, Siegquote der Games mit der Karte im Deck
+let cardstats={};
+function statLine(st){
+  if(!st||!(st.drafted||st.decks||st.games))return null;
+  const d=el("div","stl"+(st.games&&st.games<20?" few":""));
+  d.title="Aus deinen mitgelesenen Drafts: Kopien gedraftet, Decks mit der Karte, Games mit der Karte im Hauptdeck"+
+    (st.games&&st.games<20?" (weniger als 20 Games: nur ein Hinweis)":"");
+  d.append("Gedraftet "+st.drafted+" · Deck "+st.decks);
+  if(st.games){d.append(" · ");d.appendChild(el("b",null,Math.round(100*st.wins/st.games)+" %"));d.append(" in "+st.games+" G.")}
+  return d}
 let cardarch={},archsets={},poolDetect=null,detectTimer=null,live=null,liveJson="",liveVersion=0,setCards=[];
 const RATING_SHORT={splashworthy:"★ Splashworthy",mustplay:"MP MustPlay",filler:"Fi Filler",neverplay:"NP NeverPlay"};
 // Archetyp, nach dem hervorgehoben wird: im Live-Draft der des Drafts, sonst der aus den Core-Karten erkannte
@@ -1619,6 +1649,7 @@ function miniTile(c,info){
   w.appendChild(el("div","abadge","Archetyp"));d.appendChild(w);
   const cap=el("div","cap");cap.appendChild(el("b",null,c.name));
   if(info.points!=null)cap.appendChild(el("span","pts",String(info.points).replace(".",",")+" P."));d.appendChild(cap);
+  const stl=statLine(c.stats||cardstats[c.name]);if(stl)d.appendChild(stl);
   if(info.level==="arch")d.appendChild(el("div","why","passt zu "+archName(mainArch())));
   const sel=el("select","catsel");sel.title="Kategorie dieser Karte";
   const o0=el("option",null,"Kategorie: –");o0.value="";sel.appendChild(o0);
@@ -1662,7 +1693,7 @@ async function loadSet(){
   $("setnote").textContent="Lade Set "+code.toUpperCase()+" von Scryfall …";$("setgrid").textContent="";
   let r=null;try{r=await (await fetch("/api/setcards?set="+encodeURIComponent(code))).json()}catch(e){}
   if(!r||!r.ok){$("setnote").textContent="Set konnte nicht geladen werden: "+((r&&r.error)||"Fehler");return}
-  setCards=r.cards;Object.assign(cardarch,r.cardarch||{});for(const [n,v] of Object.entries(r.ratings||{}))cats[n]=v;
+  setCards=r.cards;Object.assign(cardarch,r.cardarch||{});Object.assign(cardstats,r.cardstats||{});for(const [n,v] of Object.entries(r.ratings||{}))cats[n]=v;
   renderSet()}
 function renderSet(){
   if(!$("setview").classList.contains("show"))return;
@@ -1709,7 +1740,7 @@ $("quit").onclick=async()=>{if(!confirm("Draft-Helper beenden?"))return;
   document.body.innerHTML="<main><h2>Draft-Helper wurde beendet.</h2><p>Du kannst dieses Fenster jetzt schließen.</p></main>"};
 (async()=>{
   const d=await api("/api/pool");pool=d.cards;archetypes=d.archetypes||null;
-  cardarch=d.cardarch||{};archsets=d.archsets||{};liveVersion=d.pool_version||0;
+  cardarch=d.cardarch||{};archsets=d.archsets||{};cardstats=d.cardstats||{};liveVersion=d.pool_version||0;
   try{if(localStorage.getItem("dh-archclosed")==="1")$("archetypes").open=false}catch(e){}
   $("archetypes").addEventListener("toggle",()=>{try{localStorage.setItem("dh-archclosed",$("archetypes").open?"0":"1")}catch(e){}});
   // Speicherstand je Inhalt der Pool-Datei: ein anderer Kartenpool startet mit den Vorgaben der Datei

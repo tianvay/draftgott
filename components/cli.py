@@ -30,6 +30,12 @@ def parse_args(argv=None):
                     help="Live-Draft ohne Seitenfenster (nur die Seite im Browser)")
     ap.add_argument("--overlay", default=None, metavar="URL",
                     help="Nur das Seitenfenster fuer einen laufenden Live-Draft-Drafthelper unter URL oeffnen")
+    ap.add_argument("--statistik", default="draftstatistik.json", metavar="DATEI",
+                    help="Draft-Statistik des Live-Drafts (Picks, Decks, Matches je Draft; Standard: "
+                         "draftstatistik.json, nicht im Git)")
+    ap.add_argument("--setauswertung", nargs="?", const="", default=None, metavar="SET",
+                    help="Setauswertung: die Draft-Statistik eines Sets als HTML-Seite setauswertung_<set>.html "
+                         "(ohne SET: das Set mit den meisten Drafts)")
     ap.add_argument("--neu-laden", action="store_true",
                     help="Kartendaten neu von Scryfall laden und den lokalen Cache (scryfall_cache.json) ueberschreiben")
     ap.add_argument("--sims", type=int, default=10000)
@@ -80,6 +86,6 @@ def parse_args(argv=None):
     ap.add_argument("--nicht-oeffnen", action="store_true",
                     help="HTML-Bericht nicht automatisch im Browser oeffnen")
     args = ap.parse_args(argv)
-    if not args.deckfile and args.drafthelper is None and args.overlay is None:
+    if not args.deckfile and args.drafthelper is None and args.overlay is None and args.setauswertung is None:
         ap.error("Bitte eine Deckliste angeben oder --drafthelper verwenden")
     return args

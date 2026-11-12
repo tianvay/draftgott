@@ -14,6 +14,7 @@ from collections import Counter
 from components import arenalog
 from components import archetypes as set_archetypes
 from components import cardarchetypes
+from components import draftstats
 from components.scryfall import CACHE_FILE, card_image_url, fetch_cards_cached
 
 DETAILED_LOGS = ("In Arena unter Optionen → Konto „Detailed Logs (Plugin Support)“ einschalten und Arena neu "
@@ -57,8 +58,10 @@ def default_names(log_path):
 
 
 class LiveDraft:
-    def __init__(self, log_path, pool_file, names=None, fetch=fetch_cards_cached):
+    def __init__(self, log_path, pool_file, names=None, fetch=fetch_cards_cached, stats=None):
+        """stats: Pfad der Draft-Statistik (components/draftstats.py) oder None (keine Statistik)."""
         self.log_path, self.pool_file = pathlib.Path(log_path), pathlib.Path(pool_file)
+        self.tracker = draftstats.Tracker(stats, self._lookup) if stats else None
         self._names, self.fetch = names, fetch
         self.follower = arenalog.LogFollower(log_path)
         self.state = arenalog.DraftState()
@@ -67,6 +70,24 @@ class LiveDraft:
         self.lock = threading.Lock()
         self._written = None
         self.seen = set()  # Arena-Nummern aller Karten, die in Packs dieses Programmlaufs zu sehen waren
+
+    def _lookup(self, grp):
+        info = self.names().get(grp)
+        return info["name"] if info else None
+
+    def read_previous(self, path):
+        """Statistik: die vorherige Protokolldatei (Player-prev.log) einmal nachlesen, damit Matches aus der
+        letzten Arena-Sitzung nicht fehlen. Der Live-Stand (Pack, Pool-Datei) bleibt davon unberuehrt."""
+        if not self.tracker:
+            return
+        try:
+            text = pathlib.Path(path).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return
+        own_state, self.tracker.state = self.tracker.state, arenalog.DraftState()
+        for line in text.split("\n"):
+            self.tracker.feed_line(line)
+        self.tracker.state = own_state
 
     def names(self):
         if self._names is None:
@@ -120,6 +141,11 @@ class LiveDraft:
         """Liest neue Protokollzeilen; True, wenn sich Pack oder Picks geaendert haben."""
         changed = False
         for line in self.follower.poll():
+            if self.tracker:
+                try:
+                    self.tracker.feed_line(line)
+                except OSError as e:  # Statistik nicht speicherbar: Live-Draft laeuft weiter
+                    print(f"Draft-Statistik nicht gespeichert: {e}", file=sys.stderr)
             for ev in arenalog.scan_line(line):
                 with self.lock:
                     changed = self.state.feed(ev) or changed
@@ -155,8 +181,9 @@ class LiveDraft:
         count = Counter(c["set"] for c in cards if c.get("set"))
         return count.most_common(1)[0][0] if count else None
 
-    def snapshot(self, ratings, assign, manual):
-        """Stand fuer die Seite und das Seitenfenster (siehe Modulbeschreibung)."""
+    def snapshot(self, ratings, assign, manual, cardstats=None):
+        """Stand fuer die Seite und das Seitenfenster (siehe Modulbeschreibung); cardstats: Zahlen je Karte aus der
+        Draft-Statistik, sie kommen als "stats" an die Pack-Karten."""
         with self.lock:
             if not self.log_path.exists():
                 return {"status": "nolog", "version": self.version,
@@ -173,6 +200,8 @@ class LiveDraft:
         found = set_archetypes.for_set(code)
         detect = cardarchetypes.detect([dict(c, qty=1) for c in picks], assign, ratings, found, manual)
         ranked = cardarchetypes.rank(pack, ratings, assign, detect["main"])
+        for c in ranked:
+            c["stats"] = (cardstats or {}).get(c["name"])
         names = {c["name"] for c in pack + picks}
         return {"status": "waiting" if waiting or not pack else "pack", "version": self.version, "message": "",
                 "event": event or "", "set": code or "", "pick": n_picks + 1, "pack": ranked,

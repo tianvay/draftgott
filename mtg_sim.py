@@ -64,7 +64,7 @@ def build_deck(entry, data, args):
     return dict(
         double_pips=double_pip_colors(nonlands), pip_checks=pip_checks(nonlands),
         name=entry["name"], deck=entry["deck"], parts=entry.get("parts", []), rows=rows, cards=cards, missing=missing,
-        cats=entry.get("cats", {}), cardarch=entry.get("cardarch", {}), role=entry.get("role"), coverage=coverage, info=info,
+        cats=entry.get("cats", {}), cardarch=entry.get("cardarch", {}), cardstats=entry.get("cardstats", {}), role=entry.get("role"), coverage=coverage, info=info,
         n_lands=len(cards) - len(nonlands),
         avg_mv=sum(c.mv for c in nonlands) / len(nonlands) if nonlands else 0,
         unsure=sorted({n for n, _, c, _ in rows if c.is_land and c.tap_mode == "tapped?"}),
@@ -235,6 +235,10 @@ def save_report(html, args):
 
 
 def run(args):
+    if args.setauswertung is not None:  # Setauswertung aus der Draft-Statistik
+        from components.setreport import run as run_set_report
+        run_set_report(args)
+        return
     if args.overlay is not None:  # nur das Seitenfenster des Live-Drafts
         from components.overlay import run as run_overlay
         run_overlay(args.overlay)

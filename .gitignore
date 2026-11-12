@@ -23,3 +23,7 @@ kartenarchetypen*.json.tmp
 # Live-Draft: Picks aus dem Arena-Protokoll und Set-Karten von Scryfall
 _livedraft.txt
 scryfall_set_cache.json
+
+# Draft-Statistik des Live-Drafts (je Nutzer)
+draftstatistik*.json
+draftstatistik*.json.tmp

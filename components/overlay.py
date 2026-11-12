@@ -47,6 +47,9 @@ def rows_for(snap):
             parts.append(RATING_ABBR.get(c["rating"], c["rating"]))
         if c.get("arch"):
             parts.append("[" + ", ".join(_arch_name(snap, a) for a in c["arch"]) + "]")
+        stats = c.get("stats") or {}
+        if stats.get("games"):
+            parts.append(f"{round(100 * stats['wins'] / stats['games'])} % ({stats['games']} G.)")
         rows.append(("  ".join(parts), tag))
     return rows
 
