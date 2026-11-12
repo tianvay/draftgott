@@ -15,6 +15,10 @@ from components import arenalog
 from components import archetypes as set_archetypes
 from components import cardarchetypes
 from components import draftstats
+from components import gamestate
+from components.cardkinds import FLOW_ORDER, flow_kinds
+from components.cards import land_produced
+from components.removal import removal_info
 from components.deckfile import parse_pool
 from components.scryfall import CACHE_FILE, card_image_url, fetch_cards_cached
 
@@ -31,13 +35,35 @@ def card_summary(sc, name, set_code="", number=""):
     faces = sc.get("card_faces") or []
     type_line = sc.get("type_line") or ""
     image = card_image_url(sc) if sc else None
+    front = type_line.split(" // ")[0].split("—")[0]
+    land = "Land" in front
     return {"name": name, "set": (set_code or sc.get("set") or "").upper(),
             "number": number or sc.get("collector_number") or "",
             "image": image, "large": image.replace("/normal/", "/large/") if image else None,
             "colors": sc.get("colors") or (faces[0].get("colors") if faces else None) or [],
             "cost": sc.get("mana_cost") or (faces[0].get("mana_cost") if faces else "") or "",
             "mv": sc.get("cmc") or 0, "type": type_line, "rarity": sc.get("rarity") or "",
-            "land": "Land" in type_line.split("—")[0], "found": bool(sc)}
+            "land": land, "found": bool(sc), "creature": "Creature" in front,
+            "removal": (removal_info(sc) or {}).get("points", 0) if sc else 0,
+            "flow": [k for k in FLOW_ORDER if k in set(flow_kinds(sc))] if sc else [],
+            "produces": land_produced(sc) if sc and land else []}
+
+
+def pool_info(cards, main):
+    """Kennzahlen der Picks: Karten, Kreaturen, Removal (Karten und Punkte wie im Bericht), Kartenfluss (Karten und
+    je Art). "arch": dieselben Zahlen nur fuer Karten in den Farben des Archetyps main (farblose zaehlen mit)."""
+    def count(cs):
+        kinds = {}
+        for c in cs:
+            for k in c.get("flow") or []:
+                kinds[k] = kinds.get(k, 0) + 1
+        return {"cards": len(cs), "creatures": sum(1 for c in cs if c.get("creature")),
+                "removal": sum(1 for c in cs if c.get("removal")),
+                "removal_points": round(sum(c.get("removal") or 0 for c in cs), 2),
+                "flow": sum(1 for c in cs if c.get("flow")), "flow_kinds": kinds}
+    out = count(cards)
+    out["arch"] = count([c for c in cards if set(c.get("colors") or []) <= set(main)]) if main else None
+    return out
 
 
 def default_names(log_path):
@@ -73,6 +99,7 @@ class LiveDraft:
         self.version = 0  # steigt mit jedem Schreiben der Pool-Datei
         self.lock = threading.Lock()
         self._written = None
+        self.game = gamestate.GameState()  # laufendes Spiel (Ziehchancen)
         self.deck = None  # zuletzt in Arena abgegebenes Deck eines Draft-Events {"main", "side"} (GrpId -> Anzahl)
         self.seen = set()  # Arena-Nummern aller Karten, die in Packs dieses Programmlaufs zu sehen waren
 
@@ -201,8 +228,11 @@ class LiveDraft:
 
     def step(self):
         """Liest neue Protokollzeilen; True, wenn sich Pack oder Picks geaendert haben."""
-        changed = False
+        changed = game_changed = False
         for line in self.follower.poll():
+            if self.game.feed_line(line):
+                game_changed = True
+                continue
             if self.tracker:
                 try:
                     self.tracker.feed_line(line)
@@ -220,8 +250,10 @@ class LiveDraft:
                         with self.lock:
                             self.deck = deck
                         changed = True
+        if game_changed:
+            self._load_cards(list(self.game.deck))
         if not changed:
-            return False
+            return game_changed
         self._load_cards(self.state.pack + self.state.picks + list((self.deck or {}).get("main", {}))
                          + list((self.deck or {}).get("side", {})))
         with self.lock:
@@ -255,11 +287,12 @@ class LiveDraft:
         """Stand fuer die Seite und das Seitenfenster (siehe Modulbeschreibung); cardstats: Zahlen je Karte aus der
         Draft-Statistik, sie kommen als "stats" an die Pack-Karten."""
         with self.lock:
+            game = gamestate.game_view(self.game, {g: self._card(g) for g in self.game.deck if self._card(g)})
             if not self.log_path.exists():
                 return {"status": "nolog", "version": self.version,
                         "message": f"Arena-Protokoll nicht gefunden: {self.log_path}. {DETAILED_LOGS}"}
             if not (self.state.draft or self.state.event):
-                return {"status": "idle", "version": self.version,
+                return {"status": "idle", "version": self.version, "game": game,
                         "message": "Noch kein Draft im Protokoll – starte einen Draft in Arena. Erscheint auch dann "
                                    "nichts: " + DETAILED_LOGS}
             pack = [c for c in (self._card(g) for g in self.state.pack) if c]
@@ -270,6 +303,7 @@ class LiveDraft:
         code = self._set_code(pack + picks)
         found = set_archetypes.for_set(code)
         detect = cardarchetypes.detect([dict(c, qty=1) for c in picks], assign, ratings, found, manual)
+        draftinfo = pool_info(picks, detect["main"])
         ranked = cardarchetypes.rank(pack, ratings, assign, detect["main"])
         for c in ranked:
             c["stats"] = (cardstats or {}).get(c["name"])
@@ -277,7 +311,8 @@ class LiveDraft:
         return {"status": "waiting" if waiting or not pack else "pack", "version": self.version, "message": "",
                 "event": event or "", "set": code or "", "pick": n_picks + 1, "pack": ranked,
                 "picks": [c["name"] for c in picks], "unknown": unknown, "detect": detect,
-                "deck": deck, "complete": deck["ready"] or n_picks >= DRAFT_PICKS,
+                "deck": deck, "complete": deck["ready"] or n_picks >= DRAFT_PICKS, "game": game,
+                "draftinfo": draftinfo,
                 "archetypes": found,
                 "cardarch": {n: v for n, v in (assign or {}).items() if n in names},
                 "ratings": {n: v for n, v in (ratings or {}).items() if n in names}}

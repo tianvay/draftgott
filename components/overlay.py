@@ -21,10 +21,61 @@ def _arch_name(snap, colors):
     return colors
 
 
+def _num(x):
+    return f"{x:g}".replace(".", ",")
+
+
+def _pct(p):
+    if p <= 0:
+        return "0 %"
+    return "< 1 %" if p < 0.005 else f"{round(p * 100)} %"
+
+
+def game_rows(g):
+    """Zeilen im Spiel: Bibliothek, Chancen je Gruppe (naechste Karte / in 3 Zuegen), Removal, Karten der Bibliothek."""
+    rows = [(f"Im Spiel · Zug {g.get('turn', 0)} · Bibliothek {g['library']} · Hand {g.get('hand', 0)}", "head"),
+            ("Chance nächste Karte · in den nächsten 3 Karten", "sub")]
+    for grp in g.get("groups") or []:
+        tag = {"land": "color", "removal": "arch"}.get(grp["key"], "plain")
+        rows.append((f"{grp['label']}: {grp['n']} übrig  ·  {_pct(grp['next'])}  ·  {_pct(grp['in3'])}", tag))
+    rem = g.get("removal") or {}
+    if rem.get("total"):
+        rows.append((f"Removal übrig {rem['left']} von {rem['total']} (Punkte {_num(rem['points_left'])} von "
+                     f"{_num(rem['points_total'])})", "sub"))
+    if not g.get("consistent", True):
+        rows.append(("Bibliothek passt nicht genau zum Deck (z. B. Token oder Sideboard), Werte ungefähr.", "msg"))
+    cards = g.get("cards") or []
+    spells = [c for c in cards if not c["land"]]
+    if spells:
+        rows.append(("Noch in der Bibliothek:", "sub"))
+    for c in spells:
+        text = f"{c['n']}× {c['name']}  {_pct(c['next'])}"
+        if c.get("removal"):
+            text += f"  R{_num(c['removal'])}"
+        rows.append((text, "arch" if c.get("removal") else "plain"))
+    lands = [c for c in cards if c["land"]]
+    if lands:
+        rows.append(("Länder: " + ", ".join(f"{c['n']}× {c['name']}" for c in lands), "color"))
+    return rows
+
+
+def info_rows(info, main_name):
+    """Kennzahlen der Picks (und im Archetyp) als kurze Zeilen."""
+    def line(i):
+        return (f"Kreaturen {i['creatures']} · Removal {i['removal']} ({_num(i['removal_points'])} P.) · "
+                f"Kartenfluss {i['flow']}")
+    rows = [(f"Picks {info['cards']}: " + line(info), "sub")]
+    if info.get("arch") and main_name:
+        rows.append((f"In {main_name}: {info['arch']['cards']} Karten · " + line(info["arch"]), "sub"))
+    return rows
+
+
 def rows_for(snap):
     """Zeilen [(Text, Stil)] fuer einen Stand von /api/live; Stile: head, sub, arch, color, never, plain, msg."""
     if not snap:
         return [("draftgott Live", "head"), ("Drafthelper nicht erreichbar …", "msg")]
+    if (snap.get("game") or {}).get("active"):
+        return game_rows(snap["game"])
     status = snap.get("status")
     if status in ("nolog", "idle", "off"):
         return [("draftgott Live", "head"), (snap.get("message") or "Kein Live-Draft.", "msg")]
@@ -37,6 +88,8 @@ def rows_for(snap):
     scores = [s for s in detect.get("scores") or [] if s["score"]][:3]
     if scores:
         rows.append((" · ".join(f"{s['name']} {s['score']:g}" for s in scores), "sub"))
+    if snap.get("draftinfo") and snap["draftinfo"].get("cards"):
+        rows += info_rows(snap["draftinfo"], _arch_name(snap, main) if main else None)
     if status == "waiting" or not snap.get("pack"):
         rows.append(("Warte auf das nächste Pack …", "msg"))
         return rows
@@ -47,6 +100,8 @@ def rows_for(snap):
             parts.append(RATING_ABBR.get(c["rating"], c["rating"]))
         if c.get("arch"):
             parts.append("[" + ", ".join(_arch_name(snap, a) for a in c["arch"]) + "]")
+        if c.get("removal"):
+            parts.append(f"R{_num(c['removal'])}")
         stats = c.get("stats") or {}
         if stats.get("games"):
             parts.append(f"{round(100 * stats['wins'] / stats['games'])} % ({stats['games']} G.)")

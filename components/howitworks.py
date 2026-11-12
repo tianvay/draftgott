@@ -353,6 +353,23 @@ def _live_help():
             "Archetyps liegen (hellgrün). NeverPlay hat immer 0 Punkte.",
             "Kategorie und Archetypen lassen sich direkt an den Pack-Karten festlegen; das gilt sofort.",
             "Pick Two: beide gewählten Karten zählen als Picks."]))
+        + _panel("Kennzahlen der Picks", _ul([
+            "Im Live-Bereich und im Seitenfenster stehen zu den bisherigen Picks: Kreaturen, Removal (Karten und "
+            "Removal-Punkte wie im Bericht) und Kartenfluss (Karten, die ziehen, suchen, surveilen, scrien oder "
+            "explorieren). Ist ein Archetyp erkannt, dieselben Zahlen noch einmal nur für Karten in seinen Farben "
+            "(farblose zählen mit).",
+            "Pack-Karten mit Removal tragen ihre Removal-Punkte (im Seitenfenster „R1,5“)."]))
+        + _panel("Im Spiel: Ziehchancen", _ul([
+            "Während eines Spiels zeigen Seite und Seitenfenster statt des Packs die eigene Bibliothek. Arena meldet "
+            "beim Spielstart das Deck des Spiels und danach laufend, wo die eigenen Karten liegen; Bibliothek = Deck "
+            "minus Hand, Spielfeld, Friedhof, Exil und Stapel. Das gilt für jedes Spiel, nicht nur im Draft.",
+            "Je Gruppe (Land, Kreatur, Removal, Quellen je Farbe) und je Karte: wie viele noch drin sind, die Chance "
+            "für die nächste Karte und für mindestens eine unter den nächsten 3 Karten (hypergeometrisch: 1 − "
+            "C(L − n, k) / C(L, k) bei L Karten in der Bibliothek, n passenden, k gezogenen).",
+            "Removal: übrige Karten und Punkte im Vergleich zum ganzen Deck.",
+            "Karten, die per Mulligan oder Scry unter die Bibliothek gelegt wurden, zählen wie alle anderen (ihre "
+            "Lage ist nicht bekannt). Passt die Rechnung nicht genau zur Bibliothek (z. B. durch Token oder "
+            "Sideboard), steht ein Hinweis dabei."]))
         + _panel("Deck nach dem Draft übernehmen", _ul([
             "Nach dem Draft (42 Picks oder sobald Arena ein Deck meldet) erscheint oben im Live-Bereich und im "
             "Seitenfenster der Knopf <b>Deck + Sideboard übernehmen</b>. In Arena selbst lässt sich kein Knopf "

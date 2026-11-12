@@ -828,6 +828,19 @@ h2 small{color:var(--muted);font-weight:400}
 #ldeck{display:none;background:#1f7a45;border-color:#1f7a45;color:#fff;font-weight:700}
 #ldeck.show{display:inline-block}
 #ldeck:disabled{background:#e9edf3;border-color:var(--line);color:var(--muted);opacity:1}
+#linfo{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;font-size:12.5px}
+#linfo span{background:#f3f6fb;border:1px solid var(--line);border-radius:8px;padding:2px 9px}
+#linfo span b{color:var(--ink)}
+#lgame{display:none;margin-top:10px}
+#lgame.show{display:block}
+#lgame .gtop{font-size:15px;font-weight:700;margin-bottom:6px}
+#lgame table{border-collapse:collapse;font-size:13.5px;margin:4px 0 10px}
+#lgame th,#lgame td{padding:3px 10px;border-bottom:1px solid #eef0f4;text-align:right}
+#lgame th{font-size:12px;color:var(--muted)}
+#lgame td.l,#lgame th.l{text-align:left}
+#lgame tr.land td{background:#f2f7f3}#lgame tr.rem td{background:#fff6e6}
+#lgame .gcols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:4px 24px}
+.mtile .rtag{background:#fff3d6;color:#7a5200;border-radius:6px;padding:0 5px;font-size:11px;font-weight:700}
 #live .lmsg{color:var(--muted);margin:8px 0 0;font-size:13.5px}
 #live .ltips{margin:6px 0 0;padding-left:20px;font-size:13px;color:#33415c}
 .mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-top:10px}
@@ -880,6 +893,8 @@ h2 small{color:var(--muted);font-weight:400}
       <label class="filter">Archetyp <select id="lmanual" title="Automatisch erkennen oder selbst festlegen"></select></label>
       <div class="lscores" id="lscores"></div>
       <button class="btn" id="ldeck" title="Schreibt das in Arena abgegebene Deck (Deck und Sideboard) in die Kartenpool-Datei">Deck + Sideboard übernehmen</button></div>
+    <div id="linfo"></div>
+    <div id="lgame"></div>
     <div class="lmsg" id="lmsg"></div><ul class="ltips" id="ltips"></ul>
     <div class="mgrid" id="lpack"></div>
     <div class="lmsg">Reihenfolge: Kategorie (★ 4, MP 3, ohne 1,5, Fi 1, NP immer 0) + 3, wenn die Karte dem
@@ -1663,6 +1678,8 @@ function miniTile(c,info){
   w.appendChild(el("div","abadge","Archetyp"));d.appendChild(w);
   const cap=el("div","cap");cap.appendChild(el("b",null,c.name));
   if(info.points!=null)cap.appendChild(el("span","pts",String(info.points).replace(".",",")+" P."));d.appendChild(cap);
+  if(c.removal){const rt=el("span","rtag","Removal "+String(c.removal).replace(".",","));
+    rt.title="Removal-Punkte der Karte (wie im Bericht)";cap.appendChild(rt)}
   const stl=statLine(c.stats||cardstats[c.name]);if(stl)d.appendChild(stl);
   if(info.level==="arch")d.appendChild(el("div","why","passt zu "+archName(mainArch())));
   const sel=el("select","catsel");sel.title="Kategorie dieser Karte";
@@ -1700,8 +1717,45 @@ function renderLive(){
   $("lmsg").textContent=msg+(live.unknown&&live.unknown.length?" ("+live.unknown.length+" Karten ohne Namen: Arena-Kartendatenbank nicht gefunden?)":"");
   const tips=$("ltips");tips.textContent="";
   const a=(live.archetypes||[]).find(x=>x.colors===m);if(a)a.tips.forEach(t=>tips.appendChild(el("li",null,t)));
+  renderInfo();renderGame();
   const g=$("lpack");g.textContent="";
+  if(live.game&&live.game.active)return;
   (live.pack||[]).forEach((c,i)=>g.appendChild(miniTile(c,{level:c.level,points:c.points,rank:i+1})))}
+const num=x=>String(Math.round(x*100)/100).replace(".",",");
+const pc=p=>p<=0?"0 %":p<0.005?"< 1 %":Math.round(p*100)+" %";
+// Kennzahlen der Picks (livedraft.pool_info): gesamt und in den Farben des Archetyps
+function renderInfo(){
+  const box=$("linfo");box.textContent="";const i=live.draftinfo;
+  if(!i||!i.cards||(live.game&&live.game.active))return;
+  const add=(label,val,tip)=>{const s=el("span");s.append(label+" ");s.appendChild(el("b",null,val));if(tip)s.title=tip;box.appendChild(s)};
+  const kinds=Object.entries(i.flow_kinds||{}).map(([k,n])=>(FLOW_LABELS[k]||k)+" "+n).join(", ");
+  add("Picks",String(i.cards));add("Kreaturen",String(i.creatures));
+  add("Removal",i.removal+" ("+num(i.removal_points)+" P.)","Removal-Punkte wie im Bericht; Ampel dort: grün ab 4 Punkten je 40 Karten");
+  add("Kartenfluss",String(i.flow),kinds||"keine");
+  const m=live.detect&&live.detect.main;
+  if(i.arch&&m){add("In "+archName(m),i.arch.cards+" Karten");add("Kreaturen",String(i.arch.creatures));
+    add("Removal",i.arch.removal+" ("+num(i.arch.removal_points)+" P.)");add("Kartenfluss",String(i.arch.flow))}}
+// Im Spiel (components/gamestate.py): Chancen je Gruppe und Karten der Bibliothek
+function renderGame(){
+  const box=$("lgame"),g=live.game;box.textContent="";
+  box.classList.toggle("show",!!(g&&g.active));if(!g||!g.active)return;
+  box.appendChild(el("div","gtop","Im Spiel · Zug "+g.turn+" · Bibliothek "+g.library+" Karten · Hand "+g.hand));
+  const cols=el("div","gcols"),left=el("div"),right=el("div");cols.append(left,right);box.appendChild(cols);
+  const t1=el("table"),h1=el("tr");
+  [["Gruppe","l"],["übrig",""],["nächste Karte",""],["in 3 Karten",""]].forEach(([x,c])=>h1.appendChild(el("th",c||null,x)));t1.appendChild(h1);
+  for(const r of g.groups){const tr=el("tr",r.key==="land"?"land":r.key==="removal"?"rem":null);
+    tr.append(el("td","l",r.label),el("td",null,String(r.n)),el("td",null,pc(r.next)),el("td",null,pc(r.in3)));t1.appendChild(tr)}
+  left.appendChild(t1);
+  const rm=g.removal||{};
+  if(rm.total)left.appendChild(el("div","lmsg","Removal übrig: "+rm.left+" von "+rm.total+" Karten, "+num(rm.points_left)+
+    " von "+num(rm.points_total)+" Punkten."));
+  if(!g.consistent)left.appendChild(el("div","lmsg","Die Bibliothek passt nicht genau zum Deck (z. B. Token oder Sideboard): Werte ungefähr."));
+  const t2=el("table"),h2=el("tr");
+  [["Karte","l"],["übrig",""],["nächste Karte",""],["in 3 Karten",""]].forEach(([x,c])=>h2.appendChild(el("th",c||null,x)));t2.appendChild(h2);
+  for(const c of g.cards){const tr=el("tr",c.land?"land":c.removal?"rem":null),n=el("td","l",c.name);
+    if(c.removal)n.append(" ",el("span","rtag","R"+num(c.removal)));
+    tr.append(n,el("td",null,c.n+" / "+c.deck),el("td",null,pc(c.next)),el("td",null,pc(c.in3)));t2.appendChild(tr)}
+  right.appendChild(t2)}
 $("ldeck").onclick=async()=>{let r=null;try{r=await api("/api/live/deck",{})}catch(e){}
   if(!r||!r.ok){showErr("Deck nicht übernommen: "+((r&&r.error)||"Fehler"));return}
   pollLive(true)};

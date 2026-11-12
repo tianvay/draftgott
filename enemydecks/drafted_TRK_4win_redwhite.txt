@@ -1,0 +1,40 @@
+Deck
+1 Dr. Beverly Crusher (TRK) 13
+1 The Doctor, EMH (TRK) 234
+1 Brad Boimler, Eager Ensign (TRK) 5
+1 The Naked Time (TRK) 159
+1 Oberth-Class Starship (TRK) 26
+2 Savvy Profiteer (TRK) 171
+2 Ghost of Illyria (TRK) 20
+1 Shields Up! (TRK) 35
+1 Free Borg Revolutionaries (TRK) 19
+1 Worf, Honor-Bound Warrior (TRK) 256
+1 Pure Energy (TRK) 31
+1 Tactical Officer (TRK) 38
+1 Federation Field Medic (TRK) 17
+1 Red Alert! (TRK) 169
+2 Malfunctioning Holodeck (TRK) 22
+1 Picard, Leading by Example (TRK) 29
+1 Shuttle Ace (TRK) 36
+1 The Duras Sisters (TRK) 235
+1 Test of Conviction (TRK) 39
+1 Bajor (TRK) 277
+1 Command Subadjunct (TRK) 9
+9 Plains (SPM) 194
+7 Mountain (SPM) 197
+
+Sideboard
+1 Brad Boimler, Eager Ensign (TRK) 5
+1 Highly Illogical (TRK) 62
+4 Andromedan Automatons (TRK) 2
+1 Andoria (TRK) 275
+1 Federation Probe (TRK) 59
+1 Make It So (TRK) 71
+1 Earth, Sector 001 (TRK) 281
+1 Risa (TRK) 293
+1 Cetacean Ops (TRK) 48
+1 Vexing Drone (TRK) 45
+1 Class-F Shuttlecraft (TRK) 259
+1 There's Coffee in that Nebula (TRK) 40
+1 Marooned (TRK) 72
+1 Tricorder (TRK) 270

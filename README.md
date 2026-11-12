@@ -71,6 +71,7 @@ Projektordner geklärt; Abweichungen davon stehen mit Regelnummer im Code bzw. i
 | `components/arenalog.py` | MTG Arena: Packs und Picks aus `Player.log`, Kartennamen aus Arenas Kartendatenbank |
 | `components/livedraft.py` | Live-Draft: Protokoll mitlesen, Picks in die Pool-Datei, Pack bewerten |
 | `components/overlay.py` | Seitenfenster des Live-Drafts (tkinter, immer im Vordergrund) |
+| `components/gamestate.py` | Im Spiel: Bibliothek aus dem Arena-Protokoll, Ziehchancen, übriges Removal |
 | `components/draftstats.py` | Draft-Statistik (`draftstatistik.json`): Decks und Matches sammeln, Zahlen je Karte |
 | `components/setreport.py` | Setauswertung als HTML-Seite (`--setauswertung`) |
 | `components/symbols.py` | Original-Manasymbole von Scryfall (Cache `scryfall_symbols.json`) |
@@ -209,6 +210,12 @@ In Arena muss unter Optionen → Konto „Detailed Logs (Plugin Support)“ eing
 - **Seitenfenster:** kleines Fenster, immer im Vordergrund, mit Archetyp und Rangliste (● zugeordnet, ○ Farben
   passen). Arena im Fenster oder randlosen Vollbild spielen. `--kein-overlay` schaltet es ab, `--overlay URL` öffnet
   es einzeln, `--arena-log DATEI` nimmt ein anderes Protokoll.
+- **Kennzahlen der Picks:** Kreaturen, Removal (Karten und Punkte wie im Bericht) und Kartenfluss der Picks, mit
+  erkanntem Archetyp zusätzlich nur in dessen Farben. Pack-Karten zeigen ihre Removal-Punkte.
+- **Im Spiel: Ziehchancen:** Während eines Spiels zeigen Seite und Seitenfenster die eigene Bibliothek (Deck beim
+  Spielstart minus Hand, Spielfeld, Friedhof, Exil, Stapel): je Gruppe (Land, Kreatur, Removal, Quellen je Farbe)
+  und je Karte die Chance für die nächste Karte und für mindestens eine unter den nächsten 3 Karten
+  (hypergeometrisch), dazu übriges Removal (Karten und Punkte). Gilt für jedes Spiel (`components/gamestate.py`).
 - **Deck übernehmen:** Nach dem Draft (42 Picks oder sobald Arena ein Deck meldet) erscheint auf der Seite und im
   Seitenfenster der Knopf „Deck + Sideboard übernehmen“. Er wird klickbar, sobald der Deckbau in Arena mit „Fertig“
   abgeschlossen ist, und schreibt Deck (mit Standardländern) und Sideboard in die Kartenpool-Datei: Deckkarten auf
