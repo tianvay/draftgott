@@ -255,7 +255,8 @@ class LiveDraft:
         self._save("\n".join(["Deck"] + self._lines((g, 1) for g in self.state.picks)) + "\n")
 
     def _deck_valid(self):
-        """Gehoert das zuletzt abgegebene Deck zum laufenden Draft? (Ohne mitgelesene Picks: ja.)"""
+        """Gehoert das zuletzt abgegebene Deck zum laufenden Draft? Ohne mitgelesene Picks: ja, ausser es liegt schon
+        ein Pack an (erster Pick eines neuen Drafts, das Deck ist dann vom vorigen)."""
         if not self.deck:
             return False
         names = Counter()
@@ -265,7 +266,7 @@ class LiveDraft:
                 if info and info["name"] not in draftstats.BASICS:
                     names[info["name"]] += qty
         if not self.state.picks:
-            return bool(names)
+            return bool(names) and not self.state.pack
         picks = Counter(c["name"] for c in (self._card(g) for g in self.state.picks) if c)
         total = sum(names.values())
         return total > 0 and sum((names & picks).values()) >= DECK_MATCH * total

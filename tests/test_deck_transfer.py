@@ -104,6 +104,21 @@ class LiveDeckTests(TransferTestCase):
         self.assertEqual(self.pool.read_text(encoding="utf-8"), "Deck\n1 Test Gold (TST) 14\n")
         self.assertFalse(self.live.snapshot({}, {}, None)["deck"]["ready"])
 
+    def test_first_pack_of_the_next_draft_drops_the_old_deck(self):
+        self.write(*DRAFT, DECK)
+        self.live.step()
+        self.assertTrue(self.live.snapshot({}, {}, None)["complete"])
+        self.write(notify(1, [201, 202], draft="d2"))  # naechster Draft, noch kein Pick
+        self.assertTrue(self.live.step())
+        snap = self.live.snapshot({}, {}, None)
+        self.assertFalse(snap["complete"])
+        self.assertFalse(snap["deck"]["ready"])
+        self.assertIsNone(snap["deckinfo"])
+        self.assertEqual(snap["status"], "pack")
+        self.assertEqual(snap["pick"], 1)
+        self.assertEqual([c["name"] for c in snap["pack"]], ["Test Big", "Test Gold"])
+        self.assertIn("Pick 1", overlay.rows_for(snap)[0][0])
+
     def test_complete_after_42_picks_without_deck(self):
         self.write("nichts")  # Protokoll vorhanden
         self.live.state.picks = [101] * 42
