@@ -214,6 +214,8 @@ In Arena muss unter Optionen → Konto „Detailed Logs (Plugin Support)“ eing
 - **Seitenfenster:** kleines Fenster, immer im Vordergrund, mit Archetyp und Rangliste (● zugeordnet, ○ Farben
   passen). Arena im Fenster oder randlosen Vollbild spielen. `--kein-overlay` schaltet es ab, `--overlay URL` öffnet
   es einzeln, `--arena-log DATEI` nimmt ein anderes Protokoll.
+- **Steuerfenster:** am linken Bildschirmrand, schaltet per Häkchen das Seitenfenster (Draft / Bibliothek) und den
+  Trick-Warner an und ab; schließt man es, sind alle Fenster zu.
 - **Kennzahlen der Picks:** Kreaturen, Removal (Karten und Punkte wie im Bericht) und Kartenfluss der Picks, mit
   erkanntem Archetyp zusätzlich nur in dessen Farben. Pack-Karten zeigen ihre Removal-Punkte.
 - **Archetypen im Draft:** Tabelle (und im Seitenfenster kurz) je Archetyp mit den zugeordneten Picks und
@@ -226,7 +228,8 @@ In Arena muss unter Optionen → Konto „Detailed Logs (Plugin Support)“ eing
   und je Karte die Chance für die nächste Karte und für mindestens eine unter den nächsten 3 Karten
   (hypergeometrisch), dazu übriges Removal (Karten und Punkte). Gilt für jedes Spiel (`components/gamestate.py`).
   „Spielbar“: Karten, die mit den eigenen Ländern auf dem Spielfeld bezahlbar sind (Haken an der Karte).
-- **Im Spiel: Tricks bei offenem Mana:** Oben in der Spielansicht alle Instants und Flash-Karten des Sets, die der
+- **Im Spiel: Tricks bei offenem Mana:** Oben in der Spielansicht der Seite und im Trick-Warner (eigenes Fenster links
+  unter dem Steuerfenster, nur im Spiel) alle Instants und Flash-Karten des Sets, die der
   Gegner mit seinen ungetappten Ländern jetzt wirken könnte. Hat er Zauber in mindestens zwei Farben gezeigt, nur Tricks in diesen Farben (und denen seiner
   Standardländer). Aktivierbare Fähigkeiten zählen nicht (`components/tricks.py`).
 - **Offene Farben:** Signale im Draft (`components/signals.py`): eine starke Karte (MustPlay oder höher), die mit dem

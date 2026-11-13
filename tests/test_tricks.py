@@ -142,14 +142,18 @@ class OverlayTests(unittest.TestCase):
         return g
 
     def test_rows_show_tricks(self):
-        rows = overlay.rows_for({"status": "waiting", "game": self.game()})
+        # Nutzer 13.11.2026: Tricks stehen im eigenen Fenster (Trick-Warner), nicht mehr bei der Bibliothek
+        rows = overlay.trick_window_rows({"status": "waiting", "game": self.game()})
         text = "\n".join(r[0] for r in rows)
         self.assertIn("Gegner offen 2", text)
         self.assertIn("Trick 1W", text)
         self.assertNotIn("Nächster Gegnerzug", text)  # Nutzer 13.11.2026: nur Tricks mit jetzt offenem Mana
         self.assertNotIn("Bolt R", text)
-        self.assertLess(text.index("Trick 1W"), text.index("Chance nächste Karte"))  # Tricks oben
         self.assertTrue(all(ord(ch) <= 0xFFFF for r in rows for ch in r[0]))
+        main = "\n".join(r[0] for r in overlay.rows_for({"status": "waiting", "game": self.game()}))
+        self.assertIn("Chance nächste Karte", main)
+        self.assertNotIn("Gegner offen", main)
+        self.assertNotIn("Trick 1W", main)
 
     def test_mini_shows_trick_count(self):
         text = " ".join(r[0] for r in overlay.mini_rows({"game": self.game()}))

@@ -181,11 +181,19 @@ def trick_rows(t):
     return rows
 
 
+def trick_window_rows(snap):
+    """Zeilen des Trick-Warners (eigenes Fenster): Zug und die Tricks bei offenem Mana des Gegners."""
+    g = (snap or {}).get("game") or {}
+    if not g.get("active"):
+        return [("Trick-Warner", "head"), ("Erscheint im Spiel", "msg")]
+    rows = [(f"Trick-Warner · Zug {g.get('turn', 0)}", "head")]
+    return rows + (trick_rows(g.get("tricks")) or [("Noch keine Daten zum Gegner", "msg")])
+
+
 def game_rows(g):
-    """Zeilen im Spiel: Tricks des Gegners, Bibliothek, Chancen je Gruppe (naechste Karte / in 3 Zuegen), Removal,
-    Karten der Bibliothek."""
+    """Zeilen im Spiel: Bibliothek, Chancen je Gruppe (naechste Karte / in 3 Zuegen), Removal, Karten der Bibliothek
+    (die Tricks des Gegners stehen im Trick-Warner, trick_window_rows)."""
     rows = [(f"Im Spiel · Zug {g.get('turn', 0)} · Bibliothek {g['library']} · Hand {g.get('hand', 0)}", "head")]
-    rows += trick_rows(g.get("tricks"))
     mana = g.get("mana") or {}
     colors = " ".join(f"{c}×{n}" for c, n in sorted((mana.get("colors") or {}).items(),
                                                      key=lambda kv: "WUBRGC".find(kv[0])))
@@ -408,30 +416,64 @@ def fetch(url, timeout=0.8):
         return None
 
 
-def run(url, interval_ms=1000):
-    import tkinter as tk
+WINDOWS = (("main", "Draft / Bibliothek"), ("tricks", "Trick-Warner"))
+CONTROL_SIZE = (200, 96)
+TOP = 80
 
-    root = tk.Tk()
-    root.title("draftgott Live")
-    root.attributes("-topmost", True)
+
+def default_enabled():
+    """Alle Fenster sind beim Start angeschaltet."""
+    return {key: True for key, _ in WINDOWS}
+
+
+def visible_windows(enabled, snap):
+    """Fenster, die gerade zu sehen sind: das Seitenfenster, wenn angeschaltet; der Trick-Warner nur im Spiel."""
+    shown = set()
+    if enabled.get("main"):
+        shown.add("main")
+    if enabled.get("tricks") and ((snap or {}).get("game") or {}).get("active"):
+        shown.add("tricks")
+    return shown
+
+
+def control_geometry():
+    """Steuerfenster am linken Bildschirmrand."""
+    w, h = CONTROL_SIZE
+    return f"{w}x{h}+0+{TOP}"
+
+
+def trick_geometry():
+    """Trick-Warner links unter dem Steuerfenster."""
+    return f"340x300+0+{TOP + CONTROL_SIZE[1] + 40}"
+
+
+def main_geometry(screen_width):
+    """Seitenfenster am rechten Bildschirmrand."""
+    return f"360x560+{max(0, screen_width - 380)}+{TOP}"
+
+
+def _float_window(win):
+    """Immer im Vordergrund, leicht durchsichtig, schmaler Rahmen ohne Eintrag in der Taskleiste (Windows)."""
+    import tkinter as tk
+    win.attributes("-topmost", True)
     try:
-        root.attributes("-alpha", 0.92)
-        root.attributes("-toolwindow", True)  # schmaler Rahmen, kein Eintrag in der Taskleiste (Windows)
+        win.attributes("-alpha", 0.92)
+        win.attributes("-toolwindow", True)
     except tk.TclError:
         pass
-    root.configure(bg=COLORS["bg"])
-    root.geometry(f"360x560+{max(0, root.winfo_screenwidth() - 380)}+80")
-    bar = tk.Frame(root, bg=COLORS["bg"])
-    bar.pack(fill="x", side="top")
-    toggle = tk.Button(bar, text="▁", font=("Segoe UI", 9, "bold"), bg="#2c3a52", fg=COLORS["ink"], relief="flat",
-                       activebackground="#3b4d6b", padx=8, pady=0, cursor="hand2")
-    toggle.pack(side="right", padx=4, pady=2)
-    text = tk.Text(root, bg=COLORS["bg"], fg=COLORS["ink"], bd=0, highlightthickness=0, wrap="word",
-                   font=("Segoe UI", 11), padx=10, pady=4, cursor="arrow")
-    button = tk.Button(root, font=("Segoe UI", 11, "bold"), bg="#1f7a45", fg="#ffffff", activebackground="#2e9e5b",
-                       disabledforeground="#c8d3cc", relief="flat", padx=10, pady=6,
-                       command=lambda: send_deck(url))
-    text.pack(fill="both", expand=True)
+    win.configure(bg=COLORS["bg"])
+
+
+def _fill(text, rows):
+    text.configure(state="normal")
+    text.delete("1.0", "end")
+    for line, tag in rows:
+        text.insert("end", line + "\n", tag)
+    text.configure(state="disabled")
+
+
+def _styles(text):
+    """Zeilenstile eines Textfelds (head, sub, arch, ... und groessere mini_* fuer den Kasten)."""
     text.tag_configure("head", foreground=COLORS["head"], font=("Segoe UI", 12, "bold"), spacing3=2)
     text.tag_configure("sub", foreground=COLORS["muted"], font=("Segoe UI", 9), spacing3=6)
     text.tag_configure("arch", background=COLORS["arch"], font=("Segoe UI", 11, "bold"), spacing1=2, spacing3=2)
@@ -449,7 +491,62 @@ def run(url, interval_ms=1000):
         text.tag_configure("mini_" + tag, font=("Segoe UI", 13, "bold"), spacing1=3, spacing3=3,
                            background=COLORS[tag] if tag in ("arch", "color", "best", "hint") else COLORS["bg"],
                            foreground=COLORS["head"] if tag == "head" else COLORS["ink"])
-    state = {"last": None, "seen": False, "misses": 0, "mini": False, "big": None, "snap": None,
+
+
+def run(url, interval_ms=1000):
+    """Drei Fenster: das Steuerfenster (Hauptfenster, links) schaltet Seitenfenster und Trick-Warner an und ab;
+    schliesst man es, ist alles zu."""
+    import tkinter as tk
+
+    control = tk.Tk()
+    control.title("draftgott")
+    _float_window(control)
+    control.geometry(control_geometry())
+    tk.Label(control, text="draftgott Fenster", bg=COLORS["bg"], fg=COLORS["head"],
+             font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=8, pady=(4, 2))
+    enabled = {key: tk.BooleanVar(value=on) for key, on in default_enabled().items()}
+
+    root = tk.Toplevel(control)  # Seitenfenster: Draft, Deck und im Spiel die Bibliothek
+    root.title("draftgott Live")
+    _float_window(root)
+    root.geometry(main_geometry(root.winfo_screenwidth()))
+    tricks = tk.Toplevel(control)
+    tricks.title("draftgott Tricks")
+    _float_window(tricks)
+    tricks.geometry(trick_geometry())
+    trick_text = tk.Text(tricks, bg=COLORS["bg"], fg=COLORS["ink"], bd=0, highlightthickness=0, wrap="word",
+                         font=("Segoe UI", 11), padx=10, pady=4, cursor="arrow")
+    trick_text.pack(fill="both", expand=True)
+    windows = {"main": root, "tricks": tricks}
+    for key, label in WINDOWS:
+        tk.Checkbutton(control, text=label, variable=enabled[key], bg=COLORS["bg"], fg=COLORS["ink"],
+                       selectcolor="#2c3a52", activebackground=COLORS["bg"], activeforeground=COLORS["ink"],
+                       font=("Segoe UI", 10), anchor="w", command=lambda: show_windows()).pack(fill="x", padx=6)
+        windows[key].protocol("WM_DELETE_WINDOW", lambda k=key: (enabled[k].set(False), show_windows()))
+
+    def show_windows():
+        shown = visible_windows({k: v.get() for k, v in enabled.items()}, state["snap"])
+        for key, win in windows.items():
+            if key in shown and win.state() == "withdrawn":
+                win.deiconify()
+                win.attributes("-topmost", True)
+            elif key not in shown and win.state() != "withdrawn":
+                win.withdraw()
+
+    bar = tk.Frame(root, bg=COLORS["bg"])
+    bar.pack(fill="x", side="top")
+    toggle = tk.Button(bar, text="▁", font=("Segoe UI", 9, "bold"), bg="#2c3a52", fg=COLORS["ink"], relief="flat",
+                       activebackground="#3b4d6b", padx=8, pady=0, cursor="hand2")
+    toggle.pack(side="right", padx=4, pady=2)
+    text = tk.Text(root, bg=COLORS["bg"], fg=COLORS["ink"], bd=0, highlightthickness=0, wrap="word",
+                   font=("Segoe UI", 11), padx=10, pady=4, cursor="arrow")
+    button = tk.Button(root, font=("Segoe UI", 11, "bold"), bg="#1f7a45", fg="#ffffff", activebackground="#2e9e5b",
+                       disabledforeground="#c8d3cc", relief="flat", padx=10, pady=6,
+                       command=lambda: send_deck(url))
+    text.pack(fill="both", expand=True)
+    for t in (text, trick_text):
+        _styles(t)
+    state = {"last": None, "tricks": None, "seen": False, "misses": 0, "mini": False, "big": None, "snap": None,
              "party": None, "first": True, "blink": False}
 
     def set_mini(mini):
@@ -487,18 +584,19 @@ def run(url, interval_ms=1000):
                     button.pack(fill="x", side="bottom", before=text)
         if rows != state["last"]:
             state["last"] = rows
-            text.configure(state="normal")
-            text.delete("1.0", "end")
-            for line, tag in rows:
-                text.insert("end", line + "\n", tag)
-            text.configure(state="disabled")
+            _fill(text, rows)
+        trows = trick_window_rows(snap)
+        if trows != state["tricks"]:
+            state["tricks"] = trows
+            _fill(trick_text, trows)
+        show_windows()
 
     def tick():
         snap = fetch(url)
         if snap is None:
             state["misses"] += 1
             if state["seen"] and state["misses"] * interval_ms >= 8000:  # Drafthelper beendet
-                root.destroy()
+                control.destroy()
                 return
         else:
             state["seen"], state["misses"] = True, 0
@@ -512,12 +610,12 @@ def run(url, interval_ms=1000):
             state["party"] = party
             if not state["first"]:  # beim Start nicht fuer ein schon gespeichertes Deck feiern
                 try:
-                    celebrate(root, party)
+                    celebrate(root if root.state() != "withdrawn" else control, party)
                 except tk.TclError:
                     pass
         if snap is not None:
             state["first"] = False
-        root.after(interval_ms, tick)
+        control.after(interval_ms, tick)
 
     tick()
-    root.mainloop()
+    control.mainloop()

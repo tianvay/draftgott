@@ -422,7 +422,7 @@ def _live_help():
             "Drafthelper an zwei Karten je Pick (sonst am Eventnamen). Darunter stehen die letzten Hinweise "
             "(„Pick 9: … kam zurück“)."]))
         + _panel("Im Spiel: Tricks bei offenem Mana", _ul([
-            "Oben in der Spielansicht (Seite und Seitenfenster) stehen alle Instants und Karten mit Flash des Sets, "
+            "Oben in der Spielansicht der Seite und im Trick-Warner (eigenes Fenster) stehen alle Instants und Karten mit Flash des Sets, "
             "die der Gegner mit seinen ungetappten Ländern jetzt wirken könnte, mit Kosten, deiner Kategorie und "
             "Removal-Punkten. Aktivierbare Fähigkeiten auf dem Feld zählen nicht, ebenso wenig Mana aus Kreaturen "
             "oder Treasure.",
@@ -483,7 +483,10 @@ def _live_help():
             "○ Farben passen, dazu Farben, Kategorie und zugeordnete Archetypen).",
             "Arena dafür im Fenster oder im randlosen Vollbild spielen; über exklusivem Vollbild liegt kein Fenster. "
             "Das Fenster lässt sich verschieben und schließt sich, wenn der Drafthelper beendet wird. Einzeln: "
-            "<code>python mtg_sim.py --overlay http://127.0.0.1:8765/</code>."]))
+            "<code>python mtg_sim.py --overlay http://127.0.0.1:8765/</code>.",
+            "Am linken Bildschirmrand steht das <b>Steuerfenster</b>: Häkchen schalten das Seitenfenster (Draft / "
+            "Bibliothek) und den <b>Trick-Warner</b> an und ab. Der Trick-Warner ist ein eigenes Fenster links unter "
+            "dem Steuerfenster und erscheint nur im Spiel. Schließt man das Steuerfenster, sind alle Fenster zu."]))
         + _panel("Draft-Statistik", _ul([
             "Solange der Live-Draft läuft, sammelt er je Draft die Picks, das abgegebene Deck und die Ergebnisse der "
             "Matches (je Game und fürs Match) in <code>draftstatistik.json</code> im Projektordner (nicht im Git, "
