@@ -450,7 +450,8 @@ def _live_help():
             "Archetyp und beste Karte. Noch einmal klicken klappt es in der alten Größe wieder auf.",
             "Nach dem Draft und zwischen den Spielen zeigt das Seitenfenster statt „Pick 43“ eine kurze "
             "<b>Deck-Übersicht</b>: Archetyp und Bilanz (Siege–Niederlagen), Karten, Länder und Zauber mit Ø Manawert, "
-            "Mana-Kurve, Kreaturen, Removal (Karten und Punkte), Kartenfluss, Zauber je Farbe und die Bomben (eigene "
+            "Mana-Kurve (als Balken, der höchste gelb), Kreaturen, Removal (Karten und Punkte), Kartenfluss, Zauber je Farbe "
+            "(als Balken in den Manafarben) und die Bomben (eigene "
             "Bewertung Matchwinner; Splashworthy und Must-Play zählen nicht). Grundlage ist das in Arena abgegebene Hauptdeck, vorher alle "
             "Picks. Minimiert: Bilanz, Kreaturen und Removal.",
             "Karten, die per Mulligan oder Scry unter die Bibliothek gelegt wurden, zählen wie alle anderen (ihre "

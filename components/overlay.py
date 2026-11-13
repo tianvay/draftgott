@@ -243,11 +243,11 @@ def deck_rows(snap):
     rows.append((f"{info['cards']} Karten · {info['lands']} Länder · {info['spells']} Zauber · Ø Manawert "
                  f"{info['avg_mv']:.2f}".replace(".", ","), "sub"))
     labels = ("≤1", "2", "3", "4", "5", "6+")
-    rows.append(("Kurve " + " ".join(f"{lab}:{n}" for lab, n in zip(labels, info["curve"])), "sub"))
+    rows.append(("Kurve " + " ".join(f"{lab}:{n}" for lab, n in zip(labels, info["curve"])), "curve"))
     rows.append((f"Kreaturen {info['creatures']} · Removal {info['removal']} ({_num(info['removal_points'])} P.) · "
                  f"Kartenfluss {info['flow']}", "arch"))
     if info.get("colors"):
-        rows.append(("Farben " + " · ".join(f"{c} {n}" for c, n in info["colors"].items()), "color"))
+        rows.append(("Farben " + " · ".join(f"{c} {n}" for c, n in info["colors"].items()), "colors"))
     if info.get("top"):
         rows.append(("Bomben: " + ", ".join(info["top"]), "head2"))
     return rows
@@ -464,11 +464,94 @@ def _float_window(win):
     win.configure(bg=COLORS["bg"])
 
 
+MANA_FILL = {"W": "#f3ecd2", "U": "#4a90d9", "B": "#6b5f7a", "R": "#e0533d", "G": "#3f9b5a"}
+MANA_INK = {"W": "#161b24"}
+CURVE_FILL, CURVE_PEAK = "#4f8cc9", "#ffd166"
+CHART_TAGS = ("curve", "colors")
+
+
+def curve_bars(line):
+    """Balken der Kurve aus der Zeile "Kurve ≤1:0 2:9 ..." als [(Beschriftung, Anzahl)]."""
+    return [(lab, int(n)) for lab, n in (part.rsplit(":", 1) for part in line.split()[1:])]
+
+
+def color_parts(line):
+    """Farben aus der Zeile "Farben W 14 · R 9" als [(Farbe, Anzahl)]."""
+    return [(c, int(n)) for c, n in (part.split() for part in line[len("Farben "):].split(" · "))]
+
+
+def curve_layout(bars, width, height, top=14, bottom=16):
+    """Rechtecke der Kurve: gleiche Breite, gemeinsame Grundlinie, Hoehe nach Anzahl (oben Platz fuer die Zahl,
+    unten fuer die Beschriftung)."""
+    if not bars:
+        return []
+    slot = width / len(bars)
+    gap = min(8.0, slot * 0.25)
+    base = height - bottom
+    peak = max(n for _, n in bars) or 1
+    return [{"label": lab, "n": n, "x0": round(i * slot + gap / 2), "x1": round((i + 1) * slot - gap / 2),
+             "y0": round(base - (base - top) * n / peak), "y1": base} for i, (lab, n) in enumerate(bars)]
+
+
+def color_layout(parts, width):
+    """Abschnitte des Farbbalkens: Breite nach Anteil, lueckenlos von 0 bis width."""
+    total = sum(n for _, n in parts)
+    if not total:
+        return []
+    segs, done = [], 0
+    for c, n in parts:
+        x0 = round(width * done / total)
+        done += n
+        segs.append({"color": c, "n": n, "x0": x0, "x1": round(width * done / total),
+                     "fill": MANA_FILL.get(c, "#8d97a8"), "ink": MANA_INK.get(c, "#ffffff")})
+    return segs
+
+
+def _chart(text, line, tag):
+    """Kleine Grafik (Canvas) fuer eine Zeile mit Tag curve (Balken je Manawert, hoechster gelb) oder colors
+    (geteilter Balken in Manafarben)."""
+    import tkinter as tk
+    width = max(200, text.winfo_width() - 2 * int(text.cget("padx")) - 4)
+    if tag == "curve":
+        height = 74
+        cv = tk.Canvas(text, width=width, height=height, bg=COLORS["bg"], highlightthickness=0)
+        bars = curve_layout(curve_bars(line), width, height)
+        peak = max((b["n"] for b in bars), default=0)
+        cv.create_line(0, height - 16, width, height - 16, fill="#2c3a52")
+        for b in bars:
+            mid = (b["x0"] + b["x1"]) / 2
+            if b["n"]:
+                cv.create_rectangle(b["x0"], b["y0"], b["x1"], b["y1"], width=0,
+                                    fill=CURVE_PEAK if b["n"] == peak else CURVE_FILL)
+            cv.create_text(mid, b["y0"] - 2, text=str(b["n"]), anchor="s", fill=COLORS["ink"],
+                           font=("Segoe UI", 9, "bold"))
+            cv.create_text(mid, height - 1, text=b["label"], anchor="s", fill=COLORS["muted"], font=("Segoe UI", 9))
+        return cv
+    height = 22
+    cv = tk.Canvas(text, width=width, height=height, bg=COLORS["bg"], highlightthickness=0)
+    for s in color_layout(color_parts(line), width):
+        cv.create_rectangle(s["x0"], 0, s["x1"], height, width=0, fill=s["fill"])
+        if s["x1"] - s["x0"] >= 28:
+            cv.create_text((s["x0"] + s["x1"]) / 2, height / 2, text=f"{s['color']} {s['n']}", fill=s["ink"],
+                           font=("Segoe UI", 10, "bold"))
+    return cv
+
+
 def _fill(text, rows):
+    """Schreibt die Zeilen ins Textfeld; Zeilen mit Tag curve/colors werden als kleine Grafik eingesetzt."""
     text.configure(state="normal")
+    for old in getattr(text, "_charts", []):
+        old.destroy()
+    text._charts = []
     text.delete("1.0", "end")
     for line, tag in rows:
-        text.insert("end", line + "\n", tag)
+        if tag in CHART_TAGS:
+            cv = _chart(text, line, tag)
+            text._charts.append(cv)
+            text.window_create("end", window=cv, pady=3)
+            text.insert("end", "\n")
+        else:
+            text.insert("end", line + "\n", tag)
     text.configure(state="disabled")
 
 
