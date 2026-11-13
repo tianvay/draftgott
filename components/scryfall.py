@@ -74,8 +74,6 @@ def fetch_cards_cached(names, refresh=False):
             CACHE_FILE.write_text(json.dumps(cache), encoding="utf-8")
         except OSError as e:
             print(f"Cache konnte nicht gespeichert werden: {e}", file=sys.stderr)
-    else:
-        print("Alle Karten aus dem Cache.", file=sys.stderr)
     return cache
 
 
