@@ -217,6 +217,11 @@ In Arena, “Detailed Logs (Plugin Support)” must be enabled under Options →
   it on its own, `--arena-log FILE` takes a different log.
 - **Control window:** at the left screen edge, uses checkboxes to switch the overlay (Draft / Library) and the
   Trick Warner on and off; closing it closes all windows.
+- **Card overlay:** while picking, puts rank, rating, points, archetype fit, removal, card flow, synergy and your own
+  win rate directly onto the cards in the Arena window (frame purple = top pick, green = fits, grey = other). Once,
+  with a full pack, press "Calibrate" in the control window and click five card corners (saved in
+  `kartenoverlay.json`, not in Git). Each card shows its name from the log in small print to check the order; clicks
+  go through to Arena.
 - **Pick metrics:** creatures, removal (cards and points as in the report) and card flow of the picks, with the
   detected archetype additionally only in its colors. Pack cards show their removal points.
 - **Archetypes in the draft:** Table (and briefly in the overlay) per archetype with the assigned picks and

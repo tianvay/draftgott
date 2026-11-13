@@ -27,3 +27,6 @@ scryfall_set_cache.json
 # Draft-Statistik des Live-Drafts (je Nutzer)
 draftstatistik*.json
 draftstatistik*.json.tmp
+
+# Karten-Overlay: Kalibrierung des Rasters im Arena-Fenster (je Nutzer)
+kartenoverlay.json

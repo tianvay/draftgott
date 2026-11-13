@@ -532,7 +532,7 @@ def fetch(url, timeout=0.8):
 
 
 WINDOWS = (("main", "Draft / Bibliothek"), ("tricks", "Trick-Warner"))
-CONTROL_SIZE = (200, 96)
+CONTROL_SIZE = (200, 156)  # Platz fuer Seitenfenster, Trick-Warner und Karten-Overlay mit "Kalibrieren"
 TOP = 80
 
 
@@ -693,8 +693,11 @@ def _styles(text):
 
 def run(url, interval_ms=1000):
     """Drei Fenster: das Steuerfenster (Hauptfenster, links) schaltet Seitenfenster und Trick-Warner an und ab;
-    schliesst man es, ist alles zu."""
+    schliesst man es, ist alles zu. Dazu das Karten-Overlay ueber Arena (components/packoverlay.py) mit Schalter und
+    Knopf "Kalibrieren" im Steuerfenster."""
+    import os
     import tkinter as tk
+    from components import packoverlay
 
     control = tk.Tk()
     control.title("draftgott")
@@ -721,6 +724,53 @@ def run(url, interval_ms=1000):
                        selectcolor="#2c3a52", activebackground=COLORS["bg"], activeforeground=COLORS["ink"],
                        font=("Segoe UI", 10), anchor="w", command=lambda: show_windows()).pack(fill="x", padx=6)
         windows[key].protocol("WM_DELETE_WINDOW", lambda k=key: (enabled[k].set(False), show_windows()))
+
+    cards_on = tk.BooleanVar(value=True)  # Karten-Overlay ueber Arena
+    cards_row = tk.Frame(control, bg=COLORS["bg"])
+    cards_row.pack(fill="x", padx=6)
+    tk.Checkbutton(cards_row, text=t("Karten-Overlay"), variable=cards_on, bg=COLORS["bg"], fg=COLORS["ink"],
+                   selectcolor="#2c3a52", activebackground=COLORS["bg"], activeforeground=COLORS["ink"],
+                   font=("Segoe UI", 10), anchor="w").pack(side="left")
+    tk.Button(cards_row, text=t("Kalibrieren"), font=("Segoe UI", 8), bg="#2c3a52", fg=COLORS["ink"], relief="flat",
+              activebackground="#3b4d6b", padx=4, pady=0, cursor="hand2",
+              command=lambda: start_calibration()).pack(side="right")
+    cards_hint = tk.Label(control, text="", bg=COLORS["bg"], fg=COLORS["muted"], font=("Segoe UI", 8),
+                          anchor="w", justify="left", wraplength=CONTROL_SIZE[0] - 12)
+    cards_hint.pack(fill="x", padx=8)
+    cards = packoverlay.PackOverlay(control)
+    cards_state = {"cal": packoverlay.load_calibration(), "arena": {"found": False}, "busy": False}
+
+    def start_calibration():
+        arena = packoverlay.arena_window(os.getpid())
+        if not arena.get("found") or arena.get("minimized"):
+            cards_hint.configure(text=t("Arena nicht gefunden"))
+            return
+        cards_state["busy"] = True
+        cards.hide()
+
+        def done(cal):
+            packoverlay.save_calibration(packoverlay.CAL_FILE, cal)
+            cards_state["cal"] = cal
+
+        cal_win = packoverlay.Calibrator(control, arena, done)
+        cal_win.win.bind("<Destroy>", lambda e: cards_state.update(busy=False), add="+")
+
+    def cards_tick():
+        arena = packoverlay.arena_window(os.getpid())
+        cards_state["arena"] = arena
+        cal = cards_state["cal"]
+        hint = packoverlay.status_text(cal, arena)
+        if cards_hint.cget("text") != hint:
+            cards_hint.configure(text=hint)
+        snap = state["snap"]
+        if not cards_state["busy"] and packoverlay.should_show(cards_on.get(), snap, cal, arena):
+            try:
+                cards.show(packoverlay.pack_views(snap), cal, arena)
+            except tk.TclError:
+                pass
+        else:
+            cards.hide()
+        control.after(300, cards_tick)
 
     def show_windows():
         shown = visible_windows({k: v.get() for k, v in enabled.items()}, state["snap"])
@@ -818,4 +868,5 @@ def run(url, interval_ms=1000):
         control.after(interval_ms, tick)
 
     tick()
+    cards_tick()
     control.mainloop()

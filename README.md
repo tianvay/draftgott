@@ -220,6 +220,11 @@ In Arena muss unter Optionen → Konto „Detailed Logs (Plugin Support)“ eing
   es einzeln, `--arena-log DATEI` nimmt ein anderes Protokoll.
 - **Steuerfenster:** am linken Bildschirmrand, schaltet per Häkchen das Seitenfenster (Draft / Bibliothek) und den
   Trick-Warner an und ab; schließt man es, sind alle Fenster zu.
+- **Karten-Overlay:** legt beim Picken Rang, Bewertung, Punkte, Archetyp-Passung, Removal, Kartenfluss, Synergie und
+  die eigene Siegquote direkt auf die Karten im Arena-Fenster (Rahmen lila = Top-Pick, grün = passt, grau = fremd).
+  Einmal bei vollem Pack im Steuerfenster „Kalibrieren“ und fünf Kartenecken anklicken (gespeichert in
+  `kartenoverlay.json`, nicht im Git). Jede Karte zeigt klein ihren Namen aus dem Protokoll zur Kontrolle der
+  Reihenfolge; Klicks gehen durch zu Arena.
 - **Kennzahlen der Picks:** Kreaturen, Removal (Karten und Punkte wie im Bericht) und Kartenfluss der Picks, mit
   erkanntem Archetyp zusätzlich nur in dessen Farben. Pack-Karten zeigen ihre Removal-Punkte.
 - **Archetypen im Draft:** Tabelle (und im Seitenfenster kurz) je Archetyp mit den zugeordneten Picks und
