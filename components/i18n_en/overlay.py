@@ -6,7 +6,8 @@ EN = {
     "Top-Pick: {name} ({rating}) – am besten in {arch} ({state})":
         "Top pick: {name} ({rating}) – best in {arch} ({state})",
     "4 Siege!": "4 wins!",
-    "Aufgenommen in die Hall of Game": "Added to the Hall of Game",
+    "{n} Siege!": "{n} wins!",
+    "Aufgenommen in die Hall of Fame": "Added to the Hall of Fame",
     "der Gegnerdecks": "of opponent decks",
     "{p} %": "{p}%",
     "< 1 %": "< 1%",
@@ -51,8 +52,8 @@ EN = {
     "Picks {n}: ": "Picks {n}: ",
     "In {name}: {n} Karten · ": "In {name}: {n} cards · ",
     "Drafthelper nicht erreichbar …": "Draft Helper not reachable …",
-    "★ 4 Siege: aufgenommen in die Hall of Game der Gegnerdecks":
-        "★ 4 wins: added to the Hall of Game of opponent decks",
+    "★ {n} Siege: aufgenommen in die Hall of Fame der Gegnerdecks":
+        "★ {n} wins: added to the Hall of Fame of opponent decks",
     "Gegnerdeck gespeichert: {name}": "Opponent deck saved: {name}",
     "Kein Live-Draft.": "No live draft.",
     "Archetyp: {name} ({main})": "Archetype: {name} ({main})",
@@ -71,4 +72,10 @@ EN = {
     "draftgott Fenster": "draftgott windows",
     "draftgott Tricks": "draftgott Tricks",
     "Draft / Bibliothek": "Draft / Library",
+    'Draft-Bilanz {w}–{l} (Ziel {m} Siege)': 'Draft record {w}–{l} (goal {m} wins)',
+    '{g} Spiele · {t} Züge · Karten gezogen {d}': '{g} games · {t} turns · cards drawn {d}',
+    'Zauber gewirkt {s} · Länder gelegt {l}': 'spells cast {s} · lands played {l}',
+    'Schaden am Gegner {d} (größter Treffer {b}) · erlitten {x}': 'damage to opponent {d} (biggest hit {b}) · taken {x}',
+    'Kreaturen besiegt {k} · Schaden an Kreaturen {c}': 'creatures defeated {k} · damage to creatures {c}',
+    'Ø je Spiel: {d} Schaden · {c} Karten gezogen': 'avg per game: {d} damage · {c} cards drawn',
 }

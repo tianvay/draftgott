@@ -14,9 +14,10 @@ Draft (nicht mitgelesen), entsteht ein Eintrag ohne Picks. Leere Decks (Event oh
 (draftgott neu gestartet) aendert nichts: Matches zaehlen je Match-Kennung, Picks nur, wenn sie die bekannten
 fortsetzen.
 
-Gegnerdeck (enemy_dir): Holt ein Draft seinen 4. Match-Sieg, wird das Deck dieses Matches (mit dem Sideboard des
-Drafts) einmal als enemydecks/drafted_<SET>_4wins_<Farben>_<JJJJ-MM-TT>_<hhmm>.txt gespeichert (Zeit des 4. Siegs aus
-dem Protokoll). Farben (color_name): aus den Nicht-Land-Karten des Hauptdecks, nach den Farben, die ihre Manakosten
+Gegnerdeck (enemy_dir): Erreicht ein Draft die hoechste Zahl an Match-Siegen seines Formats (max_wins: Pick Two 4,
+Traditional 3, sonst 7, z. B. Quick und Premier Draft), wird das Deck dieses Matches (mit dem Sideboard des Drafts)
+einmal als enemydecks/drafted_<SET>_<N>wins_<Farben>_<JJJJ-MM-TT>_<hhmm>.txt gespeichert, bei Pick Two also
+drafted_<SET>_4wins_... (Zeit des letzten Siegs aus dem Protokoll). Farben (color_name): aus den Nicht-Land-Karten des Hauptdecks, nach den Farben, die ihre Manakosten
 verlangen (cost_colors; zweifarbige Hybridsymbole zaehlen fuer eine Farbe, die das Deck ohnehin spielt, {2/W} und
 Phyrexian gar nicht), die mit den meisten Karten zuerst (Gleichstand: WUBRG); eine Farbe mit hoechstens SPLASH_MAX Karten heisst "splash<farbe>", wenn es eine staerkere gibt.
 Eine vorhandene Datei wird nie ueberschrieben; der Draft merkt sich den Namen ("enemy_deck").
@@ -36,11 +37,12 @@ import sys
 from components import arenalog
 from components import archetypes as set_archetypes
 from components import cardarchetypes
+from components import gamestats
 from components.i18n import t
 
 BASICS = {"Plains", "Island", "Swamp", "Mountain", "Forest", "Wastes"}
 DECK_MATCH = 0.8
-ENEMY_WINS = 4
+ENEMY_WINS = 4  # Pick Two (Standard fuer Dateinamen ohne Angabe)
 SPLASH_MAX = 2
 COLOR_WORD = {"W": "white", "U": "blue", "B": "black", "R": "red", "G": "green"}
 _DATE_DE = re.compile(r"\b(\d{1,2})\.(\d{1,2})\.(\d{4}) (\d{1,2}):(\d{2})")
@@ -107,10 +109,23 @@ def color_name(main, colors):
     return "".join(COLOR_WORD[c] for c in main_colors) + "".join("splash" + COLOR_WORD[c] for c in splash)
 
 
-def enemy_file_name(set_code, colors, stamp):
-    """drafted_<SET>_4wins_<Farben>_<JJJJ-MM-TT>_<hhmm>.txt"""
+def max_wins(event):
+    """Hoechste Zahl an Match-Siegen eines Events: Pick Two 4, Traditional (Best of 3) 3, sonst 7 (Quick, Premier,
+    Sealed). Ohne bekanntes Event bleibt es beim bisherigen Wert 4 (ENEMY_WINS)."""
+    name = (event or "").lower()
+    if not name:
+        return ENEMY_WINS
+    if "picktwo" in name:
+        return 4
+    if "trad" in name:
+        return 3
+    return 7
+
+
+def enemy_file_name(set_code, colors, stamp, wins=ENEMY_WINS):
+    """drafted_<SET>_<N>wins_<Farben>_<JJJJ-MM-TT>_<hhmm>.txt"""
     day, _, clock = stamp.partition(" ")
-    return f"drafted_{set_code.upper()}_{ENEMY_WINS}wins_{colors}_{day}_{clock.replace(':', '')}.txt"
+    return f"drafted_{set_code.upper()}_{wins}wins_{colors}_{day}_{clock.replace(':', '')}.txt"
 
 
 def empty():
@@ -149,7 +164,7 @@ class Tracker:
 
     def __init__(self, path, lookup, set_lookup=None, enemy_dir=None, card_info=None):
         """lookup(GrpId) -> Name, set_lookup(GrpId) -> Setcode (fuer Drafts ohne Eventnamen); enemy_dir: Ordner fuer
-        Decks mit 4 Siegen (None: nichts speichern), card_info(GrpId) -> {"name", "set", "number", "colors"}."""
+        Decks mit der hoechsten Zahl an Siegen (None: nichts speichern), card_info(GrpId) -> {"name", "set", "number", "colors"}."""
         self.path, self.lookup, self.set_lookup = pathlib.Path(path), lookup, set_lookup
         self.enemy_dir, self.card_info = (pathlib.Path(enemy_dir) if enemy_dir else None), card_info
         self.prints, self.colors = {}, {}  # Name -> (Set, Nummer) bzw. Farben, aus den Decks
@@ -159,6 +174,7 @@ class Tracker:
         self.state = arenalog.DraftState()
         self.user = None
         self.decks = {}  # Event -> zuletzt gesehenes Deck {"main", "side"} (Namen)
+        self.games = gamestats.GameStats()  # Spielstatistik je Spiel (Draft-Bilanz)
         self.date = None
 
     def _name(self, grp):
@@ -175,12 +191,37 @@ class Tracker:
     def _latest(self, event):
         return next((r for r in reversed(self.data["drafts"]) if r.get("event") == event), None)
 
-    def record(self, draft_id, event):
-        """Bilanz des Drafts {"wins", "losses", "matches"} (laufende Matches zaehlen nur bei "matches"): der Eintrag mit
-        dieser draft_id, sonst der juengste des Events; None, wenn es keinen gibt."""
+    def _find(self, draft_id, event):
+        """Der Eintrag mit dieser draft_id, sonst (ohne draft_id) der juengste des Events, sonst None."""
         rec = next((r for r in reversed(self.data["drafts"]) if draft_id and r.get("draft_id") == draft_id), None)
         if rec is None and not draft_id and event:
             rec = self._latest(event)
+        return rec
+
+    def saved_for(self, draft_id, event):
+        """Name des in diesem Lauf gespeicherten Gegnerdecks, wenn es zu diesem Draft gehoert, sonst None."""
+        rec = self._find(draft_id, event)
+        return self.last_saved if rec and self.last_saved and rec.get("enemy_deck") == self.last_saved else None
+
+    def summary(self, draft_id, event):
+        """Draft-Bilanz (components/gamestats.summarize) des Drafts oder None, wenn es keinen Eintrag gibt."""
+        rec = self._find(draft_id, event)
+        return gamestats.summarize(rec, max_wins(rec.get("event") or event)) if rec else None
+
+    def _attach_games(self):
+        """Zahlen der in diesem Lauf gelesenen Spiele an ihre Matches haengen; True, wenn ein Spiel neu zu Ende ist."""
+        by_id = {m.get("id"): m for r in self.data["drafts"] for m in r.get("matches") or []}
+        for (match, number), st in self.games.games.items():
+            m = by_id.get(match)
+            if m is not None:
+                m.setdefault("game_stats", {})[str(number)] = st
+        done, self.games.finished = bool(self.games.finished), []
+        return done
+
+    def record(self, draft_id, event):
+        """Bilanz des Drafts {"wins", "losses", "matches"} (laufende Matches zaehlen nur bei "matches"): der Eintrag mit
+        dieser draft_id, sonst der juengste des Events; None, wenn es keinen gibt."""
+        rec = self._find(draft_id, event)
         if rec is None:
             return None
         ms = rec.get("matches") or []
@@ -290,15 +331,16 @@ class Tracker:
         return f"{qty} {name}" + (f" ({code}) {number}" if code and number else "")
 
     def _save_enemy(self, rec, match):
-        """Beim 4. Sieg das Deck des Matches einmal als Gegnerdeck speichern (siehe Modulbeschreibung)."""
+        """Beim hoechsten Stand an Siegen (max_wins) das Deck des Matches einmal als Gegnerdeck speichern."""
         wins = sum(1 for m in rec["matches"] if m.get("win"))
-        if not self.enemy_dir or wins != ENEMY_WINS or rec.get("enemy_deck") or not match.get("deck"):
+        top = max_wins(rec.get("event"))
+        if not self.enemy_dir or wins != top or rec.get("enemy_deck") or not match.get("deck"):
             return
         main = match["deck"]
         side = (rec.get("deck") or {}).get("side") or {}
         colors = color_name({n: q for n, q in main.items() if n not in BASICS}, self.colors)
         stamp = self.stamp or datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-        name = enemy_file_name(rec.get("set") or "XXX", colors, stamp)
+        name = enemy_file_name(rec.get("set") or "XXX", colors, stamp, top)
         rec["enemy_deck"] = name
         path = self.enemy_dir / name
         if path.exists():
@@ -320,6 +362,11 @@ class Tracker:
         stamp = log_stamp(line)
         if stamp:
             self.stamp = stamp
+        if self.games.feed_line(line):  # Spielnachricht: nur die Spielstatistik, gespeichert bei Spielende
+            if self._attach_games():
+                save_stats(self.path, self.data)
+                return True
+            return False
         changed = False
         for ev in arenalog.scan_line(line):
             if self.state.feed(ev):
@@ -334,6 +381,7 @@ class Tracker:
             elif ev["kind"] == "match_end":
                 changed = self._match_end(ev) or changed
         if changed:
+            self._attach_games()
             save_stats(self.path, self.data)
         return changed
 

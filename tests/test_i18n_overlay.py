@@ -4,7 +4,7 @@ import unittest
 from components import overlay
 from tests.i18n_check import english, german_leftovers
 
-ALLOW = ["draftgott", "Hall of Game", "Test Bear", "Test Bolt", "Plains"]
+ALLOW = ["draftgott", "Hall of Fame", "Test Bear", "Test Bolt", "Plains"]
 
 GAME = {"active": True, "turn": 3, "library": 30, "hand": 4, "consistent": False,
         "mana": {"lands": 2, "colors": {"W": 1, "R": 1}},

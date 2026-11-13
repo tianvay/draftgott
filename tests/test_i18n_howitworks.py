@@ -12,7 +12,7 @@ ALLOW = [
     "--curve-runden", "--kein-overlay", "--statistik-neu", "--statistik", "--archetypen", "--setauswertung",
     "--schaden", "--drafthelper", "kartenarchetypen.json", "draftstatistik.json", "draftstatistik.backup.json",
     "setauswertung_&lt;set&gt;.html", "Player-prev.log", "scryfall_set_cache.json", "scryfall_symbols.json",
-    "Deck + Sideboard", "Hall of Game",
+    "Deck + Sideboard", "Hall of Fame",
 ]
 
 

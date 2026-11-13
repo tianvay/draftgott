@@ -177,6 +177,147 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(german_leftovers(page, allow=self.names), [])
 
 
+class IncompleteDeckTests(unittest.TestCase):
+    """Die Decklisten koennen unvollstaendig sein: trotzdem alles durchsimulieren, im Bericht kennzeichnen."""
+
+    def build(self, entry, data, args):
+        n = sum(entry["deck"].values())
+        if n < 10:
+            raise SystemExit("Zu wenige Karten")
+        return {"cards": lands(n), "missing": [k for k in entry["deck"] if k not in data]}
+
+    def test_build_all_notes(self):
+        decks = [{"Plains": 39}, {"Plains": 40}, {"Plains": 3}, {"Plains": 39, "Unbekannt": 1}]
+        data = {"Plains": {}}
+        built, info = tm.build_all(["A", "B", "C", "D"], decks, data, None, self.build)
+        self.assertEqual(sorted(built), [0, 1, 3])
+        self.assertEqual(info[0]["size"], 39)
+        self.assertTrue(info[0]["notes"])  # 39 statt 40
+        self.assertEqual(info[1]["notes"], [])
+        self.assertFalse(info[2]["playable"])
+        self.assertTrue(any("Unbekannt" in n for n in info[3]["notes"]))
+
+    def test_run_skips_unplayable_and_finishes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            (root / "enemydecks" / "wc").mkdir(parents=True)
+            for name, n in (("a", 39), ("b", 40), ("c", 2)):
+                (root / "enemydecks" / "wc" / f"{name}.txt").write_text(f"Deck\n{n} Plains\n", encoding="utf-8")
+            from tests.fixtures import args_for
+            args = args_for(["--turnier", "wc", "--turnier-spiele", "4", "--turnier-ausgabe",
+                             str(root / "out.html")])
+            with mock.patch.object(tm, "SCRIPT_DIR", root), mock.patch("sys.stderr", io.StringIO()):
+                matches = tm.run(args, self.build, lambda names, reload: {"Plains": {}}, ask=lambda p: "")
+            self.assertEqual([(m["x"], m["y"]) for m in matches], [(0, 1)])
+            page = (root / "out.html").read_text(encoding="utf-8")
+            self.assertIn("39", page)
+            self.assertIn("nicht spielbar", page)
+
+    def test_report_marks_size(self):
+        info = [{"name": "A", "size": 39, "playable": True, "notes": ["39 Karten statt 40"]},
+                {"name": "B", "size": 40, "playable": True, "notes": []}]
+        page = tm.render_tournament_html("wc", ["A", "B"], [match(0, 1, 260, 240)], decks=info)
+        self.assertIn("39 Karten statt 40", page)
+        with english():
+            page = tm.render_tournament_html("wc", ["A", "B"], [match(0, 1, 260, 240)], decks=[
+                {"name": "A", "size": 39, "playable": True, "notes": [tm.size_note(39)]},
+                {"name": "B", "size": 3, "playable": False, "notes": [tm.unplayable_note()]}])
+        self.assertEqual(german_leftovers(page, allow=["A", "B"]), [])
+
+
+def rich_game(winner, rnd, mull_x=0, opening_x=("Bear", "Plains"), drew_x="Giant"):
+    """Ein erfundenes Spielergebnis wie aus play_game (Wir = Deck x, Gegner = Deck y)."""
+    log = []
+    for r in range(1, rnd + 1):
+        log.append({"player": "Wir", "round": r, "drew": drew_x if r == 2 else None,
+                    "life": {"Wir": 20, "Gegner": 20 - 4 * r}})
+        log.append({"player": "Gegner", "round": r, "drew": "Elf" if r == 1 else None,
+                    "life": {"Gegner": 20 - 4 * r, "Wir": 20 - r}})
+    return {"winner": winner, "round": rnd, "log": log,
+            "opening": {"Wir": list(opening_x), "Gegner": ["Wolf", "Forest"]},
+            "mulligans": {"Wir": mull_x, "Gegner": 0},
+            "stats": {"combat": {"Wir": 20, "Gegner": 3}, "direct": {"Wir": 2, "Gegner": 0},
+                      "deaths": {"Wir": 1, "Gegner": 2}}}
+
+
+class MatchStatsTests(unittest.TestCase):
+    def setUp(self):
+        games = iter([rich_game("a", 5, mull_x=1), rich_game("a", 3, opening_x=("Plains",), drew_x=None),
+                      rich_game("b", 4)])
+        self.m = tm.play_match([], [], 3, game=lambda *a, **kw: next(games), rng=random.Random(1))
+
+    def test_win_rounds(self):
+        self.assertEqual(self.m["sides"]["x"]["win_rounds"], {5: 1, 3: 1})
+        self.assertEqual(self.m["sides"]["y"]["win_rounds"], {4: 1})
+
+    def test_damage_and_deaths(self):
+        x, y = self.m["sides"]["x"], self.m["sides"]["y"]
+        self.assertEqual((x["combat"], x["direct"], x["deaths"]), (60, 6, 3))
+        self.assertEqual((y["combat"], y["direct"], y["deaths"]), (9, 0, 6))
+
+    def test_mulligans(self):
+        x = self.m["sides"]["x"]
+        self.assertEqual((x["mull_games"], x["mull_wins"]), (1, 1))
+        self.assertEqual((self.m["sides"]["y"]["mull_games"]), 0)
+
+    def test_card_stats(self):
+        cards = self.m["sides"]["x"]["cards"]
+        # Bear: Starthand in Spiel 1 (Sieg) und 3 (Niederlage); Giant gezogen in Spiel 1 und 3; Plains (Basic) nicht
+        self.assertEqual(cards["Bear"], {"seen": 2, "seen_wins": 1, "open": 2, "open_wins": 1})
+        self.assertEqual(cards["Giant"], {"seen": 2, "seen_wins": 1, "open": 0, "open_wins": 0})
+        self.assertNotIn("Plains", cards)
+        self.assertEqual(self.m["sides"]["y"]["cards"]["Wolf"]["seen"], 3)
+        self.assertEqual(self.m["sides"]["y"]["cards"]["Elf"], {"seen": 3, "seen_wins": 1, "open": 0, "open_wins": 0})
+
+    def test_life_curve_carries_last_value(self):
+        curve = self.m["life_curve"]
+        self.assertEqual(len(curve["x"]), 5)
+        # Runde 1: alle Spiele 19 Leben fuer x; Runde 5: Spiel 1 = 15, Spiel 2 bleibt bei 17, Spiel 3 bei 16
+        self.assertAlmostEqual(curve["x"][0], 19)
+        self.assertAlmostEqual(curve["x"][4], (15 + 17 + 16) / 3)
+        self.assertAlmostEqual(curve["y"][0], 16)
+
+    def test_winner_end_life(self):
+        # Sieger-Restleben: x in Spiel 1 (15) und 2 (17), y in Spiel 3 (20 - 16 = 4)
+        self.assertEqual(self.m["sides"]["x"]["end_life_win"], 32)
+        self.assertEqual(self.m["sides"]["y"]["end_life_win"], 4)
+
+    def test_deck_card_stats_merge(self):
+        m2 = dict(self.m, x=0, y=1)
+        m3 = tm.play_match([], [], 1, game=lambda *a, **kw: rich_game("b", 2), rng=random.Random(1))
+        m3.update(x=2, y=0)  # Deck 0 diesmal als y
+        stats = tm.deck_card_stats([m2, m3], 0)
+        self.assertEqual(stats["Bear"]["seen"], 2)
+        self.assertEqual(stats["Wolf"], {"seen": 1, "seen_wins": 1, "open": 1, "open_wins": 1})
+
+
+class RichReportTests(unittest.TestCase):
+    def setUp(self):
+        games = iter([rich_game("a", 5, mull_x=1), rich_game("b", 4)] * 50)
+        names = ["Javier Dominguez", "Seth Manfield", "Samuel Chang"]
+        ms = []
+        for x, y in ((0, 1), (0, 2), (1, 2)):
+            m = tm.play_match([], [], 30, game=lambda *a, **kw: next(games), rng=random.Random(2))
+            m.update(x=x, y=y)
+            ms.append(m)
+        self.names, self.ms = names, ms
+        self.decks = [{"name": n, "size": 40, "playable": True, "notes": []} for n in names]
+
+    def test_sections(self):
+        page = tm.render_tournament_html("wc32", self.names, self.ms, decks=self.decks)
+        for sid in ("ueberblick", "matrix", "tabelle", "paarungen", "decks"):
+            self.assertIn(f'id="{sid}"', page)
+        self.assertIn("Giant", page)  # Kartenstatistik
+        self.assertIn("<svg", page)  # Diagramme
+        self.assertIn("prefers-color-scheme: dark", page)
+
+    def test_english_rich(self):
+        with english():
+            page = tm.render_tournament_html("wc32", self.names, self.ms, decks=self.decks)
+        allow = self.names + ["Giant", "Bear", "Wolf", "Elf"]
+        self.assertEqual(german_leftovers(page, allow=allow), [])
+
+
 class CliTests(unittest.TestCase):
     def test_args(self):
         from components.cli import parse_args

@@ -860,7 +860,7 @@ h2 small{color:var(--muted);font-weight:400}
 #ldeck:disabled{background:#e9edf3;border-color:var(--line);color:var(--muted);opacity:1}
 #linfo{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;font-size:12.5px}
 #linfo span{background:#f3f6fb;border:1px solid var(--line);border-radius:8px;padding:2px 9px}
-#linfo span b{color:var(--ink)}
+#linfo span b{color:var(--ink)} #lsummary{display:none;margin-top:10px;border:1px solid var(--line);border-radius:10px;padding:8px 12px;background:#fbfcfe} #lsummary.show{display:block} #lsummary h4{margin:0 0 6px;font-size:13.5px} #lsummary .sv{display:flex;flex-wrap:wrap;gap:6px;font-size:12.5px} #lsummary .sv span{background:#f3f6fb;border:1px solid var(--line);border-radius:8px;padding:2px 9px} #lsummary .sv span b{color:var(--ink)}
 #lmap{margin-top:10px;display:none}
 #lmap.show{display:block}
 #lmap table{border-collapse:collapse;font-size:13px;width:100%}
@@ -960,7 +960,7 @@ h2 small{color:var(--muted);font-weight:400}
       <div class="lscores" id="lscores"></div>
       <button class="btn" id="ldeck" title="Schreibt das in Arena abgegebene Deck (Deck und Sideboard) in die Kartenpool-Datei">Deck + Sideboard übernehmen</button></div>
     <div id="lhint" title="Karten ab Must Play, deren bester Archetyp (lila Knopf unter der Karte) dein Archetyp ist oder nahe dran (höchstens 3 Punkte hinter dem besten)"></div>
-    <div id="linfo"></div>
+    <div id="linfo"></div><div id="lsummary"></div>
     <div id="lsignals" title="Offene Farben: starke Karten (Must Play oder höher), die zurückkommen oder spät im Pack liegen; umkämpft: starke Karten, die andere genommen haben"></div>
     <div id="lmap"></div>
     <div id="lgame"></div>
@@ -1741,8 +1741,12 @@ const RATING_SHORT={matchwinner:"♛ Matchwinner",splashworthy:"★ Splashworthy
 function mainArch(){return live&&live.detect?live.detect.main:(poolDetect?poolDetect.main:null)}
 function archName(colors){for(const list of Object.values(archsets)){const a=list.find(x=>x.colors===colors);if(a)return a.name}
   return colors}
+// Set der Archetyp-Knoepfe: das der Karte; hat es keine Archetypen (Gastkarte aus einem anderen Set, z. B. Flare of
+// Fortitude aus MH3 im TRK-Draft), das des Live-Drafts bzw. des Pools
+function chipSet(card){const own=(card.set||"").toLowerCase();if(archsets[own])return own;
+  return ((live&&live.set)||(archetypes&&archetypes.set)||"").toLowerCase()}
 function archChips(card){
-  const list=archsets[(card.set||"").toLowerCase()];if(!list)return null;
+  const list=archsets[chipSet(card)];if(!list)return null;
   const box=el("div","achips");box.title="Archetypen dieser Karte (mehrere möglich, gilt für alle Pools). Klick: neutral → grün (passt gut) → lila (bester Archetyp, nur einer) → neutral";
   for(const a of list){const b=el("button");b.dataset.a=a.colors;b.title=a.name;
     [...a.colors].forEach(c=>b.appendChild(manaSym(c)||document.createTextNode(c)));
@@ -1820,7 +1824,7 @@ function renderLive(){
   db.disabled=!dk.ready||dk.applied;
   db.textContent=dk.applied?"Deck übernommen ✓":dk.ready?"Deck + Sideboard übernehmen ("+dk.main+" + "+dk.side+")":
     "Nach „Fertig“ in Arena: Deck + Sideboard übernehmen";
-  const saved=live.enemy_saved?"🏆 4 Siege: aufgenommen in die Hall of Game der Gegnerdecks ("+live.enemy_saved+") · ":"";
+  const saved=live.enemy_saved?"🏆 "+((live.enemy_saved.match(/_(\d+)wins_/)||[0,4])[1])+" Siege: aufgenommen in die Hall of Fame der Gegnerdecks ("+live.enemy_saved+") · ":"";
   if(live.enemy_saved&&live.enemy_saved!==window.lastSaved){window.lastSaved=live.enemy_saved;loadEnemies()}
   const msg=saved+(live.complete&&!dk.ready?"Draft fertig. Sobald du in Arena den Deckbau mit „Fertig“ abschließt, lässt sich das Deck mit Sideboard übernehmen.":
     live.status==="waiting"?"Warte auf das nächste Pack …":(live.message||""));
@@ -1829,7 +1833,7 @@ function renderLive(){
   const a=live.complete?null:(live.archetypes||[]).find(x=>x.colors===m);  // nur waehrend des Drafts
   if(a)a.tips.forEach(t=>tips.appendChild(el("li",null,t)));
   $("ltiphead").textContent=a?"Tipps zu "+a.name:"";$("ltipbox").classList.toggle("show",!!(a&&a.tips.length));
-  renderHints();renderInfo();renderSignals();renderMap();renderGame();
+  renderHints();renderInfo();renderSummary();renderSignals();renderMap();renderGame();
   const g=$("lpack");g.textContent="";
   if(live.game&&live.game.active)return;
   (live.pack||[]).forEach((c,i)=>g.appendChild(miniTile(c,{level:c.level,points:c.points,rank:i+1})))}
@@ -1854,6 +1858,19 @@ function renderInfo(){
   const m=live.detect&&live.detect.main;
   if(i.arch&&m){add("In "+archName(m),i.arch.cards+" Karten");add("Kreaturen",String(i.arch.creatures));
     add("Removal",i.arch.removal+" ("+num(i.arch.removal_points)+" P.)");add("Kartenfluss",String(i.arch.flow))}}
+// Draft-Bilanz (components/gamestats.py): nur zum fertigen Draft, ein neuer Draft beginnt ohne Reste
+function renderSummary(){
+  const box=$("lsummary"),s=live.summary;box.textContent="";
+  const show=!!(live.complete&&s&&s.games&&!(live.game&&live.game.active));box.classList.toggle("show",show);
+  if(!show)return;
+  box.appendChild(el("h4",null,"Draft-Bilanz "+s.wins+"–"+s.losses+" (Ziel "+s.max_wins+" Siege)"));
+  const sv=el("div","sv");box.appendChild(sv);
+  const add=(label,val,tip)=>{const x=el("span");x.append(label+" ");x.appendChild(el("b",null,String(val)));if(tip)x.title=tip;sv.appendChild(x)};
+  add("Spiele",s.games);add("Züge",s.turns);add("Karten gezogen",s.drawn,"ohne Starthand");
+  add("Zauber gewirkt",s.spells);add("Länder gelegt",s.lands);
+  add("Schaden am Gegner",s.damage_dealt);add("Größter Treffer",s.biggest_hit);add("Schaden erlitten",s.damage_taken);
+  add("Kreaturen besiegt",s.kills);add("Schaden an Kreaturen",s.damage_creatures);
+  add("Ø Schaden je Spiel",num(s.damage_dealt/s.games))}
 // Offene Farben (components/signals.py): Farben mit Signal und die letzten Hinweise
 const SIG_LABEL={open:"offen",maybe:"evtl. offen",contested:"umkämpft"};
 function renderSignals(){

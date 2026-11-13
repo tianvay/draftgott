@@ -317,14 +317,14 @@ class LiveDraft:
         """Liest neue Protokollzeilen; True, wenn sich Pack oder Picks geaendert haben."""
         changed = game_changed = False
         for line in self.follower.poll():
-            if self.game.feed_line(line):
-                game_changed = True
-                continue
-            if self.tracker:
+            if self.tracker:  # auch Spielnachrichten (Spielstatistik fuer die Draft-Bilanz)
                 try:
                     self.tracker.feed_line(line)
                 except OSError as e:  # Statistik nicht speicherbar: Live-Draft laeuft weiter
                     print(t("Draft-Statistik nicht gespeichert: {err}", err=e), file=sys.stderr)
+            if self.game.feed_line(line):
+                game_changed = True
+                continue
             for ev in arenalog.scan_line(line):
                 with self.lock:
                     changed = self.state.feed(ev) or changed
@@ -444,8 +444,10 @@ class LiveDraft:
         hints = [] if complete or waiting else [
             {"name": c["name"], "rating": c["rating"], "best": c["best"],
              "best_name": arch_names.get(c["best"], c["best"]), "state": c["hint"]} for c in ranked if c["hint"]]
-        deckinfo = None
-        if complete:
+        deckinfo = summary = None
+        saved = self.tracker.saved_for(draft_id, event) if self.tracker and complete else None
+        if complete and self.tracker:
+            summary = self.tracker.summary(draft_id, event)
             if main_deck is not None:
                 cards = [dict(c, qty=q) for c, q in ((self._card(g), q) for g, q in main_deck) if c]
                 deckinfo = deck_summary(cards, ratings, "arena")
@@ -457,7 +459,8 @@ class LiveDraft:
                 "event": event or "", "set": code or "", "pick": n_picks + 1, "pack": ranked,
                 "picks": [c["name"] for c in picks], "unknown": unknown, "detect": detect,
                 "deck": deck, "complete": complete, "deckinfo": deckinfo, "game": game,
-                "draftinfo": draftinfo, "archmap": archmap, "enemy_saved": self._saved(), "signals": sig,
+                "draftinfo": draftinfo, "archmap": archmap, "enemy_saved": saved, "summary": summary,
+                "signals": sig,
                 "archetypes": found,
                 "cardarch": {n: v for n, v in (assign or {}).items() if n in names},
                 "cardbest": {n: v for n, v in (best or {}).items() if n in names}, "hints": hints,

@@ -514,14 +514,16 @@ def _live_help():
             "gehört zu diesem Draft und nennt das Event. Mit <code>python mtg_sim.py --statistik-neu</code> wird die "
             "Statistik aus <code>Player-prev.log</code> und <code>Player.log</code> neu aufgebaut (alte Datei als "
             "<code>draftstatistik.backup.json</code>).")]))
-        + _panel(t("Gegnerdecks aus 4-Sieg-Decks"), _ul([
-            t("Holt ein mitgelesener Draft seinen 4. Match-Sieg, speichert der Live-Draft das Deck dieses Matches (mit "
-            "Sideboard) einmal als Gegnerdeck: <code>enemydecks/drafted_&lt;SET&gt;_4wins_&lt;Farben&gt;_"
-            "&lt;JJJJ-MM-TT&gt;_&lt;hhmm&gt;.txt</code>, Zeit des 4. Siegs aus dem Protokoll."),
+        + _panel(t("Gegnerdecks aus Decks mit Höchststand"), _ul([
+            t("Holt ein mitgelesener Draft die höchste Zahl an Match-Siegen seines Formats (Pick Two 4, Traditional 3, "
+            "sonst 7, z. B. Quick und Premier Draft), speichert der Live-Draft das Deck dieses Matches (mit "
+            "Sideboard) einmal als Gegnerdeck: <code>enemydecks/drafted_&lt;SET&gt;_&lt;N&gt;wins_&lt;Farben&gt;_"
+            "&lt;JJJJ-MM-TT&gt;_&lt;hhmm&gt;.txt</code>, z. B. <code>drafted_TRK_4wins_…</code> bei Pick Two; Zeit "
+            "des letzten Siegs aus dem Protokoll."),
             t("Farben: aus den Nicht-Land-Karten des Hauptdecks, die mit den meisten Karten zuerst (Gleichstand: WUBRG). "
             "Eine Farbe mit höchstens 2 Karten wird als Splash angehängt, z. B. <code>redwhitesplashblue</code>."),
             t("Das Seitenfenster feiert das kurz mit Pokal und Konfetti (Klick schließt): Das Deck ist in die "
-            "„Hall of Game“ der Gegnerdecks aufgenommen."),
+            "„Hall of Fame“ der Gegnerdecks aufgenommen."),
             t("Eine vorhandene Datei wird nie überschrieben. Seite und Seitenfenster melden „Gegnerdeck gespeichert“, die "
             "Gegnerdeck-Auswahl im Drafthelper hat es sofort. Beim Neuaufbau der Statistik (--statistik-neu) wird "
             "nichts gespeichert.")]))

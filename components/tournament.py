@@ -17,8 +17,7 @@ import webbrowser
 from components.battle import play_game
 from components.battle_server import ENEMY_DIR
 from components.deckfile import parse_deck, parse_deck_name
-from components.html_base import HTML_CSS, esc, h_section
-from components.i18n import dec, html_lang, t
+from components.i18n import t
 
 SCRIPT_DIR = pathlib.Path(__file__).resolve().parent.parent
 Z95 = 1.959964  # 95-%-Bereich (Wilson)
@@ -33,10 +32,73 @@ def next_starter(starter, winner):
     return "y" if winner == "x" else "x"
 
 
+BASICS = {"Plains", "Island", "Swamp", "Mountain", "Forest", "Wastes"}
+WHO = {"x": "Wir", "y": "Gegner"}  # Namen der Seiten in play_game
+
+
+def _new_side():
+    return {"win_rounds": {}, "combat": 0, "direct": 0, "deaths": 0, "mull_games": 0, "mull_wins": 0,
+            "end_life_win": 0, "cards": {}}
+
+
+def _life_by_round(r):
+    """Leben beider Seiten am Ende jeder Runde: [(Leben x, Leben y), ...]."""
+    by_round = {}
+    for e in r.get("log") or []:
+        if e.get("life"):
+            by_round[e["round"]] = (e["life"][WHO["x"]], e["life"][WHO["y"]])
+    out, last = [], (20, 20)
+    for i in range(1, max(by_round, default=0) + 1):
+        last = by_round.get(i, last)
+        out.append(last)
+    return out
+
+
+def _collect(m, r, winner):
+    """Kennzahlen eines Spiels in die Seiten des Matches einrechnen (fehlende Angaben werden uebersprungen)."""
+    life = _life_by_round(r)
+    if life:
+        m["_life"].append(life)
+    for side, other in (("x", "y"), ("y", "x")):
+        s, who, won = m["sides"][side], WHO[side], winner == side
+        if won:
+            s["win_rounds"][r.get("round", 0)] = s["win_rounds"].get(r.get("round", 0), 0) + 1
+            if life:
+                s["end_life_win"] += life[-1][0 if side == "x" else 1]
+        stats = r.get("stats") or {}
+        for key in ("combat", "direct", "deaths"):
+            s[key] += (stats.get(key) or {}).get(who, 0)
+        if (r.get("mulligans") or {}).get(who, 0):
+            s["mull_games"] += 1
+            s["mull_wins"] += won
+        opening = set((r.get("opening") or {}).get(who) or [])
+        seen = opening | {e["drew"] for e in r.get("log") or [] if e.get("player") == who and e.get("drew")}
+        for name in seen - BASICS:
+            c = s["cards"].setdefault(name, {"seen": 0, "seen_wins": 0, "open": 0, "open_wins": 0})
+            c["seen"] += 1
+            c["seen_wins"] += won
+            if name in opening:
+                c["open"] += 1
+                c["open_wins"] += won
+
+
+def _life_curve(lives):
+    """Durchschnittliche Leben je Runde; nach Spielende zaehlt der letzte Stand."""
+    rounds = max((len(v) for v in lives), default=0)
+    curve = {"x": [], "y": []}
+    for i in range(rounds):
+        vals = [v[min(i, len(v) - 1)] for v in lives]
+        curve["x"].append(sum(a for a, _ in vals) / len(vals))
+        curve["y"].append(sum(b for _, b in vals) / len(vals))
+    return curve
+
+
 def play_match(cards_x, cards_y, games, max_turns=20, game=play_game, rng=random):
-    """Spielt games Spiele Deck x gegen Deck y. Gibt Siege, Unentschieden und die Siege je Beginnendem zurueck."""
+    """Spielt games Spiele Deck x gegen Deck y. Gibt Siege, Unentschieden, die Siege je Beginnendem und Kennzahlen je
+    Seite zurueck (sides: Siege nach Runde, Schaden, gestorbene Kreaturen, Mulligans, Karten; life_curve)."""
     m = {"games": games, "wins_x": 0, "wins_y": 0, "draws": 0, "rounds": [],
-         "start_x": {"games": 0, "wins": 0}, "start_y": {"games": 0, "wins": 0}}
+         "start_x": {"games": 0, "wins": 0}, "start_y": {"games": 0, "wins": 0},
+         "sides": {"x": _new_side(), "y": _new_side()}, "_life": []}
     starter = rng.choice(["x", "y"])
     for _ in range(games):
         r = game(cards_x, cards_y, starter == "x", max_turns, True, 5, a_never_concede=True)
@@ -49,8 +111,24 @@ def play_match(cards_x, cards_y, games, max_turns=20, game=play_game, rng=random
             m["wins_" + winner] += 1
             rec["wins"] += winner == starter
             m["rounds"].append(r.get("round", 0))
+        _collect(m, r, winner)
         starter = next_starter(starter, winner)
+    m["life_curve"] = _life_curve(m.pop("_life"))
     return m
+
+
+def deck_card_stats(matches, idx):
+    """Kartenstatistik eines Decks ueber alle seine Matches zusammengefasst."""
+    out = {}
+    for m in matches:
+        for side in ("x", "y"):
+            if m.get(side) != idx or "sides" not in m:
+                continue
+            for name, c in m["sides"][side]["cards"].items():
+                o = out.setdefault(name, {"seen": 0, "seen_wins": 0, "open": 0, "open_wins": 0})
+                for k in o:
+                    o[k] += c[k]
+    return out
 
 
 def favourite(wins_x, wins_y):
@@ -129,7 +207,8 @@ def player_name(path, folder):
     return parse_deck_name(path.read_text(encoding="utf-8"), fallback)
 
 
-def choose_folder(folders, ask=input, out=sys.stderr):
+def choose_folder(folders, ask=input, out=None):
+    out = out or sys.stderr
     if len(folders) == 1:
         return folders[0]
     for i, f in enumerate(folders, 1):
@@ -142,7 +221,8 @@ def choose_folder(folders, ask=input, out=sys.stderr):
             return a
 
 
-def ask_pairings(names, ask=input, out=sys.stderr):
+def ask_pairings(names, ask=input, out=None):
+    out = out or sys.stderr
     print(t("Decks:"), file=out)
     for i, name in enumerate(names, 1):
         print(f"  {i} = {name}", file=out)
@@ -151,6 +231,46 @@ def ask_pairings(names, ask=input, out=sys.stderr):
             return parse_pairings(ask(t("Paarungen, z. B. 1-3 2-4 (Enter = jeder gegen jeden): ")), len(names), names)
         except ValueError as e:
             print(e, file=out)
+
+
+# ---------------------------------------------------------------- Decks aufbauen (auch unvollstaendige)
+
+DECK_SIZE = 40
+MIN_CARDS = 10  # darunter laesst sich kein Spiel simulieren (build_deck bricht ab)
+
+
+def size_note(n):
+    return t("{n} Karten statt {m}", n=n, m=DECK_SIZE)
+
+
+def missing_note(card):
+    return t("Karte nicht gefunden, fehlt im Deck: {c}", c=card)
+
+
+def unplayable_note():
+    return t("zu wenige Karten, nicht spielbar")
+
+
+def build_all(names, decks, data, args, build_deck):
+    """Baut alle Decks. Unvollstaendige Decklisten (z. B. 39 Karten) werden trotzdem gespielt und nur gekennzeichnet;
+    nur ein Deck, das sich gar nicht bauen laesst, faellt heraus. Gibt ({Index: Karten}, [Info je Deck]) zurueck;
+    Info: name, size (simulierte Karten), playable, notes."""
+    built, info = {}, []
+    for i, (name, deck) in enumerate(zip(names, decks)):
+        rec = {"name": name, "size": sum(deck.values()), "playable": True, "notes": []}
+        try:
+            dd = build_deck({"name": name, "deck": deck, "parts": []}, data, args)
+        except SystemExit:
+            rec.update(playable=False, notes=[unplayable_note()])
+            info.append(rec)
+            continue
+        built[i] = dd["cards"]
+        rec["size"] = len(dd["cards"])
+        if rec["size"] != DECK_SIZE:
+            rec["notes"].append(size_note(rec["size"]))
+        rec["notes"] += [missing_note(c) for c in dd.get("missing") or []]
+        info.append(rec)
+    return built, info
 
 
 # ---------------------------------------------------------------- Tabelle
@@ -178,94 +298,10 @@ def standings(names, matches):
 
 # ---------------------------------------------------------------- Bericht
 
-CSS = """
-footer{max-width:1500px;margin:0 auto;padding:20px;color:var(--muted);font-size:12px}
-.verdict{font-weight:650}
-.verdict.close{color:var(--muted);font-weight:500}
-.bar2{display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--track);min-width:120px}
-.bar2 i{display:block;height:100%}
-.bar2 .bx{background:var(--play)} .bar2 .bd{background:#c4c9d4} .bar2 .by{background:var(--draw)}
-td.win{font-weight:700}
-"""
-
-
-def _th(text, left):
-    return f'<th class="l">{esc(text)}</th>' if left else f"<th>{esc(text)}</th>"
-
-
-def _pct(a, n):
-    return dec(f"{100 * a / n:.1f}") + " %" if n else "–"
-
-
-def _match_row(names, m):
-    x, y = names[m["x"]], names[m["y"]]
-    fav, lo, hi = favourite(m["wins_x"], m["wins_y"])
-    n = m["games"] or 1
-    bar = (f'<div class="bar2"><i class="bx" style="width:{100 * m["wins_x"] / n:.1f}%"></i>'
-           f'<i class="bd" style="width:{100 * m["draws"] / n:.1f}%"></i>'
-           f'<i class="by" style="width:{100 * m["wins_y"] / n:.1f}%"></i></div>')
-    if fav:
-        verdict = f'<span class="verdict">{esc(t("{p} hätte gewinnen sollen", p=x if fav == "x" else y))}</span>'
-    else:
-        verdict = f'<span class="verdict close">{esc(t("zu knapp, kein klarer Favorit"))}</span>'
-    sx, sy = m["start_x"], m["start_y"]
-    starts = (f'{_pct(sx["wins"], sx["games"])} / {_pct(sy["wins"], sy["games"])}')
-    return (f'<tr><td class="l{" win" if fav == "x" else ""}">{esc(x)}</td>'
-            f'<td>{m["wins_x"]}</td><td>{m["draws"]}</td><td>{m["wins_y"]}</td>'
-            f'<td class="l{" win" if fav == "y" else ""}">{esc(y)}</td><td>{bar}</td>'
-            f'<td>{_pct(m["wins_x"], m["wins_x"] + m["wins_y"])}</td>'
-            f'<td>{dec(f"{100 * lo:.1f}")}–{dec(f"{100 * hi:.1f}")} %</td>'
-            f'<td title="{esc(t("Siegquote des Beginnenden: wenn {x} beginnt / wenn {y} beginnt", x=x, y=y))}">'
-            f'{starts}</td><td class="l">{verdict}</td></tr>')
-
-
-def _matches_table(names, matches):
-    head = "".join(_th(h, c in (0, 4, 9)) for c, h in enumerate((
-        t("Deck A"), t("Siege A"), t("Unent."), t("Siege B"), t("Deck B"), "", t("Quote A"), t("95-%-Bereich"),
-        t("Beginnender gewinnt"), t("Ergebnis"))))
-    rows = "".join(_match_row(names, m) for m in matches)
-    return f'<div class="panel tw"><table><thead><tr>{head}</tr></thead><tbody>{rows}</tbody></table></div>'
-
-
-def _standings_table(names, matches):
-    head = "".join(_th(h, c == 1) for c, h in enumerate((
-        "#", t("Deck"), t("Matches"), t("Match-Bilanz (S-N-U)"), t("Spiele gewonnen"), t("Spiele verloren"),
-        t("Unent."), t("Spielquote"))))
-    rows = []
-    for pos, r in enumerate(standings(names, matches), 1):
-        rows.append(f'<tr><td>{pos}</td><td class="l{" win" if pos == 1 else ""}">{esc(r["name"])}</td>'
-                    f'<td>{r["matches"]}</td><td>{r["match_wins"]}-{r["match_losses"]}-{r["match_draws"]}</td>'
-                    f'<td>{r["game_wins"]}</td><td>{r["game_losses"]}</td><td>{r["game_draws"]}</td>'
-                    f'<td>{_pct(r["game_wins"], r["game_wins"] + r["game_losses"])}</td></tr>')
-    return (f'<div class="panel tw"><table><thead><tr>{head}</tr></thead><tbody>{"".join(rows)}</tbody></table>'
-            f'</div>')
-
-
-def render_tournament_html(folder, names, matches, games=None, max_turns=20):
-    games = games or (matches[0]["games"] if matches else 0)
-    title = t("Turnier {f}", f=folder)
-    rules = t("Je Paarung {n} Spiele. Spiel 1 beginnt per Zufall, danach geht der Verlierer des vorigen Spiels "
-              "zuerst (Regel 103.1: der Verlierer wählt, im Limited fast immer zuerst spielen); nach einem "
-              "Unentschieden beginnt wieder derselbe. Beide Decks spielen nach den Regeln des Kampfmodells und "
-              "geben beim Mulligan nie auf. Nach Runde {r} gilt ein Spiel als unentschieden.", n=games, r=max_turns)
-    verdict_hint = t("Favorit: Liegt der 95-%-Bereich der Siegquote (ohne Unentschieden) ganz über 50 %, hätte das "
-                     "Deck statistisch gewinnen sollen; enthält er 50 %, ist das Matchup zu knapp für eine Aussage.")
-    sections = [h_section("paarungen", t("Paarungen"), esc(rules) + "<br>" + esc(verdict_hint),
-                          _matches_table(names, matches))]
-    if len({i for m in matches for i in (m["x"], m["y"])}) > 2:
-        sections.append(h_section("tabelle", t("Tabelle"),
-                                  esc(t("Sortiert nach Match-Siegen (mehr gewonnene Spiele der Paarung), dann "
-                                        "nach Spielquote.")), _standings_table(names, matches)))
-    nav = "".join(f'<a href="#{sid}">{esc(label)}</a>' for sid, label in
-                  (("paarungen", t("Paarungen")), ("tabelle", t("Tabelle"))) if f'id="{sid}"' in "".join(sections))
-    return (f'<!DOCTYPE html><html lang="{html_lang()}"><head><meta charset="utf-8">'
-            f'<meta name="viewport" content="width=device-width,initial-scale=1">'
-            f'<title>{esc(title)}</title><style>{HTML_CSS + CSS}</style></head><body>'
-            f'<header class="top" id="top"><h1>{esc(title)}</h1>'
-            f'<span class="sub">{esc(t("{n} Decks, {m} Paarungen", n=len(names), m=len(matches)))}</span></header>'
-            f'<div class="layout"><nav><h3>{esc(t("Abschnitte"))}</h3><div class="in">{nav}</div></nav>'
-            f'<main>{"".join(sections)}</main></div>'
-            f'<footer>{esc(t("Erzeugt mit mtg_sim.py · Kartendaten von Scryfall"))}</footer></body></html>')
+def render_tournament_html(folder, names, matches, games=None, max_turns=20, decks=None):
+    """HTML des Turnierberichts (components/tournament_report.py)."""
+    from components.tournament_report import render
+    return render(folder, names, matches, games, max_turns, decks)
 
 
 # ---------------------------------------------------------------- Programm
@@ -296,9 +332,15 @@ def run(args, build_deck, fetch_cards, ask=input):
         data = fetch_cards(sorted(set().union(*(d.keys() for d in decks))), args.neu_laden)
     except urllib.error.URLError as e:
         sys.exit(t("Scryfall nicht erreichbar: {err}", err=e))
-    built = {}
-    for i in sorted({i for p in pairs for i in p}):
-        built[i] = build_deck({"name": names[i], "deck": decks[i], "parts": []}, data, args)["cards"]
+    built, info = build_all(names, decks, data, args, build_deck)
+    for d in info:
+        if d["notes"]:
+            print(f"  {d['name']}: {'; '.join(d['notes'])}", file=sys.stderr)
+    skipped = [p for p in pairs if p[0] not in built or p[1] not in built]
+    for a, b in skipped:
+        print(t("Paarung fällt aus (Deck nicht spielbar): {a} gegen {b}", a=names[a], b=names[b]), file=sys.stderr)
+    pairs = [p for p in pairs if p not in skipped]
+    used = {i for p in pairs + skipped for i in p}
     rng = random.Random(args.seed) if args.seed is not None else random
     if args.seed is not None:
         random.seed(args.seed)
@@ -313,8 +355,8 @@ def run(args, build_deck, fetch_cards, ask=input):
               + (t("{p} hätte gewinnen sollen", p=names[a] if fav == "x" else names[b]) if fav
                  else t("zu knapp, kein klarer Favorit")), file=sys.stderr)
     out = pathlib.Path(args.turnier_ausgabe or SCRIPT_DIR / f"turnier_{folder}.html")
-    out.write_text(render_tournament_html(folder, names, matches, args.turnier_spiele, args.kampf_runden),
-                   encoding="utf-8")
+    out.write_text(render_tournament_html(folder, names, matches, args.turnier_spiele, args.kampf_runden,
+                                          decks=[d for i, d in enumerate(info) if i in used]), encoding="utf-8")
     print(t("Turnierbericht gespeichert: {path}", path=out.resolve()), file=sys.stderr)
     if not args.nicht_oeffnen:
         try:

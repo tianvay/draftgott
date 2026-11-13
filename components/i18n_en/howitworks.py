@@ -366,12 +366,12 @@ EN = {
         'Pick Two and drafts with humans: While drafting, the log names only a draft ID, no event. The set then comes from the cards; the first deck of the event whose cards come at least 80% from the picks belongs to this draft and names the event. <code>python mtg_sim.py --statistik-neu</code> rebuilds the statistics from <code>Player-prev.log</code> and <code>Player.log</code> (old file as <code>draftstatistik.backup.json</code>).',
     'Gegnerdecks aus 4-Sieg-Decks':
         'Opponent decks from 4-win decks',
-    'Holt ein mitgelesener Draft seinen 4. Match-Sieg, speichert der Live-Draft das Deck dieses Matches (mit Sideboard) einmal als Gegnerdeck: <code>enemydecks/drafted_&lt;SET&gt;_4wins_&lt;Farben&gt;_&lt;JJJJ-MM-TT&gt;_&lt;hhmm&gt;.txt</code>, Zeit des 4. Siegs aus dem Protokoll.':
-        "When a draft that was read along gets its 4th match win, the live draft saves that match's deck (with sideboard) once as an opponent deck: <code>enemydecks/drafted_&lt;SET&gt;_4wins_&lt;colors&gt;_&lt;YYYY-MM-DD&gt;_&lt;hhmm&gt;.txt</code>, time of the 4th win from the log.",
+        'Holt ein mitgelesener Draft die höchste Zahl an Match-Siegen seines Formats (Pick Two 4, Traditional 3, sonst 7, z. B. Quick und Premier Draft), speichert der Live-Draft das Deck dieses Matches (mit Sideboard) einmal als Gegnerdeck: <code>enemydecks/drafted_&lt;SET&gt;_&lt;N&gt;wins_&lt;Farben&gt;_&lt;JJJJ-MM-TT&gt;_&lt;hhmm&gt;.txt</code>, z. B. <code>drafted_TRK_4wins_…</code> bei Pick Two; Zeit des letzten Siegs aus dem Protokoll.':
+        "When a draft that was read along reaches the highest number of match wins of its format (Pick Two 4, Traditional 3, otherwise 7, e.g. Quick and Premier Draft), the live draft saves that match's deck (with sideboard) once as an opponent deck: <code>enemydecks/drafted_&lt;SET&gt;_&lt;N&gt;wins_&lt;colors&gt;_&lt;YYYY-MM-DD&gt;_&lt;hhmm&gt;.txt</code>, e.g. <code>drafted_TRK_4wins_…</code> for Pick Two; time of the last win from the log.",
     'Farben: aus den Nicht-Land-Karten des Hauptdecks, die mit den meisten Karten zuerst (Gleichstand: WUBRG). Eine Farbe mit höchstens 2 Karten wird als Splash angehängt, z. B. <code>redwhitesplashblue</code>.':
         'Colors: from the nonland cards of the main deck, the one with the most cards first (tie: WUBRG). A color with at most 2 cards is appended as a splash, e.g. <code>redwhitesplashblue</code>.',
-    'Das Seitenfenster feiert das kurz mit Pokal und Konfetti (Klick schließt): Das Deck ist in die „Hall of Game“ der Gegnerdecks aufgenommen.':
-        'The overlay celebrates this briefly with a trophy and confetti (click closes): The deck has been added to the “Hall of Game” of opponent decks.',
+    'Das Seitenfenster feiert das kurz mit Pokal und Konfetti (Klick schließt): Das Deck ist in die „Hall of Fame“ der Gegnerdecks aufgenommen.':
+        'The overlay celebrates this briefly with a trophy and confetti (click closes): The deck has been added to the “Hall of Fame” of opponent decks.',
     'Eine vorhandene Datei wird nie überschrieben. Seite und Seitenfenster melden „Gegnerdeck gespeichert“, die Gegnerdeck-Auswahl im Drafthelper hat es sofort. Beim Neuaufbau der Statistik (--statistik-neu) wird nichts gespeichert.':
         'An existing file is never overwritten. Page and overlay report “Opponent deck saved”, the opponent deck selection in the Draft Helper has it immediately. When the statistics are rebuilt (--statistik-neu), nothing is saved.',
     'Setauswertung':
@@ -574,4 +574,5 @@ EN = {
         'none (the opponent is not part of the model)',
     'unklar':
         'unclear',
+    'Gegnerdecks aus Decks mit Höchststand': 'Opponent decks from decks with a perfect run',
 }

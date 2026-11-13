@@ -1,0 +1,35 @@
+Deck
+2 The Doctor, EMH (TRK) 234
+1 Worf, Intelligence Contractor (TRK) 180
+1 Picard, Leading by Example (TRK) 29
+2 Oberth-Class Starship (TRK) 26
+3 Genesis Effect (TRK) 151
+1 Pet Sehlat (TRK) 28
+2 Perils of the Past (TRK) 161
+1 Tactical Officer (TRK) 38
+1 Kira Nerys, Firebrand (TRK) 242
+2 Boarding Action (TRK) 139
+1 Flare of Fortitude (SDS) 2
+1 Academy Instructor (TRK) 137
+1 The Naked Time (TRK) 159
+1 Kirk, Commanding Officer (TRK) 243
+1 U.S.S. Excelsior, Cutting Edge (TRK) 44
+1 Brad Boimler, Eager Ensign (TRK) 5
+1 Free Borg Revolutionaries (TRK) 19
+9 Plains (SPM) 194
+8 Mountain (SPM) 197
+
+Sideboard
+2 Emergency Medical Hologram (TRK) 15
+1 Federation Field Medic (TRK) 17
+2 Pet Sehlat (TRK) 28
+2 Shields Up! (TRK) 35
+1 Saavik, Stoic Student (TRK) 33
+1 Federation Probe (TRK) 59
+1 Pure Energy (TRK) 31
+2 Andromedan Automatons (TRK) 2
+1 Cybernetic Specialist (TRK) 262
+1 Red Alert! (TRK) 169
+1 Organic Avulsion Unit (TRK) 121
+1 Type-2 Phaser (TRK) 271
+1 Risa (TRK) 293

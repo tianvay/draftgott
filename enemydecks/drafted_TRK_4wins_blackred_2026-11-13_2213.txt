@@ -1,0 +1,38 @@
+Deck
+1 Gray and Adira, Forever Joined (TRK) 238
+2 Plasma Cascade (TRK) 164
+2 The Naked Time (TRK) 159
+1 L'Rell, Fierce Visionary (TRK) 247
+1 Qo'noS (TRK) 291
+1 Eject the Warp Core (TRK) 105
+3 Cha'DIch Investigator (TRK) 97
+1 Pattern Buffer Preservation (TRK) 123
+1 Dahar Master (TRK) 146
+1 Khan, Despot by Design (TRK) 155
+2 Fugitive Listener (TRK) 107
+1 Tenacious Drone (TRK) 133
+2 Tal Shiar Operative (TRK) 131
+1 Targ Wrangler (TRK) 175
+1 The Duras Sisters (TRK) 235
+1 Battle-Scarred Survivalist (TRK) 95
+1 Munitions Enthusiast (TRK) 158
+1 He's Dead, Jim (TRK) 114
+1 Vengeance Mission (TRK) 136
+8 Swamp (SPM) 196
+7 Mountain (SPM) 197
+
+Sideboard
+1 Cleveland Booker, Empath (TRK) 229
+1 Spatial Anomaly (TRK) 296
+1 Tricorder (TRK) 270
+1 Andoria (TRK) 275
+1 Pure Energy (TRK) 31
+2 Reckless Impulse (TRK) 168
+2 Interstellar Effigy (TRK) 66
+1 Ferenginar (TRK) 283
+1 Highly Illogical (TRK) 62
+2 Make It So (TRK) 71
+1 Melkotian Adjudicator (TRK) 73
+1 Stray from History (TRK) 130
+1 Hemmer, Fixing What Is Broken (TRK) 239
+1 Marooned (TRK) 72

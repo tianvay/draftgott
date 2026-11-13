@@ -1,4 +1,4 @@
-"""Seitenfenster: kleine Feier (Pokal und Konfetti) beim 4. Sieg, Nachricht zur "Hall of Game" der Gegnerdecks."""
+"""Seitenfenster: kleine Feier (Pokal und Konfetti) beim 4. Sieg, Nachricht zur "Hall of Fame" der Gegnerdecks."""
 import random
 import unittest
 
@@ -21,13 +21,13 @@ class TextTests(unittest.TestCase):
         lines = overlay.celebration_lines(NAME)
         text = " ".join(lines)
         self.assertIn("4 Siege", text)
-        self.assertIn("Hall of Game", text)
+        self.assertIn("Hall of Fame", text)
         self.assertIn("drafted_TRK_4wins_whitered_2026-11-12_1957", text)
         self.assertTrue(all(ord(ch) <= 0xFFFF for ch in text))  # tkinter (Tk 8.6) kann keine Emoji ab U+10000
 
     def test_rows_mention_the_hall_of_game(self):
         rows = overlay.rows_for({"status": "idle", "message": "x", "enemy_saved": NAME})
-        self.assertIn("Hall of Game", rows[0][0])
+        self.assertIn("Hall of Fame", rows[0][0])
         self.assertTrue(all(ord(ch) <= 0xFFFF for r in rows for ch in r[0]))
 
 
@@ -54,8 +54,8 @@ class PageTests(unittest.TestCase):
     def test_page_and_help(self):
         from components.drafthelper import render_page
         from components.howitworks import render_help_page
-        self.assertIn("Hall of Game", render_page())
-        self.assertIn("Hall of Game", render_help_page())
+        self.assertIn("Hall of Fame", render_page())
+        self.assertIn("Hall of Fame", render_help_page())
 
 
 if __name__ == "__main__":

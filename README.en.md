@@ -252,10 +252,11 @@ In Arena, “Detailed Logs (Plugin Support)” must be enabled under Options →
   and drafts with humans, the log names no event while drafting: the set then comes from the cards, the event
   from the first matching deck. `--statistik-neu` rebuilds the statistics from both log files.
 
-- **Opponent decks from 4-win decks:** When a draft that is being read along earns its 4th match win, its deck (with
-  sideboard) is saved once as `enemydecks/drafted_<SET>_4wins_<colors>_<YYYY-MM-DD>_<hhmm>.txt`. Colors from the
+- **Opponent decks from perfect runs:** When a draft that is being read along reaches the highest number of match
+  wins of its format (Pick Two 4, Traditional 3, otherwise 7), its deck (with sideboard) is saved once as
+  `enemydecks/drafted_<SET>_<N>wins_<colors>_<YYYY-MM-DD>_<hhmm>.txt` (e.g. `4wins` for Pick Two). Colors from the
   nonland cards of the main deck, the strongest first; up to 2 cards as a splash (`redwhitesplashblue`). Existing
-  files are never overwritten. The overlay celebrates the addition to the “Hall of Game” with a trophy and
+  files are never overwritten. The overlay celebrates the addition to the “Hall of Fame” with a trophy and
   confetti.
 
 ### Set report (`--setauswertung [SET]`)

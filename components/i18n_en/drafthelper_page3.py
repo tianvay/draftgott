@@ -58,7 +58,7 @@ PAGE = {
     '"Deck übernommen ✓"': '"Deck applied ✓"',
     '"Deck + Sideboard übernehmen ("': '"Apply deck + sideboard ("',
     '"Nach „Fertig“ in Arena: Deck + Sideboard übernehmen"': '"After “Done” in Arena: apply deck + sideboard"',
-    '🏆 4 Siege: aufgenommen in die Hall of Game der Gegnerdecks (': '🏆 4 wins: added to the Hall of Game of opponent decks (',
+    ' Siege: aufgenommen in die Hall of Fame der Gegnerdecks (': ' wins: added to the Hall of Fame of opponent decks (',
     'Draft fertig. Sobald du in Arena den Deckbau mit „Fertig“ abschließt, lässt sich das Deck mit Sideboard übernehmen.':
         'Draft complete. Once you finish deck building in Arena with “Done”, the deck can be applied with its sideboard.',
     '"Warte auf das nächste Pack …"': '"Waiting for the next pack …"',
@@ -112,4 +112,10 @@ PAGE = {
     '"Alle Karten"': '"All cards"',
     '"Ohne Kategorie"': '"No category"',
     'toLocaleString("de-DE")': 'toLocaleString("en-US")',
+    '"Draft-Bilanz "+s.wins+"–"+s.losses+" (Ziel "+s.max_wins+" Siege)"': '"Draft record "+s.wins+"–"+s.losses+" (goal "+s.max_wins+" wins)"',
+    'add("Spiele",s.games);add("Züge",s.turns);add("Karten gezogen",s.drawn,"ohne Starthand");': 'add("Games",s.games);add("Turns",s.turns);add("Cards drawn",s.drawn,"without opening hand");',
+    'add("Zauber gewirkt",s.spells);add("Länder gelegt",s.lands);': 'add("Spells cast",s.spells);add("Lands played",s.lands);',
+    'add("Schaden am Gegner",s.damage_dealt);add("Größter Treffer",s.biggest_hit);add("Schaden erlitten",s.damage_taken);': 'add("Damage to opponent",s.damage_dealt);add("Biggest hit",s.biggest_hit);add("Damage taken",s.damage_taken);',
+    'add("Kreaturen besiegt",s.kills);add("Schaden an Kreaturen",s.damage_creatures);': 'add("Creatures defeated",s.kills);add("Damage to creatures",s.damage_creatures);',
+    'add("Ø Schaden je Spiel",num(s.damage_dealt/s.games))': 'add("Avg damage per game",num(s.damage_dealt/s.games))',
 }

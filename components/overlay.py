@@ -1,8 +1,8 @@
 """Seitenfenster fuer den Live-Draft (--overlay URL): ein kleines Fenster, das immer im Vordergrund bleibt und das
 aktuelle Pack als Rangliste zeigt (Stand von /api/live des Drafthelpers, jede Sekunde neu).
 
-Holt ein Deck seinen 4. Sieg (Gegnerdeck gespeichert), feiert das Fenster kurz mit Pokal und Konfetti
-(celebrate) und meldet die Aufnahme in die "Hall of Game" der Gegnerdecks.
+Holt ein Deck die hoechste Zahl an Siegen seines Formats (Gegnerdeck gespeichert, Pick Two 4, normaler Draft 7), feiert das Fenster kurz mit Pokal und Konfetti
+(celebrate) und meldet die Aufnahme in die "Hall of Fame" der Gegnerdecks.
 
 Der Knopf oben rechts (oder ein Doppelklick ins Fenster) minimiert es zu einem kleinen Kasten (mini_rows): im Spiel
 nur die Chancen auf Removal, Land und Kreatur, im Draft Pick, Archetyp und beste Karte.
@@ -14,6 +14,7 @@ Nur Standardbibliothek (tkinter). Das Fenster schliesst sich, wenn der Drafthelp
 """
 import json
 import math
+import re
 import random
 import urllib.error
 import urllib.request
@@ -54,10 +55,16 @@ def new_celebration(last, snap):
     return name if name and name != last else None
 
 
+def saved_wins(name):
+    """Zahl der Siege aus dem Dateinamen des Gegnerdecks (drafted_TRK_7wins_...), sonst 4."""
+    m = re.search(r"_(\d+)wins_", name or "")
+    return int(m.group(1)) if m else 4
+
+
 def celebration_lines(name):
     """Texte der Feier (nur Zeichen, die tkinter darstellen kann: keine Emoji)."""
     short = name[:-4] if name.endswith(".txt") else name
-    return [t("4 Siege!"), t("Aufgenommen in die Hall of Game"), t("der Gegnerdecks"), short]
+    return [t("{n} Siege!", n=saved_wins(name)), t("Aufgenommen in die Hall of Fame"), t("der Gegnerdecks"), short]
 
 
 def make_confetti(n, width, height, rng):
@@ -338,6 +345,22 @@ def deck_rows(snap):
         rows.append((t("Farben") + " " + " · ".join(f"{c} {n}" for c, n in info["colors"].items()), "colors"))
     if info.get("top"):
         rows.append((t("Bomben: ") + ", ".join(info["top"]), "head2"))
+    return rows + summary_rows(snap.get("summary"))
+
+
+def summary_rows(s):
+    """Draft-Bilanz aus den gelesenen Spielen: Bilanz, Karten gezogen, Zauber, Schaden, besiegte Kreaturen."""
+    if not s or not s.get("games"):
+        return []
+    rows = [(t("Draft-Bilanz {w}–{l} (Ziel {m} Siege)", w=s["wins"], l=s["losses"], m=s["max_wins"]), "head2"),
+            (t("{g} Spiele · {t} Züge · Karten gezogen {d}", g=s["games"], t=s["turns"], d=s["drawn"]), "sub"),
+            (t("Zauber gewirkt {s} · Länder gelegt {l}", s=s["spells"], l=s["lands"]), "sub"),
+            (t("Schaden am Gegner {d} (größter Treffer {b}) · erlitten {x}", d=s["damage_dealt"], b=s["biggest_hit"],
+               x=s["damage_taken"]), "arch"),
+            (t("Kreaturen besiegt {k} · Schaden an Kreaturen {c}", k=s["kills"], c=s["damage_creatures"]), "arch")]
+    if s["games"]:
+        rows.append((t("Ø je Spiel: {d} Schaden · {c} Karten gezogen", d=dec(f"{s['damage_dealt'] / s['games']:.1f}"),
+                       c=dec(f"{s['drawn'] / s['games']:.1f}")), "sub"))
     return rows
 
 
@@ -394,7 +417,8 @@ def rows_for(snap):
     if (snap.get("game") or {}).get("active"):
         return game_rows(snap["game"])
     if snap.get("enemy_saved"):
-        return ([(t("★ 4 Siege: aufgenommen in die Hall of Game der Gegnerdecks"), "head2"),
+        return ([(t("★ {n} Siege: aufgenommen in die Hall of Fame der Gegnerdecks",
+                    n=saved_wins(snap["enemy_saved"])), "head2"),
                  (t("Gegnerdeck gespeichert: {name}", name=snap['enemy_saved']), "arch")]
                 + rows_for(dict(snap, enemy_saved=None)))
     status = snap.get("status")

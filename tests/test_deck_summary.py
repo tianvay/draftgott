@@ -78,7 +78,7 @@ class RowsTests(unittest.TestCase):
         game = {"active": True, "turn": 3, "library": 30, "hand": 5, "groups": [], "cards": []}
         self.assertTrue(overlay.rows_for(self.snap(game=game))[0][0].startswith("Im Spiel"))
         rows = overlay.rows_for(self.snap(enemy_saved="x.txt"))
-        self.assertIn("Hall of Game", rows[0][0])
+        self.assertIn("Hall of Fame", rows[0][0])
         self.assertIn("Bilanz", rows[2][0])
 
     def test_during_the_draft_unchanged(self):

@@ -7,7 +7,7 @@ rem   2 = Drafthelper (Kartenseite im Browser mit _draftedcardpool.txt)
 rem   3 = Live-Draft  (Drafthelper liest MTG Arena mit: Picks nach _livedraft.txt, Pack mit Bewertung und
 rem                   Archetyp auf der Seite und im Seitenfenster ueber Arena)
 rem   4 = Setauswertung (Draft-Statistik des Live-Drafts als HTML-Seite)
-rem   5 = Turnier     (Gegnerdecks eines Unterordners von enemydecks, z. B. wc32, spielen gegeneinander;
+rem   5 = Turnier     (versteckt, nicht im Menue angezeigt: Gegnerdecks eines Unterordners von enemydecks, z. B. wc32, spielen gegeneinander;
 rem                   Paarungen werden abgefragt, Bericht turnier_<Ordner>.html)
 rem Zusaetzliche Parameter werden an den gewaehlten Aufruf angehaengt,
 rem z. B.:  draftgott.bat --sims 1000
@@ -50,9 +50,9 @@ echo   1 = Analyse       (_normaldeck.txt simulieren, Bericht meinbericht.html, 
 echo   2 = Drafthelper   (Karten aus _draftedcardpool.txt auswaehlen und vergleichen)
 echo   3 = Live-Draft    (Arena mitlesen: Pack bewerten, Archetyp erkennen, Seitenfenster)
 echo   4 = Setauswertung (Statistik der Drafts eines Sets als HTML-Seite)
-echo   5 = Turnier       (Decks aus einem Unterordner von enemydecks gegeneinander, je Paarung 500 Spiele)
+rem    5 = Turnier       (versteckt: Decks aus einem Unterordner von enemydecks gegeneinander, je Paarung 500 Spiele)
 echo.
-choice /c 12345 /n /m "Auswahl (1, 2, 3, 4 oder 5): "
+choice /c 12345 /n /m "Auswahl (1, 2, 3 oder 4): "
 if errorlevel 5 goto turnier
 if errorlevel 4 goto setauswertung
 if errorlevel 3 goto live
@@ -67,9 +67,9 @@ echo   1 = Deck analysis (simulate _normaldeck.txt, report meinbericht.html, bat
 echo   2 = Draft Helper  (pick and compare cards from _draftedcardpool.txt)
 echo   3 = Live draft    (follow MTG Arena: rate the pack, detect the archetype, overlay)
 echo   4 = Set report    (statistics of the drafts of a set as an HTML page)
-echo   5 = Tournament    (decks from a subfolder of enemydecks against each other, 500 games per pairing)
+rem    5 = Tournament    (hidden: decks from a subfolder of enemydecks against each other, 500 games per pairing)
 echo.
-choice /c 12345 /n /m "Choice (1, 2, 3, 4 or 5): "
+choice /c 12345 /n /m "Choice (1, 2, 3 or 4): "
 if errorlevel 5 goto en_turnier
 if errorlevel 4 goto en_setauswertung
 if errorlevel 3 goto en_live
