@@ -1,0 +1,13 @@
+Easiest: double-click draftgott.bat, choose 2 = English, then the mode.
+
+Standard simulation:
+python .\mtg_sim.py .\_normaldeck.txt --sims 10000 --html meinbericht.html --lang en
+
+Draft Helper:
+python mtg_sim.py --drafthelper _draftedcardpool.txt --lang en
+
+Live draft (follows MTG Arena):
+python mtg_sim.py --drafthelper _livedraft.txt --live --lang en
+
+Set report:
+python mtg_sim.py --setauswertung --lang en

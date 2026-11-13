@@ -39,6 +39,7 @@ from components import draftstats
 from components import ratings as card_ratings
 from components import synergy
 from components.arenalog import default_log_path
+from components.i18n import get_lang, html_lang, t, tr_block
 from components.livedraft import LiveDraft, card_summary
 from components.scryfall import fetch_set_cards
 
@@ -60,13 +61,14 @@ def pool_path(path):
     if not p.exists() and (SCRIPT_DIR / p).exists():
         p = SCRIPT_DIR / p
     if not p.exists():
-        sys.exit(f"Kartenpool-Datei nicht gefunden: {path}\n"
-                 f"Der Drafthelper braucht deinen gedrafteten Kartenpool als Textdatei im Projektordner "
-                 f"({SCRIPT_DIR}).\n"
-                 f"Lege die Datei {pathlib.Path(path).name} an, z. B. mit dem Deck-Export aus MTG Arena: "
-                 f"ein Abschnitt 'Deck' und ein Abschnitt 'Sideboard', darunter Zeilen wie\n"
-                 f"  1 Curse-Marred Demon (FRA) 79\n"
-                 f"Die Datei liegt nicht im Git, jeder hat seine eigene.")
+        sys.exit(t("Kartenpool-Datei nicht gefunden: {path}\n"
+                   "Der Drafthelper braucht deinen gedrafteten Kartenpool als Textdatei im Projektordner "
+                   "({dir}).\n"
+                   "Lege die Datei {name} an, z. B. mit dem Deck-Export aus MTG Arena: "
+                   "ein Abschnitt 'Deck' und ein Abschnitt 'Sideboard', darunter Zeilen wie\n"
+                   "  1 Curse-Marred Demon (FRA) 79\n"
+                   "Die Datei liegt nicht im Git, jeder hat seine eigene.",
+                   path=path, dir=SCRIPT_DIR, name=pathlib.Path(path).name))
     return p
 
 
@@ -89,14 +91,14 @@ def load_pool(path, refresh=False, allow_empty=False):
     p = pool_path(path)
     rows = parse_pool(p.read_text(encoding="utf-8"))
     if not rows and not allow_empty:
-        sys.exit(f"Keine Karten in {p} gefunden (erwartet: Abschnitte 'Deck' und 'Sideboard').")
+        sys.exit(t("Keine Karten in {p} gefunden (erwartet: Abschnitte 'Deck' und 'Sideboard').", p=p))
     signature = hashlib.sha1(json.dumps(rows, sort_keys=True).encode("utf-8")).hexdigest()[:16]
-    print(f"Kartenpool: {sum(r['qty'] for r in rows)} Karten aus {p}", file=sys.stderr)
-    print("Lade Kartendaten und Bilder von Scryfall ...", file=sys.stderr)
+    print(t("Kartenpool: {n} Karten aus {p}", n=sum(r['qty'] for r in rows), p=p), file=sys.stderr)
+    print(t("Lade Kartendaten und Bilder von Scryfall ..."), file=sys.stderr)
     try:
         data = fetch_cards_cached(sorted({r["name"] for r in rows} | set(BASIC_LANDS)), refresh)
     except urllib.error.URLError as e:
-        sys.exit(f"Scryfall nicht erreichbar: {e}")
+        sys.exit(t("Scryfall nicht erreichbar: {e}", e=e))
     images = fetch_printing_images([(r["set"], r["number"]) for r in rows if r["set"] and r["number"]])
     cards = []
     basics = {n: {"name": n, "image": None, "core": 0, "pool": 0, "set": "", "number": ""} for n in BASIC_LANDS}
@@ -181,7 +183,7 @@ def parse_state(body, pool):
     marks = body["marks"]
     if len(marks) != len(pool) or any(len(ms) != c["qty"] or any(m not in MARKS for m in ms)
                                       for ms, c in zip(marks, pool)):
-        raise ValueError("Markierungen passen nicht zum Kartenpool")
+        raise ValueError(t("Markierungen passen nicht zum Kartenpool"))
     names = {c["name"] for c in pool}
     cats = {n: k for n, k in (body.get("cats") or {}).items() if n in names and k in CATEGORIES}
     basics = {}
@@ -189,22 +191,22 @@ def parse_state(body, pool):
         c = (body.get("basics") or {}).get(name) or {}
         basics[name] = {g: int(c.get(g) or 0) for g in GROUPS}
         if any(not 0 <= v <= MAX_BASICS for v in basics[name].values()):
-            raise ValueError(f"Anzahl {name}: erlaubt sind 0 bis {MAX_BASICS} je Gruppe")
+            raise ValueError(t("Anzahl {name}: erlaubt sind 0 bis {max} je Gruppe", name=name, max=MAX_BASICS))
     return marks, basics, cats
 
 
 def parse_proposal_spec(spec):
     """Prueft die Angaben fuer den Deckvorschlag (Farben, Zielgroesse, Sortierung). Gibt (colors, target, sort)."""
     if not isinstance(spec, dict):
-        raise ValueError("Angaben zum Deckvorschlag fehlen")
+        raise ValueError(t("Angaben zum Deckvorschlag fehlen"))
     colors = spec.get("colors", [])
     if not isinstance(colors, list) or any(c not in WUBRG or len(str(c)) != 1 for c in colors):
-        raise ValueError("Unbekannte Farbe (erlaubt: W, U, B, R, G)")
+        raise ValueError(t("Unbekannte Farbe (erlaubt: W, U, B, R, G)"))
     target, sort = int(spec.get("target") or 40), spec.get("sort") or "mv"
     if not 10 <= target <= 200:
-        raise ValueError("Die Zielgröße muss zwischen 10 und 200 Karten liegen")
+        raise ValueError(t("Die Zielgröße muss zwischen 10 und 200 Karten liegen"))
     if sort not in SORTS:
-        raise ValueError("Unbekannte Sortierung")
+        raise ValueError(t("Unbekannte Sortierung"))
     return colors, target, sort
 
 
@@ -218,8 +220,8 @@ def checked_proposal(body, pool, marks, cats):
     colors, target, sort = parse_proposal_spec(body["proposal"])
     proposal = propose(pool, marks, cats, colors, target, sort)
     if proposal["summary"]["size"] < MIN_PROPOSAL_CARDS:
-        raise ValueError("Der Deckvorschlag ist zu klein zum Simulieren (weniger als "
-                         f"{MIN_PROPOSAL_CARDS} Karten): Bitte Farben und Kategorien prüfen.")
+        raise ValueError(t("Der Deckvorschlag ist zu klein zum Simulieren (weniger als "
+                           "{n} Karten): Bitte Farben und Kategorien prüfen.", n=MIN_PROPOSAL_CARDS))
     return proposal
 
 
@@ -230,7 +232,7 @@ def variant_entries(pool, marks, basics, cats, proposal=None, cardarch=None, car
     entries = entries_from_marks(pool, marks, basics, cats)
     if proposal:
         deck = dict(proposal["deck"])
-        entries.append({"path": "", "name": "Vorschlag", "deck": deck, "parts": [("Vorschlag", deck)],
+        entries.append({"path": "", "name": t("Vorschlag"), "deck": deck, "parts": [(t("Vorschlag"), deck)],
                         "cats": dict(cats), "role": "proposal"})
     names = {c["name"] for c in pool}
     mine = {n: list(v) for n, v in (cardarch or {}).items() if n in names}
@@ -261,7 +263,7 @@ class Job:
         with self.lock:
             if self.state == "running":
                 return False
-            self.state, self.message, self.started, self.report = "running", "Starte ...", time.time(), None
+            self.state, self.message, self.started, self.report = "running", t("Starte ..."), time.time(), None
         threading.Thread(target=self._run, args=(work,), daemon=True).start()
         return True
 
@@ -273,12 +275,12 @@ class Job:
     def _run(self, work):
         try:
             report = work(self.progress)
-            state, message = "done", "Fertig"
+            state, message = "done", t("Fertig")
         except SystemExit as e:  # die Simulation meldet Fehler per sys.exit(Text)
-            report, state, message = None, "error", str(e.code) if e.code is not None else "Abgebrochen"
+            report, state, message = None, "error", str(e.code) if e.code is not None else t("Abgebrochen")
         except Exception as e:  # unerwartet: Meldung zeigen, Details ins Terminal
             traceback.print_exc()
-            report, state, message = None, "error", f"Unerwarteter Fehler: {e}"
+            report, state, message = None, "error", t("Unerwarteter Fehler: {e}", e=e)
         with self.lock:
             self.report, self.state, self.message, self.finished = report, state, message, time.time()
 
@@ -334,15 +336,15 @@ def make_handler(app):
                 self._send(game_fragment(app, self.path.partition("?")[2]))
             elif path == "/report":
                 rep = app.get("report_html")  # nicht job.report: der letzte Job kann ein Kampf gewesen sein
-                self._send(rep if rep else "<p>Noch kein Bericht vorhanden.</p>")
+                self._send(rep if rep else t("<p>Noch kein Bericht vorhanden.</p>"))
             elif path == "/battle":
-                self._send(app.get("battle_html") or "<p>Noch kein Kampfbericht vorhanden.</p>")
+                self._send(app.get("battle_html") or t("<p>Noch kein Kampfbericht vorhanden.</p>"))
             elif path == "/api/enemies":
                 self._json({"enemies": enemy_decks(), "quit": False})
             elif path == "/api/ratings":
                 self._json({"ratings": self._pool_ratings()})
             else:
-                self._send("Nicht gefunden", "text/plain; charset=utf-8", 404)
+                self._send(t("Nicht gefunden"), "text/plain; charset=utf-8", 404)
 
         def do_POST(self):
             path = self.path.split("?", 1)[0]
@@ -359,7 +361,7 @@ def make_handler(app):
             if path == "/api/live/deck":  # Deck mit Sideboard aus Arena in die Pool-Datei
                 try:
                     if not app.get("live"):
-                        raise ValueError("Kein Live-Draft")
+                        raise ValueError(t("Kein Live-Draft"))
                     app["live"].apply_deck()
                 except (ValueError, OSError) as exc:
                     self._json({"ok": False, "error": str(exc)}, 400)
@@ -371,7 +373,7 @@ def make_handler(app):
                 return
             if path not in ("/api/simulate", "/api/suggest", "/api/propose", "/api/lands", "/api/colors",
                             "/api/archdetect", "/api/synergy"):
-                self._send("Nicht gefunden", "text/plain; charset=utf-8", 404)
+                self._send(t("Nicht gefunden"), "text/plain; charset=utf-8", 404)
                 return
             pool = app["pool"]
             try:
@@ -380,19 +382,19 @@ def make_handler(app):
                 if path == "/api/suggest":
                     target, sort = int(body.get("target") or 40), body.get("sort") or "mv"
                     if not 10 <= target <= 200:
-                        raise ValueError("Die Zielgröße muss zwischen 10 und 200 Karten liegen")
+                        raise ValueError(t("Die Zielgröße muss zwischen 10 und 200 Karten liegen"))
                     if sort not in SORTS:
-                        raise ValueError("Unbekannte Sortierung")
+                        raise ValueError(t("Unbekannte Sortierung"))
                 elif path == "/api/propose":
                     colors, target, sort = parse_proposal_spec(body)
                 elif path == "/api/lands":
                     target = int(body.get("target") or 40)
                     if not 10 <= target <= 200:
-                        raise ValueError("Die Zielgröße muss zwischen 10 und 200 Karten liegen")
+                        raise ValueError(t("Die Zielgröße muss zwischen 10 und 200 Karten liegen"))
                 else:
                     sims = int(body.get("sims") or app["args"].sims)
                     if not 100 <= sims <= 100000:
-                        raise ValueError("Anzahl der Spiele muss zwischen 100 und 100000 liegen")
+                        raise ValueError(t("Anzahl der Spiele muss zwischen 100 und 100000 liegen"))
                     proposal = checked_proposal(body, pool, marks, cats)
             except (ValueError, KeyError, TypeError) as e:
                 self._json({"ok": False, "error": str(e)}, 400)
@@ -435,7 +437,7 @@ def make_handler(app):
                 return html
 
             if not app["job"].start(work):
-                self._json({"ok": False, "error": "Es laeuft bereits eine Simulation"}, 409)
+                self._json({"ok": False, "error": t("Es laeuft bereits eine Simulation")}, 409)
                 return
             self._json({"ok": True})
 
@@ -452,11 +454,11 @@ def make_handler(app):
             try:
                 body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
                 if not app.get("ratings"):
-                    raise ValueError("Keine Bewertungsdatei")
+                    raise ValueError(t("Keine Bewertungsdatei"))
                 if path == "/api/rating":
                     name, cat = body.get("name"), body.get("cat") or ""
                     if name not in self._known_names():
-                        raise ValueError("Unbekannte Karte")
+                        raise ValueError(t("Unbekannte Karte"))
                     data = card_ratings.set_rating(app["ratings"], name, cat)
                 else:
                     cats = body.get("cats") if isinstance(body.get("cats"), dict) else {}
@@ -493,7 +495,7 @@ def make_handler(app):
 
         def _live_snapshot(self):
             if not app.get("live"):
-                return {"status": "off", "message": "Kein Live-Draft (Drafthelper mit --live starten)."}
+                return {"status": "off", "message": t("Kein Live-Draft (Drafthelper mit --live starten).")}
             ratings = card_ratings.load_ratings(app["ratings"]) if app.get("ratings") else {}
             return app["live"].snapshot(ratings, self._assign(), app.get("live_manual"), self._stats(),
                                         self._best())
@@ -506,18 +508,18 @@ def make_handler(app):
                 if path == "/api/live/archetype":
                     choice = body.get("arch") or ""
                     if choice and choice not in set_archetypes.PAIRS:
-                        raise ValueError("Unbekannter Archetyp")
+                        raise ValueError(t("Unbekannter Archetyp"))
                     app["live_manual"] = choice or None
                     self._json({"ok": True})
                     return
                 if not app.get("cardarch"):
-                    raise ValueError("Keine Datei für die Archetyp-Zuordnung")
+                    raise ValueError(t("Keine Datei für die Archetyp-Zuordnung"))
                 name = body.get("name")
                 if name not in self._known_names():
-                    raise ValueError("Unbekannte Karte")
+                    raise ValueError(t("Unbekannte Karte"))
                 best = body.get("best")
                 if best is not None and not isinstance(best, str):
-                    raise ValueError("Unbekannter Archetyp")
+                    raise ValueError(t("Unbekannter Archetyp"))
                 data = cardarchetypes.set_assign(app["cardarch"], name, body.get("arch") or [], best)
             except (ValueError, TypeError, OSError) as exc:
                 self._json({"ok": False, "error": str(exc)}, 400)
@@ -528,7 +530,7 @@ def make_handler(app):
             """Alle Karten eines Sets (Scryfall) fuer die Set-Ansicht: Bewertung und Archetypen vorab festlegen."""
             code = (dict(p.split("=", 1) for p in query.split("&") if "=" in p).get("set") or "").lower()
             if not re.fullmatch(r"[a-z0-9]{2,6}", code):
-                self._json({"ok": False, "error": "Unbekanntes Set"}, 400)
+                self._json({"ok": False, "error": t("Unbekanntes Set")}, 400)
                 return
             raw = (app.get("fetch_set") or fetch_set_cards)(code)
             cards = [card_summary(sc, sc["name"], code, sc.get("collector_number") or "") for sc in raw
@@ -591,9 +593,10 @@ def start_overlay(url):
     """Seitenfenster in einem eigenen Prozess (tkinter braucht den Hauptthread)."""
     import subprocess
     try:
-        subprocess.Popen([sys.executable, str(SCRIPT_DIR / "mtg_sim.py"), "--overlay", url])
+        subprocess.Popen([sys.executable, str(SCRIPT_DIR / "mtg_sim.py"), "--overlay", url,
+                          "--lang", get_lang()])
     except OSError as e:
-        print(f"Seitenfenster konnte nicht gestartet werden: {e}", file=sys.stderr)
+        print(t("Seitenfenster konnte nicht gestartet werden: {e}", e=e), file=sys.stderr)
 
 
 def serve(args, simulate, save, battle=None, save_battle=None):
@@ -608,7 +611,7 @@ def serve(args, simulate, save, battle=None, save_battle=None):
         log = pathlib.Path(args.arena_log) if args.arena_log else default_log_path()
         live = LiveDraft(log, pool_path(args.drafthelper), stats=app["stats"], enemy_dir=SCRIPT_DIR / "enemydecks",
                          fetch_set=fetch_set_cards)
-        print(f"Live-Draft: lese {log}, Draft-Statistik in {app['stats']}", file=sys.stderr)
+        print(t("Live-Draft: lese {log}, Draft-Statistik in {stats}", log=log, stats=app['stats']), file=sys.stderr)
         live.read_previous(log.with_name("Player-prev.log"))
         live.step()  # bisheriger Stand des Protokolls (laufender Draft), danach im Hintergrund weiter
         app["live"], app["pool_version"] = live, live.version
@@ -622,8 +625,8 @@ def serve(args, simulate, save, battle=None, save_battle=None):
         server = LocalServer(("127.0.0.1", 0), make_handler(app))
     app["server"] = server
     url = f"http://127.0.0.1:{server.server_address[1]}/"
-    print(f"Draft-Helper laeuft: {url}", file=sys.stderr)
-    print("Zum Beenden: Button 'Beenden' auf der Seite oder Strg+C hier im Fenster.", file=sys.stderr)
+    print(t("Draft-Helper laeuft: {url}", url=url), file=sys.stderr)
+    print(t("Zum Beenden: Button 'Beenden' auf der Seite oder Strg+C hier im Fenster."), file=sys.stderr)
     if not args.nicht_oeffnen:
         try:
             webbrowser.open(url)
@@ -637,7 +640,7 @@ def serve(args, simulate, save, battle=None, save_battle=None):
         pass
     finally:
         server.server_close()
-    print("Draft-Helper beendet.", file=sys.stderr)
+    print(t("Draft-Helper beendet."), file=sys.stderr)
 
 
 PAGE = r"""<!DOCTYPE html>
@@ -2002,10 +2005,17 @@ $("quit").onclick=async()=>{if(!confirm("Draft-Helper beenden?"))return;
 SYMBOL_KEYS = ("W", "U", "B", "R", "G", "C")
 
 
+def page_table():
+    """Englische Ersetzungen fuer die feste Seite PAGE (components/i18n_en/drafthelper_page*.py, je Datei PAGE = {...})."""
+    from components.i18n_en import drafthelper_page1, drafthelper_page2, drafthelper_page3
+    return {**drafthelper_page1.PAGE, **drafthelper_page2.PAGE, **drafthelper_page3.PAGE}
+
+
 def render_page():
     """Die Seite mit den vorhandenen Original-Manasymbolen (Farben und Farblos) als eingebettetem CSS."""
     have = [k for k in SYMBOL_KEYS if k in active_symbols()]
-    counts = "".join(f'<option value="{n}"' + (" selected" if n == 500 else "") + f'>{n} Kämpfe</option>'
+    counts = "".join(f'<option value="{n}"' + (" selected" if n == 500 else "") + f'>{n} ' + t("Kämpfe") + '</option>'
                      for n in FIGHT_COUNTS)
-    return (PAGE.replace("/*SYMBOL_CSS*/", symbol_css(have)).replace("<!--DK_COUNTS-->", counts)
+    return (tr_block(PAGE, page_table()).replace('<html lang="de">', f'<html lang="{html_lang()}">')
+            .replace("/*SYMBOL_CSS*/", symbol_css(have)).replace("<!--DK_COUNTS-->", counts)
             .replace("const SYMBOLS=[];", "const SYMBOLS=" + json.dumps(have, separators=(",", ":")) + ";"))

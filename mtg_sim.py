@@ -19,6 +19,7 @@ import webbrowser
 from collections import Counter
 
 from components.cli import parse_args
+from components.i18n import set_lang, t
 from components.scryfall import fetch_cards_cached
 from components.graveyard import gy_enabler, gy_info
 from components.removal import keyword_flags, removal_info
@@ -43,7 +44,7 @@ def build_deck(entry, data, args):
         sc = data.get(name) or data.get(name.split(" // ")[0])
         if not sc:
             missing.append(name)
-            print(f"Uebersprungen (nicht gefunden) in {entry['name']}: {name}", file=sys.stderr)
+            print(t("Uebersprungen (nicht gefunden) in {deck}: {card}", deck=entry["name"], card=name), file=sys.stderr)
             continue
         card, shown = card_info(sc)
         rows.append((name, qty, card, shown))
@@ -56,7 +57,7 @@ def build_deck(entry, data, args):
                       "gy": gy_info(sc), "gy_enabler": gy_enabler(sc), "set": sc.get("set") or ""}
         cards += [card] * qty
     if len(cards) < 7 + args.turns:
-        sys.exit(f"Zu wenige Karten im Deck {entry['name']}.")
+        sys.exit(t("Zu wenige Karten im Deck {deck}.", deck=entry["name"]))
     nonlands = [c for c in cards if not c.is_land]
     castable = [c for c in nonlands if c.alts]
     top_mv = max((c.mv for c in castable), default=None)
@@ -86,7 +87,7 @@ def simulate_deck(dd, args, idx, horizon, progress=_stderr):
     """Simuliert On the Play und On the Draw. Mit --seed bekommt jedes Deck einen eigenen, festen Zufallsstrom."""
     if args.seed is not None:
         random.seed(args.seed + 7919 * idx)
-    progress(f"Simuliere {dd['name']}: {args.sims} Spiele pro Modus ...")
+    progress(t("Simuliere {deck}: {n} Spiele pro Modus ...", deck=dd["name"], n=args.sims))
     # Splash-Variante aus dem Drafthelper: Spielbarkeit der Nichtland-Karten der Splash-Gruppe messen
     # (Name im Deck, Name im Kartenmodell): zweiteilige Karten heissen im Deck oft nur nach der Vorderseite
     pairs = []
@@ -119,7 +120,7 @@ def entries_from_files(args):
         core_path, core_label = split_label(args.core)
         with open(core_path, encoding="utf-8") as f:
             core = parse_deck(f.read())
-        print(f"Kern: {sum(core.values())} Karten aus {core_path}", file=sys.stderr)
+        print(t("Kern: {n} Karten aus {path}", n=sum(core.values()), path=core_path), file=sys.stderr)
     for spec in list(args.deckfile) + (args.deckalt or []):
         path, label = split_label(spec)
         with open(path, encoding="utf-8") as f:
@@ -153,7 +154,7 @@ def load_enemy(path):
         if not p.exists() and cand.exists():
             p = cand
     if not p.exists():
-        sys.exit(f"Gegnerdeck nicht gefunden: {path}")
+        sys.exit(t("Gegnerdeck nicht gefunden: {path}", path=path))
     return {"name": enemy_name(p), "deck": parse_deck(p.read_text(encoding="utf-8"))}
 
 
@@ -169,12 +170,12 @@ def battle_entries_games(entries, enemy_paths, args, progress=_stderr):
     if isinstance(enemy_paths, (str, pathlib.Path)):
         enemy_paths = [enemy_paths]
     enemies = [load_enemy(p) for p in enemy_paths]
-    progress("Lade Kartendaten von Scryfall ...")
+    progress(t("Lade Kartendaten von Scryfall ..."))
     try:
         names = set().union(*(e["deck"].keys() for e in entries), *(e["deck"].keys() for e in enemies))
         data = fetch_cards_cached(sorted(names), args.neu_laden)
     except urllib.error.URLError as e:
-        sys.exit(f"Scryfall nicht erreichbar: {e}")
+        sys.exit(t("Scryfall nicht erreichbar: {err}", err=e))
     decks = [build_deck(e, data, args) for e in entries]
     simulate_battles(decks, enemies, data, args, progress)
     games = {}
@@ -188,7 +189,7 @@ def battle_entries_games(entries, enemy_paths, args, progress=_stderr):
 def save_battle_report(html, args):
     out_path = pathlib.Path(getattr(args, "kampf_ausgabe", None) or "mtg_kampf.html")
     out_path.write_text(html, encoding="utf-8")
-    print(f"Kampfbericht gespeichert: {out_path.resolve()}", file=sys.stderr)
+    print(t("Kampfbericht gespeichert: {path}", path=out_path.resolve()), file=sys.stderr)
     return out_path
 
 
@@ -199,7 +200,8 @@ def simulate_battles(decks, enemies, data, args, progress=_stderr):
         for idx, dd in enumerate(decks):
             if args.seed is not None:
                 random.seed(args.seed + 104729 * (idx + 1) + 7907 * e_idx)
-            progress(f"Kampf {dd['name']} gegen {enemy['name']}: {args.kaempfe} Spiele pro Modus ...")
+            progress(t("Kampf {deck} gegen {enemy}: {n} Spiele pro Modus ...", deck=dd["name"], enemy=enemy["name"],
+                       n=args.kaempfe))
             results = {}
             for label, on_draw in (("On the Play", False), ("On the Draw", True)):
                 results[label] = battle(dd["cards"], edd["cards"], args.kaempfe, on_draw, args.kampf_runden,
@@ -210,11 +212,11 @@ def simulate_battles(decks, enemies, data, args, progress=_stderr):
 def simulate_entries(entries, args, progress=_stderr):
     """Laedt die Kartendaten, simuliert alle Decks und gibt den HTML-Bericht als Text zurueck.
     Bei Fehlern (zu wenige Karten, Scryfall nicht erreichbar, ...) endet das Programm mit sys.exit(Meldung)."""
-    progress("Lade Kartendaten von Scryfall ...")
+    progress(t("Lade Kartendaten von Scryfall ..."))
     try:
         data = fetch_cards_cached(sorted(set().union(*(e["deck"].keys() for e in entries))), args.neu_laden)
     except urllib.error.URLError as e:
-        sys.exit(f"Scryfall nicht erreichbar: {e}")
+        sys.exit(t("Scryfall nicht erreichbar: {err}", err=e))
 
     horizon = max(args.max_runden, args.turns, args.curve_runden)
     decks = [build_deck(e, data, args) for e in entries]
@@ -230,11 +232,12 @@ def simulate_entries(entries, args, progress=_stderr):
 def save_report(html, args):
     out_path = pathlib.Path(args.ausgabe)
     out_path.write_text(html, encoding="utf-8")
-    print(f"Bericht gespeichert: {out_path.resolve()}", file=sys.stderr)
+    print(t("Bericht gespeichert: {path}", path=out_path.resolve()), file=sys.stderr)
     return out_path
 
 
 def run(args):
+    set_lang(getattr(args, "lang", "de"))
     if args.statistik_neu:  # Draft-Statistik aus den Arena-Protokollen neu aufbauen
         from components.livedraft import rebuild_stats
         rebuild_stats(args)

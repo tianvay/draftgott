@@ -3,6 +3,7 @@ import html as html_lib
 import re
 
 from components import symbols
+from components.i18n import t
 
 
 HTML_CSS = """
@@ -276,7 +277,7 @@ def svg_lines(xs, series, ymax=1.0, w=640, h=250, fmt=None, classes=None):
         out.append(f'<polyline points="{pts}" class="ln {cls}"/>')
         for i, v in enumerate(vals):
             out.append(f'<circle cx="{X(i):.1f}" cy="{Y(v):.1f}" r="3.3" class="pt {cls}">'
-                       f'<title>{esc(name)}, Runde {esc(xs[i])}: {fmt(v)}</title></circle>')
+                       f'<title>{esc(name)}, {t("Runde {r}", r=esc(xs[i]))}: {fmt(v)}</title></circle>')
     out.append("</svg>")
     return "".join(out)
 
@@ -316,5 +317,5 @@ def h_legend(labels):
 
 def h_section(sid, title, hint, body, help_id=None):
     hint_html = f'<p class="hint">{hint}</p>' if hint else ""
-    link = (f'<a class="hiw" href="#{help_id}" data-back="{sid}">ⓘ So funktioniert es</a>' if help_id else "")
+    link = (f'<a class="hiw" href="#{help_id}" data-back="{sid}">{t("ⓘ So funktioniert es")}</a>' if help_id else "")
     return f'<section id="{sid}"><h2>{esc(title)}{link}</h2>{hint_html}{body}</section>'

@@ -1,5 +1,7 @@
 # MTG Starthand-Simulator
 
+*English version: [README.en.md](README.en.md)*
+
 Liest eine Deckliste, holt die Kartendaten von [Scryfall](https://scryfall.com) und simuliert viele Spiele
 (On the Play und On the Draw). Das Ergebnis ist ein HTML-Bericht, der sich im Browser öffnet.
 
@@ -85,6 +87,7 @@ Projektordner geklärt; Abweichungen davon stehen mit Regelnummer im Code bzw. i
 | `components/howitworks.py` | Erklärseite „So funktioniert es“ |
 | `components/report.py` | Bericht zusammensetzen |
 | `components/drafthelper.py` | Drafthelper-Seite und -Server |
+| `components/i18n.py` | Sprache (Deutsch/Englisch): `t()` für Texte, `tr_block()` für feste Vorlagen; englische Texte je Modul in `components/i18n_en/` |
 
 ## Draft-Helper (`--drafthelper`)
 
@@ -176,8 +179,9 @@ einer Meldung ab, die beschreibt, wie die Datei aussehen muss.
   als Menge je Gruppe eingestellt (Core / Splash / NoSplash, mit − und +). Startwert ist die Anzahl im Deck der
   Datei als Core. Länder, die nicht im Pool sind (z. B. Swamp für einen anderen Splash), lassen sich ebenfalls
   hinzufügen.
-- **Start per Doppelklick (Windows):** `draftgott.bat` im Projektordner doppelklicken. Ein Menü fragt nach der
-  Betriebsart: **1 = Analyse** (simuliert `_normaldeck.txt` mit 10 000 Spielen, schreibt `meinbericht.html` und
+- **Start per Doppelklick (Windows):** `draftgott.bat` im Projektordner doppelklicken. Zuerst fragt es nach der
+  Sprache (**1 = Deutsch**, **2 = English**; alle Seiten, das Overlay und die Meldungen im Fenster erscheinen dann in
+  dieser Sprache, weitergegeben als `--lang de` bzw. `--lang en`), danach nach der Betriebsart: **1 = Analyse** (simuliert `_normaldeck.txt` mit 10 000 Spielen, schreibt `meinbericht.html` und
   zeigt ihn über den Berichts-Server, damit „Kampf simulieren“ im Bericht funktioniert) oder **2 = Drafthelper**
   (Kartenseite mit `_draftedcardpool.txt`), **3 = Live-Draft** oder **4 = Setauswertung** (siehe unten). Das Skript sucht Python selbst (`py` oder `python`). In allen Fällen
   das schwarze Fenster offen lassen und zum Beenden den Button „Beenden“ auf der Seite benutzen oder das Fenster
@@ -416,6 +420,7 @@ Aktivierung pro Runde sind fest im Skript (siehe „Feste Annahmen“).
 | `--neu-laden` | aus | Kartendaten werden in `scryfall_cache.json` neben dem Script gespeichert, bei späteren Läufen werden nur unbekannte Karten nachgeladen. Mit `--neu-laden` wird alles frisch von Scryfall geholt. |
 | `--ausgabe DATEI` (auch `--html DATEI`) | `mtg_bericht.html` | Name und Ort des HTML-Berichts. Eine vorhandene Datei wird überschrieben. |
 | `--nicht-oeffnen` | aus (Bericht wird geöffnet) | Der Bericht wird nur gespeichert, der Browser öffnet sich nicht. |
+| `--lang de\|en` | `de` | Sprache von Bericht, Kampfbericht, Drafthelper, Setauswertung, Overlay und Konsolenmeldungen. |
 | `-h`, `--help` | | Zeigt die Kurzhilfe. |
 
 ## Beispiele

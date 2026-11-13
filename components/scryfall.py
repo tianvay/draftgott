@@ -14,6 +14,8 @@ import sys
 import urllib.error
 import urllib.request
 
+from components.i18n import t
+
 HEADERS = {
     "Content-Type": "application/json",
     "User-Agent": "mtg-sim/4.0",
@@ -50,7 +52,7 @@ def fetch_cards(names):
             for card in retry["data"]:
                 store(card)
             for d in retry.get("not_found", []):
-                print(f"WARNUNG: Karte nicht gefunden: {d['name']}", file=sys.stderr)
+                print(t("WARNUNG: Karte nicht gefunden: {name}", name=d["name"]), file=sys.stderr)
     return found
 
 
@@ -73,7 +75,7 @@ def fetch_cards_cached(names, refresh=False):
         try:
             CACHE_FILE.write_text(json.dumps(cache), encoding="utf-8")
         except OSError as e:
-            print(f"Cache konnte nicht gespeichert werden: {e}", file=sys.stderr)
+            print(t("Cache konnte nicht gespeichert werden: {err}", err=e), file=sys.stderr)
     return cache
 
 
@@ -100,7 +102,7 @@ def fetch_printing_images(specs):
         try:
             data = post_collection([{"set": s_, "collector_number": n} for s_, n in todo[i:i + 75]])
         except urllib.error.URLError as e:
-            print(f"Kartenbilder konnten nicht geladen werden: {e}", file=sys.stderr)
+            print(t("Kartenbilder konnten nicht geladen werden: {err}", err=e), file=sys.stderr)
             break
         for card in data.get("data", []):
             url = card_image_url(card)
@@ -110,7 +112,7 @@ def fetch_printing_images(specs):
         try:
             IMAGE_CACHE_FILE.write_text(json.dumps(cache), encoding="utf-8")
         except OSError as e:
-            print(f"Bild-Cache konnte nicht gespeichert werden: {e}", file=sys.stderr)
+            print(t("Bild-Cache konnte nicht gespeichert werden: {err}", err=e), file=sys.stderr)
     return {k: v for k, v in cache.items() if k in {f"{s_}/{n}" for s_, n in specs}}
 
 
@@ -142,11 +144,11 @@ def fetch_set_cards(code, refresh=False):
             cards += data.get("data", [])
             url = data.get("next_page") if data.get("has_more") else None
     except (urllib.error.URLError, OSError, ValueError) as e:
-        print(f"Set {code.upper()} konnte nicht geladen werden: {e}", file=sys.stderr)
+        print(t("Set {code} konnte nicht geladen werden: {err}", code=code.upper(), err=e), file=sys.stderr)
         return cache.get(code, [])
     cache[code] = cards
     try:
         SET_CACHE_FILE.write_text(json.dumps(cache), encoding="utf-8")
     except OSError as e:
-        print(f"Set-Cache konnte nicht gespeichert werden: {e}", file=sys.stderr)
+        print(t("Set-Cache konnte nicht gespeichert werden: {err}", err=e), file=sys.stderr)
     return cards

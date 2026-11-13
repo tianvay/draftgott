@@ -17,6 +17,7 @@ import itertools
 import random
 from collections import Counter
 
+from components import i18n
 from components.mana import land_key
 from components.mulligan import deal_opening
 from components.jace import (JaceState, cast_filter_matches, enter_filter_matches, once_effects,
@@ -387,7 +388,7 @@ def end_step_discards(players, e):
                 gone.append(card)
         p.seek_discard = []
         if gone:
-            e["events"].append(f"{p.name}: wirft ab (Seek): {', '.join(c.name for c in gone)}")
+            e["events"].append(i18n.t("{p}: wirft ab (Seek): {x2}", p=i18n.t(p.name), x2=', '.join(c.name for c in gone)))
             discarded(p, e, gone)
 
 
@@ -941,7 +942,7 @@ def academy_mana(p, pool, e=None):
             rest.remove(u)
         pool = rest + [(color,)] * x
         if e is not None:
-            e["events"].append(f"{p.name}: {land.name} – {x} Mana {color}")
+            e["events"].append(i18n.t("{p}: {land_name} – {x} Mana {color}", p=i18n.t(p.name), land_name=land.name, x=x, color=color))
     return pool
 
 
@@ -1149,19 +1150,19 @@ def pay_ward(caster, c, e):
             return False
         caster.hand.remove(gone)
         caster.graveyard.append(gone)
-        e["events"].append(f"{caster.name}: wirft {gone.name} ab (Ward von {c.card.name})")
+        e["events"].append(i18n.t("{caster}: wirft {gone_name} ab (Ward von {c_card_name})", caster=i18n.t(caster.name), gone_name=gone.name, c_card_name=c.card.name))
         discarded(caster, e)
         return True
     if w[0] == "sac":
         gone = sacrifice_permanents(caster, w[1], e)
-        e["events"].append(f"{caster.name}: opfert {', '.join(gone)} (Ward von {c.card.name})")
+        e["events"].append(i18n.t("{caster}: opfert {x2} (Ward von {c_card_name})", caster=i18n.t(caster.name), x2=', '.join(gone), c_card_name=c.card.name))
         return True
     n = w[1]
     use = min(n, caster.ward_budget)
     if n - use and not _pay_open(caster, ((n - use, ()),), treasure=False):
         return False
     caster.ward_budget -= use
-    e["events"].append(f"{caster.name}: zahlt Ward {{{n}}} für {c.card.name}")
+    e["events"].append(i18n.t("{caster}: zahlt Ward {{n}} für {c_card_name}", caster=i18n.t(caster.name), n=n, c_card_name=c.card.name))
     return True
 
 
@@ -1214,7 +1215,7 @@ def protect_response(p, target, caster, e, step):
             new = Creature(card, step)
             p.creatures.append(new)
             p.grant_target = target
-            e["events"].append(f"{p.name}: {card.name} mit Flash als Antwort")
+            e["events"].append(i18n.t("{p}: {card_name} mit Flash als Antwort", p=i18n.t(p.name), card_name=card.name))
             on_cast(p, card, step, e)
             creature_enters(p, new, step, e, caster)
             return True
@@ -1231,8 +1232,7 @@ def protect_response(p, target, caster, e, step):
             p.graveyard.append(card)
             target.extra |= set(card.protect_spell)
             target.bonus += card.protect_counter
-            e["events"].append(f"{p.name}: {card.name} als Antwort – {target.card.name} bekommt "
-                               f"{', '.join(card.protect_spell)}")
+            e["events"].append(i18n.t("{p}: {card_name} als Antwort – {target_card_name} bekommt {x4}", p=i18n.t(p.name), card_name=card.name, target_card_name=target.card.name, x4=', '.join(card.protect_spell)))
             return True
     if target.card.mv < 3:
         return False
@@ -1246,7 +1246,7 @@ def protect_response(p, target, caster, e, step):
         p.graveyard.append(gone)
         discarded(p, e)
         target.extra.add("hexproof")
-        e["events"].append(f"{p.name}: {lili.card.name} wirft {gone.name} ab – {target.card.name} bekommt Hexproof")
+        e["events"].append(i18n.t("{p}: {lili_card_name} wirft {gone_name} ab – {target_card_name} bekommt Hexproof", p=i18n.t(p.name), lili_card_name=lili.card.name, gone_name=gone.name, target_card_name=target.card.name))
         return True
     return False
 
@@ -1340,7 +1340,7 @@ def _jace_add(p, n, e=None):
         if c.card.loyalty_counter and not c.dead:
             c.bonus += c.card.loyalty_counter * delta
     if e is not None:
-        e["events"].append(f"{p.name}: Jace +{n} (Loyalty {p.jace.loyalty})")
+        e["events"].append(i18n.t("{p}: Jace +{n} (Loyalty {p_jace_loyalty})", p=i18n.t(p.name), n=n, p_jace_loyalty=p.jace.loyalty))
 
 
 def _mill(p, n, e=None, source=""):
@@ -1350,7 +1350,7 @@ def _mill(p, n, e=None, source=""):
     if milled:
         library_to_graveyard(p)
     if e is not None and milled:
-        e["events"].append(f"{p.name}: {source} – Mill {len(milled)}")
+        e["events"].append(i18n.t("{p}: {source} – Mill {x3}", p=i18n.t(p.name), source=source, x3=len(milled)))
     return milled
 
 
@@ -1374,13 +1374,13 @@ def remove_counters(p, opp, n, src, e):
         if small:
             w = max(small, key=lambda w: (w.card.mv, w.loyalty))
             w.loyalty = 0
-            e["events"].append(f"{p.name}: {src} – {w.card.name} verliert seine Loyalty")
+            e["events"].append(i18n.t("{p}: {src} – {w_card_name} verliert seine Loyalty", p=i18n.t(p.name), src=src, w_card_name=w.card.name))
             bury((p, opp), e)
             return
         if jace_present(opp) and 0 < opp.jace.loyalty <= n:
             before = opp.jace.loyalty
             opp.jace.loyalty = 0
-            e["events"].append(f"{p.name}: {src} – Jace von {opp.name} verliert seine Loyalty")
+            e["events"].append(i18n.t("{p}: {src} – Jace von {opp} verliert seine Loyalty", p=i18n.t(p.name), src=src, opp=i18n.t(opp.name)))
             _jace_zero(opp, before, e)
             return
         marked = [c for c in opp.creatures if not c.dead and c.bonus > 0 and not hexproof(c) and ward_ok(p, c)]
@@ -1389,7 +1389,7 @@ def remove_counters(p, opp, n, src, e):
             pay_ward(p, c, e)
             k = min(n, c.bonus)
             c.bonus -= k
-            e["events"].append(f"{p.name}: {src} – {k} Marken von {c.card.name}")
+            e["events"].append(i18n.t("{p}: {src} – {k} Marken von {c_card_name}", p=i18n.t(p.name), src=src, k=k, c_card_name=c.card.name))
             return
         big = [(w.loyalty, w) for w in opp.walkers if w.loyalty > 0]
         if jace_present(opp) and opp.jace.loyalty > 0:
@@ -1398,16 +1398,16 @@ def remove_counters(p, opp, n, src, e):
             _l, w = max(big, key=lambda t: (t[0], t[1] != "jace"))
             if w == "jace":
                 opp.jace.loyalty -= n
-                e["events"].append(f"{p.name}: {src} – Jace von {opp.name} -{n} Loyalty")
+                e["events"].append(i18n.t("{p}: {src} – Jace von {opp} -{n} Loyalty", p=i18n.t(p.name), src=src, opp=i18n.t(opp.name), n=n))
             else:
                 w.loyalty -= n
-                e["events"].append(f"{p.name}: {src} – {w.card.name} -{n} Loyalty")
+                e["events"].append(i18n.t("{p}: {src} – {w_card_name} -{n} Loyalty", p=i18n.t(p.name), src=src, w_card_name=w.card.name, n=n))
             return
     stunned = [c for c in p.creatures if not c.dead and c.stun > 0 and c.card.name != src]
     if stunned:
         c = max(stunned, key=danger)
         c.stun = max(0, c.stun - n)
-        e["events"].append(f"{p.name}: {src} – Stun-Marken von {c.card.name} entfernt")
+        e["events"].append(i18n.t("{p}: {src} – Stun-Marken von {c_card_name} entfernt", p=i18n.t(p.name), src=src, c_card_name=c.card.name))
 
 
 def exhaust_abilities(p, opp, step, e):
@@ -1423,7 +1423,7 @@ def exhaust_abilities(p, opp, step, e):
         c.once["exhaust"] = step
         pick = _best_from_gy(p, cands)
         p.graveyard.remove(pick)
-        e["events"].append(f"{p.name}: {c.card.name} – Exhaust: {pick.name}")
+        e["events"].append(i18n.t("{p}: {c_card_name} – Exhaust: {pick_name}", p=i18n.t(p.name), c_card_name=c.card.name, pick_name=pick.name))
         put_back(p, pick, "battlefield", step, e, opp)
         c.bonus += 1
 
@@ -1439,7 +1439,7 @@ def eye_upkeep(p, opp, e):
             p.perms.remove(card)
             if not card.is_token:
                 p.graveyard.append(card)
-            e["events"].append(f"{p.name}: opfert {card.name}")
+            e["events"].append(i18n.t("{p}: opfert {card_name}", p=i18n.t(p.name), card_name=card.name))
             deal_noncombat(p, opp, dmg, e)
             gain_life(p, life)
 
@@ -1448,7 +1448,7 @@ def life_token_instants(p, opp, step, e):
     """Germinate Recruits im eigenen Zug nach dem Kampf, wenn wir mindestens 2 Leben gewonnen haben."""
     for card in [c for c in p.hand if c.life_tokens is not None and c.is_instant]:
         if p.gained >= 2 and card in p.hand and _cast_from_open(p, card):
-            e["events"].append(f"{p.name}: {card.name} in Main 2 (X = {p.gained})")
+            e["events"].append(i18n.t("{p}: {card_name} in Main 2 (X = {p_gained})", p=i18n.t(p.name), card_name=card.name, p_gained=p.gained))
             p.cast_count += 1
             _resolve(p, opp, card, step, e)
 
@@ -1462,7 +1462,7 @@ def assimilate(p, card, owner, step, e, source=""):
     new.gy, new.ctl = p.graveyard, p
     new.bonus = 1
     p.creatures.append(new)
-    e["events"].append(f"{p.name}: {source} assimiliert {card.name}")
+    e["events"].append(i18n.t("{p}: {source} assimiliert {card_name}", p=i18n.t(p.name), source=source, card_name=card.name))
     creature_enters(p, new, step, e, p.opponent, cast=False)
 
 
@@ -1500,7 +1500,7 @@ def cube_trigger(p, opp, step, e, source="Borg Cube"):
     check_auras(opp, e)
     if not t.card.is_token:
         p.cube_exiled.append((t.base_card or t.card, t.owner or opp))
-    e["events"].append(f"{p.name}: {source} – {t.card.name} ins Exil")
+    e["events"].append(i18n.t("{p}: {source} – {t_card_name} ins Exil", p=i18n.t(p.name), source=source, t_card_name=t.card.name))
 
 
 def cube_attack(p, opp, attackers, step, e):
@@ -1522,7 +1522,7 @@ def artifact_hit_triggers(p, hitters, step, e):
             if card.artifact_hit_draw and p.life - 1 > 5:
                 p.life -= 1
                 _draw(p)
-                e["events"].append(f"{p.name}: {card.name} – {a.card.name} trifft, 1 Leben, zieht")
+                e["events"].append(i18n.t("{p}: {card_name} – {a_card_name} trifft, 1 Leben, zieht", p=i18n.t(p.name), card_name=card.name, a_card_name=a.card.name))
             if card.artifact_hit_token:
                 alts, token = card.artifact_hit_token
                 need = min(g + sum(n for _c, n in cols) for g, cols in alts)
@@ -1544,7 +1544,7 @@ def artifact_menace(p, opp, step, e):
         if free_units(p) >= need and _pay_open(p, alts, treasure=False):
             for c in arts:
                 c.extra |= set(kws)
-            e["events"].append(f"{p.name}: {src.card.name} – Artefaktkreaturen bekommen {', '.join(kws)}")
+            e["events"].append(i18n.t("{p}: {src_card_name} – Artefaktkreaturen bekommen {x3}", p=i18n.t(p.name), src_card_name=src.card.name, x3=', '.join(kws)))
 
 
 def tap3_draws(p, e):
@@ -1560,7 +1560,7 @@ def tap3_draws(p, e):
                 c.tapped = True
             p.life -= 1
             _draw(p)
-            e["events"].append(f"{p.name}: {src.card.name} – tappt {n} Artefaktkreaturen, zieht")
+            e["events"].append(i18n.t("{p}: {src_card_name} – tappt {n} Artefaktkreaturen, zieht", p=i18n.t(p.name), src_card_name=src.card.name, n=n))
 
 
 def attack_planets(p, opp, step, e):
@@ -1582,7 +1582,7 @@ def attack_choice_triggers(p, opp, attackers, step, e):
         if dt is not None and blockers and cands:
             pick = max(cands, key=danger)
             pick.extra.add("deathtouch")
-            e["events"].append(f"{p.name}: {a.card.name} – {pick.card.name} bekommt Deathtouch")
+            e["events"].append(i18n.t("{p}: {a_card_name} – {pick_card_name} bekommt Deathtouch", p=i18n.t(p.name), a_card_name=a.card.name, pick_card_name=pick.card.name))
             continue
         rest = [s for s in subs if s is not dt]
         if rest and a.card.modes_all_empty_hand and not p.hand:  # Captain Kirk: ohne Handkarten alle Modi
@@ -1632,7 +1632,7 @@ def land_sac_abilities(p, opp, step, e):
             continue
         p.lands.remove(land)
         p.graveyard.append(land)
-        e["events"].append(f"{p.name}: opfert {land.name}")
+        e["events"].append(i18n.t("{p}: opfert {land_name}", p=i18n.t(p.name), land_name=land.name))
         if sub.removal:
             cast_removal(sub, p, opp, e, step)
             bury((p, opp), e)
@@ -1662,7 +1662,7 @@ def room_of_refuge(p, step, e):
         p.graveyard.append(land)
         pick = max(alive, key=danger)
         pick.bonus += n
-        e["events"].append(f"{p.name}: opfert {land.name} – {n} Marken auf {pick.card.name}")
+        e["events"].append(i18n.t("{p}: opfert {land_name} – {n} Marken auf {pick_card_name}", p=i18n.t(p.name), land_name=land.name, n=n, pick_card_name=pick.card.name))
 
 
 def legend_discard_draw(p, e):
@@ -1678,7 +1678,7 @@ def legend_discard_draw(p, e):
             continue
         p.hand.remove(pick)
         p.graveyard.append(pick)
-        e["events"].append(f"{p.name}: {card.name} – wirft {pick.name} ab, zieht")
+        e["events"].append(i18n.t("{p}: {card_name} – wirft {pick_name} ab, zieht", p=i18n.t(p.name), card_name=card.name, pick_name=pick.name))
         discarded(p, e, [pick])
         _draw(p)
 
@@ -1700,7 +1700,7 @@ def blink(p, c, step, e, source):
     check_auras(p, e)
     new = Creature(c.card, step)
     p.creatures.append(new)
-    e["events"].append(f"{p.name}: {source} blinkt {c.card.name}")
+    e["events"].append(i18n.t("{p}: {source} blinkt {c_card_name}", p=i18n.t(p.name), source=source, c_card_name=c.card.name))
     creature_enters(p, new, step, e, p.opponent, cast=False)
 
 
@@ -1721,7 +1721,7 @@ def damage_ramp(p, n, e):
         pick = max(lands, key=lambda c: (len(set(c.land_colors) - have), count[c.name], c.name))
         p.library.remove(pick)
         p.lands.append(pick)
-        e["events"].append(f"{p.name}: sucht {pick.name} (getappt)")
+        e["events"].append(i18n.t("{p}: sucht {pick_name} (getappt)", p=i18n.t(p.name), pick_name=pick.name))
         if p.opponent is not None:
             on_land(p, p.opponent, pick, p.now, e, with_mana=False)
     random.shuffle(p.library)
@@ -1750,7 +1750,7 @@ def hand_bolt_tricks(p, pairs, opp, e, step, attacking):
             discarded(p, e, [card])
             x.damage += n
             x.dead = True
-            e["events"].append(f"{p.name}: {card.name} – {n} Schaden an {x.card.name}")
+            e["events"].append(i18n.t("{p}: {card_name} – {n} Schaden an {x_card_name}", p=i18n.t(p.name), card_name=card.name, n=n, x_card_name=x.card.name))
             break
 
 
@@ -1775,7 +1775,7 @@ def anomaly_for_lethal(me, opp, step, e):
             if value >= opp.life:
                 for c in picked:
                     c.dead = True
-                    e["events"].append(f"{me.name}: opfert {c.card.name} für {loot.card.name}")
+                    e["events"].append(i18n.t("{me}: opfert {c_card_name} für {loot_card_name}", me=i18n.t(me.name), c_card_name=c.card.name, loot_card_name=loot.card.name))
                 loot.pump -= 2 * k
                 bury((me,), e)
                 return
@@ -1794,7 +1794,7 @@ def puppetbeast_sac(p, step, e):
             beast.bonus += 1
             kw = "haste" if not can_attack(beast, step) and not beast.has("haste") else "trample"
             beast.extra.add(kw)
-            e["events"].append(f"{p.name}: {beast.card.name} opfert {token.name}: Marke, {kw}")
+            e["events"].append(i18n.t("{p}: {beast_card_name} opfert {token_name}: Marke, {kw}", p=i18n.t(p.name), beast_card_name=beast.card.name, token_name=token.name, kw=kw))
 
 
 def hall_of_echoes(p, step, e):
@@ -1815,7 +1815,7 @@ def hall_of_echoes(p, step, e):
         copy.gy, copy.ctl, copy.land_source = p.graveyard, p, hall
         p.creatures.append(copy)
         p.no_legend_step = p.now
-        e["events"].append(f"{p.name}: {hall.name} wird eine Kopie von {model.card.name}")
+        e["events"].append(i18n.t("{p}: {hall_name} wird eine Kopie von {model_card_name}", p=i18n.t(p.name), hall_name=hall.name, model_card_name=model.card.name))
 
 
 def rescue_girl(p, opp, step, e):
@@ -1832,7 +1832,7 @@ def rescue_girl(p, opp, step, e):
         _leave(p, t.card)
         check_auras(p, e)
         p.hand.append(t.card)
-        e["events"].append(f"{p.name}: {girl.card.name} – {t.card.name} auf die Hand, neu gewirkt")
+        e["events"].append(i18n.t("{p}: {girl_card_name} – {t_card_name} auf die Hand, neu gewirkt", p=i18n.t(p.name), girl_card_name=girl.card.name, t_card_name=t.card.name))
         if _cast_from_open(p, t.card):
             p.cast_count += 1
             _resolve(p, opp, t.card, step, e)
@@ -1857,7 +1857,7 @@ def identity_echo(p, opp, step, e):
             if top.is_creature or top.is_planeswalker:
                 random.shuffle(revealed)
                 p.library.extend(revealed)
-                e["events"].append(f"{p.name}: {echo.name} – {t.card.name} ins Exil, {top.name} aufs Feld")
+                e["events"].append(i18n.t("{p}: {echo_name} – {t_card_name} ins Exil, {top_name} aufs Feld", p=i18n.t(p.name), echo_name=echo.name, t_card_name=t.card.name, top_name=top.name))
                 put_back(p, top, "battlefield", step, e, opp)
                 break
             revealed.append(top)
@@ -1879,7 +1879,7 @@ def prepare_abilities(p, step, e):
             p.open.append(arena.land_colors)
             continue
         t.prepared = True
-        e["events"].append(f"{p.name}: {arena.name} – {t.card.name} wird prepared")
+        e["events"].append(i18n.t("{p}: {arena_name} – {t_card_name} wird prepared", p=i18n.t(p.name), arena_name=arena.name, t_card_name=t.card.name))
     for codie in [c for c in p.creatures if c.card.codie_prepare and not c.dead and not c.tapped
                   and (c.entered < step or c.has("haste"))]:
         cands = [c for c in p.creatures if not c.dead and c.card.prepared and not c.prepared]
@@ -1888,7 +1888,7 @@ def prepare_abilities(p, step, e):
         codie.tapped = True
         for c in cands:
             c.prepared = True
-        e["events"].append(f"{p.name}: {codie.card.name} – alle Kreaturen prepared")
+        e["events"].append(i18n.t("{p}: {codie_card_name} – alle Kreaturen prepared", p=i18n.t(p.name), codie_card_name=codie.card.name))
 
 
 def emrakul_exile(p, step, e):
@@ -1904,7 +1904,7 @@ def emrakul_exile(p, step, e):
         p.hand.remove(card)
         p.impulse.append((card, 10 ** 9))
         p.cc_land = _redundant_land(p)
-        e["events"].append(f"{p.name}: exiliert {card.name} – {p.cc_land.name} liefert {{C}}{{C}}")
+        e["events"].append(i18n.t("{p}: exiliert {card_name} – {p_cc_land_name} liefert {C}{C}", p=i18n.t(p.name), card_name=card.name, p_cc_land_name=p.cc_land.name))
         return
 
 
@@ -1929,7 +1929,7 @@ def aerid_pump(me, opp, step, e):
             artifact_tokens(me, HEARTWOOD, 1, step, e)
             n = _artifacts(me)
             c.pump += n
-            e["events"].append(f"{me.name}: {c.card.name} – Heartwood-Token, +{n}/+0")
+            e["events"].append(i18n.t("{me}: {c_card_name} – Heartwood-Token, +{n}/+0", me=i18n.t(me.name), c_card_name=c.card.name, n=n))
 
 
 def end_step_abilities(p, e, step):
@@ -1938,13 +1938,13 @@ def end_step_abilities(p, e, step):
     for c in [c for c in p.creatures if c.card.aerid_pump and not c.dead]:
         if _pay_open(p, c.card.aerid_pump, treasure=False):
             artifact_tokens(p, HEARTWOOD, 1, step, e)
-            e["events"].append(f"{p.name}: {c.card.name} – Heartwood-Token")
+            e["events"].append(i18n.t("{p}: {c_card_name} – Heartwood-Token", p=i18n.t(p.name), c_card_name=c.card.name))
     for y in [c for c in p.creatures if c.card.yoshi_counter and not c.dead]:
         legends = [c for c in p.creatures if c.card.legendary and not c.dead]
         while legends and _pay_open(p, y.card.yoshi_counter, treasure=False):
             t = max(legends, key=danger)
             t.bonus += 1
-            e["events"].append(f"{p.name}: {y.card.name} – Marke auf {t.card.name}")
+            e["events"].append(i18n.t("{p}: {y_card_name} – Marke auf {t_card_name}", p=i18n.t(p.name), y_card_name=y.card.name, t_card_name=t.card.name))
 
 
 def _through(pairs):
@@ -1976,7 +1976,7 @@ def yoshimaru_combat(p, pairs, opp, e, step, attacking):
             if best is None or not _pay_open(p, y.card.yoshi_counter, treasure=False):
                 break
             best[1].bonus += 1
-            e["events"].append(f"{p.name}: {y.card.name} – Marke auf {best[1].card.name}")
+            e["events"].append(i18n.t("{p}: {y_card_name} – Marke auf {x3}", p=i18n.t(p.name), y_card_name=y.card.name, x3=best[1].card.name))
 
 
 def hapatra_untap(p, step, e):
@@ -1988,7 +1988,7 @@ def hapatra_untap(p, step, e):
                 break
             t = max(cands, key=danger)
             t.tapped = False
-            e["events"].append(f"{p.name}: {h.card.name} enttappt {t.card.name}")
+            e["events"].append(i18n.t("{p}: {h_card_name} enttappt {t_card_name}", p=i18n.t(p.name), h_card_name=h.card.name, t_card_name=t.card.name))
 
 
 def fblthp_lost(p, opp, e):
@@ -1996,10 +1996,10 @@ def fblthp_lost(p, opp, e):
     leer, gewinnen wir; Fblthp wird in die Bibliothek gemischt."""
     for f in [c for c in p.creatures if c.card.fblthp_lost]:
         _draw(p, f.card.fblthp_lost)
-        e["events"].append(f"{p.name}: {f.card.name} zieht {f.card.fblthp_lost}")
+        e["events"].append(i18n.t("{p}: {f_card_name} zieht {f_card_fblthp_lost}", p=i18n.t(p.name), f_card_name=f.card.name, f_card_fblthp_lost=f.card.fblthp_lost))
         if not p.library:
             opp.lost = True
-            e["events"].append(f"{p.name}: gewinnt durch {f.card.name} (Bibliothek leer)")
+            e["events"].append(i18n.t("{p}: gewinnt durch {f_card_name} (Bibliothek leer)", p=i18n.t(p.name), f_card_name=f.card.name))
         if not f.dead:
             p.creatures.remove(f)
             p.library.insert(random.randrange(len(p.library) + 1), f.card)
@@ -2046,7 +2046,7 @@ def uldaros_copies(p, opp, card, step, e):
         if c not in p.graveyard:
             continue
         p.graveyard.remove(c)
-        e["events"].append(f"{p.name}: {card.name} wirkt eine Kopie von {c.name}")
+        e["events"].append(i18n.t("{p}: {card_name} wirkt eine Kopie von {c_name}", p=i18n.t(p.name), card_name=card.name, c_name=c.name))
         p.cast_count += 1
         if c.is_instant_sorcery:
             _resolve(p, opp, c, step, e, to_exile=True)
@@ -2096,7 +2096,7 @@ def hydra_spread(p, e):
         h.bonus -= 1
         for c in others:
             c.bonus += 1
-        e["events"].append(f"{p.name}: {h.card.name} verteilt Marken")
+        e["events"].append(i18n.t("{p}: {h_card_name} verteilt Marken", p=i18n.t(p.name), h_card_name=h.card.name))
     bury((p,) if p.opponent is None else (p, p.opponent), e)
 
 
@@ -2114,7 +2114,7 @@ def peace_combat(me, opp, step, e):
     for owner, k in entries:
         _draw(me)
         k["count"] += 1 + counter_boost(owner)
-    e["events"].append(f"{me.name}: Peace in Our Time – zieht, greift nicht an")
+    e["events"].append(i18n.t("{me}: Peace in Our Time – zieht, greift nicht an", me=i18n.t(me.name)))
     return True
 
 
@@ -2147,7 +2147,7 @@ def kobayashi_upkeep(p, opp, step, e):
             p.life = min(p.life, 0)
             p.lost = True  # auch mit Georgiou
         used.append(mode)
-        e["events"].append(f"{p.name}: {k['card'].name} – {mode}")
+        e["events"].append(i18n.t("{p}: {x2} – {mode}", p=i18n.t(p.name), x2=k['card'].name, mode=mode))
 
 
 def kobayashi_ok(me, opp, card):
@@ -2170,7 +2170,7 @@ def upkeep_triggers(me, opp, step, e):
     if opp is not None and any(k["count"] >= 12 for k in me.peace):  # Peace in Our Time: gewonnen
         opp.life = min(opp.life, 0)
         opp.lost = True  # auch mit Georgiou
-        e["events"].append(f"{me.name}: Peace in Our Time – gewonnen")
+        e["events"].append(i18n.t("{me}: Peace in Our Time – gewonnen", me=i18n.t(me.name)))
     for c in list(me.creatures):  # Vash: zu Beginn des eigenen Upkeeps Surveil
         if c.card.upkeep_surveil and not c.dead:
             surveil_cards(me, [c.card.upkeep_surveil], e, c.card.name)
@@ -2183,7 +2183,7 @@ def upkeep_triggers(me, opp, step, e):
                 holder.creatures.remove(cr)
                 _leave(holder, cr.card)
                 exile_own(cr.owner or holder, cr.base_card or cr.card)
-                e["events"].append(f"{p.name}: {lock['aura'].name} exiliert {cr.card.name}")
+                e["events"].append(i18n.t("{p}: {x2} exiliert {cr_card_name}", p=i18n.t(p.name), x2=lock['aura'].name, cr_card_name=cr.card.name))
             destroy_permanent(p, lock["aura"], e)
     for p in (me, opp):
         if p is me:  # Troubling Tribbles: im eigenen Upkeep je eine Token-Kopie, hoechstens 20 (Nutzer 2026-11-05)
@@ -2203,7 +2203,7 @@ def upkeep_triggers(me, opp, step, e):
             for card in [g for g in p.graveyard if g.noncombat_recur]:
                 p.graveyard.remove(card)
                 p.hand.append(card)
-                e["events"].append(f"{p.name}: {card.name} aus dem Friedhof auf die Hand")
+                e["events"].append(i18n.t("{p}: {card_name} aus dem Friedhof auf die Hand", p=i18n.t(p.name), card_name=card.name))
 
 
 def end_step_prepare(players, e):
@@ -2216,7 +2216,7 @@ def end_step_prepare(players, e):
         for c in p.creatures:
             if c.card.prepared and c.card.prepared[0] == "deaths3" and not c.dead and not c.prepared:
                 c.prepared = True
-                e["events"].append(f"{p.name}: {c.card.name} wird prepared")
+                e["events"].append(i18n.t("{p}: {c_card_name} wird prepared", p=i18n.t(p.name), c_card_name=c.card.name))
 
 
 def jace_died(p, e):
@@ -2227,7 +2227,7 @@ def jace_died(p, e):
 
 def walker_died(p, name, e):
     """Ein Planeswalker von p stirbt (704.5i, 700.4): Ausloeser "another creature or planeswalker you control dies"."""
-    e["events"].append(f"{p.name}: {name} stirbt")
+    e["events"].append(i18n.t("{p}: {name} stirbt", p=i18n.t(p.name), name=name))
     for c in p.creatures:
         if c.dead:
             continue
@@ -2381,7 +2381,7 @@ def activate_walker(p, opp, step, e, opt):
     elif cost > 0:
         _jace_add(p, cost, e)
     p.jace.used = True
-    e["events"].append(f"{p.name}: Jace {'+' if cost > 0 else ''}{cost} ({src}) (Loyalty {p.jace.loyalty})")
+    e["events"].append(i18n.t("{p}: Jace {x2}{cost} ({src}) (Loyalty {p_jace_loyalty})", p=i18n.t(p.name), x2='+' if cost > 0 else '', cost=cost, src=src, p_jace_loyalty=p.jace.loyalty))
     activation_tokens(p, step, e)
     mana = _grant_atoms(p, opp, atoms, step, e, target, jace=True)
     loyalty_triggers(p, cost, e)
@@ -2415,7 +2415,7 @@ def _grant_atoms(p, opp, atoms, step, e, target, jace=False):
         elif kind == "sac_token":
             if target is not None and target in p.creatures:
                 target.dead = True
-                e["events"].append(f"{p.name}: opfert {target.card.name}")
+                e["events"].append(i18n.t("{p}: opfert {target_card_name}", p=i18n.t(p.name), target_card_name=target.card.name))
                 bury((p,), e)
             make_tokens(p, [(1, a[1])], step, e, opp, "Jace")
         elif kind == "bolt":
@@ -2437,7 +2437,7 @@ def _grant_atoms(p, opp, atoms, step, e, target, jace=False):
             mana.append(a[1])
         elif kind == "copy_next":
             p.copy_next = step
-            e["events"].append(f"{p.name}: der nächste Instant/Sorcery wird kopiert")
+            e["events"].append(i18n.t("{p}: der nächste Instant/Sorcery wird kopiert", p=i18n.t(p.name)))
     return mana
 
 
@@ -2669,7 +2669,7 @@ def pw_loyalty(p, w, n, e=None):
         if c.card.loyalty_counter and not c.dead:
             c.bonus += c.card.loyalty_counter
     if e is not None:
-        e["events"].append(f"{p.name}: {w.card.name} +{n} (Loyalty {w.loyalty})")
+        e["events"].append(i18n.t("{p}: {w_card_name} +{n} (Loyalty {w_loyalty})", p=i18n.t(p.name), w_card_name=w.card.name, n=n, w_loyalty=w.loyalty))
 
 
 def activate_pw(p, opp, w, ability, step, e, target=None):
@@ -2683,7 +2683,7 @@ def activate_pw(p, opp, w, ability, step, e, target=None):
     else:
         w.loyalty += real
     w.used = True
-    e["events"].append(f"{p.name}: {w.card.name} {'+' if real > 0 else ''}{real} (Loyalty {w.loyalty})")
+    e["events"].append(i18n.t("{p}: {w_card_name} {x3}{real} (Loyalty {w_loyalty})", p=i18n.t(p.name), w_card_name=w.card.name, x3='+' if real > 0 else '', real=real, w_loyalty=w.loyalty))
     activation_tokens(p, step, e)
     alive_opp = (lambda: [c for c in opp.creatures if not c.dead]) if opp is not None else (lambda: [])
     if atoms in [g[1] for card in grant_sources(p) for g in card.walker_grants]:
@@ -2704,7 +2704,7 @@ def activate_pw(p, opp, w, ability, step, e, target=None):
                     (target.owner or opp).hand.append(target.base_card or target.card)
                 _leave(opp, target.card)
                 check_auras(opp, e)
-                e["events"].append(f"{p.name}: {w.card.name} – {target.label()} zurück auf die Hand")
+                e["events"].append(i18n.t("{p}: {w_card_name} – {x3} zurück auf die Hand", p=i18n.t(p.name), w_card_name=w.card.name, x3=target.label()))
         elif kind == "draw":
             _draw(p, a[1])
         elif kind == "counters_hand":
@@ -2717,7 +2717,7 @@ def activate_pw(p, opp, w, ability, step, e, target=None):
             if target is not None and target in alive_opp():
                 pay_ward(p, target, e)
                 target.lasting.append((a[1], a[2], p, step))
-                e["events"].append(f"{p.name}: {w.card.name} – {target.card.name} -{a[1]}/-{a[2]}")
+                e["events"].append(i18n.t("{p}: {w_card_name} – {target_card_name} -{x4}/-{x5}", p=i18n.t(p.name), w_card_name=w.card.name, target_card_name=target.card.name, x4=a[1], x5=a[2]))
         elif kind == "edict_both":
             mine = [c for c in p.creatures if not c.dead]
             theirs = alive_opp()
@@ -2739,7 +2739,7 @@ def activate_pw(p, opp, w, ability, step, e, target=None):
             gain_life(p, a[1])
         elif kind == "emblem":
             p.emblems.append(a[1:])
-            e["events"].append(f"{p.name}: Emblem von {w.card.name}")
+            e["events"].append(i18n.t("{p}: Emblem von {w_card_name}", p=i18n.t(p.name), w_card_name=w.card.name))
         elif kind == "team_pump":
             for c in p.creatures:
                 if not c.dead:
@@ -2759,7 +2759,7 @@ def activate_pw(p, opp, w, ability, step, e, target=None):
                 if c.dead or (c in p.creatures and c.card.is_token):
                     continue
                 c.damage += a[1]
-            e["events"].append(f"{p.name}: {w.card.name} – {a[1]} Schaden an jeder Kreatur außer eigenen Token")
+            e["events"].append(i18n.t("{p}: {w_card_name} – {x3} Schaden an jeder Kreatur außer eigenen Token", p=i18n.t(p.name), w_card_name=w.card.name, x3=a[1]))
         elif kind == "surveil":
             surveil_cards(p, [a[1]], e, w.card.name)
         elif kind == "mana":
@@ -2769,7 +2769,7 @@ def activate_pw(p, opp, w, ability, step, e, target=None):
                 pay_ward(p, target, e)
                 target.tapped = True
                 target.stun += -real
-                e["events"].append(f"{p.name}: {w.card.name} – {target.card.name} getappt, {-real} Stun-Marken")
+                e["events"].append(i18n.t("{p}: {w_card_name} – {target_card_name} getappt, {x4} Stun-Marken", p=i18n.t(p.name), w_card_name=w.card.name, target_card_name=target.card.name, x4=-real))
         elif kind == "mill_top":  # Chandra, Torch of Defiance: wirken statt Schaden
             cast_top = chandra_top(p, opp, w, step, e, sum(x[1] for x in atoms if x[0] == "face"))
         elif kind == "face":
@@ -2784,11 +2784,11 @@ def activate_pw(p, opp, w, ability, step, e, target=None):
         elif kind == "shield":
             p.shield = (a[1], step)
         elif kind == "library_exile" and opp is not None:  # alle Karten bis auf die unterste ins Exil
-            e["events"].append(f"{p.name}: {w.card.name} exiliert {len(opp.library) - 1} Karten der Bibliothek")
+            e["events"].append(i18n.t("{p}: {w_card_name} exiliert {x3} Karten der Bibliothek", p=i18n.t(p.name), w_card_name=w.card.name, x3=len(opp.library) - 1))
             opp.library = opp.library[-1:]
         elif kind == "copy_next":
             p.copy_next = step
-            e["events"].append(f"{p.name}: der nächste Instant/Sorcery wird kopiert")
+            e["events"].append(i18n.t("{p}: der nächste Instant/Sorcery wird kopiert", p=i18n.t(p.name)))
     loyalty_triggers(p, real, e)
     bury((p, opp) if opp is not None else (p,), e)
     return mana
@@ -2831,12 +2831,12 @@ def chandra_top(p, opp, w, step, e, face):
     if not p.library:
         return False
     top = p.library.pop(0)
-    e["events"].append(f"{p.name}: {w.card.name} exiliert {top.name}")
+    e["events"].append(i18n.t("{p}: {w_card_name} exiliert {top_name}", p=i18n.t(p.name), w_card_name=w.card.name, top_name=top.name))
     if opp is None or opp.life <= face or top.is_land or not legend_ok(p, top) or not reanimate_ok(p, top)             or (top.removal and top.removal[4] != "etb" and not has_target(top, p, opp)):
         return False
     if not _pay_open(p, _alts(p, top), treasure=False):
         return False
-    e["events"].append(f"{p.name}: wirkt {top.name} aus dem Exil ({w.card.name})")
+    e["events"].append(i18n.t("{p}: wirkt {top_name} aus dem Exil ({w_card_name})", p=i18n.t(p.name), top_name=top.name, w_card_name=w.card.name))
     p.cast_count += 1
     _resolve(p, opp, top, step, e)
     return True
@@ -2885,11 +2885,11 @@ def entrust_spark(p, opp, step, e):
     if pick is None:
         return
     p.jace.loyalty, p.jace.zero_alive = 0, False
-    e["events"].append(f"{p.name}: opfert den Jace-Token")
+    e["events"].append(i18n.t("{p}: opfert den Jace-Token", p=i18n.t(p.name)))
     jace_died(p, e)
     p.library.remove(pick)
     random.shuffle(p.library)
-    e["events"].append(f"{p.name}: Entrust the Spark – {pick.name} aufs Feld")
+    e["events"].append(i18n.t("{p}: Entrust the Spark – {pick_name} aufs Feld", p=i18n.t(p.name), pick_name=pick.name))
     if pick.loyalty_start > 0:
         p.walkers.append(Walker(pick, step))
     else:
@@ -2904,7 +2904,7 @@ def loyal_tutor(p, e):
     p.library.remove(pick)
     random.shuffle(p.library)
     p.library.insert(0, pick)
-    e["events"].append(f"{p.name}: Loyal Tutor – {pick.name} oben auf die Bibliothek")
+    e["events"].append(i18n.t("{p}: Loyal Tutor – {pick_name} oben auf die Bibliothek", p=i18n.t(p.name), pick_name=pick.name))
 
 
 def hit_walker(caster, victim, card, target, e):
@@ -2913,15 +2913,14 @@ def hit_walker(caster, victim, card, target, e):
     if target == "jace":
         before = victim.jace.loyalty
         victim.jace.loyalty = 0 if spec[0] == "destroy" else max(0, before - _amount(spec, caster))
-        e["events"].append(f"{caster.name}: {card.name} trifft Jace von {victim.name} (Loyalty {victim.jace.loyalty})")
+        e["events"].append(i18n.t("{caster}: {card_name} trifft Jace von {victim} (Loyalty {victim_jace_loyalty})", caster=i18n.t(caster.name), card_name=card.name, victim=i18n.t(victim.name), victim_jace_loyalty=victim.jace.loyalty))
         _jace_zero(victim, before, e)
         return
     if spec[0] == "destroy":
         target.loyalty = 0
     else:
         target.loyalty = max(0, target.loyalty - _amount(spec, caster))
-    e["events"].append(f"{caster.name}: {card.name} trifft {target.card.name} von {victim.name} "
-                       f"(Loyalty {target.loyalty})")
+    e["events"].append(i18n.t("{caster}: {card_name} trifft {target_card_name} von {victim} (Loyalty {target_loyalty})", caster=i18n.t(caster.name), card_name=card.name, target_card_name=target.card.name, victim=i18n.t(victim.name), target_loyalty=target.loyalty))
     bury((caster, victim), e)
 
 
@@ -2976,12 +2975,12 @@ def _jace_activate(p, step, e, allow_surveil):
             _jace_zero(p, loyalty, e)
         if p.jace.loyalty == loyalty - 3:
             p.drawn += 1
-            e["events"].append(f"{p.name}: Jace −3, zieht eine Karte (Loyalty {p.jace.loyalty})")
+            e["events"].append(i18n.t("{p}: Jace −3, zieht eine Karte (Loyalty {p_jace_loyalty})", p=i18n.t(p.name), p_jace_loyalty=p.jace.loyalty))
         else:
             mark_surveil(p, e)
             binned = p.jace.surveil_lands - lands
-            e["events"].append(f"{p.name}: Jace −1, Surveil 1" + (" (Land abgelegt)" if binned else "")
-                               + f" (Loyalty {p.jace.loyalty})")
+            e["events"].append(i18n.t("{p}: Jace −1, Surveil 1", p=i18n.t(p.name)) + (i18n.t(" (Land abgelegt)") if binned else "")
+                               + i18n.t(" (Loyalty {loyalty})", loyalty=p.jace.loyalty))
 
 
 def jace_turn_start(p, step, e=None):
@@ -3020,7 +3019,7 @@ def deal_noncombat(src, victim, amount, e):
                 src.library.remove(pick)
                 src.hand.append(pick)
                 src.seek_discard.append(pick)
-                e["events"].append(f"{src.name}: {c.card.name} – Seek {pick.name}")
+                e["events"].append(i18n.t("{src}: {c_card_name} – Seek {pick_name}", src=i18n.t(src.name), c_card_name=c.card.name, pick_name=pick.name))
     e["face"] = e.get("face", 0) + amount
     for c in src.creatures:
         if c.card.noncombat_counter and not c.dead:
@@ -3099,7 +3098,7 @@ def mark_surveil(p, e=None, events=1):
             for x in p.creatures:
                 if not x.dead:
                     x.pump += card.surveil_team_pump
-            e["events"].append(f"{p.name}: {card.name} – alle +{card.surveil_team_pump}/+0")
+            e["events"].append(i18n.t("{p}: {card_name} – alle +{card_surveil_team_pump}/+0", p=i18n.t(p.name), card_name=card.name, card_surveil_team_pump=card.surveil_team_pump))
         if card.surveil_tokens and c.once.get("surveil_token") != p.now:
             c.once["surveil_token"] = p.now
             make_tokens(p, card.surveil_tokens, p.now, e, p.opponent, card.name)
@@ -3109,7 +3108,7 @@ def mark_surveil(p, e=None, events=1):
                     break
                 c.bonus += 1
                 _draw(p)
-                e["events"].append(f"{p.name}: {card.name} zahlt {{{card.surveil_pay}}}: Marke und eine Karte")
+                e["events"].append(i18n.t("{p}: {card_name} zahlt {{card_surveil_pay}}: Marke und eine Karte", p=i18n.t(p.name), card_name=card.name, card_surveil_pay=card.surveil_pay))
 
 
 def emblem_cast(p, step, e):
@@ -3127,7 +3126,7 @@ def emblem_cast(p, step, e):
                 deal_noncombat(p, opp, n, e)
             else:
                 t.damage += n
-                e["events"].append(f"{p.name}: Emblem – {n} Schaden an {t.card.name}")
+                e["events"].append(i18n.t("{p}: Emblem – {n} Schaden an {t_card_name}", p=i18n.t(p.name), n=n, t_card_name=t.card.name))
                 bury((p, opp), e)
 
 
@@ -3140,10 +3139,10 @@ def on_cast(p, card, step, e):
             continue
         if c.card.uhura_number and c.once.get("uhura") == card.mv:
             _draw(foe)
-            e["events"].append(f"{foe.name}: {c.card.name} – zieht ({card.name})")
+            e["events"].append(i18n.t("{foe}: {c_card_name} – zieht ({card_name})", foe=i18n.t(foe.name), c_card_name=c.card.name, card_name=card.name))
         if c.card.kai_name and c.once.get("kai") is not None and c.once.get("kai") == card.name:
             p.life -= 3
-            e["events"].append(f"{foe.name}: {c.card.name} – {p.name} verliert 3 Leben")
+            e["events"].append(i18n.t("{foe}: {c_card_name} – {p} verliert 3 Leben", foe=i18n.t(foe.name), c_card_name=c.card.name, p=i18n.t(p.name)))
     if not card.is_creature:
         for side in (p, foe):  # Lt. Cmdr. Data: jeder Nichtkreatur-Zauber
             for c in (side.creatures if side is not None else ()):
@@ -3157,7 +3156,7 @@ def on_cast(p, card, step, e):
         tok = card._replace(is_token=True)
         p.perms.append(tok)
         permanent_enters(p, foe, tok, step, e)
-        e["events"].append(f"{p.name}: {card.name} – Kopie")
+        e["events"].append(i18n.t("{p}: {card_name} – Kopie", p=i18n.t(p.name), card_name=card.name))
     if card.choices and card.is_instant_sorcery:  # 700.2a: Modi beim Wirken gewaehlt (Permanents: card_effects)
         face_dilemma(p, step, e)
     if not card.is_creature:
@@ -3165,7 +3164,7 @@ def on_cast(p, card, step, e):
     if card.is_enchantment:  # Dathon: ziehen, bei einer Saga 2 Schaden an jedem Gegner
         for c in [c for c in p.creatures if c.card.enchant_cast_draw and not c.dead]:
             _draw(p)
-            e["events"].append(f"{p.name}: {c.card.name} zieht")
+            e["events"].append(i18n.t("{p}: {c_card_name} zieht", p=i18n.t(p.name), c_card_name=c.card.name))
             if card.saga and p.opponent is not None:
                 deal_noncombat(p, p.opponent, 2, e)
     if not card.is_creature:  # Tal Shiar Analyst
@@ -3196,7 +3195,7 @@ def on_cast(p, card, step, e):
             if c.card.own_target_draw and not c.dead and c.once.get("own_target") != p.now:
                 c.once["own_target"] = p.now
                 _draw(p)
-                e["events"].append(f"{p.name}: {c.card.name} zieht")
+                e["events"].append(i18n.t("{p}: {c_card_name} zieht", p=i18n.t(p.name), c_card_name=c.card.name))
     foe = p.opponent
     if foe is not None:
         for c in foe.creatures:  # Solarium Sentry
@@ -3219,14 +3218,13 @@ def on_cast(p, card, step, e):
             if c.card.cast_token is not None and not c.dead:
                 token = Creature(c.card.cast_token, step)
                 p.creatures.append(token)
-                e["events"].append(f"{p.name}: {c.card.name} – Token {token.card.name}")
+                e["events"].append(i18n.t("{p}: {c_card_name} – Token {token_card_name}", p=i18n.t(p.name), c_card_name=c.card.name, token_card_name=token.card.name))
                 creature_enters(p, token, step, e, cast=False)
     if card.targets_opp:
         for c in p.creatures:
             if c.card.target_cast_counter and not c.dead:
                 c.bonus += c.card.target_cast_counter
-                e["events"].append(f"{p.name}: {c.card.name} +{c.card.target_cast_counter}/+"
-                                   f"{c.card.target_cast_counter}")
+                e["events"].append(i18n.t("{p}: {c_card_name} +{c_card_target_cast_counter}/+{c_card_target_cast_counter}", p=i18n.t(p.name), c_card_name=c.card.name, c_card_target_cast_counter=c.card.target_cast_counter))
     cast_triggers(p, card, step, e)
 
 
@@ -3313,11 +3311,11 @@ def face_dilemma(p, step, e):
         if free_units(p) >= 1 and _pay_open(p, card.lorca_return, treasure=False):
             p.graveyard.remove(card)
             p.hand.append(card)
-            e["events"].append(f"{p.name}: {card.name} aus dem Friedhof auf die Hand")
+            e["events"].append(i18n.t("{p}: {card_name} aus dem Friedhof auf die Hand", p=i18n.t(p.name), card_name=card.name))
     for card in [x for x in p.perms if x.dilemma_bounce_self]:  # Tell Me What You See: wieder wirken
         p.perms.remove(card)
         p.hand.append(card)
-        e["events"].append(f"{p.name}: {card.name} zurück auf die Hand")
+        e["events"].append(i18n.t("{p}: {card_name} zurück auf die Hand", p=i18n.t(p.name), card_name=card.name))
     for src, source in static_sources(p):
         if source.dilemma_trig:
             cast_effects(p, src, source, source.dilemma_trig, step, e, "Dilemma")
@@ -3383,7 +3381,7 @@ def cast_effects(p, src, source, atoms, step, e, label="Auslöser beim Wirken"):
                     else max(alive, key=lambda c: atom[1] - c.card.power, default=None))
             if pick is not None:
                 pick.pump += atom[1] - pick.card.power
-    e["events"].append(f"{p.name}: {source.name} – {label}")
+    e["events"].append(i18n.t("{p}: {source_name} – {label}", p=i18n.t(p.name), source_name=source.name, label=i18n.t(label)))
 
 
 def _tapped_lands(p):
@@ -3411,7 +3409,7 @@ def search_basics(p, x, e, source=""):
         p.hand.append(card)
     random.shuffle(p.library)
     if names:
-        e["events"].append(f"{p.name}: {source} sucht {', '.join(names)}")
+        e["events"].append(i18n.t("{p}: {source} sucht {x3}", p=i18n.t(p.name), source=source, x3=', '.join(names)))
 
 
 def free_units(p):
@@ -3450,7 +3448,7 @@ def fetch_land_tapped(p, opp, card, step, e):
     p.library.remove(pick)
     random.shuffle(p.library)
     p.lands.append(pick)
-    e["events"].append(f"{p.name}: {card.name} sucht {pick.name} (getappt)")
+    e["events"].append(i18n.t("{p}: {card_name} sucht {pick_name} (getappt)", p=i18n.t(p.name), card_name=card.name, pick_name=pick.name))
     if opp is not None or p.opponent is not None:
         on_land(p, opp if opp is not None else p.opponent, pick, step, e, with_mana=False)
 
@@ -3463,7 +3461,7 @@ def search_basic_type(p, kind, e, source=""):
     p.library.remove(pick)
     p.hand.append(pick)
     random.shuffle(p.library)
-    e["events"].append(f"{p.name}: {source} sucht {pick.name}")
+    e["events"].append(i18n.t("{p}: {source} sucht {pick_name}", p=i18n.t(p.name), source=source, pick_name=pick.name))
 
 
 def planet_tokens(p, opp, n, step, e, source=""):
@@ -3473,7 +3471,7 @@ def planet_tokens(p, opp, n, step, e, source=""):
         p.lands.append(NEW_PLANET)
         on_land(p, opp if opp is not None else p.opponent, NEW_PLANET, step, e, with_mana=False)
     if n:
-        e["events"].append(f"{p.name}: {source} – {n} New-Planet-Token")
+        e["events"].append(i18n.t("{p}: {source} – {n} New-Planet-Token", p=i18n.t(p.name), source=source, n=n))
 
 
 def _lose_land(p, land):
@@ -3512,23 +3510,23 @@ def mission_trigger(p, kind, step, e, creature=None, with_mana=True):
                     p.hand.remove(gone)
                     p.graveyard.append(gone)
                     discarded(p, e, [gone])
-            e["events"].append(f"{p.name}: {name} – zieht" + ("" if full else ", wirft ab"))
+            e["events"].append(i18n.t("{p}: {name} – zieht", p=i18n.t(p.name), name=name) + ("" if full else i18n.t(", wirft ab")))
         elif kind == "creature_dies" and p.opponent is not None:
             p.opponent.life -= 2 if full else 1
-            e["events"].append(f"{p.name}: {name} – {p.opponent.name} verliert {2 if full else 1} Leben")
+            e["events"].append(i18n.t("{p}: {name} – {p_opponent} verliert {x4} Leben", p=i18n.t(p.name), name=name, p_opponent=i18n.t(p.opponent.name), x4=2 if full else 1))
         elif kind == "landfall":
             while p.library:
                 top = p.library.pop(0)
                 if not top.is_land:
                     p.impulse.append((top, p.own_turns))
                     p.combat_impulse.append(top)
-                    e["events"].append(f"{p.name}: {name} exiliert {top.name} (in diesem Zug spielbar)")
+                    e["events"].append(i18n.t("{p}: {name} exiliert {top_name} (in diesem Zug spielbar)", p=i18n.t(p.name), name=name, top_name=top.name))
                     break
             if full and with_mana:
                 mana += [("R",), ("R",)]
         elif kind == "creature_enters" and creature is not None:
             creature.bonus += 2 if full else 1
-            e["events"].append(f"{p.name}: {name} – Marke auf {creature.card.name}")
+            e["events"].append(i18n.t("{p}: {name} – Marke auf {creature_card_name}", p=i18n.t(p.name), name=name, creature_card_name=creature.card.name))
     return mana
 
 
@@ -3543,7 +3541,7 @@ def saboteur_copy(p, new, e):
     new.base_card = new.base_card or new.card
     new.card = t.card._replace(legendary=False, is_token=new.card.is_token)
     new.bonus += t.bonus
-    e["events"].append(f"{p.name}: Dominion Saboteur kommt als Kopie von {t.card.name}")
+    e["events"].append(i18n.t("{p}: Dominion Saboteur kommt als Kopie von {t_card_name}", p=i18n.t(p.name), t_card_name=t.card.name))
 
 
 def seen_cards(p):
@@ -3621,7 +3619,7 @@ def creature_enters(p, new, step, e, opp=None, cast=True):
     if card.etb_conjure:  # Searing Soloist: Aria of Flame aufs Feld
         made = conjure(card.etb_conjure)
         if made is not None:
-            e["events"].append(f"{p.name}: {card.name} – {made.name} beschworen")
+            e["events"].append(i18n.t("{p}: {card_name} – {made_name} beschworen", p=i18n.t(p.name), card_name=card.name, made_name=made.name))
             if made.is_creature:
                 fresh = Creature(made, step)
                 p.creatures.append(fresh)
@@ -3632,7 +3630,7 @@ def creature_enters(p, new, step, e, opp=None, cast=True):
     if card.equip_token:  # Equipment-Token (Iron Hills Blacksmith, U.S.Agent, Dain Ironfoot)
         token, attach = card.equip_token
         p.perms.append(token)
-        e["events"].append(f"{p.name}: {card.name} – Equipment-Token {token.name}")
+        e["events"].append(i18n.t("{p}: {card_name} – Equipment-Token {token_name}", p=i18n.t(p.name), card_name=card.name, token_name=token.name))
         host = new if attach == "self" else gear_host(p, step) if attach == "target" else None
         if host is not None and not host.dead:
             attach_gear(p, token, host, e)
@@ -3642,7 +3640,7 @@ def creature_enters(p, new, step, e, opp=None, cast=True):
         if t != "done" and others:
             t = t if t is not None and t in others else max(others, key=danger)
             t.extra |= set(card.etb_grant)
-            e["events"].append(f"{p.name}: {card.name} – {t.card.name} bekommt {', '.join(card.etb_grant)}")
+            e["events"].append(i18n.t("{p}: {card_name} – {t_card_name} bekommt {x4}", p=i18n.t(p.name), card_name=card.name, t_card_name=t.card.name, x4=', '.join(card.etb_grant)))
     elif card.etb_grant:  # Teyo: Ziel vorgegeben (Antwort, Kampf) oder die gefaehrlichste eigene Kreatur, auch er selbst
         t, p.grant_target = p.grant_target, None
         if t != "done":
@@ -3650,7 +3648,7 @@ def creature_enters(p, new, step, e, opp=None, cast=True):
             t = t if t is not None and t in alive else max(alive, key=danger)
             t.extra |= set(card.etb_grant)
             t.bonus += 1
-            e["events"].append(f"{p.name}: {card.name} – {t.card.name} bekommt {', '.join(card.etb_grant)} und eine Marke")
+            e["events"].append(i18n.t("{p}: {card_name} – {t_card_name} bekommt {x4} und eine Marke", p=i18n.t(p.name), card_name=card.name, t_card_name=t.card.name, x4=', '.join(card.etb_grant)))
     gain_life(p, card.etb_life)
     if card.land_to_tokens and p.lands:
         n, token = card.land_to_tokens
@@ -3660,7 +3658,7 @@ def creature_enters(p, new, step, e, opp=None, cast=True):
         p.lands.remove(sac)
         p.graveyard.append(sac)
         p.perms += [token] * n
-        e["events"].append(f"{p.name}: {card.name} opfert {sac.name}, {n} {token.name}-Token")
+        e["events"].append(i18n.t("{p}: {card_name} opfert {sac_name}, {n} {token_name}-Token", p=i18n.t(p.name), card_name=card.name, sac_name=sac.name, n=n, token_name=token.name))
     if card.mill_land:
         milled = p.library[:card.mill_land]
         del p.library[:card.mill_land]
@@ -3671,7 +3669,7 @@ def creature_enters(p, new, step, e, opp=None, cast=True):
             pick = max(lands, key=lambda land: (len(set(land.land_colors) - have), -lands.index(land)))
             p.graveyard.remove(pick)
             p.lands.append(pick)
-            e["events"].append(f"{p.name}: {card.name} – Mill {len(milled)}, {pick.name} aus dem Friedhof")
+            e["events"].append(i18n.t("{p}: {card_name} – Mill {x3}, {pick_name} aus dem Friedhof", p=i18n.t(p.name), card_name=card.name, x3=len(milled), pick_name=pick.name))
             if opp is not None:
                 on_land(p, opp, pick, step, e, with_mana=False)
     if card.null_summoner and cast and opp is not None:
@@ -3682,7 +3680,7 @@ def creature_enters(p, new, step, e, opp=None, cast=True):
             opp.hand.remove(pick)
             p.exiled.append(pick)
             p.exiled_from = opp
-            e["events"].append(f"{p.name}: {card.name} exiliert {pick.name} aus der Hand von {opp.name}")
+            e["events"].append(i18n.t("{p}: {card_name} exiliert {pick_name} aus der Hand von {opp}", p=i18n.t(p.name), card_name=card.name, pick_name=pick.name, opp=i18n.t(opp.name)))
     _jace_etb(p, card, step, e)
     card_effects(p, opp, card, step, e)
     new.lifted = p.surveilled and new.card.surveil_attack
@@ -3727,7 +3725,7 @@ def creature_enters(p, new, step, e, opp=None, cast=True):
             pay_ward(p, t, e)
             t.tapped = True
             t.stun += 1
-        e["events"].append(f"{p.name}: {card.name} wirft {len(gone)} ab, Stun auf {len(cands)}")
+        e["events"].append(i18n.t("{p}: {card_name} wirft {x3} ab, Stun auf {x4}", p=i18n.t(p.name), card_name=card.name, x3=len(gone), x4=len(cands)))
     if card.etb_tutor_any and p.library:  # Curse-Marred Demon: nie ein Land; dann zufaellig abwerfen
         spells = [c for c in p.library if not c.is_land]
         ok = [c for c in spells if c.mv <= len(p.lands) + 1]
@@ -3737,12 +3735,12 @@ def creature_enters(p, new, step, e, opp=None, cast=True):
             p.library.remove(pick)
             random.shuffle(p.library)
             p.hand.append(pick)
-            e["events"].append(f"{p.name}: {card.name} sucht {pick.name}")
+            e["events"].append(i18n.t("{p}: {card_name} sucht {pick_name}", p=i18n.t(p.name), card_name=card.name, pick_name=pick.name))
         if p.hand:
             gone = random.choice(p.hand)
             p.hand.remove(gone)
             p.graveyard.append(gone)
-            e["events"].append(f"{p.name}: wirft zufällig {gone.name} ab")
+            e["events"].append(i18n.t("{p}: wirft zufällig {gone_name} ab", p=i18n.t(p.name), gone_name=gone.name))
             discarded(p, e, [gone])
     if card.etb_discard_enchant:  # Pia: ein Land abwerfen, eine Verzauberung fuer den naechsten Zug suchen
         lands = [c for c in p.hand if c.is_land]
@@ -3756,7 +3754,7 @@ def creature_enters(p, new, step, e, opp=None, cast=True):
             p.library.remove(pick)
             random.shuffle(p.library)
             p.hand.append(pick)
-            e["events"].append(f"{p.name}: {card.name} wirft {gone.name} ab, sucht {pick.name}")
+            e["events"].append(i18n.t("{p}: {card_name} wirft {gone_name} ab, sucht {pick_name}", p=i18n.t(p.name), card_name=card.name, gone_name=gone.name, pick_name=pick.name))
     if card.etb_basic_tapped:  # Simulacrum Shaper: Basic Land getappt aufs Feld (Auswahl wie search_basics)
         fetch_land_tapped(p, opp, card, step, e)
     if card.etb_artifact_colors_draw:  # Karn, Gilded Guardian
@@ -3765,7 +3763,7 @@ def creature_enters(p, new, step, e, opp=None, cast=True):
         n = len(set().union(*(colors_of_alts(c.alts) for c in arts))) if arts else 0
         if n:
             _draw(p, n)
-            e["events"].append(f"{p.name}: {card.name} zieht {n}")
+            e["events"].append(i18n.t("{p}: {card_name} zieht {n}", p=i18n.t(p.name), card_name=card.name, n=n))
     if card.etb_stun_opp:  # Hapatra, the Desert Frost
         foe = opp if opp is not None else p.opponent
         cands = [c for c in (foe.creatures if foe is not None else []) if not c.dead and not hexproof(c)
@@ -3775,39 +3773,39 @@ def creature_enters(p, new, step, e, opp=None, cast=True):
             pay_ward(p, t, e)
             t.tapped = True
             t.stun += 1
-            e["events"].append(f"{p.name}: {card.name} tappt {t.card.name} (Stun-Marke)")
+            e["events"].append(i18n.t("{p}: {card_name} tappt {t_card_name} (Stun-Marke)", p=i18n.t(p.name), card_name=card.name, t_card_name=t.card.name))
     if card.etb_remove_counters:  # Mabel, Bitter Recluse
         remove_counters(p, opp if opp is not None else p.opponent, card.etb_remove_counters, card.name, e)
     if new.power >= 4 and not new.dead:  # Garruk, Curse Breaker
         for w in p.walkers:
             if "big_enter_draw" in w.card.pw_static:
                 _draw(p)
-                e["events"].append(f"{p.name}: {w.card.name} – zieht für {new.card.name}")
+                e["events"].append(i18n.t("{p}: {w_card_name} – zieht für {new_card_name}", p=i18n.t(p.name), w_card_name=w.card.name, new_card_name=new.card.name))
     for c in alive:
         if c.card.enter_counter:
             fresh = [x for x in alive if x.entered == step]
             if fresh:
                 pick = max(fresh, key=lambda x: (can_attack(x, step), danger(x)))  # Angreifer zuerst
                 pick.bonus += c.card.enter_counter
-                e["events"].append(f"{p.name}: {c.card.name} – Marke auf {pick.card.name}")
+                e["events"].append(i18n.t("{p}: {c_card_name} – Marke auf {pick_card_name}", p=i18n.t(p.name), c_card_name=c.card.name, pick_card_name=pick.card.name))
     if new.card.artifact_pump:
         x = sum(c.card.is_artifact for c in alive) + sum(c.is_artifact for c in p.perms)
         for c in alive:
             c.pump += x
             c.extra |= set(new.card.artifact_pump)
-        e["events"].append(f"{p.name}: {new.card.name} – alle +{x}/+0 und {', '.join(new.card.artifact_pump)}")
+        e["events"].append(i18n.t("{p}: {new_card_name} – alle +{x}/+0 und {x4}", p=i18n.t(p.name), new_card_name=new.card.name, x=x, x4=', '.join(new.card.artifact_pump)))
 
 
 def _mode_label(sub):
     if sub.removal:
         return "Removal"
     if sub.draws:
-        return "Karte ziehen"
+        return i18n.t("Karte ziehen")
     if sub.creates_tokens:
         return "Token"
     if sub.grant_kw or sub.modes:
-        return "Marken/Pumps"
-    return "Sonstiges"
+        return i18n.t("Marken/Pumps")
+    return i18n.t("Sonstiges")
 
 
 def _jace_on_cast(p, card, step, e):
@@ -3862,7 +3860,7 @@ def surveil_cards(p, amounts, e, source):
     binned = len(p.graveyard) - before
     if binned:
         library_to_graveyard(p)
-    e["events"].append(f"{p.name}: {source} – Surveil {sum(amounts)}" + (f" ({binned} abgelegt)" if binned else ""))
+    e["events"].append(i18n.t("{p}: {source} – Surveil {n}", p=i18n.t(p.name), source=source, n=sum(amounts)) + (i18n.t(" ({binned} abgelegt)", binned=binned) if binned else ""))
     mark_surveil(p, e, max(1, events))
 
 
@@ -3878,7 +3876,7 @@ def on_land(me, opp, land, step, e, with_mana=True, untapped=False):
                 pick = max(alive, key=lambda c: (can_attack(c, step), danger(c)))
                 pick.pump += src.forest_pump
                 pick.tpump += src.forest_pump
-                e["events"].append(f"{me.name}: {src.name} – {pick.card.name} +{src.forest_pump}/+{src.forest_pump}")
+                e["events"].append(i18n.t("{me}: {src_name} – {pick_card_name} +{src_forest_pump}/+{src_forest_pump}", me=i18n.t(me.name), src_name=src.name, pick_card_name=pick.card.name, src_forest_pump=src.forest_pump))
     if me.creatures:
         board, bonus, pump = me.board()
         face, mana, _cnt = landfall_effects(land, board, bonus, step, with_mana=with_mana)
@@ -3928,7 +3926,7 @@ def upkeep(p):
 
 
 def _cycle_event(p, cycler, cand, e, when):
-    e["events"].append(f"{p.name}: Landcycling {cycler.name} → {cand.name} ({when})")
+    e["events"].append(i18n.t("{p}: Landcycling {cycler_name} → {cand_name} ({when})", p=i18n.t(p.name), cycler_name=cycler.name, cand_name=cand.name, when=when))
 
 
 def legend_rule(p, e):
@@ -3946,7 +3944,7 @@ def legend_rule(p, e):
             for c in same:
                 if c is not keep:
                     c.dead = True
-                    e["events"].append(f"{p.name}: Legend-Regel – {c.card.name} in den Friedhof")
+                    e["events"].append(i18n.t("{p}: Legend-Regel – {c_card_name} in den Friedhof", p=i18n.t(p.name), c_card_name=c.card.name))
     names = {}
     for w in p.walkers:
         names.setdefault(w.card.name, []).append(w)
@@ -3957,7 +3955,7 @@ def legend_rule(p, e):
                 if w is not keep:
                     p.walkers.remove(w)
                     p.graveyard.append(w.card)
-                    e["events"].append(f"{p.name}: Legend-Regel – {w.card.name} in den Friedhof")
+                    e["events"].append(i18n.t("{p}: Legend-Regel – {w_card_name} in den Friedhof", p=i18n.t(p.name), w_card_name=w.card.name))
     seen = set()
     for card in list(p.perms):
         if card.legendary:
@@ -3965,7 +3963,7 @@ def legend_rule(p, e):
                 p.perms.remove(card)
                 if not card.is_token:
                     p.graveyard.append(card)
-                e["events"].append(f"{p.name}: Legend-Regel – {card.name} in den Friedhof")
+                e["events"].append(i18n.t("{p}: Legend-Regel – {card_name} in den Friedhof", p=i18n.t(p.name), card_name=card.name))
             seen.add(card.name)
 
 
@@ -3992,7 +3990,7 @@ def mccoy_saves(players, e):
             if destroyed or lethal:
                 c.bonus, c.damage, c.touched, c.dead = 0, 0, False, False
                 c.once.pop("destroyed", None)
-                e["events"].append(f"{p.name}: {docs[0].card.name} rettet {c.card.name} (Marken weg)")
+                e["events"].append(i18n.t("{p}: {x2} rettet {c_card_name} (Marken weg)", p=i18n.t(p.name), x2=docs[0].card.name, c_card_name=c.card.name))
 
 
 def is_dying(c):
@@ -4037,7 +4035,7 @@ def bury(players, e):
             if exile_instead and is_dying(c):
                 p.creatures.remove(c)  # Garruk, Veiled Butcher: exiliert statt zu sterben, kein "dies" (614.6)
                 _leave(p, c.card)
-                e["events"].append(f"{p.name}: {c.card.name} ins Exil (statt zu sterben)")
+                e["events"].append(i18n.t("{p}: {c_card_name} ins Exil (statt zu sterben)", p=i18n.t(p.name), c_card_name=c.card.name))
                 continue
             if is_dying(c):
                 if c.card.death_counters_move and c.bonus > 0:
@@ -4091,7 +4089,7 @@ def bury(players, e):
         new = Creature(card, p.now)
         p.creatures.append(new)
         creature_enters(p, new, p.now, e, p.opponent, cast=False)
-        e["events"].append(f"{p.name}: Token-Kopie von {card.name}")
+        e["events"].append(i18n.t("{p}: Token-Kopie von {card_name}", p=i18n.t(p.name), card_name=card.name))
     for p, card in death_made:
         make_tokens(p, list(card.death_tokens), p.now, e, p.opponent, card.name)
     if died:
@@ -4124,7 +4122,7 @@ def bury(players, e):
         if alive:
             pick = max(alive, key=lambda x: (can_attack(x, p.now + 1), danger(x)))
             pick.bonus += n
-            e["events"].append(f"{p.name}: {name} – {n} Marke(n) auf {pick.card.name}")
+            e["events"].append(i18n.t("{p}: {name} – {n} Marke(n) auf {pick_card_name}", p=i18n.t(p.name), name=name, n=n, pick_card_name=pick.card.name))
     phase_check(players, e)
 
 
@@ -4142,7 +4140,7 @@ def death_watchers(players, died, e):
                     if alive:
                         pick = max(alive, key=danger)
                         pick.bonus += n
-                        e["events"].append(f"{p.name}: {src.card.name} – Marke auf {pick.card.name}")
+                        e["events"].append(i18n.t("{p}: {src_card_name} – Marke auf {pick_card_name}", p=i18n.t(p.name), src_card_name=src.card.name, pick_card_name=pick.card.name))
         for src in [c for c in p.creatures if not c.dead]:
             others = [c for _q, c in died if c is not src]
             if not others:
@@ -4157,7 +4155,7 @@ def death_watchers(players, died, e):
             if src.card.death_watch_treasure and src.once.get("death_treasure") != p.now:
                 src.once["death_treasure"] = p.now
                 artifact_tokens(p, "treasure", 1, p.now, e)
-                e["events"].append(f"{p.name}: {src.card.name} – Treasure")
+                e["events"].append(i18n.t("{p}: {src_card_name} – Treasure", p=i18n.t(p.name), src_card_name=src.card.name))
         charged = False
         for st in _station_ready(p):
             if st["card"].death_charge and st["creature"] is None:
@@ -4201,7 +4199,7 @@ def tap_check(players, e):
                     discarded(p, e, [gone])
             else:
                 continue
-            e["events"].append(f"{p.name}: {c.card.name} wird getappt")
+            e["events"].append(i18n.t("{p}: {c_card_name} wird getappt", p=i18n.t(p.name), c_card_name=c.card.name))
 
 
 def tap_target(p, opp, card, stun, e):
@@ -4229,7 +4227,7 @@ def tap_target(p, opp, card, stun, e):
     target.tapped = True
     if stun:
         target.stun += 1
-    e["events"].append(f"{p.name}: {card.name} tappt {target.card.name}" + (" (Stun-Marke)" if stun else ""))
+    e["events"].append(i18n.t("{p}: {card_name} tappt {target_card_name}", p=i18n.t(p.name), card_name=card.name, target_card_name=target.card.name) + (i18n.t(" (Stun-Marke)") if stun else ""))
 
 
 def maco_tokens(victim, e):
@@ -4265,7 +4263,7 @@ def untap_abilities(p, opp, step, e):
             src.once["untap"] = p.now
         pick = max(tapped, key=danger)
         pick.tapped = False
-        e["events"].append(f"{p.name}: {src.card.name} enttappt {pick.card.name}")
+        e["events"].append(i18n.t("{p}: {src_card_name} enttappt {pick_card_name}", p=i18n.t(p.name), src_card_name=src.card.name, pick_card_name=pick.card.name))
 
 
 def tap_pings(p, opp, step, e, own_turn):
@@ -4277,7 +4275,7 @@ def tap_pings(p, opp, step, e, own_turn):
         if own_turn and opp.life > c.card.tap_ping:
             continue
         c.tapped = True
-        e["events"].append(f"{p.name}: {c.card.name} – {c.card.tap_ping} Schaden")
+        e["events"].append(i18n.t("{p}: {c_card_name} – {c_card_tap_ping} Schaden", p=i18n.t(p.name), c_card_name=c.card.name, c_card_tap_ping=c.card.tap_ping))
         deal_noncombat(p, opp, c.card.tap_ping, e)
 
 
@@ -4306,7 +4304,7 @@ def gy_leave_check(players, e):
                 if kind == "tapped_token":
                     for c in p.creatures[before:]:
                         c.tapped = True
-            e["events"].append(f"{p.name}: {src.card.name} – Karte verlässt den Friedhof")
+            e["events"].append(i18n.t("{p}: {src_card_name} – Karte verlässt den Friedhof", p=i18n.t(p.name), src_card_name=src.card.name))
         p.gy_seen = max(p.gy_seen, p.gy_left)
 
 
@@ -4321,9 +4319,9 @@ def death_bolt(p, n, name, e):
     if opp.life > n and killable:
         pick = max(killable, key=danger)
         pick.damage += n
-        e["events"].append(f"{p.name}: {name} – {n} Schaden an {pick.card.name}")
+        e["events"].append(i18n.t("{p}: {name} – {n} Schaden an {pick_card_name}", p=i18n.t(p.name), name=name, n=n, pick_card_name=pick.card.name))
     else:
-        e["events"].append(f"{p.name}: {name} – {n} Schaden an {opp.name}")
+        e["events"].append(i18n.t("{p}: {name} – {n} Schaden an {opp}", p=i18n.t(p.name), name=name, n=n, opp=i18n.t(opp.name)))
         deal_noncombat(p, opp, n, e)
 
 
@@ -4341,7 +4339,7 @@ def check_auras(p, e=None):
                     q.perms.remove(link["aura"])
                     q.graveyard.append(link["aura"])
                     if e is not None:
-                        e["events"].append(f"{q.name}: {link['aura'].name} in den Friedhof (keine Kreatur mehr)")
+                        e["events"].append(i18n.t("{q}: {x2} in den Friedhof (keine Kreatur mehr)", q=i18n.t(q.name), x2=link['aura'].name))
     attached = Counter(a for c in p.creatures for a in c.auras)
     for card in list(p.perms):
         if not (card.twin or ((card.aura_pump or card.aura_kw or card.animate_artifact) and card.is_aura)):
@@ -4352,7 +4350,7 @@ def check_auras(p, e=None):
         p.perms.remove(card)
         p.graveyard.append(card)
         if e is not None:
-            e["events"].append(f"{p.name}: {card.name} in den Friedhof (keine Kreatur mehr)")
+            e["events"].append(i18n.t("{p}: {card_name} in den Friedhof (keine Kreatur mehr)", p=i18n.t(p.name), card_name=card.name))
 
 
 def noncreature_targets(caster, victim, allowed):
@@ -4393,7 +4391,7 @@ def _return_linked(link, e):
     owner, card = link["owner"], link["card"]
     if card.is_token:
         return
-    e["events"].append(f"{owner.name}: {card.name} kehrt aus dem Exil zurück")
+    e["events"].append(i18n.t("{owner}: {card_name} kehrt aus dem Exil zurück", owner=i18n.t(owner.name), card_name=card.name))
     if link["creature"]:
         new = Creature(card, owner.now)
         owner.creatures.append(new)
@@ -4414,7 +4412,7 @@ def destroy_permanent(p, target, e, exile=False):
     p.perms.remove(card)
     if not card.is_token and not exile:
         p.graveyard.append(card)
-    e["events"].append(f"{p.name}: {card.name} " + ("ins Exil" if exile else "zerstört"))
+    e["events"].append(i18n.t("{p}: {card_name} ", p=i18n.t(p.name), card_name=card.name) + (i18n.t("ins Exil") if exile else i18n.t("zerstört")))
     if link is None:
         link = next((l for l in p.trap_links if l["trap"] == card), None)
     if link is not None and link in p.trap_links:
@@ -4449,7 +4447,7 @@ def perm_abilities(me, opp, step, e):
         target = targets[0][2]
         card = target["trap"] if isinstance(target, dict) else target
         c.dead = True
-        e["events"].append(f"{me.name}: opfert {c.card.name}")
+        e["events"].append(i18n.t("{me}: opfert {c_card_name}", me=i18n.t(me.name), c_card_name=c.card.name))
         bury((me,), e)
         destroy_permanent(opp, target, e)
         if c.card.sac_perm_draw and card.legendary and not card.is_artifact and not card.is_planeswalker:
@@ -4464,7 +4462,7 @@ def perm_abilities(me, opp, step, e):
         destroy_permanent(me, card, e, exile=True)
         for c in me.creatures + opp.creatures:
             c.dead = c.dead or not c.has("indestructible")  # 702.12b
-        e["events"].append(f"{me.name}: {card.name} – alle Kreaturen zerstört")
+        e["events"].append(i18n.t("{me}: {card_name} – alle Kreaturen zerstört", me=i18n.t(me.name), card_name=card.name))
         bury((me, opp), e)
 
 
@@ -4501,7 +4499,7 @@ def sacrifice_for(p, victim, e, mode="rest"):
         if "klingon" in victim.card.creature_types:
             _draw(p)
             p.life -= 1
-        e["events"].append(f"{p.name}: {ed.card.name} opfert {victim.card.name}")
+        e["events"].append(i18n.t("{p}: {ed_card_name} opfert {victim_card_name}", p=i18n.t(p.name), ed_card_name=ed.card.name, victim_card_name=victim.card.name))
         return True
     if not ed.card.sac_counter:  # General Chang
         if not _pay_ability(p, ed.card.sac_klingon, mode):
@@ -4510,7 +4508,7 @@ def sacrifice_for(p, victim, e, mode="rest"):
         for k in p.creatures:
             if "klingon" in k.card.creature_types and not k.dead:
                 k.bonus += 1
-        e["events"].append(f"{p.name}: {ed.card.name} opfert {victim.card.name} (Marke auf jeden Klingonen)")
+        e["events"].append(i18n.t("{p}: {ed_card_name} opfert {victim_card_name} (Marke auf jeden Klingonen)", p=i18n.t(p.name), ed_card_name=ed.card.name, victim_card_name=victim.card.name))
         return True
     alts, n, kws = ed.card.sac_counter
     if not _pay_ability(p, alts, mode):
@@ -4518,7 +4516,7 @@ def sacrifice_for(p, victim, e, mode="rest"):
     victim.dead = True
     ed.bonus += n
     ed.extra |= set(kws)
-    e["events"].append(f"{p.name}: {ed.card.name} opfert {victim.card.name} (+{n}/+{n}"
+    e["events"].append(i18n.t("{p}: {ed_card_name} opfert {victim_card_name} (+{n}/+{n}", p=i18n.t(p.name), ed_card_name=ed.card.name, victim_card_name=victim.card.name, n=n)
                        + (", " + ", ".join(kws) if kws else "") + ")")
     return True
 
@@ -4531,7 +4529,7 @@ def kirk_sac(p, kirk, e, mode="rest"):
     if not targets or not _pay_ability(p, kirk.card.self_sac_destroy, mode):
         return False
     kirk.dead = True
-    e["events"].append(f"{p.name}: {kirk.card.name} opfert sich")
+    e["events"].append(i18n.t("{p}: {kirk_card_name} opfert sich", p=i18n.t(p.name), kirk_card_name=kirk.card.name))
     destroy_permanent(opp, targets[0][2], e)
     return True
 
@@ -4640,19 +4638,19 @@ def use_draw_ability(p, c, ab, e):
             p.hand.remove(gone)
             p.graveyard.append(gone)
             discarded(p, e)
-        e["events"].append(f"{p.name}: {c.card.name} lootet" + (f" (wirft {gone.name} ab)" if gone else ""))
+        e["events"].append(i18n.t("{p}: {c_card_name} lootet", p=i18n.t(p.name), c_card_name=c.card.name) + (i18n.t(" (wirft {gone_name} ab)", gone_name=gone.name) if gone else ""))
     elif kind == "rummage":
         p.hand.remove(gone)
         p.graveyard.append(gone)
         discarded(p, e)
         _draw(p)
-        e["events"].append(f"{p.name}: {c.card.name} wirft {gone.name} ab und zieht")
+        e["events"].append(i18n.t("{p}: {c_card_name} wirft {gone_name} ab und zieht", p=i18n.t(p.name), c_card_name=c.card.name, gone_name=gone.name))
     else:
         sac = _redundant_land(p)
         p.lands.remove(sac)
         p.graveyard.append(sac)
         _draw(p)
-        e["events"].append(f"{p.name}: {c.card.name} opfert {sac.name} und zieht")
+        e["events"].append(i18n.t("{p}: {c_card_name} opfert {sac_name} und zieht", p=i18n.t(p.name), c_card_name=c.card.name, sac_name=sac.name))
     return True
 
 
@@ -4703,7 +4701,7 @@ def discard(p, n, e):
             break
         p.hand.remove(card)
         p.graveyard.append(card)
-        e["events"].append(f"{p.name} wirft ab: {card.name}")
+        e["events"].append(i18n.t("{p} wirft ab: {card_name}", p=i18n.t(p.name), card_name=card.name))
         done += 1
         gone.append(card)
     if done:
@@ -4745,7 +4743,7 @@ def _cast_removal(card, caster, victim, e, step, target=None):
             return
         caster.hand.remove(choice)
         caster.graveyard.append(choice)
-        e["events"].append(f"{caster.name} wirft ab: {choice.name}")
+        e["events"].append(i18n.t("{caster} wirft ab: {choice_name}", caster=i18n.t(caster.name), choice_name=choice.name))
         discarded(caster, e)
     amount = _amount(spec, caster)
     if kind in ("damage", "sweep_damage") and amount > 0 and red_bonus(caster, card):  # Searing Soloist
@@ -4769,7 +4767,7 @@ def _cast_removal(card, caster, victim, e, step, target=None):
                     c.once["destroyed"] = True
             else:
                 c.damage += amount
-        e["events"].append(f"{caster.name}: {card.name} trifft alle Kreaturen")
+        e["events"].append(i18n.t("{caster}: {card_name} trifft alle Kreaturen", caster=i18n.t(caster.name), card_name=card.name))
         bury((caster, victim), e)
         return
     if kind == "edict":
@@ -4778,7 +4776,7 @@ def _cast_removal(card, caster, victim, e, step, target=None):
             pick = (max(alive, key=lambda c: (c.card.mv, c.power)) if ("greatest",) in spec[2]
                     else min(alive, key=_value))
             pick.dead = True
-            e["events"].append(f"{caster.name}: {card.name} – {victim.name} opfert {pick.card.name}")
+            e["events"].append(i18n.t("{caster}: {card_name} – {victim} opfert {pick_card_name}", caster=i18n.t(caster.name), card_name=card.name, victim=i18n.t(victim.name), pick_card_name=pick.card.name))
         bury((victim,), e)
         return
     if target is None:
@@ -4790,7 +4788,7 @@ def _cast_removal(card, caster, victim, e, step, target=None):
             return
     if kind == "damage" and any_target and (target is None or victim.life <= amount):
         deal_noncombat(caster, victim, amount, e)
-        e["events"].append(f"{caster.name}: {card.name} – {amount} Schaden an {victim.name}")
+        e["events"].append(i18n.t("{caster}: {card_name} – {amount} Schaden an {victim}", caster=i18n.t(caster.name), card_name=card.name, amount=amount, victim=i18n.t(victim.name)))
         return
     if target is None and card.exile_until:  # Memory Trap: sonst ein Nichtkreatur-Permanent
         nc = [t for t in noncreature_targets(caster, victim, "nonland") if t[0] <= 4]
@@ -4801,18 +4799,18 @@ def _cast_removal(card, caster, victim, e, step, target=None):
             destroy_permanent(victim, item, e, exile=True)
             return
     if target is None:
-        e["events"].append(f"{caster.name}: {card.name} ohne Ziel")
+        e["events"].append(i18n.t("{caster}: {card_name} ohne Ziel", caster=i18n.t(caster.name), card_name=card.name))
         return
     if target.dead or not any(target is c for c in victim.creatures):  # 608.2b: Ziel schon weg (z. B. Emblem)
-        e["events"].append(f"{caster.name}: {card.name} ohne Ziel ({target.card.name} ist nicht mehr da)")
+        e["events"].append(i18n.t("{caster}: {card_name} ohne Ziel ({target_card_name} ist nicht mehr da)", caster=i18n.t(caster.name), card_name=card.name, target_card_name=target.card.name))
         return
     if not ward_ok(caster, target):  # Ward nicht bezahlbar: anderes Ziel
         target = choose_target(spec, caster, victim)
         if target is None:
-            e["events"].append(f"{caster.name}: {card.name} ohne Ziel (Ward)")
+            e["events"].append(i18n.t("{caster}: {card_name} ohne Ziel (Ward)", caster=i18n.t(caster.name), card_name=card.name))
             return
     if not pay_ward(caster, target, e):
-        e["events"].append(f"{caster.name}: {card.name} ohne Ziel (Ward)")
+        e["events"].append(i18n.t("{caster}: {card_name} ohne Ziel (Ward)", caster=i18n.t(caster.name), card_name=card.name))
         return
     kick = next((c[1] for c in spec[2] if c[0] == "kicked_sac"), 0) if card.kicker_sac else 0
     if kick:  # Eject the Warp Core (702.33): Kicker nur, wenn -2/-2 nicht reicht (selbst gesetzt)
@@ -4821,18 +4819,18 @@ def _cast_removal(card, caster, victim, e, step, target=None):
         if target.toughness - target.damage > amount and pick is not None:
             name = sac_fodder(caster, pick)
             amount = kick
-            e["events"].append(f"{caster.name}: {card.name} mit Kicker ({name} geopfert)")
+            e["events"].append(i18n.t("{caster}: {card_name} mit Kicker ({name} geopfert)", caster=i18n.t(caster.name), card_name=card.name, name=name))
             bury((caster,), e)
     label = target.label()
     maco_tokens(victim, e)
     if protect_response(victim, target, caster, e, step):
         bury((caster, victim), e)
-        e["events"].append(f"{caster.name}: {card.name} ohne Ziel ({target.card.name} hat Hexproof)")
+        e["events"].append(i18n.t("{caster}: {card_name} ohne Ziel ({target_card_name} hat Hexproof)", caster=i18n.t(caster.name), card_name=card.name, target_card_name=target.card.name))
         return
     _draw(victim, target.card.targeted_draw)  # Ruric Thar, Biomagus: Ziel eines gegnerischen Zaubers
     if kind in ("destroy", "damage", "minus", "counters", "lock") and sacrifice_for(victim, target, e):
         bury((caster, victim), e)  # als Antwort geopfert: der Zauber hat kein Ziel mehr (608.2b)
-        e["events"].append(f"{caster.name}: {card.name} ohne Ziel ({target.card.name} geopfert)")
+        e["events"].append(i18n.t("{caster}: {card_name} ohne Ziel ({target_card_name} geopfert)", caster=i18n.t(caster.name), card_name=card.name, target_card_name=target.card.name))
         return
     if kind == "destroy" and card.exile_until:  # 610.3: Exil, bis die Falle das Spielfeld verlaesst
         victim.creatures.remove(target)
@@ -4840,12 +4838,12 @@ def _cast_removal(card, caster, victim, e, step, target=None):
         if not target.card.is_token:
             caster.trap_links.append({"trap": card, "card": target.card, "owner": target.owner or victim,
                                       "creature": True})
-        e["events"].append(f"{caster.name}: {card.name} – {label} ins Exil")
+        e["events"].append(i18n.t("{caster}: {card_name} – {label} ins Exil", caster=i18n.t(caster.name), card_name=card.name, label=label))
         bury((caster, victim), e)
         return
     if kind == "destroy":
         if target.has("indestructible"):  # 702.12b
-            e["events"].append(f"{caster.name}: {card.name} – {label} ist unzerstörbar")
+            e["events"].append(i18n.t("{caster}: {card_name} – {label} ist unzerstörbar", caster=i18n.t(caster.name), card_name=card.name, label=label))
         else:
             target.dead = True
             if not card.exile_removal:  # Dr. McCoy, Surly Surgeon: nur Zerstoeren, kein Exil
@@ -4859,7 +4857,7 @@ def _cast_removal(card, caster, victim, e, step, target=None):
         if not target.card.is_token:
             owner = target.owner or victim
             owner.library.insert(random.randint(0, len(owner.library)), target.card)
-        e["events"].append(f"{caster.name}: {card.name} – {label} in die Bibliothek gemischt")
+        e["events"].append(i18n.t("{caster}: {card_name} – {label} in die Bibliothek gemischt", caster=i18n.t(caster.name), card_name=card.name, label=label))
         bury((caster, victim), e)
         return
     elif kind in ("damage", "minus"):
@@ -4872,7 +4870,7 @@ def _cast_removal(card, caster, victim, e, step, target=None):
             return
         target.damage += ours.power
         ours.damage += target.power
-        label += f" (Fight mit {ours.card.name})"
+        label += i18n.t(" (Fight mit {ours_card_name})", ours_card_name=ours.card.name)
     elif kind == "bounce":
         victim.creatures.remove(target)
         if not target.card.is_token:
@@ -4880,7 +4878,7 @@ def _cast_removal(card, caster, victim, e, step, target=None):
             (target.owner or victim).returned_turn = victim.now  # Miles O'Brien
         _leave(victim, target.card)
         check_auras(victim, e)
-        e["events"].append(f"{caster.name}: {card.name} – {label} zurück auf die Hand")
+        e["events"].append(i18n.t("{caster}: {card_name} – {label} zurück auf die Hand", caster=i18n.t(caster.name), card_name=card.name, label=label))
         return
     elif kind == "lock":
         target.locked = True
@@ -4889,27 +4887,27 @@ def _cast_removal(card, caster, victim, e, step, target=None):
             target.prepared = False
         if card in caster.perms:
             caster.lock_links.append({"aura": card, "creature": target})
-        e["events"].append(f"{caster.name}: {card.name} – {label} gesperrt")
+        e["events"].append(i18n.t("{caster}: {card_name} – {label} gesperrt", caster=i18n.t(caster.name), card_name=card.name, label=label))
         return
     elif kind == "tuck":
         victim.creatures.remove(target)
         _leave(victim, target.card)
         check_auras(victim, e)
         if target.card.is_token:  # Token ausserhalb des Spielfelds hoert auf zu existieren (111.7)
-            e["events"].append(f"{caster.name}: {card.name} – {label} verschwindet")
+            e["events"].append(i18n.t("{caster}: {card_name} – {label} verschwindet", caster=i18n.t(caster.name), card_name=card.name, label=label))
             return
         owner = target.owner or victim
         if target.card.mv <= len(owner.lands) + 1:  # wieder spielbar: oben, sonst unten
             owner.library.insert(0, target.card)
-            where = "oben"
+            where = i18n.t("oben")
             if card.tuck_top_damage:  # Clash of Elements: oben kostet 2 Schaden
                 deal_noncombat(caster, owner, card.tuck_top_damage, e)
         else:
             owner.library.append(target.card)
-            where = "unten"
-        e["events"].append(f"{caster.name}: {card.name} – {label} {where} auf die Bibliothek")
+            where = i18n.t("unten")
+        e["events"].append(i18n.t("{caster}: {card_name} – {label} {where} auf die Bibliothek", caster=i18n.t(caster.name), card_name=card.name, label=label, where=where))
         return
-    e["events"].append(f"{caster.name}: {card.name} – {label}")
+    e["events"].append(i18n.t("{caster}: {card_name} – {label}", caster=i18n.t(caster.name), card_name=card.name, label=label))
     before = target.finality
     if card.removal_exile or (card.exile_removal and kind == "destroy"):  # Exil statt Friedhof
         target.finality = True
@@ -5015,7 +5013,7 @@ def try_counter(caster, spell, step, e, threat=None, effects=None):
     holder.hand.remove(card)
     holder.graveyard.append(card)
     on_cast(holder, card, step, e)
-    e["events"].append(f"{holder.name}: {card.name} kontert {spell.name}")
+    e["events"].append(i18n.t("{holder}: {card_name} kontert {spell_name}", holder=i18n.t(holder.name), card_name=card.name, spell_name=spell.name))
     return True
 
 
@@ -5045,11 +5043,11 @@ def brazen_bluff(holder, caster, card, alts, spell, step, e):
     on_cast(holder, card, step, e)
     free = _bluff_card(holder, card)
     if free is not None and free.mv >= spell.mv:
-        e["events"].append(f"{holder.name}: {card.name} – {caster.name} exiliert {spell.name}")
+        e["events"].append(i18n.t("{holder}: {card_name} – {caster} exiliert {spell_name}", holder=i18n.t(holder.name), card_name=card.name, caster=i18n.t(caster.name), spell_name=spell.name))
         return True
     if free is not None:
         holder.hand.remove(free)
-        e["events"].append(f"{holder.name}: {card.name} – wirkt {free.name} gratis")
+        e["events"].append(i18n.t("{holder}: {card_name} – wirkt {free_name} gratis", holder=i18n.t(holder.name), card_name=card.name, free_name=free.name))
         _resolve(holder, caster, free, step, e)
     return False
 
@@ -5129,7 +5127,7 @@ def codie_copies(me, opp, card, step, entry, modes):
 
 def _resolve_copy(me, opp, card, step, entry, modes):
     """Kopie eines Instants/Sorcery (Way of the Cryomancer): nur die Effekte, kein Wirken."""
-    entry["events"].append(f"{me.name}: Kopie von {card.name}")
+    entry["events"].append(i18n.t("{me}: Kopie von {card_name}", me=i18n.t(me.name), card_name=card.name))
     for ef in once_effects(card) if not card.choices else ():  # Empower gehoert zum Effekt (sonst beim Wirken)
         if ef[1] == "spell":
             _jace_add(me, ef[2], entry)
@@ -5173,7 +5171,7 @@ def ghost_blink(p, card, step, e):
         p.ghost_back.append((pick, True))
     else:
         return
-    e["events"].append(f"{p.name}: {card.name} exiliert {pick.name} bis zum Endsegment")
+    e["events"].append(i18n.t("{p}: {card_name} exiliert {pick_name} bis zum Endsegment", p=i18n.t(p.name), card_name=card.name, pick_name=pick.name))
 
 
 def explore(p, c, e):
@@ -5213,7 +5211,7 @@ def q_copies(me, opp, step, e):
                 continue
             me.hand.remove(fodder)
             copy = card._replace(is_token=True)
-            e["events"].append(f"{me.name}: Q – Kopie von {card.name} (exiliert {fodder.name})")
+            e["events"].append(i18n.t("{me}: Q – Kopie von {card_name} (exiliert {fodder_name})", me=i18n.t(me.name), card_name=card.name, fodder_name=fodder.name))
             _resolve(me, opp, copy, step, e)
             if copy in me.graveyard:
                 me.graveyard.remove(copy)
@@ -5255,7 +5253,7 @@ def genesis_swap(me, opp, step, e):
         for l in picks:
             me.library.remove(l)
         random.shuffle(me.library)
-        e["events"].append(f"{me.name}: {dev.name} tauscht {k} Länder")
+        e["events"].append(i18n.t("{me}: {dev_name} tauscht {k} Länder", me=i18n.t(me.name), dev_name=dev.name, k=k))
         for l in picks:
             me.lands.append(l)
             on_land(me, opp, l, step, e, with_mana=False)
@@ -5279,7 +5277,7 @@ def discover(p, opp, n, step, e):
     useful = legend_ok(p, found) and (not found.removal or found.removal[4] == "etb" or opp is None
                                       or has_target(found, p, opp))
     if useful:
-        e["events"].append(f"{p.name}: Discover – wirkt {found.name}")
+        e["events"].append(i18n.t("{p}: Discover – wirkt {found_name}", p=i18n.t(p.name), found_name=found.name))
         _resolve(p, opp, found, step, e)
     else:
         p.hand.append(found)
@@ -5302,7 +5300,7 @@ def ds9_reveal(p, opp, n, step, e):
         else:
             p.perms.append(card)
             permanent_enters(p, opp, card, step, e)
-    e["events"].append(f"{p.name}: Deep Space 9 – {', '.join(c.name for c in top)}")
+    e["events"].append(i18n.t("{p}: Deep Space 9 – {x2}", p=i18n.t(p.name), x2=', '.join(c.name for c in top)))
 
 
 def hand_exile(p, opp, card, e):
@@ -5317,7 +5315,7 @@ def hand_exile(p, opp, card, e):
         _draw(opp)
     else:
         opp.impulse.append((pick._replace(alts=tuple((g + 2, cols) for g, cols in pick.alts)), 10 ** 9))
-    e["events"].append(f"{p.name}: {card.name} exiliert {pick.name} aus der Hand von {opp.name}")
+    e["events"].append(i18n.t("{p}: {card_name} exiliert {pick_name} aus der Hand von {opp}", p=i18n.t(p.name), card_name=card.name, pick_name=pick.name, opp=i18n.t(opp.name)))
 
 
 def bones_cands(p):
@@ -5398,7 +5396,7 @@ def permanent_enters(p, opp, card, step, e):
             pick = max(alive, key=lambda c: (can_attack(c, step), danger(c)))
             pick.auras.append(card)
             pick.extra |= set(card.aura_etb_kw)
-            e["events"].append(f"{p.name}: {card.name} an {pick.card.name}")
+            e["events"].append(i18n.t("{p}: {card_name} an {pick_card_name}", p=i18n.t(p.name), card_name=card.name, pick_card_name=pick.card.name))
     if card.discover:  # U.S.S. Discovery
         discover(p, opp, card.discover, step, e)
     if card.ds9_reveal:  # Deep Space 9
@@ -5455,7 +5453,7 @@ def permanent_enters(p, opp, card, step, e):
             new.auras.append(card)
             new.gy, new.ctl = p.graveyard, p
             p.creatures.append(new)
-            e["events"].append(f"{p.name}: {card.name} belebt {target.name}")
+            e["events"].append(i18n.t("{p}: {card_name} belebt {target_name}", p=i18n.t(p.name), card_name=card.name, target_name=target.name))
     if card.is_artifact and no_enter_triggers(p):  # Karn, Argent Defender
         return
     if card.twin:
@@ -5503,12 +5501,12 @@ def snw_effects(me, opp, card, step, entry):
         elif kind == "draw":  # Deep Space Scan: kein Handlimit bis zu unserem naechsten Zug
             _draw(me, x)
             me.no_hand_limit = True
-            entry["events"].append(f"{me.name}: {card.name} zieht {x}")
+            entry["events"].append(i18n.t("{me}: {card_name} zieht {x}", me=i18n.t(me.name), card_name=card.name, x=x))
         elif kind == "sweep":  # The Destruction of Praxis: -X/-X bis Rundenende, ab X >= N Token
             for c in [c for pl in (me, opp) if pl is not None for c in pl.creatures if not c.dead]:
                 c.pump -= x
                 c.tpump -= x
-            entry["events"].append(f"{me.name}: {card.name} – alle Kreaturen −{x}/−{x}")
+            entry["events"].append(i18n.t("{me}: {card_name} – alle Kreaturen −{x}/−{x}", me=i18n.t(me.name), card_name=card.name, x=x))
             bury((me, opp) if opp is not None else (me,), entry)
             if x >= atom[1]:
                 make_tokens(me, list(atom[2]), step, entry, opp, card.name)
@@ -5517,11 +5515,11 @@ def snw_effects(me, opp, card, step, entry):
         elif kind == "chekov" and opp is not None:  # Gegner exiliert X, ein Land davon bleibt fuer uns spielbar
             top, opp.library[:x] = opp.library[:x], []
             lands = [c for c in top if c.is_land]
-            entry["events"].append(f"{me.name}: {card.name} – {opp.name} exiliert {len(top)} Karte(n)")
+            entry["events"].append(i18n.t("{me}: {card_name} – {opp} exiliert {x4} Karte(n)", me=i18n.t(me.name), card_name=card.name, opp=i18n.t(opp.name), x4=len(top)))
             if lands:
                 pick = chekov_land(me, lands)
                 me.impulse.append((pick, 10 ** 9))
-                entry["events"].append(f"{me.name}: {card.name} – {pick.name} spielbar")
+                entry["events"].append(i18n.t("{me}: {card_name} – {pick_name} spielbar", me=i18n.t(me.name), card_name=card.name, pick_name=pick.name))
         elif kind == "branching":  # Permanents von oben getappt ins Spiel, der Rest zufaellig unter die Bibliothek
             top, me.library[:x] = me.library[:x], []
             rest = []
@@ -5545,7 +5543,7 @@ def snw_effects(me, opp, card, step, entry):
                     permanent_enters(me, opp, c, step, entry)
             random.shuffle(rest)
             me.library.extend(rest)
-            entry["events"].append(f"{me.name}: {card.name} – {', '.join(c.name for c in top)}")
+            entry["events"].append(i18n.t("{me}: {card_name} – {x3}", me=i18n.t(me.name), card_name=card.name, x3=', '.join(c.name for c in top)))
 
 
 def praxis_ok(me, opp, card):
@@ -5583,7 +5581,7 @@ def snw_tap_blocker(me, opp, step, e):
         if not _pay_open(me, costs, treasure=False) or not pay_ward(me, target, e):
             continue
         src.tapped = target.tapped = True
-        e["events"].append(f"{me.name}: {src.card.name} tappt {target.card.name}")
+        e["events"].append(i18n.t("{me}: {src_card_name} tappt {target_card_name}", me=i18n.t(me.name), src_card_name=src.card.name, target_card_name=target.card.name))
 
 
 def snw_sac_draw(p, e):
@@ -5596,7 +5594,7 @@ def snw_sac_draw(p, e):
         p.perms.remove(card)
         p.graveyard.append(card)
         _draw(p, n)
-        e["events"].append(f"{p.name}: opfert {card.name} und zieht {n}")
+        e["events"].append(i18n.t("{p}: opfert {card_name} und zieht {n}", p=i18n.t(p.name), card_name=card.name, n=n))
 
 
 def beam_pick(p, opp, scotty=False):
@@ -5638,7 +5636,7 @@ def beam_up(p, opp, card, e):
         (c.owner or p).returned_turn = p.now  # Miles O'Brien
     _leave(p, c.card)
     check_auras(p, e)
-    e["events"].append(f"{p.name}: Beam me up – {c.card.name} zurück auf die Hand, {card.name} aus dem Friedhof")
+    e["events"].append(i18n.t("{p}: Beam me up – {c_card_name} zurück auf die Hand, {card_name} aus dem Friedhof", p=i18n.t(p.name), c_card_name=c.card.name, card_name=card.name))
     return True
 
 
@@ -5663,7 +5661,7 @@ def saga_lore(p, opp, st, step, e):
     final, chapters = card.saga
     for nums, sub, atoms in chapters:
         if st["lore"] in nums:
-            e["events"].append(f"{p.name}: {card.name} – Kapitel {st['lore']}")
+            e["events"].append(i18n.t("{p}: {card_name} – Kapitel {x3}", p=i18n.t(p.name), card_name=card.name, x3=st['lore']))
             if sub is not None and ("steal",) in atoms and opp is not None:
                 saga_steal(p, opp, sub, step, e)
             elif sub is not None:
@@ -5677,7 +5675,7 @@ def saga_lore(p, opp, st, step, e):
                 del p.perms[i]
                 p.graveyard.append(card)
                 _leave(p, card)
-                e["events"].append(f"{p.name}: {card.name} geopfert (letztes Kapitel)")
+                e["events"].append(i18n.t("{p}: {card_name} geopfert (letztes Kapitel)", p=i18n.t(p.name), card_name=card.name))
                 break
         p.sagas = [s for s in p.sagas if s is not st]
 
@@ -5707,7 +5705,7 @@ def saga_atom(p, opp, st, atom, step, e):
     card = st["card"]
     if kind == "clue":
         p.clues += atom[1]
-        e["events"].append(f"{p.name}: {card.name} – Clue")
+        e["events"].append(i18n.t("{p}: {card_name} – Clue", p=i18n.t(p.name), card_name=card.name))
     elif kind == "draw":
         _draw(p, atom[1])
     elif kind == "discard":
@@ -5725,7 +5723,7 @@ def saga_atom(p, opp, st, atom, step, e):
             if alive:
                 pick = min(alive, key=_value)
                 pick.dead = True
-                e["events"].append(f"{p.name}: {card.name} – {opp.name} opfert {pick.card.name}")
+                e["events"].append(i18n.t("{p}: {card_name} – {opp} opfert {pick_card_name}", p=i18n.t(p.name), card_name=card.name, opp=i18n.t(opp.name), pick_card_name=pick.card.name))
         else:
             pick = edict_permanent(opp)
             if pick is not None:
@@ -5740,20 +5738,20 @@ def saga_atom(p, opp, st, atom, step, e):
                 else:
                     destroy_permanent(opp, obj, e)
                     name = obj.name
-                e["events"].append(f"{p.name}: {card.name} – {opp.name} opfert {name}")
+                e["events"].append(i18n.t("{p}: {card_name} – {opp} opfert {name}", p=i18n.t(p.name), card_name=card.name, opp=i18n.t(opp.name), name=name))
         bury((opp,), e)
     elif kind == "exile_draw":  # "You may exile a card from your hand": nur ein ueberzaehliges Land
         gone = surplus_land(p)
         if gone is not None:
             p.hand.remove(gone)
             _draw(p)
-            e["events"].append(f"{p.name}: {card.name} – {gone.name} ins Exil, zieht")
+            e["events"].append(i18n.t("{p}: {card_name} – {gone_name} ins Exil, zieht", p=i18n.t(p.name), card_name=card.name, gone_name=gone.name))
     elif kind == "exile_hand":  # All Good Things: Pflicht, Auswahl wie beim Abwerfen
         gone = choose_discard(p)
         if gone is not None:
             p.hand.remove(gone)
             st["exiled"].append(gone)
-            e["events"].append(f"{p.name}: {card.name} – {gone.name} ins Exil")
+            e["events"].append(i18n.t("{p}: {card_name} – {gone_name} ins Exil", p=i18n.t(p.name), card_name=card.name, gone_name=gone.name))
     elif kind == "share_life":
         types = [_card_types(c) for c in st["exiled"]]
         if types and set.intersection(*types):
@@ -5798,7 +5796,7 @@ def saga_atom(p, opp, st, atom, step, e):
             pick = _best_from_gy(p, cands)
             p.graveyard.remove(pick)
             p.hand.append(pick)
-            e["events"].append(f"{p.name}: {card.name} – {pick.name} aus dem Friedhof auf die Hand")
+            e["events"].append(i18n.t("{p}: {card_name} – {pick_name} aus dem Friedhof auf die Hand", p=i18n.t(p.name), card_name=card.name, pick_name=pick.name))
     elif kind == "temp_exile" and opp is not None:  # The Measure of a Man: bis Kapitel III
         cands = [c for c in opp.creatures if not c.dead and not c.card.is_token and not hexproof(c) and ward_ok(p, c)]
         if cands:
@@ -5808,7 +5806,7 @@ def saga_atom(p, opp, st, atom, step, e):
             _leave(opp, t.card)
             check_auras(opp, e)
             st["temp"] = (t.owner or opp, t.base_card or t.card)
-            e["events"].append(f"{p.name}: {card.name} – {t.card.name} ins Exil")
+            e["events"].append(i18n.t("{p}: {card_name} – {t_card_name} ins Exil", p=i18n.t(p.name), card_name=card.name, t_card_name=t.card.name))
     elif kind == "return_exiled" and st["temp"] is not None:
         owner, back = st["temp"]
         st["temp"] = None
@@ -5820,14 +5818,14 @@ def saga_atom(p, opp, st, atom, step, e):
         t = light_target(p, opp, step)
         if t is not None:
             t.light = step
-            e["events"].append(f"{p.name}: {card.name} – {t.card.name} zieht bei Kampfschaden")
+            e["events"].append(i18n.t("{p}: {card_name} – {t_card_name} zieht bei Kampfschaden", p=i18n.t(p.name), card_name=card.name, t_card_name=t.card.name))
     elif kind == "gy_shuffle" and opp is not None:  # Those Old Scientists III
         picks = sorted((c for c in opp.graveyard if _gy_worth(c)[0]), key=lambda c: (c.mv, c.name),
                        reverse=True)[:atom[1]]
         for c in picks:
             opp.graveyard.remove(c)
             opp.library.insert(random.randint(0, len(opp.library)), c)
-            e["events"].append(f"{p.name}: {card.name} – {c.name} in die Bibliothek von {opp.name}")
+            e["events"].append(i18n.t("{p}: {card_name} – {c_name} in die Bibliothek von {opp}", p=i18n.t(p.name), card_name=card.name, c_name=c.name, opp=i18n.t(opp.name)))
     elif kind == "naked_turn":  # The Naked Time II
         p.naked_turn = p.now
     elif kind == "sac_land":  # The Naked Time III: ein Land der haeufigsten Farbe (selbst gesetzt)
@@ -5836,7 +5834,7 @@ def saga_atom(p, opp, st, atom, step, e):
             land = max(reversed(p.lands), key=lambda l: common[l.land_colors])
             p.lands.remove(land)
             p.graveyard.append(land)
-            e["events"].append(f"{p.name}: {card.name} – opfert {land.name}")
+            e["events"].append(i18n.t("{p}: {card_name} – opfert {land_name}", p=i18n.t(p.name), card_name=card.name, land_name=land.name))
     elif kind == "sac_for_tokens":  # erst Clue/Treasure, dann ein Token bzw. eine Kreatur unter 2/2 + 2/2
         small = sorted((c for c in p.creatures if not c.dead and c.power + c.toughness < 4),
                        key=lambda c: (not c.card.is_token, _value(c)))
@@ -5872,7 +5870,7 @@ def saga_steal(p, opp, sub, step, e):
     target.extra.add("haste")
     p.creatures.append(target)
     p.stolen.append(target)
-    e["events"].append(f"{p.name}: The Wrath of Khan übernimmt {target.card.name}")
+    e["events"].append(i18n.t("{p}: The Wrath of Khan übernimmt {target_card_name}", p=i18n.t(p.name), target_card_name=target.card.name))
 
 
 def _board_mv(p):
@@ -5918,7 +5916,7 @@ def phase_out_all(p, opp, e, source):
         pl.explosives[:] = [x for x in pl.explosives if not any(x is y for y in saved["explosives"])]
         pl.phased = saved
         if gone or perms:
-            e["events"].append(f"{pl.name}: {source} – {len(gone) + len(perms)} Permanent(s) phasen aus")
+            e["events"].append(i18n.t("{pl}: {source} – {x3} Permanent(s) phasen aus", pl=i18n.t(pl.name), source=source, x3=len(gone) + len(perms)))
 
 
 def phase_check(players, e):
@@ -5941,7 +5939,7 @@ def phase_check(players, e):
         pl.vehicles.extend(saved["vehicles"])
         pl.stations.extend(saved["stations"])
         pl.explosives.extend(saved["explosives"])
-        e["events"].append(f"{pl.name}: {len(saved['creatures']) + len(saved['perms'])} Permanent(s) phasen ein")
+        e["events"].append(i18n.t("{pl}: {x2} Permanent(s) phasen ein", pl=i18n.t(pl.name), x2=len(saved['creatures']) + len(saved['perms'])))
 
 
 def light_target(p, opp, step):
@@ -5976,11 +5974,11 @@ def sisko_dig(me, opp, step, e):
             continue
         c.tapped = True
         top, me.library[:5] = me.library[:5], []
-        e["events"].append(f"{me.name}: {c.card.name} – exiliert {', '.join(x.name for x in top)}")
+        e["events"].append(i18n.t("{me}: {c_card_name} – exiliert {x3}", me=i18n.t(me.name), c_card_name=c.card.name, x3=', '.join(x.name for x in top)))
         casts = [x for x in top if not x.is_land and x.mv <= officers and legend_ok(me, x)
                  and (not x.removal or x.removal[4] == "etb" or opp is None or has_target(x, me, opp))]
         for x in sorted(casts, key=lambda x: (-x.mv, x.name)):
-            e["events"].append(f"{me.name}: {c.card.name} – wirkt {x.name} gratis")
+            e["events"].append(i18n.t("{me}: {c_card_name} – wirkt {x_name} gratis", me=i18n.t(me.name), c_card_name=c.card.name, x_name=x.name))
             _resolve(me, opp, x, step, e)
 
 
@@ -6009,7 +6007,7 @@ def gwyndala_copy(me, step, e):
         new = best._replace(is_token=True)
         _swap_gear(me, g, new)
         me.gwyn_revert.append((new, g))
-    e["events"].append(f"{me.name}: {src.card.name} – Equipment-Token werden {best.name}")
+    e["events"].append(i18n.t("{me}: {src_card_name} – Equipment-Token werden {best_name}", me=i18n.t(me.name), src_card_name=src.card.name, best_name=best.name))
 
 
 def _swap_gear(p, old, new):
@@ -6068,7 +6066,7 @@ def lwaxana_echo(me, step, e):
         lw.tapped = True
         t.echo = True
         me.lwax.append((lw, t))
-        e["events"].append(f"{me.name}: {lw.card.name} – Auslöser von {t.card.name} doppelt")
+        e["events"].append(i18n.t("{me}: {lw_card_name} – Auslöser von {t_card_name} doppelt", me=i18n.t(me.name), lw_card_name=lw.card.name, t_card_name=t.card.name))
 
 
 def use_clues(p, e):
@@ -6076,7 +6074,7 @@ def use_clues(p, e):
     while p.clues and _pay_open(p, ((2, ()),), treasure=False):
         p.clues -= 1
         _draw(p)
-        e["events"].append(f"{p.name}: Clue – zieht")
+        e["events"].append(i18n.t("{p}: Clue – zieht", p=i18n.t(p.name)))
 
 
 def land_tapped(p, tapped):
@@ -6103,13 +6101,13 @@ def trk_effects(me, opp, card, step, entry):
     """TRK Pakete A und B beim Aufloesen bzw. Betreten."""
     if card.food:
         me.foods += card.food
-        entry["events"].append(f"{me.name}: {card.name} – {card.food} Food-Token")
+        entry["events"].append(i18n.t("{me}: {card_name} – {card_food} Food-Token", me=i18n.t(me.name), card_name=card.name, card_food=card.food))
     if card.opp_loss and opp is not None:  # Artificial Anomaly: Lebensverlust, kein Schaden
         opp.life -= card.opp_loss
     if card.land_swap and me.lands:  # Genesis Effect: ein farbloses Land, sonst das entbehrlichste
         land = next((l for l in me.lands if l.land_colors == ("C",)), None) or _redundant_land(me)
         _lose_land(me, land)
-        entry["events"].append(f"{me.name}: {card.name} zerstoert {land.name}")
+        entry["events"].append(i18n.t("{me}: {card_name} zerstoert {land_name}", me=i18n.t(me.name), card_name=card.name, land_name=land.name))
     if card.planet_tokens:
         planet_tokens(me, opp, card.planet_tokens, step, entry, card.name)
     if card.gy_top_creature:  # The Unicomplex: die teuerste Kreatur aus dem Friedhof oben auf die Bibliothek
@@ -6118,7 +6116,7 @@ def trk_effects(me, opp, card, step, entry):
             pick = max(pool, key=lambda c: (c.mv, c.name))
             me.graveyard.remove(pick)
             me.library.insert(0, pick)
-            entry["events"].append(f"{me.name}: {card.name} – {pick.name} oben auf die Bibliothek")
+            entry["events"].append(i18n.t("{me}: {card_name} – {pick_name} oben auf die Bibliothek", me=i18n.t(me.name), card_name=card.name, pick_name=pick.name))
     if card.is_mode and card.grant_kw and not card.modes and not card.is_instant_sorcery:
         alive = [c for c in me.creatures if not c.dead]  # Ni'Var Science Academy: Flying fuer den besten Angreifer
         if alive:
@@ -6131,7 +6129,7 @@ def trk_effects(me, opp, card, step, entry):
         if pick is not None:
             top.remove(pick)
             me.hand.append(pick)
-            entry["events"].append(f"{me.name}: {card.name} – {pick.name} auf die Hand")
+            entry["events"].append(i18n.t("{me}: {card_name} – {pick_name} auf die Hand", me=i18n.t(me.name), card_name=card.name, pick_name=pick.name))
         random.shuffle(top)
         me.library.extend(top)
     if card.fed_copy:  # Infinite Diversity: der wertvollste Instant/Sorcery aus dem Friedhof, X Kopien
@@ -6142,7 +6140,7 @@ def trk_effects(me, opp, card, step, entry):
             pick = max(cands, key=lambda g: (mode_value(me, opp, g, step), g.mv))
             me.graveyard.remove(pick)
             x = federation_x(me)
-            entry["events"].append(f"{me.name}: {card.name} – {x} Kopien von {pick.name}")
+            entry["events"].append(i18n.t("{me}: {card_name} – {x} Kopien von {pick_name}", me=i18n.t(me.name), card_name=card.name, x=x, pick_name=pick.name))
             for _ in range(x):
                 _resolve_copy(me, opp, pick, step, entry, None)
     if card.etb_tap_opp:  # Vexing Drone, Enterprise NX-01, Type-2 Phaser
@@ -6154,7 +6152,7 @@ def trk_effects(me, opp, card, step, entry):
             pick = _best_from_gy(me, lands)
             me.graveyard.remove(pick)
             me.hand.append(pick)
-            entry["events"].append(f"{me.name}: {card.name} – {pick.name} auf die Hand")
+            entry["events"].append(i18n.t("{me}: {card_name} – {pick_name} auf die Hand", me=i18n.t(me.name), card_name=card.name, pick_name=pick.name))
         else:
             artifact_tokens(me, "treasure", 1, step, entry)
     if card.etb_basic_tapped and not card.is_creature:  # Final Frontier, Genesis Device, The Naked Time I
@@ -6186,7 +6184,7 @@ def flow_effects(me, opp, card, step, entry):
         if pick is not None:
             top.remove(pick)
             me.hand.append(pick)
-            entry["events"].append(f"{me.name}: {card.name} – {pick.name} auf die Hand")
+            entry["events"].append(i18n.t("{me}: {card_name} – {pick_name} auf die Hand", me=i18n.t(me.name), card_name=card.name, pick_name=pick.name))
         if to_gy:
             for c in top:
                 me.graveyard.append(c)
@@ -6202,7 +6200,7 @@ def flow_effects(me, opp, card, step, entry):
             me.library.remove(pick)
             me.hand.append(pick)
             random.shuffle(me.library)
-            entry["events"].append(f"{me.name}: {card.name} sucht {pick.name}")
+            entry["events"].append(i18n.t("{me}: {card_name} sucht {pick_name}", me=i18n.t(me.name), card_name=card.name, pick_name=pick.name))
     if card.sac_draw and card.sac_draw[0] == "etb":  # Khan
         flow_sac_draw(me, card, card.sac_draw[1], entry, [c for c in me.creatures if c.card is card])
     if card.double_life_draw:  # Live Long and Prosper: Leben verdoppeln (Lebensgewinn), Handgroesse ziehen
@@ -6210,7 +6208,7 @@ def flow_effects(me, opp, card, step, entry):
             gain_life(me, me.life)
         _draw(me, len(me.hand))
         me.no_hand_limit = True
-        entry["events"].append(f"{me.name}: {card.name} – {me.life} Leben, {len(me.hand)} Karten auf der Hand")
+        entry["events"].append(i18n.t("{me}: {card_name} – {me_life} Leben, {x4} Karten auf der Hand", me=i18n.t(me.name), card_name=card.name, me_life=me.life, x4=len(me.hand)))
     if card.mirror_copy and opp is not None:
         mirror_copies(me, opp, card, step, entry)
 
@@ -6226,7 +6224,7 @@ def mirror_copies(me, opp, card, step, e):
         kw = t.card.kw if "menace" in t.card.kw else t.card.kw + ("menace",)
         token = Creature(t.card._replace(is_token=True, kw=kw), step)
         me.creatures.append(token)
-        e["events"].append(f"{me.name}: {card.name}{' mit Kicker' if kicked else ''} – Kopie von {t.card.name}")
+        e["events"].append(i18n.t("{me}: {card_name}{x3} – Kopie von {t_card_name}", me=i18n.t(me.name), card_name=card.name, x3=i18n.t(' mit Kicker') if kicked else '', t_card_name=t.card.name))
         creature_enters(me, token, step, e, opp, cast=False)
 
 
@@ -6252,7 +6250,7 @@ def reveal_lands(p, opp, card, step, e):
                 p.graveyard.append(c)
     for land in lands:
         p.lands.append(land)
-        e["events"].append(f"{p.name}: {card.name} – {land.name} getappt aufs Feld")
+        e["events"].append(i18n.t("{p}: {card_name} – {land_name} getappt aufs Feld", p=i18n.t(p.name), card_name=card.name, land_name=land.name))
         if opp is not None:
             on_land(p, opp, land, step, e, with_mana=False)
 
@@ -6291,7 +6289,7 @@ def flow_sac_draw(p, card, n, e, exclude=()):
         return
     name = sac_fodder(p, pick)
     _draw(p, n)
-    e["events"].append(f"{p.name}: {card.name} opfert {name} und zieht {n}")
+    e["events"].append(i18n.t("{p}: {card_name} opfert {name} und zieht {n}", p=i18n.t(p.name), card_name=card.name, name=name, n=n))
 
 
 def attack_flow(me, opp, attackers, step, e):
@@ -6311,7 +6309,7 @@ def counter_hit_draws(p, hitters, e):
     for a in hitters if n else ():
         if a.bonus > 0 or a.stun:
             _draw(p, n)
-            e["events"].append(f"{p.name}: Phlox – {a.card.name} trifft, zieht {n}")
+            e["events"].append(i18n.t("{p}: Phlox – {a_card_name} trifft, zieht {n}", p=i18n.t(p.name), a_card_name=a.card.name, n=n))
 
 
 def main1_loot(p, e):
@@ -6320,14 +6318,14 @@ def main1_loot(p, e):
     for c in [c for c in p.creatures if c.card.main1_loot_lands and not c.dead]:
         _draw(p)
         if snw_x(p) >= c.card.main1_loot_lands:
-            e["events"].append(f"{p.name}: {c.card.name} zieht")
+            e["events"].append(i18n.t("{p}: {c_card_name} zieht", p=i18n.t(p.name), c_card_name=c.card.name))
             continue
         gone = choose_discard(p)
         if gone is not None:
             p.hand.remove(gone)
             p.graveyard.append(gone)
             discarded(p, e, [gone])
-        e["events"].append(f"{p.name}: {c.card.name} zieht" + (f", wirft {gone.name} ab" if gone else ""))
+        e["events"].append(i18n.t("{p}: {c_card_name} zieht", p=i18n.t(p.name), c_card_name=c.card.name) + (i18n.t(", wirft {gone_name} ab", gone_name=gone.name) if gone else ""))
 
 
 def dig_pick(p, cards):
@@ -6358,7 +6356,7 @@ def federation_pumps(p, opp, step, e):
         pick = max(cands, key=danger)
         pick.pump += x
         pick.tpump += x
-        e["events"].append(f"{p.name}: {src.card.name} – {pick.card.name} +{x}/+{x}")
+        e["events"].append(i18n.t("{p}: {src_card_name} – {pick_card_name} +{x}/+{x}", p=i18n.t(p.name), src_card_name=src.card.name, pick_card_name=pick.card.name, x=x))
 
 
 def federation_draws(p, step, e):
@@ -6369,7 +6367,7 @@ def federation_draws(p, step, e):
         if not n:
             continue
         _draw(p, n)
-        e["events"].append(f"{p.name}: {src.card.name} zieht {n}")
+        e["events"].append(i18n.t("{p}: {src_card_name} zieht {n}", p=i18n.t(p.name), src_card_name=src.card.name, n=n))
         if n >= 3:
             for c in p.creatures:
                 if not c.dead:
@@ -6387,7 +6385,7 @@ def dahar_pay(p, opp, card, e):
     if choose_target(card.removal, p, opp) is None and opp.life > _amount(card.removal, p):
         return False
     name = sac_fodder(p, pick)
-    e["events"].append(f"{p.name}: {card.name} opfert {name}")
+    e["events"].append(i18n.t("{p}: {card_name} opfert {name}", p=i18n.t(p.name), card_name=card.name, name=name))
     return True
 
 
@@ -6419,7 +6417,7 @@ def targ_sacrifice(p, src, e):
             pick.dead, name = True, pick.card.name
         else:
             return
-    e["events"].append(f"{p.name}: {src.card.name} – opfert {name}")
+    e["events"].append(i18n.t("{p}: {src_card_name} – opfert {name}", p=i18n.t(p.name), src_card_name=src.card.name, name=name))
 
 
 def use_tea(p, e):
@@ -6434,10 +6432,10 @@ def use_tea(p, e):
         p.graveyard.append(card)
         if opp is not None and dmg and (opp.life <= dmg or p.life > 10 or not life):
             deal_noncombat(p, opp, dmg, e)
-            e["events"].append(f"{p.name}: {card.name} – {dmg} Schaden")
+            e["events"].append(i18n.t("{p}: {card_name} – {dmg} Schaden", p=i18n.t(p.name), card_name=card.name, dmg=dmg))
         else:
             gain_life(p, life)
-            e["events"].append(f"{p.name}: {card.name} – {life} Leben")
+            e["events"].append(i18n.t("{p}: {card_name} – {life} Leben", p=i18n.t(p.name), card_name=card.name, life=life))
 
 
 def savvy_treasures(p, e):
@@ -6447,7 +6445,7 @@ def savvy_treasures(p, e):
             continue
         c.tapped = True
         artifact_tokens(p, "treasure", 1, p.now, e)
-        e["events"].append(f"{p.name}: {c.card.name} – Treasure")
+        e["events"].append(i18n.t("{p}: {c_card_name} – Treasure", p=i18n.t(p.name), c_card_name=c.card.name))
 
 
 GEORGIOU_OFFICER = Card(False, 0, (), (), True, False, 1, 1, name="Officer", is_token=True,
@@ -6484,7 +6482,7 @@ def end_step_triggers(me, opp, e):
             continue
         back, p.ghost_back = p.ghost_back, []
         for card, is_creature in back:  # Ghost of Illyria: zurueck (neues Objekt, Betreten-Effekte)
-            e["events"].append(f"{p.name}: {card.name} kehrt zurück")
+            e["events"].append(i18n.t("{p}: {card_name} kehrt zurück", p=i18n.t(p.name), card_name=card.name))
             if is_creature:
                 new = Creature(card, p.now)
                 p.creatures.append(new)
@@ -6496,7 +6494,7 @@ def end_step_triggers(me, opp, e):
             for c in p.creatures:
                 if c.card.returned_draw and not c.dead:
                     _draw(p)
-                    e["events"].append(f"{p.name}: {c.card.name} – zieht")
+                    e["events"].append(i18n.t("{p}: {c_card_name} – zieht", p=i18n.t(p.name), c_card_name=c.card.name))
     for t in me.stolen:  # Worf, Intelligence Contractor: zurueck zum Gegner
         if any(t is x for x in me.creatures) and opp is not None:
             me.creatures.remove(t)
@@ -6515,7 +6513,7 @@ def end_step_triggers(me, opp, e):
                     break
             else:
                 continue
-            e["events"].append(f"{p.name}: {c.card.name} – {top.name} gratis")
+            e["events"].append(i18n.t("{p}: {c_card_name} – {top_name} gratis", p=i18n.t(p.name), c_card_name=c.card.name, top_name=top.name))
             if legend_ok(p, top):
                 _resolve(p, foe, top, p.now, e, owner=foe)
     for p in (me, opp):  # Bones McCoy: mit Marke zurueck
@@ -6538,7 +6536,7 @@ def end_step_triggers(me, opp, e):
                 if lost:
                     foe.life -= lost
                     gain_life(p, lost)
-                    e["events"].append(f"{p.name}: {c.card.name} – {foe.name} verliert {lost} Leben")
+                    e["events"].append(i18n.t("{p}: {c_card_name} – {foe} verliert {lost} Leben", p=i18n.t(p.name), c_card_name=c.card.name, foe=i18n.t(foe.name), lost=lost))
 
 
 def use_food(p, e):
@@ -6547,7 +6545,7 @@ def use_food(p, e):
     while p.foods and _pay_open(p, ((2, ()),), treasure=False):
         p.foods -= 1
         gain_life(p, 3)
-        e["events"].append(f"{p.name}: Food – 3 Leben")
+        e["events"].append(i18n.t("{p}: Food – 3 Leben", p=i18n.t(p.name)))
 
 
 def card_effects(me, opp, card, step, entry, modes=None):
@@ -6562,7 +6560,7 @@ def card_effects(me, opp, card, step, entry, modes=None):
         if not card.is_instant_sorcery:  # 700.2b: Modi des Betreten-Ausloesers (Zauber: schon in on_cast)
             face_dilemma(me, step, entry)
         for sub in (modes if modes is not None else choose_modes(me, opp, card, step)):
-            entry["events"].append(f"{me.name}: {card.name} – Modus: {_mode_label(sub)}")
+            entry["events"].append(i18n.t("{me}: {card_name} – Modus: {x3}", me=i18n.t(me.name), card_name=card.name, x3=_mode_label(sub)))
             card_effects(me, opp, sub, step, entry)
         return
     if card.is_mode:
@@ -6581,14 +6579,14 @@ def card_effects(me, opp, card, step, entry, modes=None):
             _leave(me, t.card)
             (t.owner or me).hand.append(t.base_card or t.card)
             (t.owner or me).returned_turn = me.now
-            entry["events"].append(f"{me.name}: {card.name} – {t.card.name} auf die Hand")
+            entry["events"].append(i18n.t("{me}: {card_name} – {t_card_name} auf die Hand", me=i18n.t(me.name), card_name=card.name, t_card_name=t.card.name))
     if card.q_stack:  # Q: mischen, bis zur ersten Nichtland-Karte exilieren
         random.shuffle(me.library)
         while me.library:
             top = me.library.pop(0)
             if not top.is_land:
                 me.q_cards.append(top)
-                entry["events"].append(f"{me.name}: {card.name} exiliert {top.name}")
+                entry["events"].append(i18n.t("{me}: {card_name} exiliert {top_name}", me=i18n.t(me.name), card_name=card.name, top_name=top.name))
                 break
     if card.opp_minus_power and opp is not None:  # V'Ger: bis zu unserem naechsten Zug
         for c in opp.creatures:
@@ -6608,7 +6606,7 @@ def card_effects(me, opp, card, step, entry, modes=None):
             t.extra.add("haste")
             me.creatures.append(t)
             me.stolen.append(t)
-            entry["events"].append(f"{me.name}: {card.name} übernimmt {t.card.name}")
+            entry["events"].append(i18n.t("{me}: {card_name} übernimmt {t_card_name}", me=i18n.t(me.name), card_name=card.name, t_card_name=t.card.name))
     if card.infiltrate and opp is not None:  # Dominion Infiltration: X aus dem offenen Mana
         alive = sorted((c for c in opp.creatures if not c.dead), key=danger, reverse=True)
         x = 0
@@ -6618,7 +6616,7 @@ def card_effects(me, opp, card, step, entry, modes=None):
             tok = Creature(t.card._replace(is_token=True, haste=True), step)
             tok.gy, tok.ctl, tok.exile_step = me.graveyard, me, step
             me.creatures.append(tok)
-            entry["events"].append(f"{me.name}: {card.name} – Kopie von {t.card.name}")
+            entry["events"].append(i18n.t("{me}: {card_name} – Kopie von {t_card_name}", me=i18n.t(me.name), card_name=card.name, t_card_name=t.card.name))
             creature_enters(me, tok, step, entry, opp, cast=False)
     if card.bones_return:  # Bones McCoy: bestes Nicht-Doctor-Permanent aus dem Friedhof
         cands = bones_cands(me)
@@ -6626,7 +6624,7 @@ def card_effects(me, opp, card, step, entry, modes=None):
             pick = _best_from_gy(me, cands)
             me.graveyard.remove(pick)
             me.hand.append(pick)
-            entry["events"].append(f"{me.name}: {card.name} – {pick.name} auf die Hand")
+            entry["events"].append(i18n.t("{me}: {card_name} – {pick_name} auf die Hand", me=i18n.t(me.name), card_name=card.name, pick_name=pick.name))
     if card.bones_protect:  # Bones McCoy: die gefaehrlichste andere eigene Kreatur
         others = [c for c in me.creatures if not c.dead and c.card.name != card.name]
         if others:
@@ -6653,7 +6651,7 @@ def card_effects(me, opp, card, step, entry, modes=None):
         artifact_tokens(me, "treasure", card.treasure, step, entry)
     if card.heartwood:  # 111.10x: Heartwood-Token
         artifact_tokens(me, HEARTWOOD, card.heartwood, step, entry)
-        entry["events"].append(f"{me.name}: {card.name} – {card.heartwood} Heartwood-Token")
+        entry["events"].append(i18n.t("{me}: {card_name} – {card_heartwood} Heartwood-Token", me=i18n.t(me.name), card_name=card.name, card_heartwood=card.heartwood))
     me.life -= card.life_loss  # "You lose N life"
     trk_effects(me, opp, card, step, entry)
     if card.loot:  # "Draw a card, then discard a card"
@@ -6689,7 +6687,7 @@ def card_effects(me, opp, card, step, entry, modes=None):
             if pick is not None:
                 me.graveyard.remove(pick)
                 me.hand.append(pick)
-                entry["events"].append(f"{me.name}: {card.name} – {pick.name} auf die Hand")
+                entry["events"].append(i18n.t("{me}: {card_name} – {pick_name} auf die Hand", me=i18n.t(me.name), card_name=card.name, pick_name=pick.name))
     if card.team_grant:  # Artifist Acumen
         for c in me.creatures:
             if not c.dead:
@@ -6702,7 +6700,7 @@ def card_effects(me, opp, card, step, entry, modes=None):
             me.library.remove(pick)
             random.shuffle(me.library)
             me.graveyard.append(pick)
-            entry["events"].append(f"{me.name}: {card.name} – {pick.name} in den Friedhof")
+            entry["events"].append(i18n.t("{me}: {card_name} – {pick_name} in den Friedhof", me=i18n.t(me.name), card_name=card.name, pick_name=pick.name))
     if card.life_tokens is not None and me.gained > 0:  # Germinate Recruits: X = Leben in diesem Zug
         make_tokens(me, [(me.gained, card.life_tokens)], step, entry, opp, card.name)
     if card.entrust:  # Entrust the Spark (nur mit Jace-Token)
@@ -6719,7 +6717,7 @@ def card_effects(me, opp, card, step, entry, modes=None):
         if me.library:
             top = me.library.pop(0)
             me.impulse.append((top, me.own_turns + 1))
-            entry["events"].append(f"{me.name}: {card.name} – {top.name} ins Exil (spielbar)")
+            entry["events"].append(i18n.t("{me}: {card_name} – {top_name} ins Exil (spielbar)", me=i18n.t(me.name), card_name=card.name, top_name=top.name))
     if card.rummage_spell:  # "You may discard a card. If you do, draw a card."
         gone = surplus_land(me)
         if gone is not None:
@@ -6727,21 +6725,21 @@ def card_effects(me, opp, card, step, entry, modes=None):
             me.graveyard.append(gone)
             discarded(me, entry)
             _draw(me)
-            entry["events"].append(f"{me.name}: {card.name} – wirft {gone.name} ab und zieht")
+            entry["events"].append(i18n.t("{me}: {card_name} – wirft {gone_name} ab und zieht", me=i18n.t(me.name), card_name=card.name, gone_name=gone.name))
     if card.hand_pick and card.hand_pick_gift and opp is not None:  # Boisterous Clique: Exil, dafuer Mind Stone
         pick = choose_from_hand(opp, card.hand_pick)
         gift = conjure(card.hand_pick_gift)
         if pick is not None and gift is not None:
             opp.hand.remove(pick)
             opp.hand.append(gift)
-            entry["events"].append(f"{me.name}: {card.name} – {pick.name} ins Exil, {opp.name} bekommt {gift.name}")
+            entry["events"].append(i18n.t("{me}: {card_name} – {pick_name} ins Exil, {opp} bekommt {gift_name}", me=i18n.t(me.name), card_name=card.name, pick_name=pick.name, opp=i18n.t(opp.name), gift_name=gift.name))
     elif card.hand_pick and opp is not None:
         pick = choose_from_hand(opp, card.hand_pick)
         if pick is not None:
             opp.hand.remove(pick)
             opp.graveyard.append(pick)
             discarded(opp, entry)
-            entry["events"].append(f"{me.name}: {card.name} – {opp.name} wirft {pick.name} ab")
+            entry["events"].append(i18n.t("{me}: {card_name} – {opp} wirft {pick_name} ab", me=i18n.t(me.name), card_name=card.name, opp=i18n.t(opp.name), pick_name=pick.name))
     if effects.modes:
         board, bonus, pump = me.board()
         before = [c.pump for c in me.creatures]
@@ -6781,7 +6779,7 @@ def make_tokens(p, tokens, step, e, opp=None, source=""):
             c = Creature(token, step)
             p.creatures.append(c)
             creature_enters(p, c, step, e, opp, cast=False)
-        e["events"].append(f"{p.name}: {source} – {n} {token.name}-Token")
+        e["events"].append(i18n.t("{p}: {source} – {n} {token_name}-Token", p=i18n.t(p.name), source=source, n=n, token_name=token.name))
 
 
 def _tough_ratio(card):
@@ -6804,7 +6802,7 @@ def _edict_paid(me, opp, card, e):
         return False
     pick = min(others, key=_value)
     pick.dead = True
-    e["events"].append(f"{me.name}: opfert {pick.card.name} für {card.name}")
+    e["events"].append(i18n.t("{me}: opfert {pick_card_name} für {card_name}", me=i18n.t(me.name), pick_card_name=pick.card.name, card_name=card.name))
     bury((me,), e)
     return True
 
@@ -6842,7 +6840,7 @@ def put_back(p, card, dest, step, e, opp=None, tapped=False, counters=0, finalit
     """Eine Karte aus dem Friedhof (schon entfernt) aufs Feld bzw. auf die Hand."""
     if dest == "hand":
         p.hand.append(card)
-        e["events"].append(f"{p.name}: {card.name} aus dem Friedhof auf die Hand")
+        e["events"].append(i18n.t("{p}: {card_name} aus dem Friedhof auf die Hand", p=i18n.t(p.name), card_name=card.name))
         return
     if card.is_creature:
         c = Creature(card, step)
@@ -6859,7 +6857,7 @@ def put_back(p, card, dest, step, e, opp=None, tapped=False, counters=0, finalit
     else:
         p.perms.append(card)
         permanent_enters(p, opp, card, step, e)
-    e["events"].append(f"{p.name}: {card.name} aus dem Friedhof ins Spiel")
+    e["events"].append(i18n.t("{p}: {card_name} aus dem Friedhof ins Spiel", p=i18n.t(p.name), card_name=card.name))
 
 
 def graveyard_casts(p):
@@ -7040,7 +7038,7 @@ def combat_tricks(p, pairs, opp, e, step, attacking):
             p.graveyard.append(orig)
             discarded(p, e, [orig])
             _apply_trick(best[1], own[best[2]], own, best[3], best[4])
-            e["events"].append(f"{p.name}: {orig.name} (aus der Hand) auf {own[best[2]].card.name}")
+            e["events"].append(i18n.t("{p}: {orig_name} (aus der Hand) auf {x3}", p=i18n.t(p.name), orig_name=orig.name, x3=own[best[2]].card.name))
             continue
         _cast_from_open(p, card)
         if try_counter(p, card, step, e, threat="lethal" if best[5] else None):
@@ -7060,7 +7058,7 @@ def combat_tricks(p, pairs, opp, e, step, attacking):
         elif card.is_instant_sorcery:
             p.graveyard.append(card)
         on_cast(p, card, step, e)
-        e["events"].append(f"{p.name}: Kampftrick {card.name} auf {own[best[2]].card.name}")
+        e["events"].append(i18n.t("{p}: Kampftrick {card_name} auf {x3}", p=i18n.t(p.name), card_name=card.name, x3=own[best[2]].card.name))
 
 
 def instant_removals(p):
@@ -7145,7 +7143,7 @@ def _use_removal(p, card, alts, is_spell, step, e, zone="hand", other=None, fx=N
     elif zone == "board":  # die Kreatur opfert sich als Kosten
         src = next(c for c in p.creatures if c.card == card and not c.dead)
         src.dead = True
-        e["events"].append(f"{p.name}: opfert {card.name}")
+        e["events"].append(i18n.t("{p}: opfert {card_name}", p=i18n.t(p.name), card_name=card.name))
         bury((p,), e)
         return True
     else:
@@ -7162,7 +7160,7 @@ def _use_removal(p, card, alts, is_spell, step, e, zone="hand", other=None, fx=N
             deal_noncombat(p, other, face, e)
         gain_life(p, fx.spell_life)
     else:
-        e["events"].append(f"{p.name}: wirft {card.name} ab (Fähigkeit)")
+        e["events"].append(i18n.t("{p}: wirft {card_name} ab (Fähigkeit)", p=i18n.t(p.name), card_name=card.name))
         discarded(p, e)
     return True
 
@@ -7189,7 +7187,7 @@ def needs_cast(p, e, step, doomed=()):
             c.extra |= {"hexproof", "indestructible"}
     p.prevent_turn = p.now
     on_cast(p, card, step, e)
-    e["events"].append(f"{p.name}: {card.name} (opfert {fodder.card.name})")
+    e["events"].append(i18n.t("{p}: {card_name} (opfert {fodder_card_name})", p=i18n.t(p.name), card_name=card.name, fodder_card_name=fodder.card.name))
     bury((p,), e)
     return True
 
@@ -7234,7 +7232,7 @@ def respond_to_attack(dfn, att, attackers, e, step):
             continue
         new = Creature(card, step)
         dfn.creatures.append(new)
-        e["events"].append(f"{dfn.name}: {card.name} mit Flash gegen einen Angreifer")
+        e["events"].append(i18n.t("{dfn}: {card_name} mit Flash gegen einen Angreifer", dfn=i18n.t(dfn.name), card_name=card.name))
         on_cast(dfn, card, step, e)
         creature_enters(dfn, new, step, e, att)
         alive = [a for a in attackers if a in att.creatures and not a.dead and not a.locked]
@@ -7260,7 +7258,7 @@ def respond_to_attack(dfn, att, attackers, e, step):
                 on_cast(dfn, card, step, e)
                 continue
             dfn.creatures.append(new)
-            e["events"].append(f"{dfn.name}: {card.name} mit Flash als Blocker")
+            e["events"].append(i18n.t("{dfn}: {card_name} mit Flash als Blocker", dfn=i18n.t(dfn.name), card_name=card.name))
             if card.treasure:
                 dfn.treasures += card.treasure
             on_cast(dfn, card, step, e)
@@ -7281,7 +7279,7 @@ def end_step_instants(dfn, act, e, step):
             cast_removal(rc, dfn, act, e, step)
     for card in sorted([c for c in dfn.hand if c.flash and not _combat_flash_removal(c)], key=lambda c: -c.mv):
         if card in dfn.hand and legend_ok(dfn, card) and _cast_from_open(dfn, card):
-            e["events"].append(f"{dfn.name}: {card.name} mit Flash am Ende des Zugs")
+            e["events"].append(i18n.t("{dfn}: {card_name} mit Flash am Ende des Zugs", dfn=i18n.t(dfn.name), card_name=card.name))
             _resolve(dfn, act, card, step, e)
             if card in dfn.graveyard and not card.is_instant_sorcery:
                 dfn.graveyard.remove(card)
@@ -7294,7 +7292,7 @@ def end_step_instants(dfn, act, e, step):
         if best[0] <= (0,) or best[0][0] >= 5:  # Removal und Lethal laufen ueber die Removal-Wege
             continue
         if _cast_from_open(dfn, card):
-            e["events"].append(f"{dfn.name}: {card.name} am Ende des Zugs")
+            e["events"].append(i18n.t("{dfn}: {card_name} am Ende des Zugs", dfn=i18n.t(dfn.name), card_name=card.name))
             _resolve(dfn, act, card, step, e, modes=[card.choices[1][best[1]]])
     for card in sorted([c for c in dfn.hand if c.is_instant and not c.removal and not _trick_atoms(c)
                         and not c.choices and not c.counter], key=lambda c: -c.mv):
@@ -7303,7 +7301,7 @@ def end_step_instants(dfn, act, e, step):
         if card.life_tokens is not None and dfn.gained < 2:  # Germinate Recruits erst ab X = 2
             continue
         if card in dfn.hand and reanimate_ok(dfn, card) and _cast_from_open(dfn, card):
-            e["events"].append(f"{dfn.name}: {card.name} am Ende des Zugs")
+            e["events"].append(i18n.t("{dfn}: {card_name} am Ende des Zugs", dfn=i18n.t(dfn.name), card_name=card.name))
             _resolve(dfn, act, card, step, e)
     for card in sorted(flashbacks, key=lambda c: -c.mv):  # nur Karten, die schon vorher im Friedhof lagen
         if card not in dfn.graveyard or not reanimate_ok(dfn, card):
@@ -7317,9 +7315,9 @@ def end_step_instants(dfn, act, e, step):
             gone = choose_discard(dfn)
             dfn.hand.remove(gone)
             dfn.graveyard.append(gone)
-            e["events"].append(f"{dfn.name}: wirft {gone.name} ab (Flashback)")
+            e["events"].append(i18n.t("{dfn}: wirft {gone_name} ab (Flashback)", dfn=i18n.t(dfn.name), gone_name=gone.name))
             discarded(dfn, e)
-        e["events"].append(f"{dfn.name}: {card.name} per Flashback am Ende des Zugs")
+        e["events"].append(i18n.t("{dfn}: {card_name} per Flashback am Ende des Zugs", dfn=i18n.t(dfn.name), card_name=card.name))
         _resolve(dfn, act, card._replace(draws=card.alt_draws) if card.alt_draws else card, step, e, to_exile=True)
     end_step_cycling(dfn, e)
     lasting_abilities(dfn, act, step, e, own_turn=False, mode="rest")
@@ -7342,7 +7340,7 @@ def gy_draws(p, e):
             p.graveyard.remove(card)
             _draw(p, card.gy_draw[1])
             p.life -= card.gy_draw_loss
-            e["events"].append(f"{p.name}: exiliert {card.name} aus dem Friedhof und zieht {card.gy_draw[1]}")
+            e["events"].append(i18n.t("{p}: exiliert {card_name} aus dem Friedhof und zieht {x3}", p=i18n.t(p.name), card_name=card.name, x3=card.gy_draw[1]))
 
 
 def _gy_worth(c):
@@ -7361,7 +7359,7 @@ def gy_bottom_abilities(p, opp, e):
             p.graveyard.remove(card)
             p.library.append(card)
             gain_life(p, card.gy_bottom_life[1])
-            e["events"].append(f"{p.name}: {card.name} aus dem Friedhof unter die Bibliothek")
+            e["events"].append(i18n.t("{p}: {card_name} aus dem Friedhof unter die Bibliothek", p=i18n.t(p.name), card_name=card.name))
     watchers = [c for c in p.creatures if c.card.gy_leave and not c.dead
                 and not (c.card.gy_leave[2] and c.once.get("gy_leave") == p.now)]
     for src in [c for c in p.creatures if c.card.gy_bottom_ability and not c.dead and not c.tapped]:
@@ -7373,7 +7371,7 @@ def gy_bottom_abilities(p, opp, e):
         pick = min(p.graveyard, key=_gy_worth)
         p.graveyard.remove(pick)
         p.library.append(pick)
-        e["events"].append(f"{p.name}: {src.card.name} – {pick.name} unter die Bibliothek")
+        e["events"].append(i18n.t("{p}: {src_card_name} – {pick_name} unter die Bibliothek", p=i18n.t(p.name), src_card_name=src.card.name, pick_name=pick.name))
         bury((p,) + ((opp,) if opp is not None else ()), e)
         watchers = [c for c in watchers if not (c.card.gy_leave[2] and c.once.get("gy_leave") == p.now)]
 
@@ -7391,8 +7389,8 @@ def combat_exile_counters(p, step, e):
         target = buff_target(p, step)
         if target is not None:
             target.bonus += 1
-        e["events"].append(f"{p.name}: {src.card.name} exiliert {pick.name}"
-                           + (f" – Marke auf {target.card.name}" if target is not None else ""))
+        e["events"].append(i18n.t("{p}: {src_card_name} exiliert {pick_name}", p=i18n.t(p.name), src_card_name=src.card.name, pick_name=pick.name)
+                           + (i18n.t(" – Marke auf {target_card_name}", target_card_name=target.card.name) if target is not None else ""))
 
 
 def confidant_end_step(p, e):
@@ -7405,7 +7403,7 @@ def confidant_end_step(p, e):
         for card in surveil(p.library, 1, p.hand, p.lands):
             if card.mv <= p.gained:
                 p.hand.append(card)
-                e["events"].append(f"{p.name}: {c.card.name} – Surveil 1, {card.name} auf die Hand")
+                e["events"].append(i18n.t("{p}: {c_card_name} – Surveil 1, {card_name} auf die Hand", p=i18n.t(p.name), c_card_name=c.card.name, card_name=card.name))
             else:
                 p.graveyard.append(card)
 
@@ -7431,7 +7429,7 @@ def tap_artifact_abilities(p, e):
             for x in creatures[:n - take]:
                 x.tapped = True
             apply_ability(p, c, ((), 0, False, "instant", atoms), None, e)
-            e["events"].append(f"{p.name}: {c.card.name} tappt {n} Artefakte")
+            e["events"].append(i18n.t("{p}: {c_card_name} tappt {n} Artefakte", p=i18n.t(p.name), c_card_name=c.card.name, n=n))
 
 
 def end_step_cycling(p, e):
@@ -7455,7 +7453,7 @@ def end_step_cycling(p, e):
             rem, cand = plan
             do_cycle(p.hand, p.library, cycler, cand, graveyard=p.graveyard)
             p.open = rem
-            _cycle_event(p, cycler, cand, e, "Ende des gegnerischen Zugs")
+            _cycle_event(p, cycler, cand, e, i18n.t("Ende des gegnerischen Zugs"))
             done = True
             break
         if not done:
@@ -7575,12 +7573,12 @@ def apply_ability(p, src, ab, target, e=None, gy=None):
             continue
         if kind == "surveil":
             if e is not None:
-                surveil_cards(p, [atom[1]], e, "Fähigkeit")
+                surveil_cards(p, [atom[1]], e, i18n.t("Fähigkeit"))
             did = True
             continue
         if kind == "token":
             if e is not None:
-                make_tokens(p, [atom[1:]], p.now, e, p.opponent, src.card.name if src is not None else "Fähigkeit")
+                make_tokens(p, [atom[1:]], p.now, e, p.opponent, src.card.name if src is not None else i18n.t("Fähigkeit"))
             did = True
             continue
         scope = atom[-1]
@@ -7639,8 +7637,8 @@ def _activate(p, src, ab, target, e, mode, gy=None):
         src.once["snw_ability"] = p.now
     if gy is not None:
         p.graveyard.remove(gy)
-    who = src.card.name if src is not None else (f"{gy.name} (aus dem Friedhof)" if gy is not None else "Permanent")
-    e["events"].append(f"{p.name}: Fähigkeit von {who}" + (f" auf {target.card.name}" if target is not None else ""))
+    who = src.card.name if src is not None else (i18n.t("{gy_name} (aus dem Friedhof)", gy_name=gy.name) if gy is not None else i18n.t("Permanent"))
+    e["events"].append(i18n.t("{p}: Fähigkeit von {who}", p=i18n.t(p.name), who=who) + (i18n.t(" auf {target_card_name}", target_card_name=target.card.name) if target is not None else ""))
     apply_ability(p, src, ab, target, e, gy)
     return True
 
@@ -7867,7 +7865,7 @@ def pre_block_abilities(dfn, att, attackers, e, step):
 
 
 def _desc(cs):
-    return [c.label() + (" (getappt)" if c.tapped else "") + (" (gesperrt)" if c.locked else "") for c in cs]
+    return [c.label() + (i18n.t(" (getappt)") if c.tapped else "") + (i18n.t(" (gesperrt)") if c.locked else "") for c in cs]
 
 
 def _hits_face(card):
@@ -7930,7 +7928,7 @@ def stun_from_graveyard(me, opp, step, e):
         pay_ward(me, pick, e)
         pick.tapped = True
         pick.stun += 1
-        e["events"].append(f"{me.name}: {card.name} (aus dem Friedhof) – {pick.card.name} getappt mit Stun-Marke")
+        e["events"].append(i18n.t("{me}: {card_name} (aus dem Friedhof) – {pick_card_name} getappt mit Stun-Marke", me=i18n.t(me.name), card_name=card.name, pick_card_name=pick.card.name))
 
 
 def _may_equip(g, c):
@@ -7954,7 +7952,7 @@ def attach_gear(p, g, host, e):
         if g in c.gear:
             c.gear.remove(g)
     host.gear.append(g)
-    e["events"].append(f"{p.name}: {g.name} an {host.card.name}")
+    e["events"].append(i18n.t("{p}: {g_name} an {host_card_name}", p=i18n.t(p.name), g_name=g.name, host_card_name=host.card.name))
 
 
 def equip_gear(me, step, e):
@@ -7979,7 +7977,7 @@ def equip_gear(me, step, e):
         if host is not None:
             host.gear.remove(g)
         pick.gear.append(g)
-        e["events"].append(f"{me.name}: {g.name} an {pick.card.name}")
+        e["events"].append(i18n.t("{me}: {g_name} an {pick_card_name}", me=i18n.t(me.name), g_name=g.name, pick_card_name=pick.card.name))
 
 
 def combat_draw_abilities(me, opp, step, e):
@@ -7993,7 +7991,7 @@ def combat_draw_abilities(me, opp, step, e):
         alts, n = c.card.combat_draw_ability
         if _pay_ability(me, alts, "free"):
             c.tdraw += n
-            e["events"].append(f"{me.name}: Fähigkeit von {c.card.name} (zieht {n} bei Kampfschaden)")
+            e["events"].append(i18n.t("{me}: Fähigkeit von {c_card_name} (zieht {n} bei Kampfschaden)", me=i18n.t(me.name), c_card_name=c.card.name, n=n))
 
 
 def _debuff_card(card):
@@ -8062,7 +8060,7 @@ def debuff_tricks(p, pairs, opp, e, step, attacking):
             perpetual_pump(target, -n, 0)
         else:
             target.pump -= n
-        e["events"].append(f"{p.name}: {card.name} – {target.card.name} −{n}/−0")
+        e["events"].append(i18n.t("{p}: {card_name} – {target_card_name} −{n}/−0", p=i18n.t(p.name), card_name=card.name, target_card_name=target.card.name, n=n))
 
 
 def combat_buffs(me, step, e):
@@ -8078,11 +8076,11 @@ def combat_buffs(me, step, e):
         n = c.card.combat_buff
         if me.surveilled:
             pick.bonus += n
-            e["events"].append(f"{me.name}: {c.card.name} – Marke auf {pick.card.name}")
+            e["events"].append(i18n.t("{me}: {c_card_name} – Marke auf {pick_card_name}", me=i18n.t(me.name), c_card_name=c.card.name, pick_card_name=pick.card.name))
         else:
             pick.pump += n
             pick.tpump += n
-            e["events"].append(f"{me.name}: {c.card.name} – {pick.card.name} +{n}/+{n}")
+            e["events"].append(i18n.t("{me}: {c_card_name} – {pick_card_name} +{n}/+{n}", me=i18n.t(me.name), c_card_name=c.card.name, pick_card_name=pick.card.name, n=n))
     for c in list(me.creatures):  # Cantankerous Captain: +P/+0, ab Gesamtstaerke N dazu Menace
         if c.dead or not c.card.combat_pump_power:
             continue
@@ -8091,7 +8089,7 @@ def combat_buffs(me, step, e):
         pick.pump += pw
         if total_power(me) >= need:
             pick.extra |= set(kws)
-        e["events"].append(f"{me.name}: {c.card.name} – {pick.card.name} +{pw}/+0"
+        e["events"].append(i18n.t("{me}: {c_card_name} – {pick_card_name} +{pw}/+0", me=i18n.t(me.name), c_card_name=c.card.name, pick_card_name=pick.card.name, pw=pw)
                            + (f", {', '.join(kws)}" if kws[0] in pick.extra else ""))
 
 
@@ -8109,7 +8107,7 @@ def jadzia_mana(p, e):
         if c.card.main1_counter_mana and not c.dead:
             c.bonus += 1
             out += [("G",)] * c.bonus
-            e["events"].append(f"{p.name}: {c.card.name} – Marke, {c.bonus} {{G}}")
+            e["events"].append(i18n.t("{p}: {c_card_name} – Marke, {c_bonus} {G}", p=i18n.t(p.name), c_card_name=c.card.name, c_bonus=c.bonus))
     return out
 
 
@@ -8127,7 +8125,7 @@ def lead_pump(me, opp, step, e):
         x = src.power
         target.pump += x
         target.tpump += x
-        e["events"].append(f"{me.name}: {src.card.name} – {target.card.name} +{x}/+{x}")
+        e["events"].append(i18n.t("{me}: {src_card_name} – {target_card_name} +{x}/+{x}", me=i18n.t(me.name), src_card_name=src.card.name, target_card_name=target.card.name, x=x))
 
 
 def combat_tokens(me, opp, step, e):
@@ -8150,7 +8148,7 @@ def combat_tokens(me, opp, step, e):
             me.riker_temp.append(land)
             on_land(me, opp, land, step, e, with_mana=False, untapped=True)
         if lands:
-            e["events"].append(f"{me.name}: {c.card.name} – {', '.join(l.name for l in lands)}")
+            e["events"].append(i18n.t("{me}: {c_card_name} – {x3}", me=i18n.t(me.name), c_card_name=c.card.name, x3=', '.join(l.name for l in lands)))
     if me.noncreature_cast:  # Gray and Adira: Kopie der gefaehrlichsten eigenen Kreatur
         for src in [x for x in me.creatures if x.card.gray_copy and not x.dead]:
             alive = [x for x in me.creatures if not x.dead]
@@ -8189,7 +8187,7 @@ def combat_counters(me, step, e):
             n = 1 + me.gained
         pick.bonus += n
         pick.extra |= set(kws)
-        e["events"].append(f"{me.name}: {card.name} – {n} Marke(n) auf {pick.card.name}"
+        e["events"].append(i18n.t("{me}: {card_name} – {n} Marke(n) auf {pick_card_name}", me=i18n.t(me.name), card_name=card.name, n=n, pick_card_name=pick.card.name)
                            + (f", {', '.join(kws)}" if kws else ""))
 
 
@@ -8207,20 +8205,20 @@ def attack_keywords(me, attackers, alone, e):
             a.pump += pw
             a.tpump += tw
             a.extra |= set(kws)
-            e["events"].append(f"{me.name}: {a.card.name} greift an: +{pw}/+{tw}" + (f", {', '.join(kws)}" if kws else ""))
+            e["events"].append(i18n.t("{me}: {a_card_name} greift an: +{pw}/+{tw}", me=i18n.t(me.name), a_card_name=a.card.name, pw=pw, tw=tw) + (f", {', '.join(kws)}" if kws else ""))
         if a.card.snw and snw_atom(a.card, "attack_team"):  # Pah-Wraith: eigene Kreaturen +X/+0
             x = snw_x(me)
             for c in me.creatures:
                 if not c.dead:
                     c.pump += x
-            e["events"].append(f"{me.name}: {a.card.name} greift an: Kreaturen +{x}/+0")
+            e["events"].append(i18n.t("{me}: {a_card_name} greift an: Kreaturen +{x}/+0", me=i18n.t(me.name), a_card_name=a.card.name, x=x))
         if a.card.attack_target:  # Nori: Ziel nach der Regel fuer Buffs, der gefaehrlichste Angreifer
             pw, tw, kws = a.card.attack_target
             pick = max((b for b in attackers if not b.dead), key=danger)
             pick.pump += pw
             pick.tpump += tw
             pick.extra |= set(kws)
-            e["events"].append(f"{me.name}: {a.card.name} – {pick.card.name}" + (f" +{pw}/+{tw}" if pw or tw else "")
+            e["events"].append(i18n.t("{me}: {a_card_name} – {pick_card_name}", me=i18n.t(me.name), a_card_name=a.card.name, pick_card_name=pick.card.name) + (f" +{pw}/+{tw}" if pw or tw else "")
                                + (f" {', '.join(kws)}" if kws else ""))
         if a.card.equipped_attack_kw:
             for b in attackers:
@@ -8230,8 +8228,7 @@ def attack_keywords(me, attackers, alone, e):
         for _src, card in static_sources(me):
             if card.alone_kw:
                 alone.extra |= set(card.alone_kw)
-                e["events"].append(f"{me.name}: {card.name} – {alone.card.name} greift allein an: "
-                                   f"{', '.join(card.alone_kw)}")
+                e["events"].append(i18n.t("{me}: {card_name} – {alone_card_name} greift allein an: {x4}", me=i18n.t(me.name), card_name=card.name, alone_card_name=alone.card.name, x4=', '.join(card.alone_kw)))
 
 
 def counter_boost(p):
@@ -8288,7 +8285,7 @@ def update_stations(p, step, e):
                 car.gy, car.ctl = p.graveyard, p
                 p.creatures.append(car)
                 st["creature"] = car
-                e["events"].append(f"{p.name}: {card.name} ist ab {at} Marken eine {pw}/{tw}-Kreatur")
+                e["events"].append(i18n.t("{p}: {card_name} ist ab {at} Marken eine {pw}/{tw}-Kreatur", p=i18n.t(p.name), card_name=card.name, at=at, pw=pw, tw=tw))
             else:
                 car = st["creature"]
                 new = car.card._replace(kw=card.kw + kws, cond_static=card.cond_static + conds)
@@ -8334,8 +8331,7 @@ def station_phase(me, opp, step, e):
                 break
             pick.tapped = True
             add_charge(me, st, pick.power)
-            e["events"].append(f"{me.name}: Station – {pick.card.name} tappt, {st['card'].name} hat {st['charge']} "
-                               f"Marken")
+            e["events"].append(i18n.t("{me}: Station – {pick_card_name} tappt, {x3} hat {x4} Marken", me=i18n.t(me.name), pick_card_name=pick.card.name, x3=st['card'].name, x4=st['charge']))
             update_stations(me, step, e)
 
 
@@ -8359,7 +8355,7 @@ def warp_core_phase(me, step, e):
         add_charge(me, st, n)
         update_stations(me, step, e)
         used = used + (core,)
-        e["events"].append(f"{me.name}: {core.name} – {st['card'].name} hat {st['charge']} Marken")
+        e["events"].append(i18n.t("{me}: {core_name} – {x3} hat {x4} Marken", me=i18n.t(me.name), core_name=core.name, x3=st['card'].name, x4=st['charge']))
     me.warp_used = (at, used)
 
 
@@ -8380,12 +8376,12 @@ def dathon_counters(me, opp, step, e):
                 return
             if mission is not None:
                 add_quest(me, mission)
-                e["events"].append(f"{me.name}: {src.card.name} – Quest-Marke")
+                e["events"].append(i18n.t("{me}: {src_card_name} – Quest-Marke", me=i18n.t(me.name), src_card_name=src.card.name))
             elif peace is not None:
                 peace["count"] += 1 + counter_boost(me)
-                e["events"].append(f"{me.name}: {src.card.name} – Peace-Marke")
+                e["events"].append(i18n.t("{me}: {src_card_name} – Peace-Marke", me=i18n.t(me.name), src_card_name=src.card.name))
             else:
-                e["events"].append(f"{me.name}: {src.card.name} – Lore-Marke")
+                e["events"].append(i18n.t("{me}: {src_card_name} – Lore-Marke", me=i18n.t(me.name), src_card_name=src.card.name))
                 saga_lore(me, opp, saga, step, e)
 
 
@@ -8399,7 +8395,7 @@ def seven_upgrade(me, step, e):
             continue
         c.base_card = c.base_card or c.card
         c.card = c.card._replace(power=7, toughness=9)
-        e["events"].append(f"{me.name}: {c.card.name} wird 7/9")
+        e["events"].append(i18n.t("{me}: {c_card_name} wird 7/9", me=i18n.t(me.name), c_card_name=c.card.name))
 
 
 def data_draw(p, e):
@@ -8420,7 +8416,7 @@ def data_draw(p, e):
                 left -= take
             data.bonus -= left
             _draw(p)
-            e["events"].append(f"{p.name}: {data.card.name} – {n} Marken weg, zieht")
+            e["events"].append(i18n.t("{p}: {data_card_name} – {n} Marken weg, zieht", p=i18n.t(p.name), data_card_name=data.card.name, n=n))
 
 
 def _threats(opp):
@@ -8453,7 +8449,7 @@ def picard_tutor(me, opp, step, e):
         if st is not None:
             add_charge(me, st, charge)
             update_stations(me, step, e)
-        e["events"].append(f"{me.name}: {src.card.name} tappt {n} Officers – {ship.name} mit {charge} Marken")
+        e["events"].append(i18n.t("{me}: {src_card_name} tappt {n} Officers – {ship_name} mit {charge} Marken", me=i18n.t(me.name), src_card_name=src.card.name, n=n, ship_name=ship.name, charge=charge))
 
 
 def worf_counters(me, opp, step, e):
@@ -8482,7 +8478,7 @@ def worf_counters(me, opp, step, e):
                 c.tapped = True
             me.worf_taps = (at, clues + picks.count("clue"), arts + tuple(x for x in picks if x != "clue"))
             w.bonus += 1
-            e["events"].append(f"{me.name}: {w.card.name} – Marke ({w.bonus})")
+            e["events"].append(i18n.t("{me}: {w_card_name} – Marke ({w_bonus})", me=i18n.t(me.name), w_card_name=w.card.name, w_bonus=w.bonus))
 
 
 def _bomb_value(p, mv):
@@ -8514,7 +8510,7 @@ def replicator_phase(me, step, e):
             me.clues += 1
         else:
             me.foods += 1
-        e["events"].append(f"{me.name}: {rep.name} – Kopie")
+        e["events"].append(i18n.t("{me}: {rep_name} – Kopie", me=i18n.t(me.name), rep_name=rep.name))
 
 
 def explosives_phase(me, opp, step, e):
@@ -8532,7 +8528,7 @@ def explosives_phase(me, opp, step, e):
         me.perms.remove(ex["card"])
         me.graveyard.append(ex["card"])
         me.explosives.remove(ex)
-        e["events"].append(f"{me.name}: {ex['card'].name} – zerstört alles mit Manawert {n}")
+        e["events"].append(i18n.t("{me}: {x2} – zerstört alles mit Manawert {n}", me=i18n.t(me.name), x2=ex['card'].name, n=n))
         for p in (me, opp):
             for c in p.creatures:
                 if not c.dead and c.card.mv == n and not c.has("indestructible"):
@@ -8559,7 +8555,7 @@ def explosives_phase(me, opp, step, e):
         live = card._replace()
         me.perms.append(live)
         me.explosives.append({"card": live, "charge": n, "since": step})
-        e["events"].append(f"{me.name}: {card.name} mit {n} Marken")
+        e["events"].append(i18n.t("{me}: {card_name} mit {n} Marken", me=i18n.t(me.name), card_name=card.name, n=n))
 
 
 def nog_levels(me, opp, step, e):
@@ -8570,10 +8566,10 @@ def nog_levels(me, opp, step, e):
             c.base_card = c.base_card or c.card
             c.card = c.card._replace(power=3, toughness=4, creature_types=("ferengi", "scout"),
                                      became_tapped=("surveil", 2))
-            e["events"].append(f"{me.name}: {c.card.name} wird Scout")
+            e["events"].append(i18n.t("{me}: {c_card_name} wird Scout", me=i18n.t(me.name), c_card_name=c.card.name))
         if "scout" in c.card.creature_types and free_units(me) >= 3 and _pay_open(me, ((3, ()),), treasure=False):
             c.card = c.card._replace(creature_types=("ferengi", "officer"), nog_levels=False, nog_officer=True)
-            e["events"].append(f"{me.name}: {c.card.name} wird Officer")
+            e["events"].append(i18n.t("{me}: {c_card_name} wird Officer", me=i18n.t(me.name), c_card_name=c.card.name))
 
 
 def _crew_ready(p):
@@ -8617,7 +8613,7 @@ def crew(p, v, members, step, e):
     p.creatures.append(car)
     v["crewed"] = car
     if e is not None:
-        e["events"].append(f"{p.name}: Crew {n} – {v['card'].name} mit {', '.join(c.card.name for c in members)}")
+        e["events"].append(i18n.t("{p}: Crew {n} – {x3} mit {x4}", p=i18n.t(p.name), n=n, x3=v['card'].name, x4=', '.join(c.card.name for c in members)))
 
 
 def uncrew(p, v, e, untap=True):
@@ -8673,7 +8669,7 @@ def crew_to_block(p, attackers, step, e):
         trial = choose_blocks(attackers, p.creatures, p.life)
         if any(b is v["crewed"] for _a, bs in trial for b in bs):
             blocks = trial
-            e["events"].append(f"{p.name}: Crew {v['card'].vehicle[0]} – {v['card'].name} blockt")
+            e["events"].append(i18n.t("{p}: Crew {x2} – {x3} blockt", p=i18n.t(p.name), x2=v['card'].vehicle[0], x3=v['card'].name))
         else:
             uncrew(p, v, e)
     return blocks
@@ -8714,10 +8710,10 @@ def attack_power_triggers(me, opp, attackers, step, e):
             if kind == "counter_target":
                 pick = max(alive, key=danger)
                 pick.bonus += atom[1]
-                e["events"].append(f"{me.name}: {src.card.name} – Marke auf {pick.card.name}")
+                e["events"].append(i18n.t("{me}: {src_card_name} – Marke auf {pick_card_name}", me=i18n.t(me.name), src_card_name=src.card.name, pick_card_name=pick.card.name))
             elif kind == "counter_self":
                 src.bonus += atom[1]
-                e["events"].append(f"{me.name}: {src.card.name} – Marke auf sich")
+                e["events"].append(i18n.t("{me}: {src_card_name} – Marke auf sich", me=i18n.t(me.name), src_card_name=src.card.name))
             elif kind == "untap_self":
                 src.tapped = False
             elif kind == "attacker_pump":
@@ -8725,22 +8721,22 @@ def attack_power_triggers(me, opp, attackers, step, e):
                 pick.pump += atom[1]
                 pick.tpump += atom[2]
                 pick.extra |= set(atom[3])
-                e["events"].append(f"{me.name}: {src.card.name} – {pick.card.name} +{atom[1]}/+{atom[2]}"
+                e["events"].append(i18n.t("{me}: {src_card_name} – {pick_card_name} +{a1}/+{a2}", me=i18n.t(me.name), src_card_name=src.card.name, pick_card_name=pick.card.name, a1=atom[1], a2=atom[2])
                                    + (f" {', '.join(atom[3])}" if atom[3] else ""))
             elif kind == "no_block" and opp is not None:
                 target = stopping_blocker(me, opp, alive)
                 if target is not None and pay_ward(me, target, e):
                     target.extra.add("cant_block_turn")
-                    e["events"].append(f"{me.name}: {src.card.name} – {target.card.name} kann nicht blocken")
+                    e["events"].append(i18n.t("{me}: {src_card_name} – {target_card_name} kann nicht blocken", me=i18n.t(me.name), src_card_name=src.card.name, target_card_name=target.card.name))
             elif kind == "impulse" and me.library:  # Kirk: nur in diesem Zug spielbar (Main 2)
                 top = me.library.pop(0)
                 me.impulse.append((top, me.own_turns))
                 me.combat_impulse.append(top)
-                e["events"].append(f"{me.name}: {src.card.name} exiliert {top.name} (in diesem Zug spielbar)")
+                e["events"].append(i18n.t("{me}: {src_card_name} exiliert {top_name} (in diesem Zug spielbar)", me=i18n.t(me.name), src_card_name=src.card.name, top_name=top.name))
             elif kind == "double_power":  # 701.10b: +X/+0, X = Power
                 if src.power > 0:
                     src.pump += src.power
-                e["events"].append(f"{me.name}: {src.card.name} – Power verdoppelt")
+                e["events"].append(i18n.t("{me}: {src_card_name} – Power verdoppelt", me=i18n.t(me.name), src_card_name=src.card.name))
 
 
 def combat_impulse_main2(me, opp, step, e):
@@ -8759,7 +8755,7 @@ def combat_impulse_main2(me, opp, step, e):
             tapped = land_tapped(me, enters_tapped(card, me.lands[:-1]))
             if not tapped:
                 me.open.append(card.land_colors)
-            e["events"].append(f"{me.name}: spielt {card.name} aus dem Exil")
+            e["events"].append(i18n.t("{me}: spielt {card_name} aus dem Exil", me=i18n.t(me.name), card_name=card.name))
             on_land(me, opp, card, step, e, with_mana=False, untapped=not tapped)
             continue
         if not legend_ok(me, card):
@@ -8770,7 +8766,7 @@ def combat_impulse_main2(me, opp, step, e):
             continue
         _take_impulse(me, card)
         me.cast_count += 1
-        e["events"].append(f"{me.name}: wirkt {card.name} aus dem Exil")
+        e["events"].append(i18n.t("{me}: wirkt {card_name} aus dem Exil", me=i18n.t(me.name), card_name=card.name))
         _resolve(me, opp, card, step, e)
 
 
@@ -8783,7 +8779,7 @@ def attack_taps(me, opp, attackers, e):
         if target is None or not pay_ward(me, target, e):
             return
         target.tapped = True
-        e["events"].append(f"{me.name}: Angriffs-Auslöser tappt {target.card.name}")
+        e["events"].append(i18n.t("{me}: Angriffs-Auslöser tappt {target_card_name}", me=i18n.t(me.name), target_card_name=target.card.name))
 
 
 def exile_own(p, card):
@@ -8839,7 +8835,7 @@ def attach_twin(p, opp, card, e):
         p.graveyard.append(card)
         return
     host.auras.append(card)
-    e["events"].append(f"{p.name}: {card.name} auf {host.card.name}")
+    e["events"].append(i18n.t("{p}: {card_name} auf {host_card_name}", p=i18n.t(p.name), card_name=card.name, host_card_name=host.card.name))
 
 
 def _twin_token(p, host, step, end_step):
@@ -8859,7 +8855,7 @@ def twin_activate(p, opp, step, e, end_step=True, hosts=None):
         host.tapped = True
         token = _twin_token(p, host, step, end_step)
         p.creatures.append(token)
-        e["events"].append(f"{p.name}: Splinter Twin – Kopie von {host.card.name}")
+        e["events"].append(i18n.t("{p}: Splinter Twin – Kopie von {host_card_name}", p=i18n.t(p.name), host_card_name=host.card.name))
         creature_enters(p, token, step, e, opp, cast=False)
         bury((p, opp), e)
 
@@ -8948,7 +8944,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     if not skip_draw:  # Draw
         if not me.library:
             me.lost = True
-            e["note"] = "muss aus leerer Bibliothek ziehen"
+            e["note"] = i18n.t("muss aus leerer Bibliothek ziehen")
             return e
         card = me.library[0]
         _draw(me)
@@ -8956,7 +8952,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
         for w in opp.walkers:  # The Theorist: zu Beginn des Draw Steps des Gegners
             if "opp_draw" in w.card.pw_static:
                 _draw(opp)
-                e["events"].append(f"{opp.name}: {w.card.name} – zieht eine Karte")
+                e["events"].append(i18n.t("{opp}: {w_card_name} – zieht eine Karte", opp=i18n.t(opp.name), w_card_name=w.card.name))
     jace_turn_start(me, step, e)
     if me.sagas:  # 714.3b: Lore-Marke nach dem Draw Step
         saga_after_draw(me, opp, step, e)
@@ -9047,7 +9043,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
             if plan:
                 rem, cand = plan
                 do_cycle(me.hand, me.library, cycler, cand, graveyard=me.graveyard)
-                _cycle_event(me, cycler, cand, e, "Land fehlt")
+                _cycle_event(me, cycler, cand, e, i18n.t("Land fehlt"))
                 me.cast_count += 1
                 pool = rem
                 spells = phase_spells()
@@ -9081,7 +9077,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
             land = top_lands.pop(land)
         me.lands.append(land)
         me.land_now = land
-        e["land"] = land.name + (" (getappt)" if tapped else "")
+        e["land"] = land.name + (i18n.t(" (getappt)") if tapped else "")
         if not tapped:
             pool_all = pool_all + [land.land_colors]
         pool_all = pool_all + on_land(me, opp, land, step, e, untapped=not tapped)
@@ -9153,21 +9149,21 @@ def take_turn(me, opp, step, rnd, skip_draw):
             pool_all, kept = left
             if held[0] in spells:
                 spells.remove(held[0])
-            e["events"].append(f"{me.name}: hält {len(kept)} Mana für {held[0].name} offen")
+            e["events"].append(i18n.t("{me}: hält {x2} Mana für {x3} offen", me=i18n.t(me.name), x2=len(kept), x3=held[0].name))
     hc = held_counter(me, orig) if rnd >= 5 and forced is None else None  # Counterspell ab Runde 5 freihalten
     if hc is not None:
         left = _hold(pool_all, hc[1], creature_units)
         if left is None and kept:  # beides geht nicht: nur der Counterspell
             pool_all = pool_all + kept
             kept = []
-            e["events"] = [ev for ev in e["events"] if not ev.startswith(f"{me.name}: hält ")]
+            e["events"] = [ev for ev in e["events"] if not ev.startswith(i18n.t("{me}: hält ", me=i18n.t(me.name)))]
             if held is not None and held[0] in me.hand and held[0] not in spells and not held[0].is_instant:
                 spells.append(held[0])
             left = _hold(pool_all, hc[1], creature_units)
         if left is not None:
             pool_all, used = left
             kept += used
-            e["events"].append(f"{me.name}: hält {len(used)} Mana für {hc[0].name} offen")
+            e["events"].append(i18n.t("{me}: hält {x2} Mana für {x3} offen", me=i18n.t(me.name), x2=len(used), x3=hc[0].name))
     me.ward_pool = None
     _score_, chosen = best_cast_reduced(spells, land_key(pool_all), has_creature, True, must=forced)
     if treasure_count(me) and forced is None:  # Treasure nur, wenn er diese Runde mehr ermoeglicht
@@ -9175,7 +9171,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
         if k_t:
             _spend_treasures(me, k_t, remove=False)
             pool_all = pool_all + [ANY_COLOR] * k_t
-            e["events"].append(f"{me.name}: {k_t} Treasure geopfert")
+            e["events"].append(i18n.t("{me}: {k_t} Treasure geopfert", me=i18n.t(me.name), k_t=k_t))
             _score_, chosen = best_cast_reduced(spells, land_key(pool_all), has_creature, True)
     lotus = [c for c in me.perms if c.name == "Lotus" and c.is_token]
     if lotus and forced is None:  # Lotus wie Treasure: nur, wenn er diese Runde mehr ermoeglicht
@@ -9187,7 +9183,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
                     me.perms.remove(lotus[0])
                 pool_all = pool_all + [ANY_COLOR] * 3 * k
                 _score_, chosen = trial
-                e["events"].append(f"{me.name}: {k} Lotus geopfert")
+                e["events"].append(i18n.t("{me}: {k} Lotus geopfert", me=i18n.t(me.name), k=k))
                 break
     if any(c.draws for c in chosen) or enters_prepared(chosen) or any(usable_now(c) for c in chosen):
         walker_bf, jace_bf = walker_flags(me)
@@ -9227,7 +9223,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
                     crafters = crafters[k:]
                     rest = paid  # k ist minimal: das Crafter-Mana ist verbraucht
                     chosen.append(cp)
-                    e["events"].append(f"{me.name}: {cp.name} mit dem Mana von Heartwood Crafter")
+                    e["events"].append(i18n.t("{me}: {cp_name} mit dem Mana von Heartwood Crafter", me=i18n.t(me.name), cp_name=cp.name))
                     break
             if not crafters:
                 break
@@ -9240,7 +9236,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
             pick = max(cands, key=lambda c: (c.mv, c.name))
             rest = pay(rest + list(src.artifact_mana), pick.alts)
             chosen.append(pick)
-            e["events"].append(f"{me.name}: {pick.name} mit dem Mana von {src.name}")
+            e["events"].append(i18n.t("{me}: {pick_name} mit dem Mana von {src_name}", me=i18n.t(me.name), pick_name=pick.name, src_name=src.name))
     me.open = rest
     me.ward_budget = sum(ward_of.get(c, 0) for c in chosen if ward_of.get(c, 0) < 99)
     chosen = [c if c.is_copy else hand_form(c, me.hand) if c not in me.hand else c for c in chosen]
@@ -9426,7 +9422,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
         pick = max(attackers, key=danger)  # Kiora: enttappt und unblockbar
         pick.tapped = False
         pick.extra.add("unblockable")
-        e["events"].append(f"{me.name}: Kiora – {pick.card.name} enttappt und unblockbar")
+        e["events"].append(i18n.t("{me}: Kiora – {pick_card_name} enttappt und unblockbar", me=i18n.t(me.name), pick_card_name=pick.card.name))
     alone = attackers[0] if len(attackers) == 1 and attackers[0].at_pw is None and not attackers[0].at_jace \
         else None  # 506.5: allein angreifen (einen Spieler)
     if alone is not None:
@@ -9444,7 +9440,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
                 _draw(me)
                 if me.discards_turn:
                     alone.bonus += me.discards_turn
-                e["events"].append(f"{me.name}: {c.card.name} – {alone.card.name} greift allein an")
+                e["events"].append(i18n.t("{me}: {c_card_name} – {alone_card_name} greift allein an", me=i18n.t(me.name), c_card_name=c.card.name, alone_card_name=alone.card.name))
     attack_keywords(me, attackers, alone, e)
     attack_taps(me, opp, attackers, e)
     attack_power_triggers(me, opp, attackers, step, e)
@@ -9461,7 +9457,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
                          and b.toughness - b.damage > a.dmg]
                 kw = "deathtouch" if tough else "trample"
                 a.extra.add(kw)
-                e["events"].append(f"{me.name}: {a.card.name} – {g.name}: {kw}")
+                e["events"].append(i18n.t("{me}: {a_card_name} – {g_name}: {kw}", me=i18n.t(me.name), a_card_name=a.card.name, g_name=g.name, kw=kw))
         for _rep in range(echo_times(me, a)):  # Lwaxana Troi: Ausloeser der Kreatur doppelt
             if a.card.attack_loot:  # Sphinx of False Conclusions: ziehen, dann abwerfen
                 _draw(me)
@@ -9469,25 +9465,24 @@ def take_turn(me, opp, step, rnd, skip_draw):
                 if gone is not None:
                     me.hand.remove(gone)
                     me.graveyard.append(gone)
-                    e["events"].append(f"{me.name}: {a.card.name} – Loot, wirft {gone.name} ab")
+                    e["events"].append(i18n.t("{me}: {a_card_name} – Loot, wirft {gone_name} ab", me=i18n.t(me.name), a_card_name=a.card.name, gone_name=gone.name))
                     discarded(me, e, [gone])
             if a.card.attack_drain:  # Screeching Soulbreaker
                 dmg, life = a.card.attack_drain
                 deal_noncombat(me, opp, dmg, e)
                 gain_life(me, life)
-                e["events"].append(f"{me.name}: {a.card.name} – {dmg} Schaden, {life} Leben")
+                e["events"].append(i18n.t("{me}: {a_card_name} – {dmg} Schaden, {life} Leben", me=i18n.t(me.name), a_card_name=a.card.name, dmg=dmg, life=life))
             if a.card.attack_exile_gy:  # Afterthought Sentry
                 pick = gy_exile_target(opp)
                 if pick is not None:
                     opp.graveyard.remove(pick)
-                    e["events"].append(f"{me.name}: {a.card.name} exiliert {pick.name} aus dem Friedhof von "
-                                       f"{opp.name}")
+                    e["events"].append(i18n.t("{me}: {a_card_name} exiliert {pick_name} aus dem Friedhof von {opp}", me=i18n.t(me.name), a_card_name=a.card.name, pick_name=pick.name, opp=i18n.t(opp.name)))
     ping = sum(c.card.attack_ping for c in me.creatures if not c.dead) * len(attackers)
     if ping:  # "Whenever a creature you control attacks, that creature deals 1 damage to each opponent"
         for a in attackers:  # je Angreifer ein Schadensereignis
             for _ in range(sum(c.card.attack_ping for c in me.creatures if not c.dead)):
                 deal_noncombat(me, opp, 1, e)
-        e["events"].append(f"{me.name}: {ping} Schaden durch Angriffs-Auslöser")
+        e["events"].append(i18n.t("{me}: {ping} Schaden durch Angriffs-Auslöser", me=i18n.t(me.name), ping=ping))
     if me.kira_join:  # Kira Nerys: angreifend ins Spiel gekommen
         attackers = attackers + [c for c in me.kira_join if not c.dead and any(c is x for x in me.creatures)]
     me.kira_join = None
@@ -9515,12 +9510,12 @@ def take_turn(me, opp, step, rnd, skip_draw):
     if res["jace"]:
         alive_before = opp.jace.loyalty > 0
         opp.jace.loyalty = max(0, opp.jace.loyalty - res["jace"])
-        e["events"].append(f"{me.name}: {res['jace']} Schaden an Jace von {opp.name} (Loyalty {opp.jace.loyalty})")
+        e["events"].append(i18n.t("{me}: {x2} Schaden an Jace von {opp} (Loyalty {opp_jace_loyalty})", me=i18n.t(me.name), x2=res['jace'], opp=i18n.t(opp.name), opp_jace_loyalty=opp.jace.loyalty))
         if alive_before and opp.jace.loyalty == 0:
             _jace_zero(opp, 1, e)
     for w, n in res["pw"].values():  # 120.3c
         w.loyalty = max(0, w.loyalty - n)
-        e["events"].append(f"{me.name}: {n} Schaden an {w.card.name} von {opp.name} (Loyalty {w.loyalty})")
+        e["events"].append(i18n.t("{me}: {n} Schaden an {w_card_name} von {opp} (Loyalty {w_loyalty})", me=i18n.t(me.name), n=n, w_card_name=w.card.name, opp=i18n.t(opp.name), w_loyalty=w.loyalty))
     if prevented(opp):  # The Needs of the Many
         res["player"] = 0
     opp.life -= res["player"]
@@ -9533,10 +9528,10 @@ def take_turn(me, opp, step, rnd, skip_draw):
         if (a.card.combat_draw or a.tdraw) and res["to_player"].get(id(a)):
             n = (a.card.combat_draw + a.tdraw) * echo_times(me, a)  # Lwaxana Troi: doppelt
             _draw(me, n)
-            e["events"].append(f"{me.name}: {a.card.name} zieht {n}")
+            e["events"].append(i18n.t("{me}: {a_card_name} zieht {n}", me=i18n.t(me.name), a_card_name=a.card.name, n=n))
         if a.light == step and res["to_player"].get(id(a)):  # The Inner Light II: so viele, wie Schaden
             _draw(me, res["to_player"][id(a)])
-            e["events"].append(f"{me.name}: The Inner Light – zieht {res['to_player'][id(a)]}")
+            e["events"].append(i18n.t("{me}: The Inner Light – zieht {x2}", me=i18n.t(me.name), x2=res['to_player'][id(a)]))
         if a.card.combat_land_return and res["to_player"].get(id(a)):  # Carnivorous Cultivator
             lands = gy_candidates(me, "land")
             if lands:
@@ -9607,7 +9602,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
         for c in list(p_.creatures):
             if c.exile_step is not None and c.exile_step <= step:
                 p_.creatures.remove(c)
-                e["events"].append(f"{p_.name}: Kopie von {c.card.name} exiliert")
+                e["events"].append(i18n.t("{p_}: Kopie von {c_card_name} exiliert", p_=i18n.t(p_.name), c_card_name=c.card.name))
     end_step_discards((me, opp), e)
     end_step_triggers(me, opp, e)
     lrell_surveil(me, e)
@@ -9615,7 +9610,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
         for c in p_.creatures:
             if c.card.end_sacrifice:
                 c.dead = True
-                e["events"].append(f"{p_.name}: opfert {c.card.name}")
+                e["events"].append(i18n.t("{p_}: opfert {c_card_name}", p_=i18n.t(p_.name), c_card_name=c.card.name))
     bury((me, opp), e)
     end_step_instants(opp, me, e, step)
     snw_sac_draw(opp, e)  # Warp Speed mit dem Rest des offenen Manas
@@ -9645,7 +9640,7 @@ def hand_limit(p, e, size=7):
         p.hand.remove(card)
         p.graveyard.append(card)
         gone.append(card)
-        e["events"].append(f"{p.name}: Handlimit – wirft {card.name} ab")
+        e["events"].append(i18n.t("{p}: Handlimit – wirft {card_name} ab", p=i18n.t(p.name), card_name=card.name))
     if over:
         discarded(p, e, gone)
 
@@ -9688,7 +9683,7 @@ def play_game(cards_a, cards_b, a_starts, max_turns=20, mulligan=True, min_hand=
               "mulligans": {"Wir": a.mulls, "Gegner": b.mulls}}
     if a.lost or b.lost:
         result["winner"] = None if a.lost and b.lost else ("b" if a.lost else "a")
-        result["note"] = "Spiel durch Mulligan verloren"
+        result["note"] = i18n.t("Spiel durch Mulligan verloren")
         return result
     order = [(a, b), (b, a)] if a_starts else [(b, a), (a, b)]
     step = 0
@@ -9748,7 +9743,7 @@ def battle(cards_a, cards_b, games, on_draw, max_turns=20, mulligan=True, min_ha
     for n in range(games):
         r = play_game(cards_a, cards_b, not on_draw, max_turns, mulligan, min_hand)
         out["results_all"].append(r)
-        mull = r.get("note") == "Spiel durch Mulligan verloren"
+        mull = r.get("note") == i18n.t("Spiel durch Mulligan verloren")
         out["games_list"].append({"n": n, "winner": r["winner"], "round": r["round"], "mulligans": r["mulligans"],
                                   "mulligan_loss": mull,
                                   "life": {"Wir": _end_life(r, "Wir"), "Gegner": _end_life(r, "Gegner")}})

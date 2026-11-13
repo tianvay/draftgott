@@ -23,6 +23,7 @@ from components.cardkinds import FLOW_ORDER, flow_kinds
 from components.cards import card_info, land_produced
 from components.removal import removal_info
 from components.deckfile import parse_pool
+from components.i18n import t
 from components.scryfall import CACHE_FILE, card_image_url, fetch_cards_cached
 
 DRAFT_PICKS = 42  # 3 Packs zu 14 Karten: danach ist der Draft fertig (auch ohne Deck aus Arena)
@@ -127,7 +128,8 @@ def default_names(log_path):
     db = arenalog.find_card_db(arenalog.install_dirs(head))
     if db:
         names.update(arenalog.load_card_db(db))
-    print(f"Arena-Kartendatenbank: {db or 'nicht gefunden'} ({len(names)} Karten bekannt)", file=sys.stderr)
+    print(t("Arena-Kartendatenbank: {db} ({n} Karten bekannt)", db=db or t("nicht gefunden"), n=len(names)),
+          file=sys.stderr)
     return names
 
 
@@ -147,8 +149,8 @@ def rebuild_stats(args):
 
     backup = draftstats.rebuild(path, [log.with_name("Player-prev.log"), log], lookup, set_lookup)
     data = draftstats.load_stats(path)
-    print(f"Draft-Statistik neu aufgebaut: {path} ({len(data['drafts'])} Drafts)"
-          + (f", alte Datei gesichert als {backup.name}" if backup else ""), file=sys.stderr)
+    print(t("Draft-Statistik neu aufgebaut: {path} ({n} Drafts)", path=path, n=len(data["drafts"]))
+          + (t(", alte Datei gesichert als {name}", name=backup.name) if backup else ""), file=sys.stderr)
 
 
 class LiveDraft:
@@ -228,7 +230,7 @@ class LiveDraft:
         try:
             data = self.fetch(sorted(todo))
         except (urllib.error.URLError, OSError, ValueError) as e:
-            print(f"Scryfall nicht erreichbar: {e}", file=sys.stderr)
+            print(t("Scryfall nicht erreichbar: {err}", err=e), file=sys.stderr)
             data = None
         for name, info in todo.items():
             sc = None if data is None else (data.get(name) or data.get(name.split(" // ")[0]))
@@ -307,8 +309,8 @@ class LiveDraft:
         es noch keines gibt (in Arena den Deckbau mit "Fertig" abschliessen)."""
         with self.lock:
             if not self._deck_valid():
-                raise ValueError("Noch kein Deck aus Arena: In Arena den Deckbau mit „Fertig“ abschließen, dann "
-                                 "erscheint es hier.")
+                raise ValueError(t("Noch kein Deck aus Arena: In Arena den Deckbau mit „Fertig“ abschließen, dann "
+                                   "erscheint es hier."))
             self._save(self._deck_text())
 
     def step(self):
@@ -322,7 +324,7 @@ class LiveDraft:
                 try:
                     self.tracker.feed_line(line)
                 except OSError as e:  # Statistik nicht speicherbar: Live-Draft laeuft weiter
-                    print(f"Draft-Statistik nicht gespeichert: {e}", file=sys.stderr)
+                    print(t("Draft-Statistik nicht gespeichert: {err}", err=e), file=sys.stderr)
             for ev in arenalog.scan_line(line):
                 with self.lock:
                     changed = self.state.feed(ev) or changed
@@ -362,7 +364,7 @@ class LiveDraft:
         try:
             cards = self.fetch_set(code) or []
         except (urllib.error.URLError, OSError, ValueError) as e:
-            print(f"Set {code.upper()} fuer die Tricks nicht geladen: {e}", file=sys.stderr)
+            print(t("Set {code} fuer die Tricks nicht geladen: {err}", code=code.upper(), err=e), file=sys.stderr)
             cards = []
         with self.lock:
             self.tricks[code] = tricks.trick_cards(cards)
@@ -412,11 +414,12 @@ class LiveDraft:
                 game["tricks"] = self._tricks_view(ratings)
             if not self.log_path.exists():
                 return {"status": "nolog", "version": self.version,
-                        "message": f"Arena-Protokoll nicht gefunden: {self.log_path}. {DETAILED_LOGS}"}
+                        "message": t("Arena-Protokoll nicht gefunden: {path}. {hint}", path=self.log_path,
+                                     hint=t(DETAILED_LOGS))}
             if not (self.state.draft or self.state.event):
                 return {"status": "idle", "version": self.version, "game": game, "enemy_saved": self._saved(),
-                        "message": "Noch kein Draft im Protokoll – starte einen Draft in Arena. Erscheint auch dann "
-                                   "nichts: " + DETAILED_LOGS}
+                        "message": t("Noch kein Draft im Protokoll – starte einen Draft in Arena. Erscheint auch dann "
+                                     "nichts: {hint}", hint=t(DETAILED_LOGS))}
             pack = [c for c in (self._card(g) for g in self.state.pack) if c]
             picks = [c for c in (self._card(g) for g in self.state.picks) if c]
             unknown = [g for g in self.state.pack + self.state.picks if g not in self.names()]

@@ -3,6 +3,7 @@ import itertools
 import random
 from collections import Counter
 
+from components import i18n
 from components.cards import HEARTWOOD, enters_tapped
 from components.jace import (JaceState, cast_filter_matches, creates_jace, creates_walker, enter_filter_matches,
                              once_effects, recurring_effects, surveil)
@@ -1024,8 +1025,9 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
     while played < sims:
         mull["deals"] += 1
         if mull["deals"] > max_deals:
-            raise RuntimeError(f"Fast jede Starthand fuehrt zum Mulligan: nur {played} von {sims} Spielen "
-                               f"wurden gespielt. Das Deck ist mit diesen Mulligan-Regeln praktisch unspielbar.")
+            raise RuntimeError(i18n.t("Fast jede Starthand fuehrt zum Mulligan: nur {played} von {sims} Spielen "
+                                          "wurden gespielt. Das Deck ist mit diesen Mulligan-Regeln praktisch "
+                                          "unspielbar.", played=played, sims=sims))
         hand, library, mulls, first_reasons = deal_opening(cards, mulligan, min_hand)
         if first_reasons:
             mull["first_any"] += 1

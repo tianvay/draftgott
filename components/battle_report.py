@@ -5,9 +5,11 @@ Inhalt: Uebersicht (Siege/Niederlagen je Deck und Modus), je Deck der schnellste
 knappsten und gedrehten Spiele und das laengste Spiel als Zugprotokoll beider Spieler, Regeln des Kampfs. Bei mehreren Decks (Splash/NoSplash) Umschalter an jeder Ueberschrift.
 """
 import datetime
+import re
 
 from components.battle import _end_life, _max_gap
 from components.html_base import HTML_CSS, LAYOUT_JS, LABEL_CLASS, esc, h_bar_cell, h_mode, h_section, h_table, svg_lines
+from components.i18n import html_lang, is_en, t, tr_block
 
 MODES = ("On the Play", "On the Draw")
 
@@ -608,11 +610,11 @@ def _attacks_html(attacks):
     for at in attacks:
         att = esc(at["attacker"]) + (' <span class="dead">†</span>' if at["attacker_dies"] else "")
         if at.get("jace"):
-            att += " (auf Jace)"
+            att += t(" (auf Jace)")
         if at.get("walker"):
-            att += f" (auf {esc(at['walker'])})"
+            att += t(" (auf {w})", w=esc(at["walker"]))
         if not at["blockers"]:
-            out.append(f"{att} → ungeblockt")
+            out.append(f"{att} → " + t("ungeblockt"))
         else:
             bl = ", ".join(esc(b) + (' <span class="dead">†</span>' if d else "")
                            for b, d in zip(at["blockers"], at["blockers_die"]))
@@ -620,20 +622,29 @@ def _attacks_html(attacks):
     return "<br>".join(out) or "–"
 
 
+def _title(title):
+    """Titel eines Protokolls in der Sprache (auch "Spiel N: Ergebnis" aus dem Kampf-Server)."""
+    if is_en():
+        m = re.match(r"Spiel (\d+): (.*)$", title)
+        if m:
+            return t("Spiel {n}: {label}", n=m.group(1), label=t(m.group(2)))
+    return t(title)
+
+
 def _protocol(game, mode, title):
     """Zugprotokoll eines Spiels."""
     hands = "".join(
-        f'<div class="panel"><b>Starthand {esc(who)}</b>'
-        f'{" <span class=small>(" + str(game["mulligans"][who]) + " Mulligan)</span>" if game["mulligans"][who] else ""}'
+        f'<div class="panel"><b>{t("Starthand {who}", who=esc(t(who)))}</b>'
+        f'{" <span class=small>(" + t("{n} Mulligan", n=game["mulligans"][who]) + ")</span>" if game["mulligans"][who] else ""}'
         f'<div class="small" style="margin-top:4px">{esc(", ".join(game["opening"][who]))}</div></div>'
         for who in ("Wir", "Gegner"))
     rows = []
     for e in game["log"]:
         life = e.get("life") or {}
         board = e.get("board") or {}
-        dmg = str(e["damage"]) + (f' + {e["face"]} direkt' if e["face"] else "")
+        dmg = str(e["damage"]) + (" + " + t("{n} direkt", n=e["face"]) if e["face"] else "")
         cls = f'p-{e["player"]}'
-        cells = [f'<td>{e["round"]}</td>', f'<td class="l"><b>{esc(e["player"])}</b></td>',
+        cells = [f'<td>{e["round"]}</td>', f'<td class="l"><b>{esc(t(e["player"]))}</b></td>',
                  f'<td class="l">{esc(e["drew"] or "–")}</td>', f'<td class="l">{esc(e["land"] or "–")}</td>',
                  f'<td class="l">{esc(", ".join(e["main1"]) or "–")}</td>',
                  f'<td class="l">{_attacks_html(e["attacks"])}</td>',
@@ -641,15 +652,15 @@ def _protocol(game, mode, title):
                  f'<td class="l small">{"<br>".join(esc(x) for x in e.get("events", [])) or "–"}</td>',
                  f'<td>{dmg}</td>',
                  f'<td>{life.get("Wir", "–")} / {life.get("Gegner", "–")}</td>',
-                 f'<td class="l small">Wir: {esc(", ".join(board.get("Wir", [])) or "–")}<br>'
-                 f'Gegner: {esc(", ".join(board.get("Gegner", [])) or "–")}'
+                 f'<td class="l small">{esc(t("Wir"))}: {esc(", ".join(board.get("Wir", [])) or "–")}<br>'
+                 f'{esc(t("Gegner"))}: {esc(", ".join(board.get("Gegner", [])) or "–")}'
                  + (f'<br><b>{esc(e["note"])}</b>' if e.get("note") else "") + '</td>']
         rows.append(f'<tr class="{cls}">' + "".join(cells) + "</tr>")
     head = "".join(f'<th class="{"l" if i in (1, 2, 3, 4, 5, 6, 7, 10) else ""}">{h}</th>' for i, h in enumerate(
-        ["Runde", "Spieler", "Zieht", "Land", "Main 1", "Kampf († = stirbt)", "Main 2",
-         "Removal, Instants, Flash", "Schaden", "Leben Wir / Gegner", "Feld danach"]))
-    return (f'<div class="note" style="margin:0 0 6px"><b>{esc(title)}</b> in Runde {game["round"]} '
-            f'({esc(mode)})</div><div class="hands">{hands}</div>'
+        [t(x) for x in ("Runde", "Spieler", "Zieht", "Land", "Main 1", "Kampf († = stirbt)", "Main 2",
+                        "Removal, Instants, Flash", "Schaden", "Leben Wir / Gegner", "Feld danach")]))
+    return (f'<div class="note" style="margin:0 0 6px"><b>{esc(_title(title))}</b> '
+            + t("in Runde {n}", n=game["round"]) + f' ({esc(mode)})</div><div class="hands">{hands}</div>'
             f'<div class="panel"><div class="tw"><table class="proto"><thead><tr>{head}</tr></thead>'
             f'<tbody>{"".join(rows)}</tbody></table></div></div>')
 
@@ -719,6 +730,16 @@ GAMES_JS = """<script>
 </script>"""
 
 
+GAMES_JS_EN = {  # woertliche Ersetzungen fuer GAMES_JS (nur die sichtbaren Texte)
+    "Das Protokoll einzelner Spiele gibt es nur, solange draftgott läuft ":
+        "The log of individual games is only available while draftgott is running ",
+    "(Drafthelper oder Analyse). Die besonderen Spiele stehen oben.":
+        "(Draft Helper or analysis). The special games are shown above.",
+    "Lade Protokoll …": "Loading log …",
+    "Fehler beim Laden.": "Error while loading.",
+}
+
+
 def protocol_html(game, mode, title):
     """Protokoll eines einzelnen Spiels (fuer die Spieleliste auf Abruf)."""
     return _protocol(game, mode, title)
@@ -738,10 +759,10 @@ def _kpi_tiles(decks):
             for mode in MODES:
                 r = b["results"][mode]
                 vals.append(f'<small>{"Play" if mode == MODES[0] else "Draw"}</small>{r["wins"] / (r["games"] or 1):.0%}')
-            head = (f'{esc(dd["name"])} · ' if multi else "") + f'gegen {esc(b["enemy"])}'
+            head = (f'{esc(dd["name"])} · ' if multi else "") + t("gegen {e}", e=esc(b["enemy"]))
             tiles.append(f'<div class="panel kpi"><div class="l">{head}</div>'
                          f'<div class="v">{vals[0]}<span class="vs">/</span>{vals[1]}</div>'
-                         f'<div class="s">Siege On the Play / On the Draw</div></div>')
+                         f'<div class="s">{t("Siege On the Play / On the Draw")}</div></div>')
     return f'<div class="grid g4" style="margin-bottom:14px">{"".join(tiles)}</div>' if tiles else ""
 
 
@@ -763,19 +784,23 @@ def _overview(decks):
                             + [f'<td>{_pct(r["wins"], played)}</td>',
                                f'<td>{_avg(r["win_rounds"])}</td>', f'<td>{_avg(r["loss_rounds"])}</td>'])
                 if r["mull_losses"] / n > MULL_WARN:
-                    warnings.append(f'{esc(dd["name"])} ({esc(mode)}): {r["mull_losses"]} von {n} Spielen '
-                                    f'({r["mull_losses"] / n:.0%}) geben wir schon beim Mulligan auf')
+                    warnings.append(f'{esc(dd["name"])} ({esc(mode)}): ' + t(
+                        "{a} von {n} Spielen ({p}) geben wir schon beim Mulligan auf",
+                        a=r["mull_losses"], n=n, p=f'{r["mull_losses"] / n:.0%}'))
     games = next((b["results"][MODES[0]]["games"] for dd in decks for b in dd.get("battles") or []), 0)
-    warn = ('<div class="warnbox"><b>Mulligan-Aufgaben:</b> ' + "; ".join(warnings) + '. Die Hand fiel dabei unter '
-            'die Mindestzahl an Karten (<code>--min-handkarten</code>).</div>') if warnings else ""
-    heads = (["Deck", "Gegner", "", "Siege", "Niederlagen", "davon durch Mulligan"] + (["Unentschieden"] if draws else [])
-             + ["Siege ohne Mulligan-Aufgaben", "Ø Runde Sieg", "Ø Runde Niederlage"])
+    warn = ('<div class="warnbox"><b>' + t("Mulligan-Aufgaben:") + '</b> ' + "; ".join(warnings) + '. '
+            + t("Die Hand fiel dabei unter die Mindestzahl an Karten (<code>--min-handkarten</code>).")
+            + '</div>') if warnings else ""
+    heads = [t(x) for x in (["Deck", "Gegner", "", "Siege", "Niederlagen", "davon durch Mulligan"]
+                            + (["Unentschieden"] if draws else [])
+                            + ["Siege ohne Mulligan-Aufgaben", "Ø Runde Sieg", "Ø Runde Niederlage"])]
     return (_kpi_tiles(decks) + warn + '<div class="panel">' + h_table(heads, rows, extra='class="wrap"',
                                                                         left=(0, 1, 2))
-        + f'<div class="note">{games} Spiele je Deck und Modus. Runde = Zahl der eigenen Züge. „davon durch Mulligan“: '
-          f'Niederlagen, weil unsere Hand unter die Mindestzahl fiel (der Gegner gibt nie auf). „Siege ohne '
-          f'Mulligan-Aufgaben“: Siege unter den Spielen, die wirklich gespielt wurden. Mulligan-Aufgaben zählen nicht '
-          f'bei Runden, Kennzahlen und besonderen Spielen.</div></div>')
+        + '<div class="note">' + t(
+            "{games} Spiele je Deck und Modus. Runde = Zahl der eigenen Züge. „davon durch Mulligan“: "
+            "Niederlagen, weil unsere Hand unter die Mindestzahl fiel (der Gegner gibt nie auf). „Siege ohne "
+            "Mulligan-Aufgaben“: Siege unter den Spielen, die wirklich gespielt wurden. Mulligan-Aufgaben zählen nicht "
+            "bei Runden, Kennzahlen und besonderen Spielen.", games=games) + '</div></div>')
 
 
 def _verlauf(b):
@@ -786,25 +811,25 @@ def _verlauf(b):
     for mode in MODES:
         r = res[mode]
         total, acc, vals = r["games"] or 1, 0, []
-        for t in xs:
-            acc += r["win_by_round"].get(t, 0)
+        for x in xs:
+            acc += r["win_by_round"].get(x, 0)
             vals.append(acc / total)
         cum[mode] = vals
-    charts = [f'<div class="panel"><b>Siege bis Runde N</b> <span class="muted">(Anteil aller Spiele)</span>'
+    charts = [f'<div class="panel"><b>{t("Siege bis Runde N")}</b> <span class="muted">({t("Anteil aller Spiele")})</span>'
               f'{svg_lines(xs, cum)}</div>']
     for mode in MODES:
         curve = res[mode]["life_curve"]
         n = len(curve["Wir"])
         if not n:
-            charts.append(f'<div class="panel"><b>Lebenspunkte {esc(mode)}</b><p class="muted">keine Spiele</p></div>')
+            charts.append(f'<div class="panel"><b>{t("Lebenspunkte {m}", m=esc(mode))}</b><p class="muted">{t("keine Spiele")}</p></div>')
             continue
         top = max(20, max(curve["Wir"] + curve["Gegner"]))
-        charts.append(f'<div class="panel"><b>Lebenspunkte je Runde – {esc(mode)}</b> '
-                      f'<span class="muted">(Ø über alle gespielten Spiele, nach Spielende der letzte Stand)</span>'
-                      + svg_lines(list(range(1, n + 1)), curve, ymax=top, fmt=lambda v: f"{v:.0f}",
-                                  classes={"Wir": "play", "Gegner": "draw"})
-                      + '<div class="legend"><span><span class="dot play"></span>Wir</span>'
-                        '<span><span class="dot draw"></span>Gegner</span></div></div>')
+        charts.append(f'<div class="panel"><b>{t("Lebenspunkte je Runde – {m}", m=esc(mode))}</b> '
+                      f'<span class="muted">({t("Ø über alle gespielten Spiele, nach Spielende der letzte Stand")})</span>'
+                      + svg_lines(list(range(1, n + 1)), {t(k): v for k, v in curve.items()}, ymax=top,
+                                  fmt=lambda v: f"{v:.0f}", classes={t("Wir"): "play", t("Gegner"): "draw"})
+                      + f'<div class="legend"><span><span class="dot play"></span>{t("Wir")}</span>'
+                        f'<span><span class="dot draw"></span>{t("Gegner")}</span></div></div>')
     rows = []
     for mode in MODES:
         r = res[mode]
@@ -812,11 +837,12 @@ def _verlauf(b):
                      f'<td>{r["combat_damage"]["Wir"]:.1f} / {r["combat_damage"]["Gegner"]:.1f}</td>',
                      f'<td>{r["direct_damage"]["Wir"]:.1f} / {r["direct_damage"]["Gegner"]:.1f}</td>',
                      f'<td>{r["deaths"]["Wir"]:.1f} / {r["deaths"]["Gegner"]:.1f}</td>'])
-    table = ('<div class="panel"><b>Kennzahlen je Spiel</b>' + h_table(
-        ["", "Ø Leben am Ende (Sieg, unsere)", "Ø Leben am Ende (Niederlage, Gegner)", "Ø Kampfschaden Wir / Gegner",
-         "Ø direkter Schaden Wir / Gegner", "Ø gestorbene Kreaturen Wir / Gegner"], rows)
-             + '<div class="note">Direkter Schaden: Burn, Landfall, „any target“ an den Gegner. Ohne Spiele, die durch '
-               'Mulligan entschieden wurden.</div></div>')
+    table = ('<div class="panel"><b>' + t("Kennzahlen je Spiel") + '</b>' + h_table(
+        [t(x) for x in ("", "Ø Leben am Ende (Sieg, unsere)", "Ø Leben am Ende (Niederlage, Gegner)",
+                        "Ø Kampfschaden Wir / Gegner", "Ø direkter Schaden Wir / Gegner",
+                        "Ø gestorbene Kreaturen Wir / Gegner")], rows)
+             + '<div class="note">' + t("Direkter Schaden: Burn, Landfall, „any target“ an den Gegner. Ohne Spiele, die "
+                                        "durch Mulligan entschieden wurden.") + '</div></div>')
     return f'<div class="grid g2">{"".join(charts)}</div>{table}'
 
 
@@ -825,26 +851,27 @@ def _games_list(d_idx, e_idx, b):
     for mode in MODES:
         for g in b["results"][mode]["games_list"]:
             if g["mulligan_loss"]:
-                res, cls, rkey = "Aufgabe (Mulligan)", "mull", "mull"
+                res, cls, rkey = t("Aufgabe (Mulligan)"), "mull", "mull"
             elif g["winner"] == "a":
-                res, cls, rkey = "Sieg", "res-win", "win"
+                res, cls, rkey = t("Sieg"), "res-win", "win"
             elif g["winner"] == "b":
-                res, cls, rkey = "Niederlage", "res-loss", "loss"
+                res, cls, rkey = t("Niederlage"), "res-loss", "loss"
             else:
-                res, cls, rkey = "Unentschieden", "muted", "draw"
+                res, cls, rkey = t("Unentschieden"), "muted", "draw"
             mull = f'{g["mulligans"]["Wir"]} / {g["mulligans"]["Gegner"]}'
             rows.append(f'<tr class="game" data-d="{d_idx}" data-e="{e_idx}" data-m="{MODE_KEY[mode]}" '
                         f'data-n="{g["n"]}" data-r="{rkey}"><td>{g["n"] + 1}</td>{h_mode(mode)}'
                         f'<td class="l {cls}">{res}</td><td>{g["round"] or "–"}</td>'
                         f'<td>{g["life"]["Wir"]} / {g["life"]["Gegner"]}</td><td>{mull}</td></tr>')
     head = "".join(f'<th class="{"l" if i == 2 else ""}">{h}</th>' for i, h in enumerate(
-        ["Nr.", "Modus", "Ergebnis", "Runde", "Leben Wir / Gegner", "Mulligans Wir / Gegner"]))
-    filters = ('<div class="gfilter">Modus <select class="fmode"><option value="">alle</option>'
+        [t(x) for x in ("Nr.", "Modus", "Ergebnis", "Runde", "Leben Wir / Gegner", "Mulligans Wir / Gegner")]))
+    filters = ('<div class="gfilter">' + t("Modus") + ' <select class="fmode"><option value="">' + t("alle") + '</option>'
                '<option value="play">On the Play</option><option value="draw">On the Draw</option></select>'
-               'Ergebnis <select class="fres"><option value="">alle</option><option value="win">Siege</option>'
-               '<option value="loss">Niederlagen</option><option value="mull">Aufgabe (Mulligan)</option>'
-               '<option value="draw">Unentschieden</option></select>'
-               '<span class="muted">Klick auf ein Spiel zeigt sein Protokoll (solange draftgott läuft).</span></div>')
+               + t("Ergebnis") + ' <select class="fres"><option value="">' + t("alle") + '</option><option value="win">'
+               + t("Siege") + '</option><option value="loss">' + t("Niederlagen") + '</option><option value="mull">'
+               + t("Aufgabe (Mulligan)") + '</option><option value="draw">' + t("Unentschieden") + '</option></select>'
+               '<span class="muted">' + t("Klick auf ein Spiel zeigt sein Protokoll (solange draftgott läuft).")
+               + '</span></div>')
     return (f'<div class="panel gamesbox">{filters}<div class="glist tw"><table><thead><tr>{head}</tr></thead>'
             f'<tbody>{"".join(rows)}</tbody></table></div><div class="gameview" id="gameview"></div></div>')
 
@@ -863,7 +890,7 @@ def _nav_links(items):
                 out.append(enemy)
             groups[enemy].append(f'<a href="#{sid}">{esc(label)}</a>')
     return "".join(x if x.startswith("<a") else
-                   f'<details open><summary>gegen {esc(x)}</summary>{"".join(groups[x])}</details>' for x in out)
+                   f'<details open><summary>{t("gegen {e}", e=esc(x))}</summary>{"".join(groups[x])}</details>' for x in out)
 
 
 def _side_kpis(decks):
@@ -877,7 +904,7 @@ def _side_kpis(decks):
                 r = b["results"][mode]
                 cells.append(f'<td>{r["wins"] / (r["games"] or 1):.0%}</td>')
             rows.append(cells)
-        table = h_table(["Gegner", "Play", "Draw"], rows) if rows else '<p class="muted">–</p>'
+        table = h_table([t("Gegner"), "Play", "Draw"], rows) if rows else '<p class="muted">–</p>'
         if len(decks) > 1:
             blocks.append(f'<div class="sidekpi grpkpi{" on" if i == 0 else ""}" data-g="{i}">'
                           f'<div class="kvar">{esc(dd["name"])}</div>{table}</div>')
@@ -892,12 +919,12 @@ def render_battle_html(decks, args):
         for b in dd.get("battles") or []:
             if b["enemy"] not in enemies:
                 enemies.append(b["enemy"])
-    title = "Kampf gegen " + ", ".join(enemies)
+    title = t("Kampf gegen {e}", e=", ".join(enemies))
     multi = len(decks) > 1
     names = [d["name"] for d in decks]
     games = next((b["results"][MODES[0]]["games"] for dd in decks for b in dd.get("battles") or []), 0)
-    sections = [h_section("uebersicht", "Übersicht", "Wie oft gewinnen wir?", _overview(decks))]
-    nav = [("uebersicht", "Übersicht")]
+    sections = [h_section("uebersicht", t("Übersicht"), t("Wie oft gewinnen wir?"), _overview(decks))]
+    nav = [("uebersicht", t("Übersicht"))]
 
     groups, navs = [], []
     for i, dd in enumerate(decks):
@@ -915,50 +942,55 @@ def render_battle_html(decks, args):
 
         for e_idx, b in enumerate(dd.get("battles") or []):
             tag = "" if e_idx == 0 else str(e_idx)
-            vs = f" gegen {b['enemy']}" if len(enemies) > 1 else ""
-            add("verlauf" + tag, "Verlauf und Kennzahlen" + vs, _verlauf(b), short="Verlauf und Kennzahlen",
+            vs = " " + t("gegen {e}", e=b["enemy"]) if len(enemies) > 1 else ""
+            add("verlauf" + tag, t("Verlauf und Kennzahlen") + vs, _verlauf(b), short=t("Verlauf und Kennzahlen"),
                 enemy=b["enemy"])
             for key, sid, label, order in SPECIALS:
                 cands = [(b["results"][m][key], m) for m in MODES if b["results"][m].get(key)]
                 if cands:
                     game, mode = min(cands, key=lambda gm: order(gm[0]))
-                    head = f"{label} ({RESULT_LABEL[game['winner']]})" if key == "longest_game" else label
+                    label = t(label)
+                    head = f"{label} ({t(RESULT_LABEL[game['winner']])})" if key == "longest_game" else label
                     body = _protocol(game, mode, head)
                 else:
-                    what = "kein Spiel" if key == "longest_game" else "kein Sieg" if "win" in key else "keine Niederlage"
-                    body = (f'<div class="panel"><p class="muted">In keinem Spiel gegen {esc(b["enemy"])} '
-                            f'({what}).</p></div>')
-                add(sid + tag, label + vs, body, SPECIAL_NOTE.get(key, ""), short=label, enemy=b["enemy"])
-            add("spiele" + tag, "Alle Spiele" + vs, _games_list(i, e_idx, b), short="Alle Spiele", enemy=b["enemy"])
+                    what = t("kein Spiel" if key == "longest_game" else "kein Sieg" if "win" in key
+                             else "keine Niederlage")
+                    body = ('<div class="panel"><p class="muted">'
+                            + t("In keinem Spiel gegen {e} ({what}).", e=esc(b["enemy"]), what=what) + '</p></div>')
+                add(sid + tag, label + vs, body, t(SPECIAL_NOTE[key]) if key in SPECIAL_NOTE else "", short=label,
+                    enemy=b["enemy"])
+            add("spiele" + tag, t("Alle Spiele") + vs, _games_list(i, e_idx, b), short=t("Alle Spiele"),
+                enemy=b["enemy"])
         if multi:
             groups.append(f'<div class="grp{" on" if i == 0 else ""}" data-g="{i}">'
-                          f'<h2 class="gh">Details: {esc(dd["name"])}</h2>{"".join(secs)}</div>')
+                          f'<h2 class="gh">{t("Details: {n}", n=esc(dd["name"]))}</h2>{"".join(secs)}</div>')
             navs.append(f'<div class="in grpnav{" on" if i == 0 else ""}" data-g="{i}">' + _nav_links(nav + nv) + "</div>")
         else:
             groups += secs
             nav += nv
-    rules = h_section("regeln", "So funktioniert der Kampf", "",
-                      '<div class="panel"><ul class="ass">' + "".join(f"<li>{r}</li>" for r in RULES) + "</ul></div>")
+    rules = h_section("regeln", t("So funktioniert der Kampf"), "",
+                      '<div class="panel"><ul class="ass">' + "".join(f"<li>{t(r)}</li>" for r in RULES) + "</ul></div>")
     if multi:
         nav_html = "".join(navs)
     else:
         nav_html = '<div class="in">' + _nav_links(nav) + "</div>"
-    nav_html += '<div class="in"><a href="#regeln">So funktioniert der Kampf</a></div>'
-    stamp = datetime.datetime.now().strftime("%d.%m.%Y %H:%M")
-    chips = [f"{games} Spiele je Modus", f"Rundengrenze {getattr(args, 'kampf_runden', 20)}",
-             "Varianten: " + ", ".join(names)] + ([f"Seed {args.seed}"] if getattr(args, "seed", None) is not None else [])
-    side_html = (f'<h3>Siegquote</h3>{_side_kpis(decks)}<div class="navsep"></div><h3>Abschnitte</h3>{nav_html}'
-                 f'<div class="navsep"></div><h3>Einstellungen</h3>'
+    nav_html += '<div class="in"><a href="#regeln">' + t("So funktioniert der Kampf") + '</a></div>'
+    stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M" if is_en() else "%d.%m.%Y %H:%M")
+    chips = [t("{n} Spiele je Modus", n=games), t("Rundengrenze {n}", n=getattr(args, 'kampf_runden', 20)),
+             t("Varianten: {v}", v=", ".join(names))] + (
+        [f"Seed {args.seed}"] if getattr(args, "seed", None) is not None else [])
+    side_html = (f'<h3>{t("Siegquote")}</h3>{_side_kpis(decks)}<div class="navsep"></div><h3>{t("Abschnitte")}</h3>{nav_html}'
+                 f'<div class="navsep"></div><h3>{t("Einstellungen")}</h3>'
                  f'<div class="chips">{"".join(f"<span class=chip>{esc(c)}</span>" for c in chips)}</div>')
-    return (f'<!DOCTYPE html><html lang="de"><head><meta charset="utf-8">'
+    return (f'<!DOCTYPE html><html lang="{html_lang()}"><head><meta charset="utf-8">'
             f'<meta name="viewport" content="width=device-width,initial-scale=1">'
-            f'<title>{esc(title)} – MTG Simulation</title><style>{HTML_CSS}{CSS}</style></head><body>'
+            f'<title>{esc(title)} – {t("MTG Simulation")}</title><style>{HTML_CSS}{CSS}</style></head><body>'
             f'<header class="top" id="top"><h1>{esc(title)}</h1>'
-            f'<span class="sub">Kampf-Simulation · erstellt am {stamp}</span>'
-            '<a id="backlink" class="btn" href="report" style="display:none;margin-left:auto">← Zurück zum Bericht</a>'
+            f'<span class="sub">{t("Kampf-Simulation · erstellt am {stamp}", stamp=stamp)}</span>'
+            '<a id="backlink" class="btn" href="report" style="display:none;margin-left:auto">' + t("← Zurück zum Bericht") + '</a>'
             '</header>'
             f'<div class="layout"><nav>{side_html}</nav><main>{"".join(sections)}{"".join(groups)}{rules}</main></div>'
-            f'<footer>Erzeugt mit mtg_sim.py · Kartendaten von Scryfall</footer>'
-            + LAYOUT_JS + (SWITCH_JS if multi else "") + GAMES_JS
+            f'<footer>{t("Erzeugt mit mtg_sim.py · Kartendaten von Scryfall")}</footer>'
+            + LAYOUT_JS + (SWITCH_JS if multi else "") + tr_block(GAMES_JS, GAMES_JS_EN)
             + "<script>if(location.protocol.indexOf('http')===0)document.getElementById('backlink').style.display="
               "'inline-block'</script></body></html>")

@@ -6,6 +6,8 @@ from components.cardkinds import FLOW_ORDER, color_curve
 from components import archetypes as arch
 from components import cardarchetypes as cardarch
 from components.html_base import esc, h_level_td, h_table, html_cost
+from components.i18n import t
+from components.i18n_en.report_parts import L
 from components.removal import removal_level
 from components import synergy
 
@@ -50,7 +52,7 @@ def _svg(curve, mode, w=520, h=250):
                 y -= bh
                 out.append(f'<rect x="{cx - bw / 2:.1f}" y="{y:.1f}" width="{bw:.1f}" height="{bh:.1f}" '
                            f'fill="{COLOR_HEX[k]}" stroke="rgba(0,0,0,.25)" stroke-width="1">'
-                           f'<title>{COLOR_NAME[k]}, Manawert {label}: {v}</title></rect>')
+                           f'<title>{t("{color}, Manawert {mv}: {n}", color=L(COLOR_NAME[k]), mv=label, n=v)}</title></rect>')
             total = sum(bucket.values())
             if total:
                 out.append(f'<text x="{cx:.1f}" y="{y - 4:.1f}" class="lbl" text-anchor="middle">{total}</text>')
@@ -64,7 +66,7 @@ def _svg(curve, mode, w=520, h=250):
                 x = cx - bw * len(keys) / 2 + bw * j
                 out.append(f'<rect x="{x:.1f}" y="{mt + ph - bh:.1f}" width="{bw - 1:.1f}" height="{bh:.1f}" '
                            f'fill="{COLOR_HEX[k]}" stroke="rgba(0,0,0,.25)" stroke-width="1">'
-                           f'<title>{COLOR_NAME[k]}, Manawert {label}: {v}</title></rect>')
+                           f'<title>{t("{color}, Manawert {mv}: {n}", color=L(COLOR_NAME[k]), mv=label, n=v)}</title></rect>')
                 out.append(f'<text x="{x + (bw - 1) / 2:.1f}" y="{mt + ph - bh - 3:.1f}" class="lbl" '
                            f'text-anchor="middle">{v}</text>')
     out.append("</svg>")
@@ -73,7 +75,8 @@ def _svg(curve, mode, w=520, h=250):
 
 def _legend(keys):
     items = "".join(
-        f'<span><i style="background:{COLOR_HEX[k]}"></i>{COLOR_NAME[k]}{" (mehrere Farben)" if k == "M" else ""}</span>'
+        f'<span><i style="background:{COLOR_HEX[k]}"></i>'
+        f'{t("{color} (mehrere Farben)", color=L(COLOR_NAME[k])) if k == "M" else L(COLOR_NAME[k])}</span>'
         for k in keys)
     return f'<div class="cc-legend">{items}</div>'
 
@@ -83,17 +86,19 @@ def render_color_curves(ctx):
     items = curve_items(ctx)
     stacked, percolor = color_curve(items, "stacked", BUCKETS), color_curve(items, "percolor", BUCKETS)
     pairs = sorted(stacked["pairs"].items(), key=lambda kv: (-kv[1], kv[0]))
-    pair_text = " · ".join("/".join(COLOR_NAME[c] for c in k.split("/")) + f" {n}" for k, n in pairs)
-    info = (f'{stacked["total"]} Nichtland-Karten, davon {stacked["multi"]} mehrfarbig und {stacked["colorless"]} '
-            "farblos." + (f" Mehrfarbig: {esc(pair_text)}." if pairs else ""))
-    left = (f'<div><b>Mehrfarbige gesondert</b>{_svg(stacked, "stacked")}{_legend(stacked["keys"])}'
-            '<div class="cc-note">Jede Karte steht genau einmal im Diagramm (Balkenhöhe = Kartenzahl). Karten mit '
-            "mehreren Farben bilden das goldene Segment „Mehrfarbig“.</div></div>")
-    right = (f'<div><b>Je Farbe</b>{_svg(percolor, "percolor")}{_legend(percolor["keys"])}'
-             '<div class="cc-note">Eine mehrfarbige Karte zählt bei jeder ihrer Farben, z. B. eine Karte Grün/Weiß bei '
-             "Grün und bei Weiß. Die Balken ergeben deshalb zusammen mehr als die Kartenzahl.</div></div>")
-    return ('<div class="panel"><b>Mana-Kurve nach Farben</b>'
-            '<div class="note" style="margin:0 0 6px">Nichtland-Karten je Manawert, nach Farben aufgeteilt</div>'
+    pair_text = " · ".join("/".join(L(COLOR_NAME[c]) for c in k.split("/")) + f" {n}" for k, n in pairs)
+    info = (t("{total} Nichtland-Karten, davon {multi} mehrfarbig und {colorless} farblos.", total=stacked["total"],
+              multi=stacked["multi"], colorless=stacked["colorless"])
+            + (t(" Mehrfarbig: {pairs}.", pairs=esc(pair_text)) if pairs else ""))
+    left = (f'<div><b>{t("Mehrfarbige gesondert")}</b>{_svg(stacked, "stacked")}{_legend(stacked["keys"])}'
+            '<div class="cc-note">' + t("Jede Karte steht genau einmal im Diagramm (Balkenhöhe = Kartenzahl). Karten mit "
+                                        "mehreren Farben bilden das goldene Segment „Mehrfarbig“.") + "</div></div>")
+    right = (f'<div><b>{t("Je Farbe")}</b>{_svg(percolor, "percolor")}{_legend(percolor["keys"])}'
+             '<div class="cc-note">' + t("Eine mehrfarbige Karte zählt bei jeder ihrer Farben, z. B. eine Karte Grün/Weiß bei "
+                                         "Grün und bei Weiß. Die Balken ergeben deshalb zusammen mehr als die Kartenzahl.")
+             + "</div></div>")
+    return ('<div class="panel"><b>' + t("Mana-Kurve nach Farben") + '</b>'
+            '<div class="note" style="margin:0 0 6px">' + t("Nichtland-Karten je Manawert, nach Farben aufgeteilt") + '</div>'
             f'<div class="grid g2">{left}{right}</div><div class="cc-note">{info}</div></div>')
 
 
@@ -151,7 +156,7 @@ FLOW_NOTE = (" Kartenfluss: Karten, die ziehen, suchen oder Karten aus der Bibli
 
 
 def _note(rows):
-    return TYPE_NOTE + (FLOW_NOTE if any(label.startswith("Kartenfluss") for label, _c, _v in rows) else "")
+    return t(TYPE_NOTE) + (t(FLOW_NOTE) if any(label.startswith("Kartenfluss") for label, _c, _v in rows) else "")
 
 
 def _rows(decks):
@@ -199,23 +204,23 @@ def _td(value, extra_cls=""):
 
 def _label_cell(label, cls):
     style = ' style="padding-left:22px;color:var(--muted)"' if cls == "sub" else ""
-    return f'<td class="l"{style}>{esc(label)}</td>'
+    return f'<td class="l"{style}>{esc(L(label))}</td>'
 
 
 def render_type_table(ctx):
     spec = _rows([ctx])
     rows = [[_label_cell(label, cls), _td(vals[0])] for label, cls, vals in spec]
-    return (f'<div class="panel"><b>Kartentypen</b>{h_table(["Art", "Karten"], rows)}'
+    return (f'<div class="panel"><b>{t("Kartentypen")}</b>{h_table([L("Art"), L("Karten")], rows)}'
 '</div>')
 
 
 def _archetype_html(a, tips=True):
     head = (f'{html_cost("".join("{" + c + "}" for c in a["colors"]))} <b>{esc(a["name"])}</b> '
-            f'<span class="tag">{esc(arch.pair_label(a["colors"]))}</span>')
+            f'<span class="tag">{esc("/".join(L(x) for x in arch.pair_label(a["colors"]).split("/")))}</span>')
     if not tips:
         return head
     return head + "<ul style=\"margin:6px 0 0;padding-left:20px\">" + "".join(
-        f"<li>{esc(t)}</li>" for t in a["tips"]) + "</ul>"
+        f"<li>{esc(L(tip))}</li>" for tip in a["tips"]) + "</ul>"
 
 
 def _assignment_html(ctx, archetypes):
@@ -228,12 +233,11 @@ def _assignment_html(ctx, archetypes):
     if not any(assign.get(c["name"]) for c in cards if not c["land"]):
         return ""
     found = cardarch.detect(cards, assign, ctx.get("cats") or {}, archetypes)
-    counts = [f'{esc(s["name"])}: {s["assigned"]} Karte{"n" if s["assigned"] != 1 else ""}'
+    counts = [t("{name}: {n} Karten" if s["assigned"] != 1 else "{name}: {n} Karte", name=esc(s["name"]), n=s["assigned"])
               for s in sorted(found["scores"], key=lambda s: -s["assigned"]) if s["assigned"]]
     main = next((s for s in found["scores"] if s["colors"] == found["main"]), None)
-    detected = (f'<b>{esc(main["name"])}</b> ({main["score"]} Punkte)' if main else
-                'noch offen (kein Archetyp liegt allein vorn mit mindestens '
-                f'{cardarch.MIN_POINTS} Punkten)')
+    detected = (f'<b>{esc(main["name"])}</b> ' + t("({n} Punkte)", n=main["score"]) if main else
+                t("noch offen (kein Archetyp liegt allein vorn mit mindestens {n} Punkten)", n=cardarch.MIN_POINTS))
     names = {c["name"] for c in cards if not c["land"]}
     best = {}
     for n, pair in sorted((ctx.get("cardbest") or {}).items()):
@@ -241,11 +245,12 @@ def _assignment_html(ctx, archetypes):
             best.setdefault(pair, []).append(n)
     by_name = {s["colors"]: s["name"] for s in found["scores"]}
     best_html = "".join(
-        f'<div style="margin-top:4px"><b style="color:#7b2fbf">Am besten in {esc(by_name.get(p, p))}:</b> '
+        '<div style="margin-top:4px"><b style="color:#7b2fbf">' + t("Am besten in {x}:", x=esc(by_name.get(p, p))) + '</b> '
         + ", ".join(esc(n) for n in lst) + "</div>"
         for p, lst in sorted(best.items(), key=lambda kv: (kv[0] != found["main"], -len(kv[1]), kv[0])))
-    return ('<div style="margin-top:10px"><b>Deine Zuordnung:</b> ' + " · ".join(counts) + '</div>'
-            f'<div style="margin-top:4px">Erkannt aus Zuordnung, Farben und Kategorien: {detected}</div>' + best_html)
+    return ('<div style="margin-top:10px"><b>' + t("Deine Zuordnung:") + '</b> ' + " · ".join(counts) + '</div>'
+            '<div style="margin-top:4px">' + t("Erkannt aus Zuordnung, Farben und Kategorien: {detected}",
+                                               detected=detected) + '</div>' + best_html)
 
 
 def render_stats_panel(ctx):
@@ -258,17 +263,17 @@ def render_stats_panel(ctx):
     for n in names:
         st = stats[n]
         g, w = st.get("games", 0), st.get("wins", 0)
-        rate = f"{round(100 * w / g)} %" if g else "–"
+        rate = t("{p} %", p=round(100 * w / g)) if g else "–"
         cls = ' class="note"' if g and g < 20 else ""
         rows.append([f'<td class="l">{esc(n)}</td>', f'<td>{st.get("drafted", 0)}</td>', f'<td>{st.get("decks", 0)}</td>',
                      f'<td>{g}</td>', f'<td{cls}>{rate}</td>'])
     if not rows:
         return ""
-    return ('<div class="panel"><b>Deine Draft-Statistik</b>'
-            + h_table(["Karte", "Gedraftet", "Im Deck", "Games", "Games gewonnen"], rows)
-            + '<div class="note">Aus den mitgelesenen Live-Drafts (draftstatistik.json): Games mit der Karte im '
-              'Hauptdeck. Grau: weniger als 20 Games, nur ein Hinweis. Ganze Auswertung: Setauswertung '
-              '(Menüpunkt 4).</div></div>')
+    return ('<div class="panel"><b>' + t("Deine Draft-Statistik") + '</b>'
+            + h_table([L("Karte"), t("Gedraftet"), t("Im Deck"), "Games", t("Games gewonnen")], rows)
+            + '<div class="note">' + t("Aus den mitgelesenen Live-Drafts (draftstatistik.json): Games mit der Karte im "
+                                       "Hauptdeck. Grau: weniger als 20 Games, nur ein Hinweis. Ganze Auswertung: "
+                                       "Setauswertung (Menüpunkt 4).") + '</div></div>')
 
 
 def render_archetype_panel(ctx):
@@ -290,25 +295,25 @@ def render_archetype_panel(ctx):
     main = [a for a in found["list"] if a["colors"] == pair]
     others = [a for a in found["list"] if a["colors"] != pair]
     body = (_archetype_html(main[0]) if main else
-            '<div class="note" style="margin-top:4px">Das Deck hat kein Farbpaar als Hauptfarben (weniger als zwei '
-            'Farben).</div>')
+            '<div class="note" style="margin-top:4px">' + t("Das Deck hat kein Farbpaar als Hauptfarben (weniger als "
+                                                            "zwei Farben).") + '</div>')
     rest = "".join(f'<div style="margin:3px 0">{_archetype_html(a, tips=False)}</div>' for a in others)
-    return (f'<div class="panel"><b>Archetyp ({esc(found["set"])})</b>'
+    return ('<div class="panel"><b>' + t("Archetyp ({set})", set=esc(found["set"])) + '</b>'
             f'<div style="margin-top:8px">{body}</div>' + _assignment_html(ctx, found["list"]) +
-            f'<details style="margin-top:10px"><summary class="note" style="cursor:pointer">Weitere Archetypen des '
-            f'Sets</summary>{rest}</details>'
-            '<div class="note">Hauptfarben: die zwei Farben mit den meisten Nichtland-Karten (Kopien, mehrfarbige '
-            'zählen für jede ihrer Farben).</div></div>')
+            '<details style="margin-top:10px"><summary class="note" style="cursor:pointer">'
+            + t("Weitere Archetypen des Sets") + f'</summary>{rest}</details>'
+            '<div class="note">' + t("Hauptfarben: die zwei Farben mit den meisten Nichtland-Karten (Kopien, mehrfarbige "
+                                     "zählen für jede ihrer Farben).") + '</div></div>')
 
 
 def render_types_compare(decks):
     """Tabelle mit einer Spalte je Deck; Zeilen mit Unterschieden sind fett."""
-    heads = ["Art"] + [esc(d["name"]) for d in decks]
+    heads = [L("Art")] + [esc(d["name"]) for d in decks]
     rows, spec = [], _rows(decks)
     for label, cls, vals in spec:
         cell_cls = ' class="diff"' if len(set(vals)) > 1 else ""
         rows.append([_label_cell(label, cls)] + [_td(v, cell_cls) for v in vals])
-    return (f'<div class="panel"><b>Kartentypen im Vergleich</b>{h_table(heads, rows)}'
+    return (f'<div class="panel"><b>{t("Kartentypen im Vergleich")}</b>{h_table(heads, rows)}'
 '</div>')
 
 
@@ -321,7 +326,7 @@ def render_removal_table(ctx):
     if not items:
         return ""
     items.sort(key=lambda x: (-x[2]["points"], x[0]))
-    rows = [[f'<td class="l">{esc(n)}</td>', f"<td>{q}</td>", f'<td class="l">{esc(r["kind"])}</td>',
+    rows = [[f'<td class="l">{esc(n)}</td>', f"<td>{q}</td>", f'<td class="l">{esc(L(r["kind"]))}</td>',
              f'<td>{r["points"]:.2f}</td>', f'<td>{q * r["points"]:.2f}</td>',
              f'<td class="l muted" style="font-size:12.5px">{esc(r["text"])}</td>'] for n, q, r in items]
     total = sum(q * r["points"] for _n, q, r in items)
@@ -330,19 +335,20 @@ def render_removal_table(ctx):
     by_kind = {}
     for _n, q, r in items:
         by_kind[r["kind"]] = by_kind.get(r["kind"], 0) + q
-    kinds = " · ".join(f"{esc(k)} {v}" for k, v in sorted(by_kind.items(), key=lambda kv: (-kv[1], kv[0])))
+    kinds = " · ".join(f"{esc(L(k))} {v}" for k, v in sorted(by_kind.items(), key=lambda kv: (-kv[1], kv[0])))
     level = removal_level(total, deck_size)
     pill = {"green": "good", "yellow": "warn", "red": "bad"}[level]
     kpis = (f'<div class="grid g4" style="margin-bottom:12px">'
-            f'<div class="panel kpi"><div class="l">Removal-Karten</div><div class="v">{copies}</div>'
-            f'<div class="s">von {deck_size} Karten</div></div>'
-            f'<div class="panel kpi"><div class="l">Σ Removal-Punkte</div>'
+            f'<div class="panel kpi"><div class="l">{t("Removal-Karten")}</div><div class="v">{copies}</div>'
+            f'<div class="s">{t("von {n} Karten", n=deck_size)}</div></div>'
+            f'<div class="panel kpi"><div class="l">{t("Σ Removal-Punkte")}</div>'
             f'<div class="v"><span class="pill {pill}">{total:.1f}</span></div>'
-            f'<div class="s">grün ab {4 * deck_size / 40:.1f}, gelb ab {2.5 * deck_size / 40:.1f}</div></div>'
-            f'<div class="panel kpi" style="grid-column:span 2"><div class="l">Nach Art (Karten)</div>'
+            f'<div class="s">{t("grün ab {g}, gelb ab {y}", g=f"{4 * deck_size / 40:.1f}", y=f"{2.5 * deck_size / 40:.1f}")}'
+            f'</div></div>'
+            f'<div class="panel kpi" style="grid-column:span 2"><div class="l">{t("Nach Art (Karten)")}</div>'
             f'<div class="s" style="font-size:14px;margin-top:6px">{kinds}</div></div></div>')
     return (kpis + '<div class="panel">'
-            + h_table(["Karte", "Anz.", "Art", "Punkte je Karte", "Summe", "Erkannte Textstelle"], rows,
+            + h_table([L("Karte"), t("Anz."), L("Art"), t("Punkte je Karte"), t("Summe"), t("Erkannte Textstelle")], rows,
                       left=(0, 2, 5)) + '</div>')
 
 
@@ -357,19 +363,20 @@ def render_graveyard_table(ctx):
     items.sort(key=lambda x: (-x[2]["points"], x[0]))
     total = sum(q * r["points"] for _n, q, r in items)
     kpis = (f'<div class="grid g4" style="margin-bottom:12px">'
-            f'<div class="panel kpi"><div class="l">Friedhof-Interaktion</div><div class="v">{sum(q for _n, q, _r in items)}</div>'
-            f'<div class="s">Karten</div></div>'
-            f'<div class="panel kpi"><div class="l">Σ Friedhof-Punkte</div><div class="v">{total:.1f}</div></div>'
-            f'<div class="panel kpi" style="grid-column:span 2"><div class="l">Enabler (füllen den Friedhof)</div>'
+            f'<div class="panel kpi"><div class="l">{t("Friedhof-Interaktion")}</div>'
+            f'<div class="v">{sum(q for _n, q, _r in items)}</div>'
+            f'<div class="s">{L("Karten")}</div></div>'
+            f'<div class="panel kpi"><div class="l">{t("Σ Friedhof-Punkte")}</div><div class="v">{total:.1f}</div></div>'
+            f'<div class="panel kpi" style="grid-column:span 2"><div class="l">{t("Enabler (füllen den Friedhof)")}</div>'
             f'<div class="s" style="font-size:14px;margin-top:6px">'
             f'{esc(", ".join(f"{q}× {n}" for n, q in enablers)) or "–"}</div></div></div>')
     table = ""
     if items:
-        rows = [[f'<td class="l">{esc(n)}</td>', f"<td>{q}</td>", f'<td class="l">{esc(r["kind"])}</td>',
+        rows = [[f'<td class="l">{esc(n)}</td>', f"<td>{q}</td>", f'<td class="l">{esc(L(r["kind"]))}</td>',
                  f'<td>{r["points"]:.2f}</td>', f'<td>{q * r["points"]:.2f}</td>',
                  f'<td class="l muted" style="font-size:12.5px">{esc(r["text"])}</td>'] for n, q, r in items]
-        table = ('<div class="panel">' + h_table(["Karte", "Anz.", "Art", "Punkte je Karte", "Summe",
-                                                  "Erkannte Textstelle"], rows, left=(0, 2, 5)) + '</div>')
+        table = ('<div class="panel">' + h_table([L("Karte"), t("Anz."), L("Art"), t("Punkte je Karte"), t("Summe"),
+                                                  t("Erkannte Textstelle")], rows, left=(0, 2, 5)) + '</div>')
     return kpis + table
 
 
@@ -388,7 +395,7 @@ def _avail_cell(n, games, measured=True):
 
 
 def all_colors_label(colors):
-    return "Alle Farben bis Runde 3 (" + ", ".join(COLOR_NAME[c] for c in colors) + ")"
+    return t("Alle Farben bis Runde 3 ({colors})", colors=", ".join(L(COLOR_NAME[c]) for c in colors))
 
 
 def all_colors_row(ctx):
@@ -402,7 +409,7 @@ def all_colors_row(ctx):
 
 
 def pip_check_label(ch):
-    return f'≥ {ch["k"]} Quellen {COLOR_NAME[ch["color"]]} bis Runde {ch["turn"]}'
+    return t("≥ {k} Quellen {color} bis Runde {turn}", k=ch["k"], color=L(COLOR_NAME[ch["color"]]), turn=ch["turn"])
 
 
 def render_color_availability(ctx):
@@ -416,7 +423,7 @@ def render_color_availability(ctx):
         return ""
     rows = [all_colors_row(ctx)]
     for c in first["colors"]:
-        rows.append([f'<td class="l" style="padding-left:22px">≥ 1 Quelle {COLOR_NAME[c]} bis Runde 3</td>'] + [
+        rows.append([f'<td class="l" style="padding-left:22px">{t("≥ 1 Quelle {color} bis Runde 3", color=L(COLOR_NAME[c]))}</td>'] + [
             _avail_cell(results[l]["color_avail"]["t3"][c], results[l]["color_avail"]["games"]) for l in labels])
     for i, ch in enumerate(first.get("checks") or []):
         cells = []
@@ -425,9 +432,17 @@ def render_color_availability(ctx):
             other = (ca.get("checks") or [])[i]
             cells.append(_avail_cell(other["ok"], ca["games"], other["measured"]))
         rows.append([f'<td class="l">{esc(pip_check_label(ch))}'
-                     f'<div class="muted" style="font-size:12px">wegen {ch["color"] * ch["k"]} in: '
-                     f'{esc(", ".join(ch["cards"]))}</div></td>'] + cells)
-    return f'<div class="panel">{h_table(["Kennzahl"] + [esc(l) for l in labels], rows)}</div>'
+                     f'<div class="muted" style="font-size:12px">'
+                     f'{t("wegen {symbols} in: {cards}", symbols=ch["color"] * ch["k"], cards=esc(", ".join(ch["cards"])))}'
+                     '</div></td>'] + cells)
+    return f'<div class="panel">{h_table([t("Kennzahl")] + [esc(l) for l in labels], rows)}</div>'
+
+
+def _syn_label(label):
+    """Anzeige-Text einer Synergie-Ressource in der aktuellen Sprache ("Kreaturtyp X" mit Typ)."""
+    if label.startswith("Kreaturtyp "):
+        return t("Kreaturtyp {x}", x=label[len("Kreaturtyp "):])
+    return L(label)
 
 
 def render_synergy_table(ctx):
@@ -446,28 +461,30 @@ def render_synergy_table(ctx):
         if len(r["partners"]) > 5:
             partners += f' … (+{len(r["partners"]) - 5})'
         rows.append([f'<td class="l">{esc(r["name"])}</td>', f'<td>{r["qty"]}</td>',
-                     f'<td class="l">{esc(r["label"])}</td>', f'<td>{r["givers"]:g}</td>',
+                     f'<td class="l">{esc(_syn_label(r["label"]))}</td>', f'<td>{r["givers"]:g}</td>',
                      h_level_td("green" if r["fill"] >= 0.6 else ("yellow" if r["fill"] >= synergy.ORPHAN else "red"),
                                 f'{r["fill"]:.0%}'),
                      f'<td>{r["points"]:.2f}</td>',
                      f'<td class="l muted" style="font-size:12.5px">{esc(partners) or "–"}</td>'])
     missing = {}
     for r in res["orphans"]:
-        missing.setdefault(r["name"], []).append(r["label"])
+        missing.setdefault(r["name"], []).append(_syn_label(r["label"]))
     orphans = [f"{n} ({', '.join(labels)})" for n, labels in sorted(missing.items())]
     kpis = (f'<div class="grid g4" style="margin-bottom:12px">'
-            f'<div class="panel kpi"><div class="l">Synergie-Punkte</div>'
+            f'<div class="panel kpi"><div class="l">{t("Synergie-Punkte")}</div>'
             f'<div class="v"><span class="pill {pill}">{res["score"]:.1f}</span></div>'
-            f'<div class="s">grün ab {synergy.GREEN * deck_size / 40:.1f}, gelb ab {synergy.YELLOW * deck_size / 40:.1f}'
+            f'<div class="s">{t("grün ab {g}, gelb ab {y}", g=f"{synergy.GREEN * deck_size / 40:.1f}", y=f"{synergy.YELLOW * deck_size / 40:.1f}")}'
             f'</div></div>'
-            f'<div class="panel kpi"><div class="l">Karten mit Synergie-Bedarf</div><div class="v">{payoffs}</div>'
-            f'<div class="s">profitieren von anderen Karten</div></div>'
-            f'<div class="panel kpi" style="grid-column:span 2"><div class="l">Ohne Partner (Erfüllung unter '
-            f'{synergy.ORPHAN:.0%})</div><div class="s" style="font-size:14px;margin-top:6px">'
-            f'{esc(", ".join(orphans)) or "keine"}</div></div></div>')
-    note = ('<div class="muted" style="font-size:12.5px;margin-top:8px">Erfüllung = 1 − (1 − p)<sup>k</sup> mit k '
-            'Geber-Einheiten im Deck (ohne die eigene Kopie): der dritte Geber bringt weniger als der erste. Punkte = '
-            'Gewicht × Erfüllung × Anzahl. Länder zählen nicht.</div>')
+            f'<div class="panel kpi"><div class="l">{t("Karten mit Synergie-Bedarf")}</div><div class="v">{payoffs}</div>'
+            f'<div class="s">{t("profitieren von anderen Karten")}</div></div>'
+            f'<div class="panel kpi" style="grid-column:span 2"><div class="l">'
+            f'{t("Ohne Partner (Erfüllung unter {p})", p=f"{synergy.ORPHAN:.0%}")}</div>'
+            f'<div class="s" style="font-size:14px;margin-top:6px">'
+            f'{esc(", ".join(orphans)) or t("keine")}</div></div></div>')
+    note = ('<div class="muted" style="font-size:12.5px;margin-top:8px">'
+            + t("Erfüllung = 1 − (1 − p)<sup>k</sup> mit k "
+                "Geber-Einheiten im Deck (ohne die eigene Kopie): der dritte Geber bringt weniger als der erste. Punkte = "
+                "Gewicht × Erfüllung × Anzahl. Länder zählen nicht.") + '</div>')
     return (kpis + '<div class="panel">'
-            + h_table(["Karte", "Anz.", "profitiert von", "Geber im Deck", "Erfüllung", "Punkte", "Partner im Deck"],
-                      rows, left=(0, 2, 6)) + note + '</div>')
+            + h_table([L("Karte"), t("Anz."), t("profitiert von"), t("Geber im Deck"), t("Erfüllung"), t("Punkte"),
+                       t("Partner im Deck")], rows, left=(0, 2, 6)) + note + '</div>')

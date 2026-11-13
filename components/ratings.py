@@ -4,6 +4,8 @@ import json
 import os
 import pathlib
 
+from components.i18n import t
+
 CATEGORIES = ("matchwinner", "splashworthy", "mustplay", "filler", "neverplay")
 
 
@@ -30,7 +32,7 @@ def save_ratings(path, data):
 def set_rating(path, name, cat):
     """Setzt die Kategorie einer Karte; leere Kategorie entfernt sie. Gibt die ganze Bewertung zurueck."""
     if cat and cat not in CATEGORIES:
-        raise ValueError("Unbekannte Kategorie")
+        raise ValueError(t("Unbekannte Kategorie"))
     data = load_ratings(path)
     if cat:
         data[name] = cat

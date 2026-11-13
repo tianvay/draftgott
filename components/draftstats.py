@@ -36,6 +36,7 @@ import sys
 from components import arenalog
 from components import archetypes as set_archetypes
 from components import cardarchetypes
+from components.i18n import t
 
 BASICS = {"Plains", "Island", "Swamp", "Mountain", "Forest", "Wastes"}
 DECK_MATCH = 0.8
@@ -309,10 +310,10 @@ class Tracker:
             self.enemy_dir.mkdir(exist_ok=True)
             path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         except OSError as e:
-            print(f"Gegnerdeck nicht gespeichert: {e}", file=sys.stderr)
+            print(t("Gegnerdeck nicht gespeichert: {e}", e=e), file=sys.stderr)
             return
         self.last_saved = name
-        print(f"Gegnerdeck gespeichert: {path}", file=sys.stderr)
+        print(t("Gegnerdeck gespeichert: {path}", path=path), file=sys.stderr)
 
     def feed_line(self, line):
         """Verarbeitet eine Protokollzeile; True (und Datei geschrieben), wenn sich die Statistik geaendert hat."""

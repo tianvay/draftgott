@@ -15,6 +15,7 @@ Grundlagen
 from functools import lru_cache
 from math import comb
 
+from components.i18n import t
 from components.mana import cost_alternatives
 
 WUBRG = "WUBRG"
@@ -184,19 +185,21 @@ def recommend(pool, marks, target=40):
         n_basics = max(0, lands - n_nonbasic)
         if n_nonbasic > lands:
             lands = n_nonbasic
-            warnings.append(f"{GROUP_LABEL[key]}: mehr passende Nicht-Standardländer ({n_nonbasic}) als Länder "
-                            "nach der Faustregel.")
+            warnings.append(t("{g}: mehr passende Nicht-Standardländer ({n}) als Länder nach der Faustregel.",
+                              g=GROUP_LABEL[key], n=n_nonbasic))
         fixed = {c: sum(q for l, q in nonbasic if c in l["colors"]) for c in WUBRG}
         deck = v["spells"] + lands
         needed = {c for it in v["items"] for c in it["needs"]}
         alloc = distribute(v["items"], fixed, n_basics, deck, needed)
         if not needed and n_basics:
-            warnings.append(f"{GROUP_LABEL[key]}: keine Karte verlangt eine bestimmte Farbe, deshalb werden keine "
-                            "Standardländer empfohlen.")
+            warnings.append(t("{g}: keine Karte verlangt eine bestimmte Farbe, deshalb werden keine "
+                              "Standardländer empfohlen.", g=GROUP_LABEL[key]))
         sources = {c: fixed[c] + alloc.get(c, 0) for c in WUBRG}
         if deck != target:
-            warnings.append(f"{GROUP_LABEL[key]}: {v['spells']} Zauber + {lands} Länder = {deck} Karten "
-                            f"(Ziel {target}; Faustregel {low} bis {high} Länder).")
+            warnings.append(t("{g}: {spells} Zauber + {lands} Länder = {deck} Karten "
+                              "(Ziel {target}; Faustregel {low} bis {high} Länder).",
+                              g=GROUP_LABEL[key], spells=v['spells'], lands=lands, deck=deck, target=target,
+                              low=low, high=high))
         per_variant[key] = alloc
         out_variants.append({"key": key, "label": GROUP_LABEL[key], "spells": v["spells"],
                              "lands": n_nonbasic + sum(alloc.values()), "nonbasic": n_nonbasic, "size": deck,

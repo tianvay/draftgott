@@ -18,6 +18,7 @@ from components import draftstats as ds
 from components import ratings as card_ratings
 from components import symbols
 from components.html_base import HTML_CSS, esc, h_section, html_cost
+from components.i18n import dec, html_lang, is_en, t, tr_block
 from components.scryfall import fetch_cards_cached
 
 SCRIPT_DIR = pathlib.Path(__file__).resolve().parent.parent
@@ -144,6 +145,7 @@ if(tbl){const q=document.getElementById("cq"),only=document.getElementById("conl
   document.querySelectorAll(".cf button").forEach(x=>x.classList.toggle("on",x.dataset.c===col));apply()});
  apply()}
 </script>"""
+JS_EN = {'th.title="Sortieren"': 'th.title="Sort"', '" von "': '" of "', '" Karten"': '" cards"'}
 
 
 def output_name(code):
@@ -166,7 +168,7 @@ def _rate_td(wins, games):
     if not games:
         return '<td data-v="-1">–</td>'
     if games < MIN_GAMES:
-        attr = ' class="few" title="Weniger als %d Games: nur ein Hinweis"' % MIN_GAMES
+        attr = ' class="few" title="%s"' % t("Weniger als {n} Games: nur ein Hinweis", n=MIN_GAMES)
     else:
         attr = f' class="rate {_level(wins, games)}"'
     return (f'<td data-v="{wins / games:.4f}"{attr}><div class="rv"><b>{_pct(wins, games)}</b>'
@@ -203,9 +205,11 @@ def _results(rec):
 
 
 def _wl(rec):
-    pills = "".join('<i class="w" title="Sieg">S</i>' if m["win"] else '<i class="l" title="Niederlage">N</i>'
-                    for m in _results(rec))
-    pills += "".join('<i class="o" title="läuft noch">·</i>' for m in rec.get("matches") or [] if m.get("win") is None)
+    win_ch, loss_ch, win_t, loss_t = ("W", "L", "win", "loss") if is_en() else ("S", "N", "Sieg", "Niederlage")
+    pills = "".join(f'<i class="w" title="{win_t}">{win_ch}</i>' if m["win"]
+                    else f'<i class="l" title="{loss_t}">{loss_ch}</i>' for m in _results(rec))
+    pills += "".join(f'<i class="o" title="{t("läuft noch")}">·</i>' for m in rec.get("matches") or []
+                     if m.get("win") is None)
     return f'<span class="wl">{pills}</span>'
 
 
@@ -222,20 +226,23 @@ def _overview(data, code, records):
     losses, glosses = s["matches"] - s["match_wins"], s["games"] - s["wins"]
     rate = round(100 * s["match_wins"] / s["matches"]) if s["matches"] else 0
     dates = sorted(r.get("started") or "" for r in records if r.get("started"))
-    period = (f"{dates[0]} bis {dates[-1]}" if dates and dates[0] != dates[-1] else (dates[0] if dates else ""))
+    period = (t("{a} bis {b}", a=dates[0], b=dates[-1]) if dates and dates[0] != dates[-1] else (dates[0] if dates else ""))
     timeline = "".join(_wl(r) for r in sorted(records, key=lambda r: r.get("started") or ""))
+    per_draft = dec(f"{(s['match_wins'] / drafts if drafts else 0):.1f}")
     kpis = (f'<div class="kpi"><div class="donut" style="--p:{rate}" data-t="{rate} %"></div><div>'
             f'<b>{s["match_wins"]}-{losses}</b><span>Matches</span></div></div>'
-            f'<div class="kpi"><div><b>{drafts} Draft{"s" if drafts != 1 else ""}</b><span>mitgelesen</span></div></div>'
-            f'<div class="kpi"><div><b>{s["wins"]}-{glosses}</b><span>Games, {_pct(s["wins"], s["games"])} gewonnen'
+            f'<div class="kpi"><div><b>{drafts} Draft{"s" if drafts != 1 else ""}</b><span>{t("mitgelesen")}</span>'
+            f'</div></div>'
+            f'<div class="kpi"><div><b>{s["wins"]}-{glosses}</b><span>'
+            + t("Games, {p} gewonnen", p=_pct(s["wins"], s["games"])) +
             f'</span></div></div>'
-            f'<div class="kpi"><div><b>{(s["match_wins"] / drafts if drafts else 0):.1f}</b>'
-            f'<span>Siege je Draft</span></div></div>').replace(".0</b>", ",0</b>")
-    kpis = re.sub(r"<b>(\d+)\.(\d)</b>", r"<b>\1,\2</b>", kpis)
-    return (f'<div class="hero"><h2>Setauswertung {esc(code)}</h2>'
-            f'<div class="per">{esc(period)} · alle mitgelesenen Drafts des Sets</div>'
+            f'<div class="kpi"><div><b>{per_draft}</b>'
+            f'<span>{t("Siege je Draft")}</span></div></div>')
+    return (f'<div class="hero"><h2>{t("Setauswertung {code}", code=esc(code))}</h2>'
+            f'<div class="per">{esc(period)} · {t("alle mitgelesenen Drafts des Sets")}</div>'
             f'<div class="kpis">{kpis}</div>'
-            f'<div style="margin-top:14px;font-size:12.5px;opacity:.9">Match-Verlauf (älteste zuerst): {timeline}</div>'
+            f'<div style="margin-top:14px;font-size:12.5px;opacity:.9">'
+            + t("Match-Verlauf (älteste zuerst): {timeline}", timeline=timeline) + '</div>'
             f'</div>')
 
 
@@ -252,21 +259,21 @@ def _archetypes(records, code, colors, assign, ratings):
             b["games"] += len(m["games"])
             b["gw"] += sum(1 for g in m["games"] if g)
     if not by:
-        return '<p class="hint">Keine Drafts.</p>'
+        return f'<p class="hint">{t("Keine Drafts.")}</p>'
     names = {a["colors"]: a["name"] for a in found}
     out = []
     for key in sorted(by, key=lambda k: (-by[k]["drafts"], -by[k]["mw"], k)):
         b = by[key]
         accent = (f"linear-gradient({ACCENT[key[0]]} 50%,{ACCENT[key[1]]} 50%)" if len(key) == 2 else "#b7bcc6")
-        title = f'{_mana(key)} {esc(names.get(key, key))}' if key else "noch offen"
+        title = f'{_mana(key)} {esc(names.get(key, key))}' if key else t("noch offen")
         lvl = _level(b["mw"], b["matches"])
         color = {"good": "#2e9e5b", "bad": "#d6453b"}.get(lvl, "#6b7d99")
         out.append(f'<div class="arch" style="--ac:{accent}"><div class="ah">{title}</div>'
                    f'<div class="am">{b["drafts"]} Draft{"s" if b["drafts"] != 1 else ""} · Matches '
                    f'{b["mw"]}-{b["matches"] - b["mw"]}</div>'
-                   f'<div class="mrow"><span>Matches gewonnen</span><b>{_pct(b["mw"], b["matches"])}</b></div>'
+                   f'<div class="mrow"><span>{t("Matches gewonnen")}</span><b>{_pct(b["mw"], b["matches"])}</b></div>'
                    f'{_meter(b["mw"], b["matches"], color)}'
-                   f'<div class="mrow"><span>Games gewonnen</span><b>{_pct(b["gw"], b["games"])}</b></div>'
+                   f'<div class="mrow"><span>{t("Games gewonnen")}</span><b>{_pct(b["gw"], b["games"])}</b></div>'
                    f'{_meter(b["gw"], b["games"], color)}</div>')
     return f'<div class="archs">{"".join(out)}</div>'
 
@@ -277,21 +284,22 @@ def _tile(name, st, sc):
     lvl = _level(st["wins"], st["games"]) or "mid"
     return (f'<div class="tile">{pic}<span class="rb {lvl}">{_pct(st["wins"], st["games"])}</span>'
             f'<div class="tn">{esc(name)}</div><div class="ts">{st["games"]} Games · {st["decks"]} '
-            f'Deck{"s" if st["decks"] != 1 else ""} · {st["drafted"]}× gedraftet</div></div>')
+            f'Deck{"s" if st["decks"] != 1 else ""} · ' + t("{n}× gedraftet", n=st["drafted"]) + '</div></div>')
 
 
 def _best(stats, cards):
     enough = {n: s for n, s in stats.items() if s["games"] >= TOP_GAMES}
     if not enough:
-        return (f'<p class="hint">Noch keine Karte mit mindestens {TOP_GAMES} Games im Hauptdeck – je mehr Drafts '
-                'mitgelesen werden, desto aussagekräftiger wird diese Liste.</p>')
+        return ('<p class="hint">' + t("Noch keine Karte mit mindestens {n} Games im Hauptdeck – je mehr Drafts "
+                                       "mitgelesen werden, desto aussagekräftiger wird diese Liste.", n=TOP_GAMES)
+                + '</p>')
     order = sorted(enough, key=lambda n: (-enough[n]["wins"] / enough[n]["games"], -enough[n]["games"]))
     top = order[:6]
     low = [n for n in order[::-1][:6] if n not in top]
-    out = '<h3 class="sub">Am stärksten</h3><div class="tiles">' + "".join(
+    out = f'<h3 class="sub">{t("Am stärksten")}</h3><div class="tiles">' + "".join(
         _tile(n, enough[n], cards.get(n) or {}) for n in top) + "</div>"
     if low:
-        out += '<h3 class="sub">Am schwächsten</h3><div class="tiles">' + "".join(
+        out += f'<h3 class="sub">{t("Am schwächsten")}</h3><div class="tiles">' + "".join(
             _tile(n, enough[n], cards.get(n) or {}) for n in low) + "</div>"
     return out
 
@@ -323,19 +331,20 @@ def _card_table(stats, cards, assign, ratings, arch_names):
             f'<td data-v="{"CURM".find(RARITY.get(rarity, "-"))}">'
             + (f'<span class="rar {rarity}" title="{esc(rarity)}"></span>' if rarity else "") + '</td>'
             f'<td class="l" data-v="{list(CAT_LABEL).index(cat)}">'
-            + (f'<span class="cat {CAT_CLASS[cat]}">{esc(CAT_LABEL[cat])}</span>' if cat else "") + '</td>'
+            + (f'<span class="cat {CAT_CLASS[cat]}">{esc(t(CAT_LABEL[cat]))}</span>' if cat else "") + '</td>'
             f'<td class="l aps" data-v="{esc(arch_sort.lower())}">{arch}</td><td>{st["drafted"]}</td>'
-            f'<td data-v="{avg if avg is not None else 99}">{f"{avg:g}".replace(".", ",") if avg else "–"}</td>'
+            f'<td data-v="{avg if avg is not None else 99}">{dec(f"{avg:g}") if avg else "–"}</td>'
             f'<td>{st["decks"]}</td><td>{st["games"]}</td>{_rate_td(st["wins"], st["games"])}'
             f'<td data-v="{st["match_wins"]}">{st["match_wins"]}-{st["matches"] - st["match_wins"]}</td></tr>')
-    head = "".join(f'<th class="{"l" if i in (1, 2, 4, 5) else ""}"{" data-nosort" if i == 0 else ""}>{h}</th>'
+    head = "".join(f'<th class="{"l" if i in (1, 2, 4, 5) else ""}"{" data-nosort" if i == 0 else ""}>{t(h)}</th>'
                    for i, h in enumerate(CARD_HEAD))
-    filters = ('<div class="filters"><input type="search" id="cq" placeholder="Karte suchen">'
-               '<div class="cf">' + "".join(f'<button type="button" data-c="{c}" title="{t}">{_mana(c) if c in "WUBRG" else t}'
-                                            '</button>' for c, t in (("W", "Weiß"), ("U", "Blau"), ("B", "Schwarz"),
-                                                                     ("R", "Rot"), ("G", "Grün"), ("M", "Mehrfarbig"),
-                                                                     ("C", "Farblos")))
-               + '</div><label><input type="checkbox" id="conly"> nur gespielte Karten</label>'
+    filters = (f'<div class="filters"><input type="search" id="cq" placeholder="{t("Karte suchen")}">'
+               '<div class="cf">' + "".join(f'<button type="button" data-c="{c}" title="{t(cn)}">'
+                                            f'{_mana(c) if c in "WUBRG" else t(cn)}'
+                                            '</button>' for c, cn in (("W", "Weiß"), ("U", "Blau"), ("B", "Schwarz"),
+                                                                      ("R", "Rot"), ("G", "Grün"), ("M", "Mehrfarbig"),
+                                                                      ("C", "Farblos")))
+               + f'</div><label><input type="checkbox" id="conly"> {t("nur gespielte Karten")}</label>'
                '<span class="count" id="ccount"></span></div>')
     return (filters + f'<div class="cardbox" style="padding:0;overflow:auto"><table class="cards" id="cardtable">'
             f'<thead><tr>{head}</tr></thead><tbody>{"".join(rows)}</tbody></table></div>')
@@ -350,12 +359,13 @@ def _ratings_vs_results(stats, ratings):
         wins = sum(stats[n]["wins"] for n in names)
         lvl = _level(wins, games)
         color = {"good": "#2e9e5b", "bad": "#d6453b"}.get(lvl, "#6b7d99") if games >= MIN_GAMES else "#c3c8d2"
-        label = (f'<span class="cat {CAT_CLASS[cat]}">{esc(CAT_LABEL[cat])}</span>' if cat
-                 else esc(CAT_LABEL[cat]))
+        label = (f'<span class="cat {CAT_CLASS[cat]}">{esc(t(CAT_LABEL[cat]))}</span>' if cat
+                 else esc(t(CAT_LABEL[cat])))
         rows.append(f'<div class="catrow"><span>{label}</span>'
                     f'<div>{_meter(wins, games, color)}</div>'
-                    f'<span><b>{_pct(wins, games)}</b> in {games} Games · {len(played)} von {len(names)} Karten '
-                    f'gespielt</span></div>')
+                    f'<span><b>{_pct(wins, games)}</b> '
+                    + t("in {games} Games · {played} von {total} Karten gespielt", games=games, played=len(played),
+                        total=len(names)) + '</span></div>')
     return f'<div class="cardbox cats">{"".join(rows)}</div>'
 
 
@@ -370,14 +380,14 @@ def _drafts(records, colors, assign, ratings, arch_names):
         key = ds.record_archetype(rec, colors, assign, ratings)
         deck = (rec.get("deck") or {}).get("main") or {}
         picks = len(rec.get("picks") or [])
-        arch = f'{_mana(key)} {esc(arch_names.get(key, key))}' if key else "Archetyp offen"
-        info = (f'{picks} Picks' if picks else "Draft nicht mitgelesen") + (
-            f' · Deck {sum(deck.values())} Karten' if deck else "")
+        arch = f'{_mana(key)} {esc(arch_names.get(key, key))}' if key else t("Archetyp offen")
+        info = (f'{picks} Picks' if picks else t("Draft nicht mitgelesen")) + (
+            t(" · Deck {n} Karten", n=sum(deck.values())) if deck else "")
         out.append(f'<div class="draft"><div><div class="dd">{esc(rec.get("started") or "")}</div>'
                    f'<div class="de">{esc(_event_label(rec.get("event")))}</div></div>'
                    f'<div><div style="font-weight:600">{arch}</div><div class="de">{esc(info)}</div>'
                    f'<div style="margin-top:4px">{_wl(rec)}</div></div>'
-                   f'<div class="rec">{mw}-{len(ms) - mw}<small>Games {gw}-{games - gw}</small></div></div>')
+                   f'<div class="rec">{mw}-{len(ms) - mw}<small>{t("Games {a}-{b}", a=gw, b=games - gw)}</small></div></div>')
     return f'<div class="drafts">{"".join(out)}</div>'
 
 
@@ -390,42 +400,44 @@ def render_set_report(data, set_code, cards, assign, ratings):
     colors = _colors(cards)
     arch_names = {a["colors"]: a["name"] for a in set_archetypes.for_set(code) or []}
     if not records:
-        sections = [h_section("ueberblick", "Überblick", "", "<p>Noch keine Drafts für dieses Set in der Statistik. "
-                              "Starte den Live-Draft (Menüpunkt 3), dann werden Drafts und Matches gesammelt.</p>")]
+        sections = [h_section("ueberblick", t("Überblick"), "", "<p>" + t(
+            "Noch keine Drafts für dieses Set in der Statistik. "
+            "Starte den Live-Draft (Menüpunkt 3), dann werden Drafts und Matches gesammelt.") + "</p>")]
     else:
         sections = [
             f'<section id="ueberblick">{_overview(data, code, records)}</section>',
-            h_section("archetypen", "Archetypen",
-                      "Je Draft erkannt wie im Live-Draft: aus dem Hauptdeck (sonst den Picks), mit deiner "
-                      "Archetyp-Zuordnung und Kategorie.", _archetypes(records, code, colors, assign, ratings)),
-            h_section("beste", "Beste und schwächste Karten",
-                      f"Karten mit mindestens {TOP_GAMES} Games im Hauptdeck, nach Siegquote der Games.",
+            h_section("archetypen", t("Archetypen"),
+                      t("Je Draft erkannt wie im Live-Draft: aus dem Hauptdeck (sonst den Picks), mit deiner "
+                        "Archetyp-Zuordnung und Kategorie."), _archetypes(records, code, colors, assign, ratings)),
+            h_section("beste", t("Beste und schwächste Karten"),
+                      t("Karten mit mindestens {n} Games im Hauptdeck, nach Siegquote der Games.", n=TOP_GAMES),
                       _best(stats, cards)),
-            h_section("karten", "Karten",
-                      "Gedraftet: Kopien. Ø Pick: Pick-Nummer im Pack (1 = erster Pick aus einem vollen Pack; bei "
-                      "Pick Two zählen Picks, nicht Karten). Im Deck: Drafts, in deren Hauptdeck die Karte war. Games "
-                      f"und Matches: mit der Karte im Hauptdeck; grün ab {round(GOOD * 100)} %, rot unter "
-                      f"{round(BAD * 100)} %, grau unter {MIN_GAMES} Games (nur ein Hinweis). Klick auf eine Spalte "
-                      "sortiert.", _card_table(stats, cards, assign, ratings, arch_names)),
-            h_section("bewertung", "Bewertung gegen Ergebnis",
-                      "Deine Kategorien (kartenbewertung.json) und wie Karten jeder Kategorie im Deck abgeschnitten "
-                      "haben (Games je Karte gezählt). Liegt Filler über MustPlay, lohnt ein zweiter Blick auf die "
-                      "Bewertung.", _ratings_vs_results(stats, ratings)),
-            h_section("drafts", "Drafts", "Neueste zuerst; S = Sieg, N = Niederlage, grau = läuft noch.",
+            h_section("karten", t("Karten"),
+                      t("Gedraftet: Kopien. Ø Pick: Pick-Nummer im Pack (1 = erster Pick aus einem vollen Pack; bei "
+                        "Pick Two zählen Picks, nicht Karten). Im Deck: Drafts, in deren Hauptdeck die Karte war. "
+                        "Games und Matches: mit der Karte im Hauptdeck; grün ab {good} %, rot unter {bad} %, grau "
+                        "unter {min} Games (nur ein Hinweis). Klick auf eine Spalte sortiert.",
+                        good=round(GOOD * 100), bad=round(BAD * 100), min=MIN_GAMES), _card_table(stats, cards, assign, ratings, arch_names)),
+            h_section("bewertung", t("Bewertung gegen Ergebnis"),
+                      t("Deine Kategorien (kartenbewertung.json) und wie Karten jeder Kategorie im Deck "
+                        "abgeschnitten haben (Games je Karte gezählt). Liegt Filler über MustPlay, lohnt ein "
+                        "zweiter Blick auf die Bewertung."), _ratings_vs_results(stats, ratings)),
+            h_section("drafts", t("Drafts"), t("Neueste zuerst; S = Sieg, N = Niederlage, grau = läuft noch."),
                       _drafts(records, colors, assign, ratings, arch_names)),
         ]
-    nav = "".join(f'<a href="#{sid}">{esc(t)}</a>' for sid, t in
+    nav = "".join(f'<a href="#{sid}">{esc(t(label))}</a>' for sid, label in
                   (("ueberblick", "Überblick"), ("archetypen", "Archetypen"), ("beste", "Beste und schwächste"),
                    ("karten", "Karten"), ("bewertung", "Bewertung"), ("drafts", "Drafts")))
     css = HTML_CSS + CSS + symbols.symbol_css(symbols.used())
-    return (f'<!DOCTYPE html><html lang="de"><head><meta charset="utf-8">'
+    return (f'<!DOCTYPE html><html lang="{html_lang()}"><head><meta charset="utf-8">'
             f'<meta name="viewport" content="width=device-width,initial-scale=1">'
-            f'<title>Setauswertung {esc(code)}</title><style>{css}</style></head><body>'
-            f'<header class="top" id="top"><h1>Setauswertung {esc(code)}</h1>'
-            f'<span class="sub">aus der Draft-Statistik des Live-Drafts</span></header>'
-            f'<div class="layout"><nav><h3>Abschnitte</h3><div class="in">{nav}</div></nav>'
+            f'<title>{t("Setauswertung {code}", code=esc(code))}</title><style>{css}</style></head><body>'
+            f'<header class="top" id="top"><h1>{t("Setauswertung {code}", code=esc(code))}</h1>'
+            f'<span class="sub">{t("aus der Draft-Statistik des Live-Drafts")}</span></header>'
+            f'<div class="layout"><nav><h3>{t("Abschnitte")}</h3><div class="in">{nav}</div></nav>'
             f'<main>{"".join(sections)}</main></div>'
-            f'<footer>Erzeugt mit mtg_sim.py · Kartendaten und Bilder von Scryfall</footer>{JS}</body></html>')
+            f'<footer>{t("Erzeugt mit mtg_sim.py · Kartendaten und Bilder von Scryfall")}</footer>'
+            f'{tr_block(JS, JS_EN)}</body></html>')
 
 
 def _path(name):
@@ -438,19 +450,19 @@ def run(args):
     data = ds.load_stats(_path(args.statistik))
     code = (args.setauswertung or "").upper() or next(iter(ds.sets_in(data)), "")
     if not code:
-        sys.exit(f"Noch keine Drafts in {_path(args.statistik)}. Starte den Live-Draft (Menüpunkt 3), dann werden "
-                 "Drafts und Matches gesammelt.")
+        sys.exit(t("Noch keine Drafts in {path}. Starte den Live-Draft (Menüpunkt 3), dann werden "
+                   "Drafts und Matches gesammelt.", path=_path(args.statistik)))
     names = sorted(ds.card_stats(data, code))
     try:
         cards = fetch_cards_cached(names) if names else {}
     except (urllib.error.URLError, OSError) as e:
-        print(f"Scryfall nicht erreichbar, Auswertung ohne Kartendaten: {e}", file=sys.stderr)
+        print(t("Scryfall nicht erreichbar, Auswertung ohne Kartendaten: {e}", e=e), file=sys.stderr)
         cards = {}
     assign = cardarchetypes.load_assign(_path(args.archetypen))
     ratings = card_ratings.load_ratings(_path(args.bewertung))
     out = OUT_DIR / output_name(code)
     out.write_text(render_set_report(data, code, cards, assign, ratings), encoding="utf-8")
-    print(f"Setauswertung gespeichert: {out}", file=sys.stderr)
+    print(t("Setauswertung gespeichert: {path}", path=out), file=sys.stderr)
     if not args.nicht_oeffnen:
         try:
             webbrowser.open(out.resolve().as_uri())

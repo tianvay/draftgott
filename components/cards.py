@@ -2,6 +2,7 @@
 import re
 from typing import NamedTuple
 
+from components.i18n import t
 from components.mana import cost_alternatives, mana_value
 from components.removal import _classify, _spec_from, discard_count, has_flash, removal_info, removal_spec
 
@@ -560,13 +561,13 @@ def enters_tapped(land, battlefield, walker=False, jace=False):
 def tap_tag(mode, arg):
     return {
         "no": "",
-        "tapped": "   [getappt]",
-        "tapped?": "   [getappt (Bedingung nicht modelliert)]",
-        "fast": "   [getappt ab dem 4. Land]",
-        "slow": "   [getappt, solange weniger als 2 andere Laender]",
-        "check": "   [getappt, ausser du kontrollierst: " + "/".join(arg) + "]",
-        "planeswalker": "   [getappt, ausser du kontrollierst einen Planeswalker]",
-        "jace": "   [getappt, ausser du kontrollierst oder zeigst einen Jace]",
+        "tapped": t("   [getappt]"),
+        "tapped?": t("   [getappt (Bedingung nicht modelliert)]"),
+        "fast": t("   [getappt ab dem 4. Land]"),
+        "slow": t("   [getappt, solange weniger als 2 andere Laender]"),
+        "check": t("   [getappt, ausser du kontrollierst: {lands}]", lands="/".join(arg)),
+        "planeswalker": t("   [getappt, ausser du kontrollierst einen Planeswalker]"),
+        "jace": t("   [getappt, ausser du kontrollierst oder zeigst einen Jace]"),
     }[mode]
 
 
@@ -2398,8 +2399,9 @@ def pw_tags_for(card, front_type):
 def empower_tags_text(effects):
     out = []
     for fi, kind, n, trig, cost, tap, unmod, xval in effects:
-        label = EMPOWER_KIND_LABEL[kind]
-        out.append(f"   [Empower Jace {'X' if xval and not n else n}{'+X' if xval and n else ''} · {label}]")
+        label = t(EMPOWER_KIND_LABEL[kind])
+        out.append(t("   [Empower Jace {val} · {label}]",
+                     val=f"{'X' if xval and not n else n}{'+X' if xval and n else ''}", label=label))
     return "".join(dict.fromkeys(out))
 
 
@@ -3902,7 +3904,7 @@ def card_info(card):
     saga = saga_traits(card)
     if saga:
         out, shown = _card_info(card)
-        return out._replace(saga=saga), shown + f"   [Saga {saga[0]} Kapitel]"
+        return out._replace(saga=saga), shown + t("   [Saga {n} Kapitel]", n=saga[0])
     snw = snw_traits(card)
     if snw:  # TRK: die Zeilen mit X = verschieden benannte Laender liest snw_traits, der Rest wie sonst
         out, shown = _card_info(snw_stripped(card))
@@ -3928,12 +3930,12 @@ def _card_info_base(card):
         subtypes = tuple(sorted(t.lower() for t in type_line.split("—", 1)[1].split())) \
             if "—" in type_line else ()
         ordered = sorted(colors, key="WUBRGC".find)
-        shown = "Land " + ("".join("{%s}" % c for c in ordered) or "(-)") + tap_tag(tap_mode, tap_arg)
+        shown = t("Land") + " " + ("".join("{%s}" % c for c in ordered) or "(-)") + tap_tag(tap_mode, tap_arg)
         eff, etext = parse_empower(card)
         shown += empower_tags_text(eff)
         surveil = parse_surveil(card, type_line)
         if surveil:
-            shown += f"   [Surveil {surveil}]"
+            shown += t("   [Surveil {n}]", n=surveil)
         return (Card(True, 0, (), colors, False, False, 0, 0, False, tap_mode, tap_arg, subtypes,
                      card["name"], is_basic="Basic" in type_line, empower=eff, empower_text=etext,
                      pw_tags=pw_tags_for(card, type_line), surveil=surveil,
@@ -3968,7 +3970,7 @@ def _card_info_base(card):
     defender = is_creature and "Defender" in keywords
     shown = " // ".join(costs) or "-"
     if is_creature:
-        shown += f"   [Kreatur {pw}/{tg}" + (", Haste" if haste else "") + (", Defender]" if defender else "]")
+        shown += t("   [Kreatur {pt}", pt=f"{pw}/{tg}") + (", Haste" if haste else "") +             (", Defender]" if defender else "]")
     elif is_aura:
         shown += "   [Aura]"
     shown += cycle_tag
@@ -3976,13 +3978,14 @@ def _card_info_base(card):
     shown += empower_tags_text(eff)
     draws = parse_draws(card, type_line)
     if draws:
-        shown += f"   [Zieht {draws}]"
+        shown += t("   [Zieht {n}]", n=draws)
     surveil = parse_surveil(card, type_line)
     if surveil:
-        shown += f"   [Surveil {surveil}]"
+        shown += t("   [Surveil {n}]", n=surveil)
     mana_src, treasure = parse_mana(card, type_line)
     if mana_src:
-        shown += "   [Mana: " + " ".join("{" + "/".join(u) + "}" if len(u) < 5 else "{beliebig}" for u in mana_src) + "]"
+        shown += "   [Mana: " + " ".join("{" + "/".join(u) + "}" if len(u) < 5 else "{" + t("beliebig") + "}"
+                                    for u in mana_src) + "]"
     if treasure:
         shown += f"   [Treasure {treasure}]"
     modes = effect_modes(card, type_line)

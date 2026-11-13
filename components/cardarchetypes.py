@@ -25,6 +25,7 @@ import os
 import pathlib
 
 from components import synergy
+from components.i18n import t
 from components.archetypes import PAIRS
 
 WEIGHT = {"matchwinner": 3, "splashworthy": 2, "mustplay": 2, "filler": 1, "neverplay": 0}  # unbewertet: 1
@@ -95,11 +96,11 @@ def set_assign(path, name, pairs, best=None):
     """Setzt die Archetypen einer Karte; eine leere Liste entfernt sie. best: bester Archetyp (kommt mit in die
     Zuordnung), "" entfernt ihn, None laesst ihn, solange er zugeordnet bleibt. Gibt die ganze Zuordnung zurueck."""
     if not name or not isinstance(name, str):
-        raise ValueError("Kartenname fehlt")
+        raise ValueError(t("Kartenname fehlt"))
     if not isinstance(pairs, list) or any(p not in PAIRS for p in pairs):
-        raise ValueError("Unbekannter Archetyp")
+        raise ValueError(t("Unbekannter Archetyp"))
     if best not in (None, "") and best not in PAIRS:
-        raise ValueError("Unbekannter Archetyp")
+        raise ValueError(t("Unbekannter Archetyp"))
     loaded = _load(path)
     data = {n: p for n, (p, _b) in loaded.items()}
     bests = {n: b for n, (_p, b) in loaded.items() if b}

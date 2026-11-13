@@ -18,6 +18,8 @@ import random
 import urllib.error
 import urllib.request
 
+from components.i18n import dec, t
+
 RATING_ABBR = {"matchwinner": "♛", "splashworthy": "★", "mustplay": "MP", "filler": "Fi", "neverplay": "NP"}
 MARK = {"best": "◆", "arch": "●", "color": "○", "": "  "}
 COLORS = {"bg": "#161b24", "ink": "#e8ecf3", "muted": "#8d97a8", "arch": "#1f7a45", "color": "#2c3a52",
@@ -27,8 +29,10 @@ HINT_STATE = {"in": "dein Archetyp", "near": "nahe dran"}
 
 def hint_rows(snap):
     """Top-Picks im Pack: Karten ab MustPlay in ihrem besten Archetyp (oder nahe dran)."""
-    return [(f"{MARK['best']} Top-Pick: {h['name']} ({RATING_ABBR.get(h.get('rating'), h.get('rating') or '')}) – "
-             f"am besten in {h.get('best_name') or h.get('best')} ({HINT_STATE.get(h.get('state'), '')})", "hint")
+    return [(f"{MARK['best']} " + t("Top-Pick: {name} ({rating}) – am besten in {arch} ({state})",
+                                    name=h['name'], rating=RATING_ABBR.get(h.get('rating'), h.get('rating') or ''),
+                                    arch=h.get('best_name') or h.get('best'),
+                                    state=t(HINT_STATE.get(h.get('state'), ''))), "hint")
             for h in (snap or {}).get("hints") or []]
 
 
@@ -53,7 +57,7 @@ def new_celebration(last, snap):
 def celebration_lines(name):
     """Texte der Feier (nur Zeichen, die tkinter darstellen kann: keine Emoji)."""
     short = name[:-4] if name.endswith(".txt") else name
-    return ["4 Siege!", "Aufgenommen in die Hall of Game", "der Gegnerdecks", short]
+    return [t("4 Siege!"), t("Aufgenommen in die Hall of Game"), t("der Gegnerdecks"), short]
 
 
 def make_confetti(n, width, height, rng):
@@ -144,39 +148,40 @@ def celebrate(root, name, seconds=PARTY_SECONDS):
 
 
 def _num(x):
-    return f"{x:g}".replace(".", ",")
+    return dec(f"{x:g}")
 
 
 def _pct(p):
     if p <= 0:
-        return "0 %"
-    return "< 1 %" if p < 0.005 else f"{round(p * 100)} %"
+        return t("{p} %", p=0)
+    return t("< 1 %") if p < 0.005 else t("{p} %", p=round(p * 100))
 
 
-def _trick_text(t):
-    text = f"{t['name']}  {t['cost'] or '{0}'}"
-    if t.get("rating"):
-        text += "  " + RATING_ABBR.get(t["rating"], t["rating"])
-    if t.get("removal"):
-        text += f"  R{_num(t['removal'])}"
+def _trick_text(tk):
+    text = f"{tk['name']}  {tk['cost'] or '{0}'}"
+    if tk.get("rating"):
+        text += "  " + RATING_ABBR.get(tk["rating"], tk["rating"])
+    if tk.get("removal"):
+        text += f"  R{_num(tk['removal'])}"
     return text
 
 
-def trick_rows(t):
+def trick_rows(tr):
     """Tricks bei offenem Mana des Gegners (components/tricks.py): nur, was er jetzt wirken koennte (der naechste
     Gegnerzug wird berechnet, aber nicht gezeigt)."""
-    if not t:
+    if not tr:
         return []
-    colors = " ".join(f"{c}×{n}" for c, n in (t.get("colors") or {}).items())
-    head = f"Gegner offen {t['open']}" + (f" ({colors})" if colors else "") + f" von {t['lands']} Ländern"
-    if t.get("spell_colors"):
-        head += " · zeigt " + "".join(t["spell_colors"])
+    colors = " ".join(f"{c}×{n}" for c, n in (tr.get("colors") or {}).items())
+    head = (t("Gegner offen {open}", open=tr['open']) + (f" ({colors})" if colors else "") +
+            t(" von {lands} Ländern", lands=tr['lands']))
+    if tr.get("spell_colors"):
+        head += t(" · zeigt ") + "".join(tr["spell_colors"])
     rows = [(head, "head2")]
-    if not t["open"]:
-        rows.append(("Kein Mana offen: jetzt keine Tricks", "sub"))
-    elif not t["now"]:
-        rows.append(("Keine Instants/Flash-Karten mit diesem Mana", "sub"))
-    for c in t["now"]:
+    if not tr["open"]:
+        rows.append((t("Kein Mana offen: jetzt keine Tricks"), "sub"))
+    elif not tr["now"]:
+        rows.append((t("Keine Instants/Flash-Karten mit diesem Mana"), "sub"))
+    for c in tr["now"]:
         rows.append(("• " + _trick_text(c), "arch" if c.get("removal") else "color"))
     return rows
 
@@ -186,17 +191,17 @@ def trick_tip(c):
     lines = [f"{c['name']}  {c.get('cost') or '{0}'}"]
     if c.get("type"):
         lines.append(c["type"] + (f" · {c['pt']}" if c.get("pt") else ""))
-    lines += ["", c.get("text") or "Kein Kartentext gespeichert (Drafthelper neu starten)."]
+    lines += ["", c.get("text") or t("Kein Kartentext gespeichert (Drafthelper neu starten).")]
     if c.get("removal"):
-        lines += ["", f"Removal {_num(c['removal'])} P."]
+        lines += ["", t("Removal {n} P.", n=_num(c['removal']))]
     return "\n".join(lines)
 
 
 def trick_tips(snap):
     """Mausfenster-Texte der jetzt moeglichen Tricks, nach Kartenname."""
     g = (snap or {}).get("game") or {}
-    t = g.get("tricks") if g.get("active") else None
-    return {c["name"]: trick_tip(c) for c in (t or {}).get("now") or []}
+    tr = g.get("tricks") if g.get("active") else None
+    return {c["name"]: trick_tip(c) for c in (tr or {}).get("now") or []}
 
 
 def tip_for_line(line, tips):
@@ -265,34 +270,37 @@ def trick_window_rows(snap):
     """Zeilen des Trick-Warners (eigenes Fenster): Zug und die Tricks bei offenem Mana des Gegners."""
     g = (snap or {}).get("game") or {}
     if not g.get("active"):
-        return [("Trick-Warner", "head"), ("Erscheint im Spiel", "msg")]
-    rows = [(f"Trick-Warner · Zug {g.get('turn', 0)}", "head")]
-    return rows + (trick_rows(g.get("tricks")) or [("Noch keine Daten zum Gegner", "msg")])
+        return [(t("Trick-Warner"), "head"), (t("Erscheint im Spiel"), "msg")]
+    rows = [(t("Trick-Warner · Zug {n}", n=g.get('turn', 0)), "head")]
+    return rows + (trick_rows(g.get("tricks")) or [(t("Noch keine Daten zum Gegner"), "msg")])
 
 
 def game_rows(g):
     """Zeilen im Spiel: Bibliothek, Chancen je Gruppe (naechste Karte / in 3 Zuegen), Removal, Karten der Bibliothek
     (die Tricks des Gegners stehen im Trick-Warner, trick_window_rows)."""
-    rows = [(f"Im Spiel · Zug {g.get('turn', 0)} · Bibliothek {g['library']} · Hand {g.get('hand', 0)}", "head")]
+    rows = [(t("Im Spiel · Zug {turn} · Bibliothek {library} · Hand {hand}", turn=g.get('turn', 0),
+               library=g['library'], hand=g.get('hand', 0)), "head")]
     mana = g.get("mana") or {}
     colors = " ".join(f"{c}×{n}" for c, n in sorted((mana.get("colors") or {}).items(),
                                                      key=lambda kv: "WUBRGC".find(kv[0])))
     rows.append((f"Mana {mana.get('lands', 0)}" + (f" ({colors})" if colors else "") +
-                 " · Spielbar = mit diesen Ländern bezahlbar", "sub"))
-    rows.append(("Chance nächste Karte · in den nächsten 3 Karten", "sub"))
+                 t(" · Spielbar = mit diesen Ländern bezahlbar"), "sub"))
+    rows.append((t("Chance nächste Karte · in den nächsten 3 Karten"), "sub"))
     for grp in g.get("groups") or []:
         tag = {"land": "color", "removal": "arch", "castable": "head2"}.get(grp["key"], "plain")
-        rows.append((f"{grp['label']}: {grp['n']} übrig  ·  {_pct(grp['next'])}  ·  {_pct(grp['in3'])}", tag))
+        rows.append((t("{label}: {n} übrig  ·  {next}  ·  {in3}", label=grp['label'], n=grp['n'],
+                       next=_pct(grp['next']), in3=_pct(grp['in3'])), tag))
     rem = g.get("removal") or {}
     if rem.get("total"):
-        rows.append((f"Removal übrig {rem['left']} von {rem['total']} (Punkte {_num(rem['points_left'])} von "
-                     f"{_num(rem['points_total'])})", "sub"))
+        rows.append((t("Removal übrig {left} von {total} (Punkte {pl} von {pt})", left=rem['left'],
+                       total=rem['total'], pl=_num(rem['points_left']), pt=_num(rem['points_total'])), "sub"))
     if not g.get("consistent", True):
-        rows.append(("Bibliothek passt nicht genau zum Deck (z. B. Token oder Sideboard), Werte ungefähr.", "msg"))
+        rows.append((t("Bibliothek passt nicht genau zum Deck (z. B. Token oder Sideboard), Werte ungefähr."),
+                     "msg"))
     cards = g.get("cards") or []
     spells = [c for c in cards if not c["land"]]
     if spells:
-        rows.append(("Noch in der Bibliothek:", "sub"))
+        rows.append((t("Noch in der Bibliothek:"), "sub"))
     for c in spells:
         text = ("✓ " if c.get("castable") else "   ") + f"{c['n']}× {c['name']}  {_pct(c['next'])}"
         if c.get("removal"):
@@ -300,13 +308,13 @@ def game_rows(g):
         rows.append((text, "arch" if c.get("removal") else "plain"))
     lands = [c for c in cards if c["land"]]
     if lands:
-        rows.append(("Länder: " + ", ".join(f"{c['n']}× {c['name']}" for c in lands), "color"))
+        rows.append((t("Länder: ") + ", ".join(f"{c['n']}× {c['name']}" for c in lands), "color"))
     return rows
 
 
 def _record(info):
     r = info.get("record")
-    return f"Bilanz {r['wins']}–{r['losses']}" if r and r.get("matches") else ""
+    return t("Bilanz {w}–{l}", w=r['wins'], l=r['losses']) if r and r.get("matches") else ""
 
 
 def deck_rows(snap):
@@ -314,22 +322,22 @@ def deck_rows(snap):
     Kurve, Kreaturen, Removal, Kartenfluss, Farben, Bomben."""
     info = snap["deckinfo"]
     main = (snap.get("detect") or {}).get("main")
-    head = "Dein Deck" + (f" · {_arch_name(snap, main)} ({main})" if main else "")
+    head = t("Dein Deck") + (f" · {_arch_name(snap, main)} ({main})" if main else "")
     if _record(info):
         head += " · " + _record(info)
     rows = [(head, "head")]
     if info.get("source") == "picks":
-        rows.append(("Noch kein Deck in Arena abgegeben: Zahlen über alle Picks", "msg"))
-    rows.append((f"{info['cards']} Karten · {info['lands']} Länder · {info['spells']} Zauber · Ø Manawert "
-                 f"{info['avg_mv']:.2f}".replace(".", ","), "sub"))
+        rows.append((t("Noch kein Deck in Arena abgegeben: Zahlen über alle Picks"), "msg"))
+    rows.append((t("{cards} Karten · {lands} Länder · {spells} Zauber · Ø Manawert {mv}", cards=info['cards'],
+                   lands=info['lands'], spells=info['spells'], mv=dec(f"{info['avg_mv']:.2f}")), "sub"))
     labels = ("≤1", "2", "3", "4", "5", "6+")
-    rows.append(("Kurve " + " ".join(f"{lab}:{n}" for lab, n in zip(labels, info["curve"])), "curve"))
-    rows.append((f"Kreaturen {info['creatures']} · Removal {info['removal']} ({_num(info['removal_points'])} P.) · "
-                 f"Kartenfluss {info['flow']}", "arch"))
+    rows.append((t("Kurve") + " " + " ".join(f"{lab}:{n}" for lab, n in zip(labels, info["curve"])), "curve"))
+    rows.append((t("Kreaturen {c} · Removal {r} ({p} P.) · Kartenfluss {f}", c=info['creatures'], r=info['removal'],
+                   p=_num(info['removal_points']), f=info['flow']), "arch"))
     if info.get("colors"):
-        rows.append(("Farben " + " · ".join(f"{c} {n}" for c, n in info["colors"].items()), "colors"))
+        rows.append((t("Farben") + " " + " · ".join(f"{c} {n}" for c, n in info["colors"].items()), "colors"))
     if info.get("top"):
-        rows.append(("Bomben: " + ", ".join(info["top"]), "head2"))
+        rows.append((t("Bomben: ") + ", ".join(info["top"]), "head2"))
     return rows
 
 
@@ -344,25 +352,25 @@ def mini_rows(snap):
     g = snap.get("game") or {}
     if g.get("active"):
         by = {r["key"]: r for r in g.get("groups") or []}
-        rows = [(f"{label} {_pct(by[key]['next'])}", {"land": "color", "removal": "arch"}.get(key, "plain"))
+        rows = [(f"{t(label)} {_pct(by[key]['next'])}", {"land": "color", "removal": "arch"}.get(key, "plain"))
                 for key, label in MINI_KEYS if key in by]
-        t = g.get("tricks")
-        if t:
-            rows.append((f"Tricks {len(t['now'])} · offen {t['open']}", "head"))
+        tr = g.get("tricks")
+        if tr:
+            rows.append((t("Tricks {n} · offen {open}", n=len(tr['now']), open=tr['open']), "head"))
         return rows
     if snap.get("complete") and snap.get("deckinfo"):
         info = snap["deckinfo"]
-        return [(_record(info) or "Dein Deck", "head"),
-                (f"Kreaturen {info['creatures']} · Removal {info['removal']}", "arch")]
+        return [(_record(info) or t("Dein Deck"), "head"),
+                (t("Kreaturen {c} · Removal {r}", c=info['creatures'], r=info['removal']), "arch")]
     if snap.get("status") in ("pack", "waiting"):
         main = (snap.get("detect") or {}).get("main")
-        head = f"Pick {snap.get('pick', 1)} · " + (_arch_name(snap, main) if main else "offen")
+        head = f"Pick {snap.get('pick', 1)} · " + (_arch_name(snap, main) if main else t("offen"))
         rows = [(head, "head")] + [(f"{MARK['best']} {h['name']}", "hint") for h in snap.get("hints") or []][:1]
         if snap.get("pack"):
             best = snap["pack"][0]
             rows.append((f"1. {best['name']}", best.get("level") or "plain"))
         else:
-            rows.append(("Warte auf Pack …", "msg"))
+            rows.append((t("Warte auf Pack …"), "msg"))
         return rows
     return [("draftgott Live", "msg")]
 
@@ -370,34 +378,36 @@ def mini_rows(snap):
 def info_rows(info, main_name):
     """Kennzahlen der Picks (und im Archetyp) als kurze Zeilen."""
     def line(i):
-        return (f"Kreaturen {i['creatures']} · Removal {i['removal']} ({_num(i['removal_points'])} P.) · "
-                f"Kartenfluss {i['flow']}")
-    rows = [(f"Picks {info['cards']}: " + line(info), "sub")]
+        return t("Kreaturen {c} · Removal {r} ({p} P.) · Kartenfluss {f}", c=i['creatures'], r=i['removal'],
+                 p=_num(i['removal_points']), f=i['flow'])
+    rows = [(t("Picks {n}: ", n=info['cards']) + line(info), "sub")]
     if info.get("arch") and main_name:
-        rows.append((f"In {main_name}: {info['arch']['cards']} Karten · " + line(info["arch"]), "sub"))
+        rows.append((t("In {name}: {n} Karten · ", name=main_name, n=info['arch']['cards']) + line(info["arch"]),
+                     "sub"))
     return rows
 
 
 def rows_for(snap):
     """Zeilen [(Text, Stil)] fuer einen Stand von /api/live; Stile: head, sub, arch, color, never, plain, msg."""
     if not snap:
-        return [("draftgott Live", "head"), ("Drafthelper nicht erreichbar …", "msg")]
+        return [("draftgott Live", "head"), (t("Drafthelper nicht erreichbar …"), "msg")]
     if (snap.get("game") or {}).get("active"):
         return game_rows(snap["game"])
     if snap.get("enemy_saved"):
-        return ([("★ 4 Siege: aufgenommen in die Hall of Game der Gegnerdecks", "head2"),
-                 (f"Gegnerdeck gespeichert: {snap['enemy_saved']}", "arch")]
+        return ([(t("★ 4 Siege: aufgenommen in die Hall of Game der Gegnerdecks"), "head2"),
+                 (t("Gegnerdeck gespeichert: {name}", name=snap['enemy_saved']), "arch")]
                 + rows_for(dict(snap, enemy_saved=None)))
     status = snap.get("status")
     if status in ("nolog", "idle", "off"):
-        return [("draftgott Live", "head"), (snap.get("message") or "Kein Live-Draft.", "msg")]
+        return [("draftgott Live", "head"), (snap.get("message") or t("Kein Live-Draft."), "msg")]
     if snap.get("complete") and snap.get("deckinfo"):
         return deck_rows(snap)
     detect = snap.get("detect") or {}
     main = detect.get("main")
     head = f"Pick {snap.get('pick', 1)} · " + (
-        f"Archetyp: {_arch_name(snap, main)} ({main})" + (" – eigene Wahl" if detect.get("manual") else "")
-        if main else "Archetyp: noch offen")
+        t("Archetyp: {name} ({main})", name=_arch_name(snap, main), main=main) +
+        (t(" – eigene Wahl") if detect.get("manual") else "")
+        if main else t("Archetyp: noch offen"))
     rows = [(head, "head")]
     if status != "waiting":
         rows += hint_rows(snap)
@@ -410,10 +420,10 @@ def rows_for(snap):
     for a in snap.get("archmap") or []:
         text = f"{a['name']}: {a['count']} Pick{'s' if a['count'] != 1 else ''}"
         if a["pack"]:
-            text += " · im Pack: " + ", ".join(a["pack"])
+            text += t(" · im Pack: ") + ", ".join(a["pack"])
         rows.append((text, "arch" if a["pack"] and a["colors"] == main else ("color" if a["pack"] else "sub")))
     if status == "waiting" or not snap.get("pack"):
-        rows.append(("Warte auf das nächste Pack …", "msg"))
+        rows.append((t("Warte auf das nächste Pack …"), "msg"))
         return rows + tip_rows(snap, main)
     for c in snap["pack"]:
         tag = "never" if c.get("rating") == "neverplay" else (c.get("level") or "plain")
@@ -428,7 +438,7 @@ def rows_for(snap):
             parts.append(f"Syn+{_num(c['synergy'])}")
         stats = c.get("stats") or {}
         if stats.get("games"):
-            parts.append(f"{round(100 * stats['wins'] / stats['games'])} % ({stats['games']} G.)")
+            parts.append(t("{p} % ({g} G.)", p=round(100 * stats['wins'] / stats['games']), g=stats['games']))
         rows.append(("  ".join(parts), tag))
     return rows + tip_rows(snap, main)
 
@@ -449,8 +459,8 @@ def signal_rows(sig):
                     key=lambda cv: (-cv[1]["score"], "WUBRG".find(cv[0])))
     if not marked:
         return []
-    text = f"Signale ({sig.get('format', 'Draft')}): " + " · ".join(
-        f"{c} {SIGNAL_LABEL[v['level']]} {_signed(v['score'])}" for c, v in marked)
+    text = t("Signale ({fmt}): ", fmt=sig.get('format', 'Draft')) + " · ".join(
+        f"{c} {t(SIGNAL_LABEL[v['level']])} {_signed(v['score'])}" for c, v in marked)
     best = marked[0][1]["level"]
     rows = [(text, "arch" if best == "open" else "color")]
     rows += [(f"• {n}", "sub") for n in (sig.get("notes") or [])[:2]]
@@ -463,7 +473,7 @@ def tip_rows(snap, main):
     a = next((a for a in snap.get("archetypes") or [] if main and a["colors"] == main), None)
     if not a or not a.get("tips"):
         return []
-    return [(f"Tipps zu {a['name']}", "head2")] + [(f"• {t}", "tip") for t in a["tips"]]
+    return [(t("Tipps zu {name}", name=a['name']), "head2")] + [(f"• {tp}", "tip") for tp in a["tips"]]
 
 
 def deck_button(snap):
@@ -472,10 +482,11 @@ def deck_button(snap):
         return None  # im Spiel stoert der Knopf nur
     deck = snap.get("deck") or {}
     if deck.get("applied"):
-        return ("Deck übernommen ✓", False)
+        return (t("Deck übernommen ✓"), False)
     if deck.get("ready"):
-        return (f"Deck + Sideboard übernehmen ({deck.get('main', 0)} + {deck.get('side', 0)})", True)
-    return ("Nach „Fertig“ in Arena: Deck + Sideboard übernehmen", False)
+        return (t("Deck + Sideboard übernehmen ({main} + {side})", main=deck.get('main', 0),
+                  side=deck.get('side', 0)), True)
+    return (t("Nach „Fertig“ in Arena: Deck + Sideboard übernehmen"), False)
 
 
 def send_deck(url, timeout=3):
@@ -557,7 +568,7 @@ def curve_bars(line):
 
 def color_parts(line):
     """Farben aus der Zeile "Farben W 14 · R 9" als [(Farbe, Anzahl)]."""
-    return [(c, int(n)) for c, n in (part.split() for part in line[len("Farben "):].split(" · "))]
+    return [(c, int(n)) for c, n in (part.split() for part in line.split(" ", 1)[1].split(" · "))]
 
 
 def curve_layout(bars, width, height, top=14, bottom=16):
@@ -665,7 +676,7 @@ def run(url, interval_ms=1000):
     control.title("draftgott")
     _float_window(control)
     control.geometry(control_geometry())
-    tk.Label(control, text="draftgott Fenster", bg=COLORS["bg"], fg=COLORS["head"],
+    tk.Label(control, text=t("draftgott Fenster"), bg=COLORS["bg"], fg=COLORS["head"],
              font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=8, pady=(4, 2))
     enabled = {key: tk.BooleanVar(value=on) for key, on in default_enabled().items()}
 
@@ -674,7 +685,7 @@ def run(url, interval_ms=1000):
     _float_window(root)
     root.geometry(main_geometry(root.winfo_screenwidth()))
     tricks = tk.Toplevel(control)
-    tricks.title("draftgott Tricks")
+    tricks.title(t("draftgott Tricks"))
     _float_window(tricks)
     tricks.geometry(trick_geometry())
     trick_text = tk.Text(tricks, bg=COLORS["bg"], fg=COLORS["ink"], bd=0, highlightthickness=0, wrap="word",
@@ -682,7 +693,7 @@ def run(url, interval_ms=1000):
     trick_text.pack(fill="both", expand=True)
     windows = {"main": root, "tricks": tricks}
     for key, label in WINDOWS:
-        tk.Checkbutton(control, text=label, variable=enabled[key], bg=COLORS["bg"], fg=COLORS["ink"],
+        tk.Checkbutton(control, text=t(label), variable=enabled[key], bg=COLORS["bg"], fg=COLORS["ink"],
                        selectcolor="#2c3a52", activebackground=COLORS["bg"], activeforeground=COLORS["ink"],
                        font=("Segoe UI", 10), anchor="w", command=lambda: show_windows()).pack(fill="x", padx=6)
         windows[key].protocol("WM_DELETE_WINDOW", lambda k=key: (enabled[k].set(False), show_windows()))
@@ -707,8 +718,8 @@ def run(url, interval_ms=1000):
                        disabledforeground="#c8d3cc", relief="flat", padx=10, pady=6,
                        command=lambda: send_deck(url))
     text.pack(fill="both", expand=True)
-    for t in (text, trick_text):
-        _styles(t)
+    for tw in (text, trick_text):
+        _styles(tw)
     state = {"last": None, "tricks": None, "seen": False, "misses": 0, "mini": False, "big": None, "snap": None,
              "party": None, "first": True, "blink": False}
     trick_tip_win = _bind_trick_tips(trick_text, lambda: trick_tips(state["snap"]))

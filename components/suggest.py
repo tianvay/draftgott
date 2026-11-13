@@ -13,6 +13,8 @@ Reihenfolge der Filler: nach der gewaehlten Sortierung der Seite, dann Farben, d
 als vorhanden), dann Manawert aufsteigend.
 """
 
+from components.i18n import t
+
 GROUPS = ("core", "splash", "nosplash")
 MARK_ORDER = ("core", "splash", "nosplash", "off")
 COLOR_ORDER = ("W", "U", "B", "R", "G", "M", "C", "L")
@@ -98,10 +100,11 @@ def suggest(cards, marks, basics, cats, target=40, sort="mv"):
 
     warnings = []
     if max(size_s0, size_n0) > target:
-        warnings.append(f"Eine Variante hat schon {max(size_s0, size_n0)} Karten und liegt über dem Ziel von {target}.")
+        warnings.append(t("Eine Variante hat schon {n} Karten und liegt über dem Ziel von {target}.", n=max(size_s0, size_n0),
+                        target=target))
     if size_s < target or size_n < target:
-        warnings.append(f"Nicht genug Filler: Splash-Variante {size_s} und NoSplash-Variante {size_n} Karten, "
-                        f"Ziel {target}.")
+        warnings.append(t("Nicht genug Filler: Splash-Variante {s} und NoSplash-Variante {n} Karten, Ziel {target}.",
+                        s=size_s, n=size_n, target=target))
     return {"marks": new, "summary": {
         "target": target, "sizes": {"splash": size_s, "nosplash": size_n}, "assigned": assigned,
         "filler": {"core": taken["core"], "nosplash": taken["nosplash"], "off": len(pool)},
@@ -250,9 +253,10 @@ def propose(cards, marks, cats, colors, target=40, sort="mv"):
     size = sum(deck.values())
     hints, warnings = [], []
     if lands < low or lands > high:
-        hints.append(f"Länder: {lands} (Faustregel bei {target} Karten: {low} bis {high}).")
+        hints.append(t("Länder: {lands} (Faustregel bei {target} Karten: {low} bis {high}).", lands=lands, target=target,
+                      low=low, high=high))
     if size < target:
-        warnings.append(f"Nicht genug Filler: Der Deckvorschlag hat {size} statt {target} Karten.")
+        warnings.append(t("Nicht genug Filler: Der Deckvorschlag hat {size} statt {target} Karten.", size=size, target=target))
     return {"deck": deck, "summary": {
         "target": target, "size": size, "lands": lands, "land_range": [low, high], "splash_cards": splash_cards,
         "ignored": ignored, "fillers": taken, "basics": basics, "colors": sorted(chosen), "hints": hints,

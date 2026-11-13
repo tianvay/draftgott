@@ -13,6 +13,7 @@ Laender zaehlen nicht (Landfall ist in jedem Deck erfuellt und sagt nichts ueber
 Pick (pick_bonus): Zuwachs des Deckwerts, wenn die Pack-Karte zum Pool kommt, mal PICK_WEIGHT, hoechstens PICK_MAX.
 """
 from components.cards import Card
+from components.i18n import t
 
 ORPHAN = 0.35
 GREEN, YELLOW = 6.0, 3.5  # Ampel fuer den Deckwert je 40 Karten (Bericht)
@@ -378,8 +379,8 @@ def _p(res):
 
 def label(res):
     if res.startswith("type:"):
-        return "Kreaturtyp " + res[5:].title()
-    return RESOURCES.get(res, (res,))[0]
+        return t("Kreaturtyp {typ}", typ=res[5:].title())
+    return t(RESOURCES.get(res, (res,))[0])
 
 
 def deck_synergy(entries):

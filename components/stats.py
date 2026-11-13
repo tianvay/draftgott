@@ -1,6 +1,8 @@
 """Statistik: Ampel-Schwellen, Zeitkennzahlen und Signifikanz-Rechnung fuer den Deck-Vergleich."""
 import statistics
 
+from components.i18n import t
+
 
 # Ampel fuer "mindestens einen Zauber gespielt" je Runde: (gruen ab, gelb ueber)
 # Wert >= gruen -> gruen, Wert > gelb -> gelb, sonst rot. Gerechnet wird mit der angezeigten ganzen Prozentzahl.
@@ -75,18 +77,18 @@ def compare_metrics(decks, args, label):
     rows = []
     mull_on = decks[0]["results"][label]["mulligan"]["on"]
     if mull_on:
-        rows.append(("Mulligan auf der ersten Hand", "prop", False, [
+        rows.append((t("Mulligan auf der ersten Hand"), "prop", False, [
             prop(d["results"][label]["mulligan"]["first_any"], d["results"][label]["mulligan"]["deals"]) for d in decks]))
-        rows.append(("Spiel verloren (Mulligan)", "prop", False, [
+        rows.append((t("Spiel verloren (Mulligan)"), "prop", False, [
             prop(d["results"][label]["mulligan"]["lost"], d["results"][label]["mulligan"]["deals"]) for d in decks]))
-    for t in range(1, T + 1):
-        rows.append((f"Zauber gespielt in Runde {t}", "prop", True, [
-            prop(d["results"][label]["cast"][t], sims) for d in decks]))
+    for rt in range(1, T + 1):
+        rows.append((t("Zauber gespielt in Runde {t}", t=rt), "prop", True, [
+            prop(d["results"][label]["cast"][rt], sims) for d in decks]))
     def avail(d):
         return d["results"][label].get("color_avail")
 
     if any(avail(d) and avail(d)["colors"] for d in decks):
-        rows.append(("Alle Farben bis Runde 3", "prop", True, [
+        rows.append((t("Alle Farben bis Runde 3"), "prop", True, [
             prop(avail(d)["t3_all"], avail(d)["games"]) if avail(d) and avail(d)["colors"] else None for d in decks]))
     keys = []
     for d in decks:
@@ -94,7 +96,7 @@ def compare_metrics(decks, args, label):
             key = (ch["color"], ch["k"], ch["turn"])
             if key not in keys:
                 keys.append(key)
-    names = {"W": "Weiß", "U": "Blau", "B": "Schwarz", "R": "Rot", "G": "Grün"}
+    names = {"W": t("Weiß"), "U": t("Blau"), "B": t("Schwarz"), "R": t("Rot"), "G": t("Grün")}
 
     def check_of(d, key):
         return next((ch for ch in (avail(d) or {}).get("checks", []) if (ch["color"], ch["k"], ch["turn"]) == key),
@@ -102,26 +104,26 @@ def compare_metrics(decks, args, label):
 
     for key in sorted(keys, key=lambda k_: ("WUBRG".index(k_[0]), k_[1], k_[2])):
         col, k, turn = key
-        rows.append((f"≥ {k} Quellen {names[col]} bis Runde {turn}", "prop", True, [
+        rows.append((t("≥ {k} Quellen {col} bis Runde {turn}", k=k, col=names[col], turn=turn), "prop", True, [
             prop(check_of(d, key)["ok"], avail(d)["games"])
             if check_of(d, key) and check_of(d, key)["measured"] else None for d in decks]))
-    rows.append((f"Mana Screw nach Runde {T}", "prop", False, [
+    rows.append((t("Mana Screw nach Runde {T}", T=T), "prop", False, [
         prop(round(d["results"][label]["any_screw"] * sims), sims) for d in decks]))
-    rows.append((f"Flood ({args.flood}+ Länder bis Runde {max(args.max_runden, T, C)})",
+    rows.append((t("Flood ({n}+ Länder bis Runde {r})", n=args.flood, r=max(args.max_runden, T, C)),
                  "prop", False, [prop(round(d["results"][label]["flood"] * sims), sims) for d in decks]))
-    rows.append((f"Kreaturen auf dem Feld nach Runde {T}", "mean", True, [
+    rows.append((t("Kreaturen auf dem Feld nach Runde {T}", T=T), "mean", True, [
         mean(d["results"][label]["samples"]["creatures"]) for d in decks]))
-    rows.append((f"Gesamt-Power nach Runde {T}", "mean", True, [
+    rows.append((t("Gesamt-Power nach Runde {T}", T=T), "mean", True, [
         mean(d["results"][label]["samples"]["power"]) for d in decks]))
-    rows.append((f"Curve-Auslastung Runde 1–{C} (Mana genutzt)", "prop", True, [
+    rows.append((t("Curve-Auslastung Runde 1–{C} (Mana genutzt)", C=C), "prop", True, [
         None if not d["results"][label]["samples"]["util"] else
         (lambda r: (r[0], Z95 * r[1] ** 0.5, r[1]))(mean_var_of_mean(d["results"][label]["samples"]["util"])) for d in decks]))
     for x in (5, 7):
-        rows.append((f"{args.schaden} Schaden bis Runde {x}", "prop", True, [
+        rows.append((t("{n} Schaden bis Runde {x}", n=args.schaden, x=x), "prop", True, [
             prop(sum(1 for v in d["results"][label]["dmg"] if v <= x), sims) for d in decks]))
-    rows.append((f"Ø Runde für {args.schaden} Schaden", "mean", False, [
+    rows.append((t("Ø Runde für {n} Schaden", n=args.schaden), "mean", False, [
         mean(d["results"][label]["dmg"]) if d["results"][label]["dmg"] else None for d in decks]))
     if any(d["results"][label]["jace"]["on"] for d in decks):
-        rows.append(("Jace-Aktivierungen bis Hand leer (Ø)", "mean", True, [
+        rows.append((t("Jace-Aktivierungen bis Hand leer (Ø)"), "mean", True, [
             mean(d["results"][label]["samples"]["jace"]) if d["results"][label]["jace"]["on"] else None for d in decks]))
     return rows

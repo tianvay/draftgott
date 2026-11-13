@@ -9,6 +9,7 @@ game_fragment(app, query)         -> Protokoll eines einzelnen Spiels (Spielelis
 import copy
 from urllib.parse import parse_qs
 from components.deckfile import parse_deck_name
+from components.i18n import t
 
 FIGHT_COUNTS = (50, 100, 250, 500, 1000)  # Auswahl in der Kampf-Leiste (Spiele je Modus)
 MAX_FIGHTS = 5000
@@ -30,11 +31,11 @@ def enemy_decks(folder):
 def start_battle(app, body, folder):
     enemy = (body or {}).get("enemy")
     if enemy not in {e["file"] for e in enemy_decks(folder)}:
-        return 400, {"ok": False, "error": "Unbekanntes Gegnerdeck"}
+        return 400, {"ok": False, "error": t("Unbekanntes Gegnerdeck")}
     if not app.get("last_entries"):
-        return 400, {"ok": False, "error": "Bitte zuerst simulieren: Der Kampf nutzt die Varianten des Berichts."}
+        return 400, {"ok": False, "error": t("Bitte zuerst simulieren: Der Kampf nutzt die Varianten des Berichts.")}
     if not app.get("battle"):
-        return 400, {"ok": False, "error": "Kampf ist nicht verfuegbar"}
+        return 400, {"ok": False, "error": t("Kampf ist nicht verfuegbar")}
     entries, run_args = app["last_entries"], app["last_args"]
     games = (body or {}).get("games")
     if games is not None:  # gewaehlte Kampfzahl; die Einstellung des Berichts bleibt unveraendert
@@ -43,7 +44,7 @@ def start_battle(app, body, folder):
         except (TypeError, ValueError):
             games = 0
         if not 0 < games <= MAX_FIGHTS:
-            return 400, {"ok": False, "error": f"Ungueltige Zahl der Kaempfe (1 bis {MAX_FIGHTS})"}
+            return 400, {"ok": False, "error": t("Ungueltige Zahl der Kaempfe (1 bis {max})", max=MAX_FIGHTS)}
         run_args = copy.copy(run_args)
         run_args.kaempfe = games
 
@@ -56,7 +57,7 @@ def start_battle(app, body, folder):
         return html
 
     if not app["job"].start(work):
-        return 409, {"ok": False, "error": "Es laeuft bereits eine Simulation"}
+        return 409, {"ok": False, "error": t("Es laeuft bereits eine Simulation")}
     return 200, {"ok": True}
 
 
@@ -69,9 +70,9 @@ def game_fragment(app, query):
         mode = q["m"][0]
         game = (app.get("battle_games") or {})[(d, e, mode)][n]
     except (KeyError, IndexError, ValueError):
-        return "<p class=\"muted\">Spiel nicht gefunden (Kampfbericht neu erstellen).</p>"
-    label = "Sieg" if game["winner"] == "a" else "Niederlage" if game["winner"] == "b" else "Unentschieden"
+        return "<p class=\"muted\">" + t("Spiel nicht gefunden (Kampfbericht neu erstellen).") + "</p>"
+    label = t("Sieg") if game["winner"] == "a" else t("Niederlage") if game["winner"] == "b" else t("Unentschieden")
     if game.get("note"):
-        return f"<p class=\"muted\">Spiel {n + 1}: {game['note']} (keine Züge).</p>"
+        return "<p class=\"muted\">" + t("Spiel {n}: {note} (keine Züge).", n=n + 1, note=game['note']) + "</p>"
     mode_label = "On the Play" if mode == "play" else "On the Draw"
-    return protocol_html(game, mode_label, f"Spiel {n + 1}: {label}")
+    return protocol_html(game, mode_label, t("Spiel {n}: {label}", n=n + 1, label=label))

@@ -15,6 +15,8 @@ import time
 import urllib.error
 import urllib.request
 
+from components.i18n import t
+
 SYMBOL_FILE = pathlib.Path(__file__).resolve().parent.parent / "scryfall_symbols.json"
 SYMBOLOGY_URL = "https://api.scryfall.com/symbology"
 HEADERS = {"User-Agent": "mtg-sim/4.0", "Accept": "*/*"}
@@ -53,14 +55,15 @@ def fetch_symbols(refresh=False):
             time.sleep(PAUSE)
             out[key] = _get(s["svg_uri"]).decode("utf-8")
     except (urllib.error.URLError, OSError, ValueError) as e:
-        print(f"Manasymbole konnten nicht geladen werden ({e}); es werden einfache Symbole gezeigt.", file=sys.stderr)
+        print(t("Manasymbole konnten nicht geladen werden ({err}); es werden einfache Symbole gezeigt.", err=e),
+              file=sys.stderr)
         old = _read_file()
         use(old)
         return old
     try:
         SYMBOL_FILE.write_text(json.dumps(out), encoding="utf-8")
     except OSError as e:
-        print(f"Symbol-Cache konnte nicht gespeichert werden: {e}", file=sys.stderr)
+        print(t("Symbol-Cache konnte nicht gespeichert werden: {err}", err=e), file=sys.stderr)
     use(out)
     return out
 

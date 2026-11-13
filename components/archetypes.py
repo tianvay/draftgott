@@ -6,6 +6,8 @@ WUBRG-Reihenfolge wie WU, UB, ..., GW, RW, UG), "name" (englischer Originaltitel
 """
 from collections import Counter
 
+from components.i18n import t
+
 WUBRG = "WUBRG"
 PAIRS = ("WU", "UB", "BR", "RG", "GW", "WB", "UR", "BG", "RW", "UG")  # uebliche Schreibweise der Farbpaare
 COLOR_NAME = {"W": "Weiß", "U": "Blau", "B": "Schwarz", "R": "Rot", "G": "Grün"}
@@ -15,7 +17,7 @@ def _a(colors, name, *tips):
     return {"colors": colors, "name": name, "tips": list(tips)}
 
 
-ARCHETYPES = {
+_RAW = {
     "trk": [
         _a("WU", "Spacecraft",
            "Sehr wichtig: die Zahl der Spacecraft und der Payoffs im Gleichgewicht halten.",
@@ -88,6 +90,30 @@ ARCHETYPES = {
 }
 
 
+def _tr_list(lst):
+    """Archetypen mit uebersetzten Spielhinweisen (Englisch); im Deutschen unveraendert."""
+    return [dict(a, tips=[t(x) for x in a["tips"]]) for a in lst]
+
+
+class _Archetypes(dict):
+    """ARCHETYPES: gibt die Spielhinweise beim Abruf in der aktuellen Sprache heraus."""
+
+    def __getitem__(self, key):
+        return _tr_list(dict.__getitem__(self, key))
+
+    def get(self, key, default=None):
+        return _tr_list(dict.get(self, key)) if key in self else default
+
+    def items(self):
+        return [(k, _tr_list(v)) for k, v in dict.items(self)]
+
+    def values(self):
+        return [_tr_list(v) for v in dict.values(self)]
+
+
+ARCHETYPES = _Archetypes(_RAW)
+
+
 def for_set(code):
     """Archetypen eines Sets (Setcode in beliebiger Schreibweise) oder None."""
     return ARCHETYPES.get((code or "").lower())
@@ -122,4 +148,4 @@ def main_pair(counts):
 
 def pair_label(colors):
     """"Weiß/Blau" fuer "WU"."""
-    return "/".join(COLOR_NAME[c] for c in colors)
+    return "/".join(t(COLOR_NAME[c]) for c in colors)

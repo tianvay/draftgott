@@ -11,6 +11,7 @@ import webbrowser
 
 from components.battle_server import enemy_decks, game_fragment, start_battle
 from components.drafthelper import Job, LocalServer
+from components.i18n import t
 
 PORT = 8766
 SCRIPT_DIR = pathlib.Path(__file__).resolve().parent.parent
@@ -43,7 +44,7 @@ def make_handler(app):
             if path in ("/", "/report"):
                 self._send(app["report_html"])
             elif path == "/battle":
-                self._send(app.get("battle_html") or "<p>Noch kein Kampfbericht vorhanden.</p>")
+                self._send(app.get("battle_html") or t("<p>Noch kein Kampfbericht vorhanden.</p>"))
             elif path == "/api/enemies":
                 self._json({"enemies": enemy_decks(app["folder"]), "quit": True})
             elif path == "/api/status":
@@ -51,7 +52,7 @@ def make_handler(app):
             elif path == "/game":
                 self._send(game_fragment(app, self.path.partition("?")[2]))
             else:
-                self._send("Nicht gefunden", "text/plain; charset=utf-8", 404)
+                self._send(t("Nicht gefunden"), "text/plain; charset=utf-8", 404)
 
         def do_POST(self):
             path = self.path.split("?", 1)[0]
@@ -60,7 +61,7 @@ def make_handler(app):
                 threading.Thread(target=app["server"].shutdown, daemon=True).start()
                 return
             if path != "/api/battle":
-                self._send("Nicht gefunden", "text/plain; charset=utf-8", 404)
+                self._send(t("Nicht gefunden"), "text/plain; charset=utf-8", 404)
                 return
             try:
                 body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
@@ -88,8 +89,8 @@ def serve_report(report_html, entries, args, battle, save_battle, open_browser=T
     app = make_app(report_html, entries, args, battle, save_battle)
     server = start(app)
     url = f"http://127.0.0.1:{server.server_address[1]}/"
-    print(f"Bericht mit Kampf-Funktion: {url}", file=sys.stderr)
-    print("Zum Beenden: Knopf 'Beenden' im Bericht oder Strg+C hier im Fenster.", file=sys.stderr)
+    print(t("Bericht mit Kampf-Funktion: {url}", url=url), file=sys.stderr)
+    print(t("Zum Beenden: Knopf 'Beenden' im Bericht oder Strg+C hier im Fenster."), file=sys.stderr)
     if open_browser:
         try:
             webbrowser.open(url)
@@ -110,4 +111,4 @@ def serve_report(report_html, entries, args, battle, save_battle, open_browser=T
         pass
     finally:
         server.server_close()
-        print("Bericht beendet.", file=sys.stderr)
+        print(t("Bericht beendet."), file=sys.stderr)

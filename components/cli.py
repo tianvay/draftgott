@@ -88,6 +88,8 @@ def parse_args(argv=None):
                     help="Name des HTML-Berichts (Standard: mtg_bericht.html)")
     ap.add_argument("--nicht-oeffnen", action="store_true",
                     help="HTML-Bericht nicht automatisch im Browser oeffnen")
+    ap.add_argument("--lang", choices=("de", "en"), default="de",
+                    help="Sprache von Bericht, Drafthelper, Setauswertung, Overlay und Konsole (de oder en, Standard de)")
     args = ap.parse_args(argv)
     if not args.deckfile and args.drafthelper is None and args.overlay is None and args.setauswertung is None \
             and not args.statistik_neu:

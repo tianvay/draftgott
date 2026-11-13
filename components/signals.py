@@ -16,6 +16,8 @@ Wert je Farbe = offen - umkaempft; Stufe: ab 3 "open" (offen), ab 1 "maybe" (vie
 """
 from collections import Counter
 
+from components.i18n import t
+
 STRONG = ("matchwinner", "splashworthy", "mustplay")
 SHORT = {"matchwinner": "♛", "splashworthy": "★", "mustplay": "MP"}
 WHEEL_POINTS, LATE_POINTS, TAKEN_POINTS = 2, 1, 1
@@ -89,14 +91,14 @@ def analyze(history, card_of, ratings, event=None):
                 if c:
                     for col in c["colors"]:
                         opened[col] += WHEEL_POINTS
-                    notes.append(f"Pick {h['pick']}: {label(c)} kam zurück")
+                    notes.append(t("Pick {pick}: {card} kam zurück", pick=h["pick"], card=label(c)))
             taken = Counter(history[source]["cards"]) - Counter(history[source]["picked"]) - here
             for grp in sorted(set(taken)):
                 c = strong(grp)
                 if c:
                     for col in c["colors"]:
                         contested[col] += TAKEN_POINTS
-                    notes.append(f"Pick {h['pick']}: {label(c)} von anderen genommen")
+                    notes.append(t("Pick {pick}: {card} von anderen genommen", pick=h["pick"], card=label(c)))
             continue
         players = (start[rounds[i]] - len(h["cards"])) / per_pick
         if players >= LATE_PLAYERS:
@@ -105,7 +107,7 @@ def analyze(history, card_of, ratings, event=None):
                 if c:
                     for col in c["colors"]:
                         opened[col] += LATE_POINTS
-                    notes.append(f"Pick {h['pick']}: {label(c)} noch spät im Pack")
+                    notes.append(t("Pick {pick}: {card} noch spät im Pack", pick=h["pick"], card=label(c)))
     colors = {}
     for col in COLORS:
         score = opened[col] - contested[col]

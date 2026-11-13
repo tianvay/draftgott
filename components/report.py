@@ -6,7 +6,8 @@ from collections import Counter
 from components.battle_server import FIGHT_COUNTS
 from components.howitworks import render_help_view
 from components.html_base import HTML_CSS, LAYOUT_JS, LABEL_CLASS, esc, h_bar_cell, h_legend, h_level_pill, h_level_td, h_mode, h_pct, h_section, h_table, html_cost, html_mana, svg_bars, svg_lines
-from components import symbols
+from components import i18n, symbols
+from components.i18n_en.report import FIGHT_BAR_EN, FIGHT_JS_EN, SWITCH_JS_EN
 from components.jace import analyze_jace
 from components.landadvice import color_report, level, needs_of_alts
 from components.mana import required_colors
@@ -122,18 +123,18 @@ def sidebar_kpis(ctx):
         rows.append(['<td class="l">Mulligan</td>'] + [
             f'<td>{h_pct(res[l]["mulligan"]["first_any"] / res[l]["mulligan"]["deals"])}</td>' for l in labels])
     t = a.turns
-    rows.append([f'<td class="l">Zauber R{t}</td>'] + [
+    rows.append(['<td class="l">' + i18n.t("Zauber R{n}", n=t) + '</td>'] + [
         h_level_td(traffic_level(round(res[l]["cast"][t] / a.sims * 100), l == "On the Draw", t),
                    f'{round(res[l]["cast"][t] / a.sims * 100)}%') for l in labels])
-    lethal = ['<td class="l">Lethal ab</td>']
+    lethal = ['<td class="l">' + i18n.t("Lethal ab") + '</td>']
     for l in labels:
         b = res[l]["best_lethal"]
-        lethal.append(h_level_td(lethal_level(b["key"][0]) if b else "red", f'R{b["key"][0]}' if b else "–"))
+        lethal.append(h_level_td(lethal_level(b["key"][0]) if b else "red", i18n.t("R{n}", n=b["key"][0]) if b else "–"))
     rows.append(lethal)
-    avg = [f'<td class="l">Ø {a.schaden} Schaden</td>']
+    avg = ['<td class="l">' + i18n.t("Ø {n} Schaden", n=a.schaden) + '</td>']
     for l in labels:
         st = timing_stats(res[l]["dmg"], a.sims)
-        avg.append(f'<td>R{st[0]:.1f}</td>' if st else '<td class="muted">–</td>')
+        avg.append('<td>' + i18n.t("R{n}", n=f"{st[0]:.1f}") + '</td>' if st else '<td class="muted">–</td>')
     rows.append(avg)
     return h_table([""] + [esc(short.get(l, l)) for l in labels], rows)
 
@@ -169,18 +170,19 @@ def render_great(ctx):
                        f'<td class="l">{html_cost(shown.split("   [")[0])}</td>', f'<td class="l">{props}</td>'])
     parts = []
     if rows_g:
-        parts.append(h_table(["Karte", "Kategorie", "Anz.", "Bereich", "Kosten", "Eigenschaften"], rows_g,
+        parts.append(h_table([i18n.t("Karte"), i18n.t("Kategorie"), i18n.t("Anz."), i18n.t("Bereich"), i18n.t("Kosten"),
+                              i18n.t("Eigenschaften")], rows_g,
                              left=(0, 1, 3, 4, 5)))
     else:
-        parts.append('<p class="muted">Keine Matchwinner-, Splashworthy- oder MustPlay-Karten in diesem Deck.</p>')
+        parts.append('<p class="muted">' + i18n.t("Keine Matchwinner-, Splashworthy- oder MustPlay-Karten in diesem Deck.") + '</p>')
     expected = [] if ctx.get("role") == "proposal" else [
         n for n, c in great.items() if c == "mustplay" or (c in ("matchwinner", "splashworthy") and ctx.get("role") == "splash")]
     missing = sorted(n for n in expected if n not in ctx["deck"])
     if missing:
-        parts.append('<div class="warnbox" style="margin-top:12px"><b>Fehlt in diesem Deck:</b> '
+        parts.append('<div class="warnbox" style="margin-top:12px"><b>' + i18n.t("Fehlt in diesem Deck:") + '</b> '
                      + esc(", ".join(f"{n} ({CAT_LABEL[great[n]]})" for n in missing)) + "</div>")
     if never_in_deck:
-        parts.append('<div class="warnbox" style="margin-top:12px"><b>NeverPlay-Karten im Deck:</b> '
+        parts.append('<div class="warnbox" style="margin-top:12px"><b>' + i18n.t("NeverPlay-Karten im Deck:") + '</b> '
                      + esc(", ".join(never_in_deck)) + "</div>")
     return '<div class="panel">' + "".join(parts) + "</div>"
 
@@ -192,10 +194,10 @@ def render_coverage(ctx):
     qty = {name: q for name, q, _c, _s in ctx["rows"]}
     summary = summarize(coverage, qty)
     if not summary["flagged_cards"]:
-        return '<div class="panel"><p class="muted">Keine Karte mit nicht implementierten Effekten gefunden.</p></div>'
+        return '<div class="panel"><p class="muted">' + i18n.t("Keine Karte mit nicht implementierten Effekten gefunden.") + '</p></div>'
     kpis = "".join(
-        f'<div class="kpi"><div class="l">{esc(m)}</div><div class="v">{summary["by_metric"][m]}</div>'
-        f'<div class="s">Karten</div></div>' for m in METRIC_ORDER if summary["by_metric"][m])
+        f'<div class="kpi"><div class="l">{esc(i18n.t(m))}</div><div class="v">{summary["by_metric"][m]}</div>'
+        f'<div class="s">{i18n.t("Karten")}</div></div>' for m in METRIC_ORDER if summary["by_metric"][m])
     flagged = [n for n, items in coverage.items() if items]
 
     def order(name):
@@ -209,13 +211,14 @@ def render_coverage(ctx):
         metrics = [m for m in METRIC_ORDER if m in metrics_of(items)]
         evidence = " | ".join(dict.fromkeys(l for _c, _m, l in items))
         rows.append([f'<td class="l">{esc(name)}</td>', f"<td>{qty.get(name, 1)}</td>",
-                     f'<td class="l"><span class="tag off">{esc(STATUS_TEXT)}</span></td>',
-                     f'<td class="l" title="{esc(evidence)}">{esc(", ".join(cats))}</td>',
-                     f'<td class="l">{esc(", ".join(metrics))}</td>'])
-    note = (f'<div class="note" style="margin:0 0 10px"><b>{summary["flagged_cards"]} Karten</b> '
-            f'({summary["flagged_copies"]} Kopien) haben Effekte, die die Simulation noch nicht abbildet. Die Zahlen in '
-            'diesem Bericht berücksichtigen sie nicht.</div>')
-    table = h_table(["Karte", "Anz.", "Status", "Kategorie", "Betroffene Kennzahl"], rows, left=(0, 2, 3, 4))
+                     f'<td class="l"><span class="tag off">{esc(i18n.t(STATUS_TEXT))}</span></td>',
+                     f'<td class="l" title="{esc(evidence)}">{esc(", ".join(i18n.t(c) for c in cats))}</td>',
+                     f'<td class="l">{esc(", ".join(i18n.t(m) for m in metrics))}</td>'])
+    note = ('<div class="note" style="margin:0 0 10px">' + i18n.t(
+        "<b>{n} Karten</b> ({k} Kopien) haben Effekte, die die Simulation noch nicht abbildet. Die Zahlen in "
+        "diesem Bericht berücksichtigen sie nicht.", n=summary["flagged_cards"], k=summary["flagged_copies"]) + '</div>')
+    table = h_table([i18n.t("Karte"), i18n.t("Anz."), i18n.t("Status"), i18n.t("Kategorie"),
+                     i18n.t("Betroffene Kennzahl")], rows, left=(0, 2, 3, 4))
     return f'<div class="panel">{note}<div class="grid g4" style="margin-bottom:12px">{kpis}</div>{table}</div>'
 
 
@@ -227,66 +230,66 @@ def render_details(ctx, suffix="", switch=None):
     sections, nav = [], []
 
     def add(sid, title, hint, body):
-        html = h_section(sid + suffix, title, hint, body, "hiw-" + sid)
+        html = h_section(sid + suffix, i18n.t(title), i18n.t(hint) if hint else hint, body, "hiw-" + sid)
         if switch:  # Umschalter zwischen den Varianten an der Ueberschrift
             group, names = switch
             buttons = "".join(f'<button type="button" data-g="{i}" data-sec="{sid}" class="{"on" if i == group else ""}">'
                               f'{esc(n)}</button>' for i, n in enumerate(names))
             html = html.replace("</h2>", f'<span class="gsw">{buttons}</span></h2>', 1)
         sections.append(html)
-        nav.append((sid + suffix, title))
+        nav.append((sid + suffix, i18n.t(title)))
 
     # ---------------- Auf einen Blick
     rows_v = []
     for t in range(1, T + 1):
-        cells = [f'<td class="l">Zauber gespielt in Runde {t}</td>']
+        cells = ['<td class="l">' + i18n.t("Zauber gespielt in Runde {n}", n=t) + '</td>']
         for lab in labels:
             pct = round(res[lab]["cast"][t] / sims * 100)
             cells.append(h_level_td(traffic_level(pct, lab == "On the Draw", t), f"{pct}%"))
         rows_v.append(cells)
-    scr = [f'<td class="l">Mana Screw nach Runde {T}</td>'] + [
+    scr = ['<td class="l">' + i18n.t("Mana Screw nach Runde {n}", n=T) + '</td>'] + [
         f'<td>{h_pct(res[l]["any_screw"])}</td>' for l in labels]
-    fl = [f'<td class="l">Flood ({a.flood}+ Länder bis Runde {H})</td>'] + [
+    fl = ['<td class="l">' + i18n.t("Flood ({f}+ Länder bis Runde {h})", f=a.flood, h=H) + '</td>'] + [
         f'<td>{h_pct(res[l]["flood"])}</td>' for l in labels]
-    lt = [f'<td class="l">Schnellster Lethal ({a.schaden} Schaden)</td>']
+    lt = ['<td class="l">' + i18n.t("Schnellster Lethal ({n} Schaden)", n=a.schaden) + '</td>']
     for l in labels:
         b = res[l]["best_lethal"]
         lt.append(h_level_td(lethal_level(b["key"][0]) if b else "red",
-                             f'Runde {b["key"][0]}' if b else "kein Lethal"))
-    avg = [f'<td class="l">Ø Runde für {a.schaden} Schaden</td>']
+                             i18n.t("Runde {n}", n=b["key"][0]) if b else i18n.t("kein Lethal")))
+    avg = ['<td class="l">' + i18n.t("Ø Runde für {n} Schaden", n=a.schaden) + '</td>']
     for l in labels:
         st = timing_stats(res[l]["dmg"], sims)
-        avg.append(f'<td>{st[0]:.1f} <span class="muted">({st[2]:.0%} der Spiele)</span></td>' if st
+        avg.append(f'<td>{st[0]:.1f} <span class="muted">(' + i18n.t("{p} der Spiele", p=f"{st[2]:.0%}") + ')</span></td>' if st
                    else '<td class="muted">-</td>')
     mu0 = res[labels[0]]["mulligan"]
     mull_rows = []
     if mu0["on"]:
         mull_rows = [
-            ['<td class="l">Mulligan auf der ersten Hand</td>'] + [
+            ['<td class="l">' + i18n.t("Mulligan auf der ersten Hand") + '</td>'] + [
                 f'<td>{h_pct(res[l]["mulligan"]["first_any"] / res[l]["mulligan"]["deals"], 1)}</td>' for l in labels],
-            [f'<td class="l">Spiel verloren (Hand unter {mu0["min_hand"]} Karten)</td>'] + [
+            ['<td class="l">' + i18n.t("Spiel verloren (Hand unter {n} Karten)", n=mu0["min_hand"]) + '</td>'] + [
                 f'<td>{h_pct(res[l]["mulligan"]["lost"] / res[l]["mulligan"]["deals"], 1)}</td>' for l in labels],
         ]
     jace_row = []
     if any(res[l]["jace"]["on"] for l in labels):
-        jace_row = [['<td class="l">Jace-Aktivierungen bis die Hand leer ist (Ø)</td>'] + [
+        jace_row = [['<td class="l">' + i18n.t("Jace-Aktivierungen bis die Hand leer ist (Ø)") + '</td>'] + [
             f'<td>{res[l]["jace"]["acts_win"] / sims:.2f}</td>' for l in labels]]
     colors_row = all_colors_row(ctx)
     rows_v = mull_rows + rows_v + jace_row + ([colors_row] if colors_row else []) + [scr, fl, avg, lt]
-    body = f'<div class="panel">{h_table(["Kennzahl"] + [esc(l) for l in labels], rows_v)}</div>'
+    body = f'<div class="panel">{h_table([i18n.t("Kennzahl")] + [esc(l) for l in labels], rows_v)}</div>'
     add("blick", "Auf einen Blick", "Die wichtigsten Kennzahlen im Vergleich Play gegen Draw.", body)
 
     # ---------------- Deck
     cards, nonlands = ctx["cards"], [c for c in ctx["cards"] if not c.is_land]
     kpis = [
-        ("Karten", str(len(cards)), f"{len(rows)} verschiedene"),
-        ("Länder", str(ctx["n_lands"]), f"{ctx['n_lands'] / len(cards):.0%} des Decks"),
-        ("Ø Manakosten", f"{ctx['avg_mv']:.2f}", "ohne Länder"),
-        ("Farben", "".join(html_mana(c) for c in sorted(ctx["deck_colors"], key="WUBRGC".find)) or "–",
-         "mehrfarbig" if ctx["multicolor"] else "einfarbig"),
+        (i18n.t("Karten"), str(len(cards)), i18n.t("{n} verschiedene", n=len(rows))),
+        (i18n.t("Länder"), str(ctx["n_lands"]), i18n.t("{p} des Decks", p=f"{ctx['n_lands'] / len(cards):.0%}")),
+        (i18n.t("Ø Manakosten"), f"{ctx['avg_mv']:.2f}", i18n.t("ohne Länder")),
+        (i18n.t("Farben"), "".join(html_mana(c) for c in sorted(ctx["deck_colors"], key="WUBRGC".find)) or "–",
+         i18n.t("mehrfarbig") if ctx["multicolor"] else i18n.t("einfarbig")),
     ]
     if ctx["top_mv"] is not None:
-        kpis.append(("Top Card", f"{ctx['top_mv']} Mana", ", ".join(ctx["top_names"])))
+        kpis.append(("Top Card", i18n.t("{n} Mana", n=ctx['top_mv']), ", ".join(ctx["top_names"])))
     kpi_html = "".join(f'<div class="panel kpi"><div class="l">{esc(l)}</div><div class="v">{v}</div>'
                        f'<div class="s">{esc(s_)}</div></div>' for l, v, s_ in kpis)
 
@@ -309,9 +312,10 @@ def render_details(ctx, suffix="", switch=None):
                              else '<td class="muted">–</td>',
                              f'<td class="l">{esc(worst["name"])} ({worst["p"]:.0%})</td>' if worst
                              else '<td class="muted">–</td>'])
-    col_table = h_table(["Farbe", "Symbole", "Karten", "Quellen", "Anteil der Länder", "Ø pünktlich", "Am knappsten"], col_rows)
+    col_table = h_table([i18n.t("Farbe"), i18n.t("Symbole"), i18n.t("Karten"), i18n.t("Quellen"), i18n.t("Anteil der Länder"),
+                         i18n.t("Ø pünktlich"), i18n.t("Am knappsten")], col_rows)
 
-    deck_rows, origin_note, head = [], "", ["Karte", "Anz.", "Kosten", "Eigenschaften"]
+    deck_rows, origin_note, head = [], "", [i18n.t("Karte"), i18n.t("Anz."), i18n.t("Kosten"), i18n.t("Eigenschaften")]
     cost_tags = lambda shown: ("".join(f'<span class="tag">{html_cost(t)}</span>'
                                        for t in re.findall(r"\[([^\]]*)\]", shown)))
     if ctx["parts"] and ctx["args"].core:
@@ -333,19 +337,20 @@ def render_details(ctx, suffix="", switch=None):
             tag = f'<span class="tag t{min(i, 2)}{"" if in_base else " off"}">{esc(lab)}</span>'
             deck_rows.append([f'<td class="l">{esc(n)}</td>', f"<td>{q}</td>", f'<td class="l">{tag}</td>',
                               f'<td class="l">{html_cost(shown.split("   [")[0])}</td>', f'<td class="l">{cost_tags(shown)}</td>'])
-        head = ["Karte", "Anz.", "Bereich", "Kosten", "Eigenschaften"]
-        origin_note = ('<div class="note" style="margin:0 0 8px">Alle Dateien: '
-                       + " · ".join(f"<b>{esc(l)}</b> {totals[l]} Karten" for l, _ in order)
-                       + f'. Dieses Deck besteht aus {" + ".join(esc(l) for l in base_labels)}; '
-                       'blass dargestellte Bereiche gehören nur zu einer anderen Variante. Eine Karte steht mit der Menge je Bereich, '
-                       'ihre Gesamtmenge im Deck ist die Summe der Bereiche des Decks.</div>')
+        head = [i18n.t("Karte"), i18n.t("Anz."), i18n.t("Bereich"), i18n.t("Kosten"), i18n.t("Eigenschaften")]
+        origin_note = ('<div class="note" style="margin:0 0 8px">' + i18n.t("Alle Dateien:") + ' '
+                       + " · ".join(f"<b>{esc(l)}</b> " + i18n.t("{n} Karten", n=totals[l]) for l, _ in order)
+                       + '. ' + i18n.t("Dieses Deck besteht aus {parts}; "
+                                       "blass dargestellte Bereiche gehören nur zu einer anderen Variante. Eine Karte steht mit der Menge je Bereich, "
+                                       "ihre Gesamtmenge im Deck ist die Summe der Bereiche des Decks.",
+                                       parts=" + ".join(esc(l) for l in base_labels)) + '</div>')
     else:
         for name, qty, card, shown in sorted(rows, key=lambda r: (r[2].is_land, r[2].mv, r[0])):
             deck_rows.append([f'<td class="l">{esc(name)}</td>', f"<td>{qty}</td>",
                               f'<td class="l">{html_cost(shown.split("   [")[0])}</td>', f'<td class="l">{cost_tags(shown)}</td>'])
     unsure = ""
     if ctx["unsure"]:
-        unsure = ('<div class="warnbox">Getappt-Bedingung nicht modelliert (als immer getappt gezählt): '
+        unsure = ('<div class="warnbox">' + i18n.t("Getappt-Bedingung nicht modelliert (als immer getappt gezählt):") + ' '
                   + esc(", ".join(ctx["unsure"])) + "</div>")
     archetype = render_archetype_panel(ctx)
     stats_panel = render_stats_panel(ctx)
@@ -355,7 +360,7 @@ def render_details(ctx, suffix="", switch=None):
             + f'<div style="margin-top:14px">{render_color_curves(ctx)}</div>'
             f'<div class="grid g2" style="margin-top:14px">'
             f'{render_type_table(ctx)}'
-            f'<div class="panel"><b>Farbverteilung</b>{col_table}</div></div>'
+            f'<div class="panel"><b>{i18n.t("Farbverteilung")}</b>{col_table}</div></div>'
             f'<div class="panel" style="margin-top:14px">{unsure}'
             f'{origin_note}{h_table(head, deck_rows, left=(0, 2, 3, 4) if len(head) == 5 else (0, 2, 3))}</div>')
     add("deck", "Deck", "Kartendaten von Scryfall.", body)
@@ -378,22 +383,23 @@ def render_details(ctx, suffix="", switch=None):
         for l in labels:
             g_ = res[l]["graveyard"]
             turns = sorted(g_["size"])
-            sim_rows.append([h_mode(l), '<td class="l">Ø Karten im Friedhof</td>']
+            sim_rows.append([h_mode(l), '<td class="l">' + i18n.t("Ø Karten im Friedhof") + '</td>']
                             + [f'<td>{g_["size"][t]:.1f}</td>' for t in turns])
-            sim_rows.append([h_mode(l), '<td class="l">Ø höchster Manawert im Friedhof</td>']
+            sim_rows.append([h_mode(l), '<td class="l">' + i18n.t("Ø höchster Manawert im Friedhof") + '</td>']
                             + [f'<td>{g_["max_mv"][t]:.1f}</td>' for t in turns])
         turns = sorted(res[labels[0]]["graveyard"]["size"])
-        sim_html = ('<div class="panel" style="margin-top:14px"><b>Simulation</b>'
-                    + h_table(["", "Kennzahl"] + [f"nach Runde {t}" for t in turns], sim_rows, left=(0, 1)))
+        sim_html = ('<div class="panel" style="margin-top:14px"><b>' + i18n.t("Simulation") + '</b>'
+                    + h_table(["", i18n.t("Kennzahl")] + [i18n.t("nach Runde {n}", n=t) for t in turns], sim_rows, left=(0, 1)))
         if ctx.get("gy_x_names"):
             hp = []
             for l in labels:
                 g_ = res[l]["graveyard"]
                 hp.append([h_mode(l), f'<td>{g_["hapatra_x_avg"]:.1f}</td>', f'<td>{h_pct(g_["x_ge3"])}</td>',
                            f'<td>{h_pct(g_["x_ge5"])}</td>', f'<td>{g_["hapatra_n"]}</td>'])
-            sim_html += (f'<div style="margin-top:10px"><b class="muted">{esc(", ".join(ctx["gy_x_names"]))}: X = '
-                         f'höchster Manawert im Friedhof beim Betreten</b>'
-                         + h_table(["", "Ø X", "X ≥ 3", "X ≥ 5", "gewirkt (Anzahl)"], hp) + '</div>')
+            sim_html += (f'<div style="margin-top:10px"><b class="muted">'
+                         + i18n.t("{names}: X = höchster Manawert im Friedhof beim Betreten",
+                                  names=esc(", ".join(ctx["gy_x_names"]))) + '</b>'
+                         + h_table(["", "Ø X", "X ≥ 3", "X ≥ 5", i18n.t("gewirkt (Anzahl)")], hp) + '</div>')
         sim_html += '</div>'
         add("friedhof", "Friedhof", "Wie stark nutzt das Deck den Friedhof, und was liegt in der Simulation darin?",
             gy_html + sim_html)
@@ -421,9 +427,10 @@ def render_details(ctx, suffix="", switch=None):
             rows_m.append([h_mode(l)] + [h_bar_cell(mu["sizes"][k] / d, h_pct(mu["sizes"][k] / d, 1), cls) for k in sizes]
                            + [h_bar_cell(mu["lost"] / d, h_pct(mu["lost"] / d, 1), cls),
                               f'<td>{sims} / {mu["lost"]}</td>'])
-        heads = [""] + [f"{k} Karten" for k in sizes] + [f"Verloren (< {mh})", "Gespielt / verloren"]
-        reasons = [(MULL_COLORS, "Farben passen nicht"), (MULL_LANDS_HIGH, "6+ Länder"),
-                   (MULL_LANDS_LOW, "≤ 2 Länder, < 3 spielbar")]
+        heads = [""] + [i18n.t("{n} Karten", n=k) for k in sizes] + [i18n.t("Verloren (< {n})", n=mh),
+                                                                   i18n.t("Gespielt / verloren")]
+        reasons = [(MULL_COLORS, i18n.t("Farben passen nicht")), (MULL_LANDS_HIGH, i18n.t("6+ Länder")),
+                   (MULL_LANDS_LOW, i18n.t("≤ 2 Länder, < 3 spielbar"))]
         rows_r = []
         for l in labels:
             mu = res[l]["mulligan"]
@@ -431,10 +438,10 @@ def render_details(ctx, suffix="", switch=None):
             rows_r.append([h_mode(l), f'<td><b>{h_pct(mu["first_any"] / d, 1)}</b></td>']
                           + [f'<td>{h_pct(mu["first"][key] / d, 1)}</td>' for key, _ in reasons])
         body = (
-            '<div class="panel"><b>Erste 7-Karten-Hand: Gründe für einen Mulligan</b>'
-            + h_table(["", "Mulligan gesamt"] + [r for _, r in reasons], rows_r) + '</div>'
-            '<div class="panel" style="margin-top:14px"><b>Mit wie vielen Karten startet das Spiel?</b> '
-            '<span class="muted">(Behalten mit … Karten)</span>' + h_table(heads, rows_m) + '</div>')
+            '<div class="panel"><b>' + i18n.t("Erste 7-Karten-Hand: Gründe für einen Mulligan") + '</b>'
+            + h_table(["", i18n.t("Mulligan gesamt")] + [r for _, r in reasons], rows_r) + '</div>'
+            '<div class="panel" style="margin-top:14px"><b>' + i18n.t("Mit wie vielen Karten startet das Spiel?") + '</b> '
+            '<span class="muted">' + i18n.t("(Behalten mit … Karten)") + '</span>' + h_table(heads, rows_m) + '</div>')
         add("mulligan", "Mulligan", "Wie oft die Starthand getauscht werden muss und wie oft das Spiel dadurch verloren geht.", body)
 
     if ctx["jace"]["any"]:
@@ -451,16 +458,16 @@ def render_details(ctx, suffix="", switch=None):
             cells.append(h_level_td(traffic_level(pct, lab == "On the Draw", t), f"{pct}%"))
         cells.append(f'<td>{r["opener_lands"]:.2f}</td>')
         rows_c.append(cells)
-    body = (f'<div class="panel">{h_table([""] + [f"Runde {t}" for t in range(1, T + 1)] + ["Ø Länder in Starthand (nach Mulligan)"], rows_c)}'
+    body = (f'<div class="panel">{h_table([""] + [i18n.t("Runde {n}", n=t) for t in range(1, T + 1)] + [i18n.t("Ø Länder in Starthand (nach Mulligan)")], rows_c)}'
 '</div>')
-    add("zauber", "Zauber pro Runde", f"{sims} Simulationen pro Modus.", body)
+    add("zauber", "Zauber pro Runde", i18n.t("{n} Simulationen pro Modus.", n=sims), body)
 
     # ---------------- Kreaturen
     rows_k = [[h_mode(l), f'<td>{res[l]["creatures"]:.2f}</td>', f'<td>{res[l]["power"]:.2f}</td>',
                f'<td>{res[l]["toughness"]:.2f}</td>'] for l in labels]
-    body = (f'<div class="panel">{h_table(["", "Kreaturen", "Gesamt-Power", "Gesamt-Toughness"], rows_k)}'
+    body = (f'<div class="panel">{h_table(["", i18n.t("Kreaturen"), i18n.t("Gesamt-Power"), i18n.t("Gesamt-Toughness")], rows_k)}'
 '</div>')
-    add("kreaturen", f"Kreaturen nach Runde {T}", "", body)
+    add("kreaturen", i18n.t("Kreaturen nach Runde {n}", n=T), "", body)
 
     # ---------------- Screw & Flood
     rows_s = []
@@ -472,11 +479,10 @@ def render_details(ctx, suffix="", switch=None):
                        h_bar_cell(r["any_screw"], cls=cls)])
     rows_f = [[h_mode(l), h_bar_cell(res[l]["flood"], cls=LABEL_CLASS.get(l, "")),
                f'<td>{res[l]["lands_drawn"]:.1f}</td>'] for l in labels]
-    body = (f'<div class="grid"><div class="panel"><b>Mana Screw nach Runde {T}</b>'
-
-            f'{h_table(["", "Zu wenig Länder", "Farben fehlen", "Gesamt"], rows_s)}</div>'
-            f'<div class="panel"><b>Flood ({a.flood}+ Länder bis Runde {H})</b>'
-            f'{h_table(["", "Flooded", "Ø Länder gezogen"], rows_f)}</div></div>')
+    body = (f'<div class="grid"><div class="panel"><b>' + i18n.t("Mana Screw nach Runde {n}", n=T) + '</b>'
+            f'{h_table(["", i18n.t("Zu wenig Länder"), i18n.t("Farben fehlen"), i18n.t("Gesamt")], rows_s)}</div>'
+            '<div class="panel"><b>' + i18n.t("Flood ({f}+ Länder bis Runde {h})", f=a.flood, h=H) + '</b>'
+            f'{h_table(["", i18n.t("Flooded"), i18n.t("Ø Länder gezogen")], rows_f)}</div></div>')
     add("screw", "Mana Screw & Flood", "", body)
 
     # ---------------- Farbverfuegbarkeit
@@ -511,11 +517,12 @@ def render_details(ctx, suffix="", switch=None):
                     cells += ['<td class="muted">–</td>'] * 4
                 trs.append(cells)
         body = ('<div class="panel">'
-                + h_table(["Karte", "", "Gezogen", "Spielbar", "Pünktlich", "Ø Wartezeit", "Gewirkt"], trs,
-                          left=(0, 1))
-                + '<div class="note">Gezogen: Anteil aller Spiele. Die übrigen Spalten beziehen sich auf die Spiele, in '
-                  'denen die Karte auf die Hand kam: Spielbar, wenn gezogen · Pünktlich (bis Runde = Manawert) · '
-                  'Ø Wartezeit in Runden bis erstmals bezahlbar · Gewirkt, wenn gezogen.</div></div>')
+                + h_table([i18n.t("Karte"), "", i18n.t("Gezogen"), i18n.t("Spielbar"), i18n.t("Pünktlich"), i18n.t("Ø Wartezeit"),
+                           i18n.t("Gewirkt")], trs, left=(0, 1))
+                + '<div class="note">' + i18n.t(
+                  "Gezogen: Anteil aller Spiele. Die übrigen Spalten beziehen sich auf die Spiele, in "
+                  "denen die Karte auf die Hand kam: Spielbar, wenn gezogen · Pünktlich (bis Runde = Manawert) · "
+                  "Ø Wartezeit in Runden bis erstmals bezahlbar · Gewirkt, wenn gezogen.") + '</div></div>')
         add("splashkarten", "Splash-Karten",
             "Wie oft werden die Karten der Splash-Gruppe spielbar, wenn man sie zieht?", body)
 
@@ -529,23 +536,23 @@ def render_details(ctx, suffix="", switch=None):
         ratio = lambda t: cv["spent"][t] / cv["avail"][t] if cv["avail"][t] else 0
         full = lambda t: cv["full"][t] / cv["games"][t] if cv["games"][t] else 0
         rws = [
-            [f'<td class="l">Ø Mana verfügbar</td>'] + [f'<td>{cv["avail"][t] / sims:.2f}</td>' for t in ts]
+            ['<td class="l">' + i18n.t("Ø Mana verfügbar") + '</td>'] + [f'<td>{cv["avail"][t] / sims:.2f}</td>' for t in ts]
             + [f'<td><b>{tot_a / sims / C:.2f}</b></td>'],
-            [f'<td class="l">Ø Mana ausgegeben</td>'] + [f'<td>{cv["spent"][t] / sims:.2f}</td>' for t in ts]
+            ['<td class="l">' + i18n.t("Ø Mana ausgegeben") + '</td>'] + [f'<td>{cv["spent"][t] / sims:.2f}</td>' for t in ts]
             + [f'<td><b>{tot_s / sims / C:.2f}</b></td>'],
-            [f'<td class="l">Auslastung</td>'] + [f'<td>{h_pct(ratio(t))}</td>' for t in ts]
+            ['<td class="l">' + i18n.t("Auslastung") + '</td>'] + [f'<td>{h_pct(ratio(t))}</td>' for t in ts]
             + [f'<td><b>{h_pct(tot_s / tot_a if tot_a else 0)}</b></td>'],
-            [f'<td class="l">Alles Mana genutzt</td>'] + [f'<td>{h_pct(full(t))}</td>' for t in ts]
+            ['<td class="l">' + i18n.t("Alles Mana genutzt") + '</td>'] + [f'<td>{h_pct(full(t))}</td>' for t in ts]
             + [f'<td><b>{h_pct(tot_f / tot_g if tot_g else 0)}</b></td>'],
         ]
         panels.append(f'<div class="panel"><b>{esc(l)}</b>'
-                      f'{h_table([""] + [f"Runde {t}" for t in ts] + ["Gesamt"], rws)}</div>')
+                      f'{h_table([""] + [i18n.t("Runde {n}", n=t) for t in ts] + [i18n.t("Gesamt")], rws)}</div>')
     util = {l: [(res[l]["curve"]["spent"][t] / res[l]["curve"]["avail"][t]) if res[l]["curve"]["avail"][t] else 0
                 for t in range(1, C + 1)] for l in labels}
-    chart = (f'<div class="panel" style="margin-top:14px"><b>Auslastung je Runde</b>{h_legend(labels)}'
-             f'{svg_bars([f"R{t}" for t in range(1, C + 1)], util, 1.0, lambda v: f"{v:.0%}")}'
+    chart = (f'<div class="panel" style="margin-top:14px"><b>{i18n.t("Auslastung je Runde")}</b>{h_legend(labels)}'
+             f'{svg_bars([i18n.t("R{n}", n=t) for t in range(1, C + 1)], util, 1.0, lambda v: f"{v:.0%}")}'
 '</div>')
-    add("curve", "Curve-Auslastung", f"Runde 1–{C}: wie gut wird das Mana genutzt?",
+    add("curve", "Curve-Auslastung", i18n.t("Runde 1–{n}: wie gut wird das Mana genutzt?", n=C),
         f'<div class="grid">{"".join(panels)}</div>{chart}')
 
 
@@ -557,16 +564,17 @@ def render_details(ctx, suffix="", switch=None):
                                      else ['<td class="muted">–</td>'] * 2 + [h_bar_cell(0)]))
     xs = list(range(1, H + 1))
     cum = {l: [sum(1 for v in res[l]["dmg"] if v <= t) / sims for t in xs] for l in labels}
-    chart = (f'<div class="panel"><b>Wahrscheinlichkeit, bis Runde X mindestens {a.schaden} Schaden verursacht zu haben</b>'
+    chart = ('<div class="panel"><b>' + i18n.t("Wahrscheinlichkeit, bis Runde X mindestens {n} Schaden verursacht zu haben", n=a.schaden) + '</b>'
              f'{h_legend(labels)}{svg_lines(xs, cum)}</div>')
     effect_note = ""
     if any(res[l]["effects"]["face"] or res[l]["effects"]["counters"] for l in labels):
-        effect_note = ('<div class="note">Pro Spiel aus Karten: '
-                       + " · ".join(f'{esc(l)}: Ø {res[l]["effects"]["face"]:.1f} Schaden an den Gegner, '
-                                    f'Ø {res[l]["effects"]["counters"]:.1f} +1/+1-Marken' for l in labels)
+        effect_note = ('<div class="note">' + i18n.t("Pro Spiel aus Karten:") + ' '
+                       + " · ".join(esc(l) + ": " + i18n.t("Ø {a} Schaden an den Gegner, Ø {b} +1/+1-Marken",
+                                                          a=f'{res[l]["effects"]["face"]:.1f}',
+                                                          b=f'{res[l]["effects"]["counters"]:.1f}') for l in labels)
                        + '</div>')
-    table = (f'<div class="panel"><b>Erste Runde mit {a.schaden} Schaden</b>'
-             f'{h_table(["", "Ø Runde", "Median", "Eintritt"], rows_d)}{effect_note}</div>')
+    table = ('<div class="panel"><b>' + i18n.t("Erste Runde mit {n} Schaden", n=a.schaden) + '</b>'
+             f'{h_table(["", i18n.t("Ø Runde"), i18n.t("Median"), i18n.t("Eintritt")], rows_d)}{effect_note}</div>')
     add("schaden", "Schaden durch Kreaturen", "", f'<div class="grid g2">{table}{chart}</div>')
 
     lethals = []
@@ -574,37 +582,38 @@ def render_details(ctx, suffix="", switch=None):
         b = res[l]["best_lethal"]
         if not b:
             lethals.append(f'<div class="panel lethal"><div class="head"><b>{esc(l)}</b>'
-                           f'{h_level_pill("red", "kein Lethal")}</div></div>')
+                           f'{h_level_pill("red", i18n.t("kein Lethal"))}</div></div>')
             continue
         turn, neg = b["key"]
         hand = "".join(f'<span class="card {"land" if c.is_land else ""}">{esc(c.name)}</span>'
                        for c in sorted(b["opening"], key=lambda c: (c.is_land, c.mv, c.name)))
         trs = []
         for t, drew, land, tapped, cast, tdmg, total, cycled, jinfo in b["log"]:
-            land_txt = "–" if land is None else esc(land.name) + (' <span class="tag">getappt</span>' if tapped else "")
+            land_txt = "–" if land is None else esc(land.name) + (' <span class="tag">' + i18n.t("getappt") + '</span>' if tapped else "")
             cast_txt = ", ".join(esc(card_label(c)) for c in cast) or "–"
-            cyc_txt = "".join(f'<span class="tag">Landcycling: {esc(c.name)}</span>' for c, _ in cycled)
+            cyc_txt = "".join('<span class="tag">' + i18n.t("Landcycling: {name}", name=esc(c.name)) + '</span>' for c, _ in cycled)
             if jinfo[0]:
-                cyc_txt += f'<span class="tag">Jace +{jinfo[0]} → {jinfo[2]} Loyalty</span>'
+                cyc_txt += '<span class="tag">' + i18n.t("Jace +{a} → {b} Loyalty", a=jinfo[0], b=jinfo[2]) + '</span>'
             if jinfo[1]:
-                cyc_txt += '<span class="tag">Jace aktiviert (+1 Karte)</span>'
+                cyc_txt += '<span class="tag">' + i18n.t("Jace aktiviert (+1 Karte)") + '</span>'
             if len(jinfo) > 3 and jinfo[3]:
-                cyc_txt += f'<span class="tag">Draw-Zauber: +{jinfo[3]} Karte{"n" if jinfo[3] > 1 else ""}</span>'
-            trs.append([f'<td class="l">Runde {t}</td>', f'<td class="l">{esc(drew.name) if drew else "–"}</td>',
+                cyc_txt += '<span class="tag">' + (i18n.t("Draw-Zauber: +{n} Karten", n=jinfo[3]) if jinfo[3] > 1
+                                                  else i18n.t("Draw-Zauber: +{n} Karte", n=jinfo[3])) + '</span>'
+            trs.append(['<td class="l">' + i18n.t("Runde {n}", n=t) + '</td>', f'<td class="l">{esc(drew.name) if drew else "–"}</td>',
                         f'<td class="l">{land_txt}</td>', f'<td class="l">{cast_txt} {cyc_txt}</td>',
                         f'<td class="dmg">+{tdmg}</td>',
                         h_bar_cell(min(total / a.schaden, 1), f"{total}", LABEL_CLASS.get(l, ""))])
         lethals.append(
             f'<div class="panel lethal"><div class="head"><span class="dot {LABEL_CLASS.get(l, "")}"></span>'
-            f'<b>{esc(l)}</b>{h_level_pill(lethal_level(turn), f"Runde {turn}")}'
-            f'<span class="muted">{-neg} Schaden</span>'
-            + (f'<span class="tag">Mulligan: Starthand mit {len(b["opening"])} Karten</span>' if b.get("mulls") else "")
+            f'<b>{esc(l)}</b>{h_level_pill(lethal_level(turn), i18n.t("Runde {n}", n=turn))}'
+            '<span class="muted">' + i18n.t("{n} Schaden", n=-neg) + '</span>'
+            + ('<span class="tag">' + i18n.t("Mulligan: Starthand mit {n} Karten", n=len(b["opening"])) + '</span>' if b.get("mulls") else "")
             + '</div>'
-            f'<div class="muted" style="font-size:12.5px">Starthand</div><div class="hand">{hand}</div>'
-            f'{h_table(["", "Zieht", "Land", "Zauber", "Schaden", "Gesamt"], trs, "class=tl", left=(0, 1, 2, 3))}</div>')
+            '<div class="muted" style="font-size:12.5px">' + i18n.t("Starthand") + f'</div><div class="hand">{hand}</div>'
+            f'{h_table(["", i18n.t("Zieht"), i18n.t("Land"), i18n.t("Zauber"), i18n.t("Schaden"), i18n.t("Gesamt")], trs, "class=tl", left=(0, 1, 2, 3))}</div>')
     add("lethal", "Schnellster Lethal",
-        f"Das schnellste von {sims} simulierten Spielen (bei gleicher Runde das mit mehr Schaden) – "
-        f"ein Glücksfall, kein Erwartungswert.", f'<div class="grid">{"".join(lethals)}</div>')
+        i18n.t("Das schnellste von {n} simulierten Spielen (bei gleicher Runde das mit mehr Schaden) – "
+               "ein Glücksfall, kein Erwartungswert.", n=sims), f'<div class="grid">{"".join(lethals)}</div>')
 
 
     # ---------------- Landcycling
@@ -614,25 +623,25 @@ def render_details(ctx, suffix="", switch=None):
             lc = res[l]["landcycle"]
             ev = lc["events"]
             if not ev:
-                panels.append(f'<div class="panel"><b>{esc(l)}</b><p class="muted">in {sims} Simulationen nie nötig oder möglich</p></div>')
+                panels.append(f'<div class="panel"><b>{esc(l)}</b><p class="muted">' + i18n.t("in {n} Simulationen nie nötig oder möglich", n=sims) + '</p></div>')
                 continue
             pb, pa = lc["p_before"] / ev, lc["p_after"] / ev
             first = sum(lc["first"]) / len(lc["first"])
-            reasons = "".join(f'<tr><td class="l">{esc(k)}</td>{h_bar_cell(v / ev, cls=LABEL_CLASS.get(l, ""))}</tr>'
+            reasons = "".join(f'<tr><td class="l">{esc(i18n.t(k))}</td>{h_bar_cell(v / ev, cls=LABEL_CLASS.get(l, ""))}</tr>'
                               for k, v in lc["reason"].most_common())
             cards_ = "".join(f'<tr><td class="l">{esc(n)}</td><td>{v}×</td>{h_bar_cell(v / ev, cls=LABEL_CLASS.get(l, ""))}</tr>'
                              for n, v in lc["card"].most_common())
             panels.append(
                 f'<div class="panel"><b>{esc(l)}</b>'
                 f'<div class="grid g4" style="margin:10px 0">'
-                f'<div class="kpi"><div class="l">Spiele mit Cycling</div><div class="v">{h_pct(lc["games"] / sims)}</div></div>'
-                f'<div class="kpi"><div class="l">Ø pro Spiel</div><div class="v">{ev / sims:.2f}</div></div>'
-                f'<div class="kpi"><div class="l">Erstmals Ø in</div><div class="v">Runde {first:.1f}</div></div>'
-                f'<div class="kpi"><div class="l">Nicht-Land-Chance</div><div class="v">+{(pa - pb) * 100:.1f} PP</div>'
-                f'<div class="s">{pb:.1%} → {pa:.1%} (relativ +{(pa / pb - 1) if pb else 0:.1%})</div></div></div>'
-                f'<div class="grid g2"><div><b class="muted">Grund</b><table>{reasons}</table></div>'
-                f'<div><b class="muted">Meistgenutzte Karte</b><table>{cards_}</table></div></div></div>')
-        add("landcycling", "Landcycling", "Karten im Deck: " + esc(", ".join(ctx["cyc_names"])),
+                f'<div class="kpi"><div class="l">{i18n.t("Spiele mit Cycling")}</div><div class="v">{h_pct(lc["games"] / sims)}</div></div>'
+                f'<div class="kpi"><div class="l">{i18n.t("Ø pro Spiel")}</div><div class="v">{ev / sims:.2f}</div></div>'
+                f'<div class="kpi"><div class="l">{i18n.t("Erstmals Ø in")}</div><div class="v">{i18n.t("Runde {n}", n=f"{first:.1f}")}</div></div>'
+                f'<div class="kpi"><div class="l">{i18n.t("Nicht-Land-Chance")}</div><div class="v">+{(pa - pb) * 100:.1f} {i18n.t("PP")}</div>'
+                f'<div class="s">{pb:.1%} → {pa:.1%} ({i18n.t("relativ")} +{(pa / pb - 1) if pb else 0:.1%})</div></div></div>'
+                f'<div class="grid g2"><div><b class="muted">{i18n.t("Grund")}</b><table>{reasons}</table></div>'
+                f'<div><b class="muted">{i18n.t("Meistgenutzte Karte")}</b><table>{cards_}</table></div></div></div>')
+        add("landcycling", "Landcycling", i18n.t("Karten im Deck:") + " " + esc(", ".join(ctx["cyc_names"])),
             f'<div class="grid">{"".join(panels)}</div>')
 
     # ---------------- Draw-Zauber
@@ -642,12 +651,12 @@ def render_details(ctx, suffix="", switch=None):
             d = res[l]["draws"]
             panels.append(
                 f'<div class="panel"><b>{esc(l)}</b><div class="grid g4" style="margin:10px 0">'
-                f'<div class="kpi"><div class="l">Spiele mit Draw-Zauber</div><div class="v">{h_pct(d["games"])}</div></div>'
-                f'<div class="kpi"><div class="l">Ø zusätzlich gezogen</div><div class="v">{d["cards"]:.2f}</div>'
-                f'<div class="s">Karten pro Spiel bis Runde {H}</div></div>'
-                f'<div class="kpi"><div class="l">Ø gleich genutzt</div><div class="v">{d["used"]:.2f}</div>'
-                f'<div class="s">Länder und Zauber im selben Zug</div></div></div></div>')
-        add("ziehen", "Draw-Zauber", "Karten im Deck: " + esc(", ".join(ctx["draw_names"])),
+                f'<div class="kpi"><div class="l">{i18n.t("Spiele mit Draw-Zauber")}</div><div class="v">{h_pct(d["games"])}</div></div>'
+                f'<div class="kpi"><div class="l">{i18n.t("Ø zusätzlich gezogen")}</div><div class="v">{d["cards"]:.2f}</div>'
+                f'<div class="s">{i18n.t("Karten pro Spiel bis Runde {n}", n=H)}</div></div>'
+                f'<div class="kpi"><div class="l">{i18n.t("Ø gleich genutzt")}</div><div class="v">{d["used"]:.2f}</div>'
+                f'<div class="s">{i18n.t("Länder und Zauber im selben Zug")}</div></div></div></div>')
+        add("ziehen", "Draw-Zauber", i18n.t("Karten im Deck:") + " " + esc(", ".join(ctx["draw_names"])),
             f'<div class="grid">{"".join(panels)}</div>')
 
     # ---------------- Surveil durch Karten
@@ -657,12 +666,12 @@ def render_details(ctx, suffix="", switch=None):
             s_ = res[l]["card_surveil"]
             panels.append(
                 f'<div class="panel"><b>{esc(l)}</b><div class="grid g4" style="margin:10px 0">'
-                f'<div class="kpi"><div class="l">Spiele mit Surveil</div><div class="v">{h_pct(s_["games"])}</div></div>'
-                f'<div class="kpi"><div class="l">Ø Surveils</div><div class="v">{s_["events"]:.2f}</div>'
-                f'<div class="s">pro Spiel bis Runde {H}</div></div>'
-                f'<div class="kpi"><div class="l">Ø Länder in den Friedhof</div><div class="v">{s_["lands"]:.2f}</div>'
-                f'<div class="s">pro Spiel</div></div></div></div>')
-        add("surveil", "Surveil durch Karten", "Karten im Deck: " + esc(", ".join(ctx["surveil_names"])),
+                f'<div class="kpi"><div class="l">{i18n.t("Spiele mit Surveil")}</div><div class="v">{h_pct(s_["games"])}</div></div>'
+                f'<div class="kpi"><div class="l">{i18n.t("Ø Surveils")}</div><div class="v">{s_["events"]:.2f}</div>'
+                f'<div class="s">{i18n.t("pro Spiel bis Runde {n}", n=H)}</div></div>'
+                f'<div class="kpi"><div class="l">{i18n.t("Ø Länder in den Friedhof")}</div><div class="v">{s_["lands"]:.2f}</div>'
+                f'<div class="s">{i18n.t("pro Spiel")}</div></div></div></div>')
+        add("surveil", "Surveil durch Karten", i18n.t("Karten im Deck:") + " " + esc(", ".join(ctx["surveil_names"])),
             f'<div class="grid">{"".join(panels)}</div>')
 
     # ---------------- Prepared
@@ -672,12 +681,12 @@ def render_details(ctx, suffix="", switch=None):
             p_ = res[l]["prepared"]
             panels.append(
                 f'<div class="panel"><b>{esc(l)}</b><div class="grid g4" style="margin:10px 0">'
-                f'<div class="kpi"><div class="l">Spiele mit Kopie</div><div class="v">{h_pct(p_["games"])}</div></div>'
-                f'<div class="kpi"><div class="l">Ø Kopien</div><div class="v">{p_["copies"]:.2f}</div>'
-                f'<div class="s">pro Spiel bis Runde {H}</div></div>'
-                f'<div class="kpi"><div class="l">Ø Mana für Kopien</div><div class="v">{p_["mana"]:.2f}</div>'
-                f'<div class="s">pro Spiel</div></div></div></div>')
-        add("prepared", "Prepared", "Karten im Deck: " + esc(", ".join(ctx["prepared_names"])),
+                f'<div class="kpi"><div class="l">{i18n.t("Spiele mit Kopie")}</div><div class="v">{h_pct(p_["games"])}</div></div>'
+                f'<div class="kpi"><div class="l">{i18n.t("Ø Kopien")}</div><div class="v">{p_["copies"]:.2f}</div>'
+                f'<div class="s">{i18n.t("pro Spiel bis Runde {n}", n=H)}</div></div>'
+                f'<div class="kpi"><div class="l">{i18n.t("Ø Mana für Kopien")}</div><div class="v">{p_["mana"]:.2f}</div>'
+                f'<div class="s">{i18n.t("pro Spiel")}</div></div></div></div>')
+        add("prepared", "Prepared", i18n.t("Karten im Deck:") + " " + esc(", ".join(ctx["prepared_names"])),
             f'<div class="grid">{"".join(panels)}</div>')
 
     # ---------------- Ramp (Mana ausser Laendern)
@@ -685,38 +694,38 @@ def render_details(ctx, suffix="", switch=None):
         panels = []
         for l in labels:
             rp_ = res[l]["ramp"]
-            first = f'Runde {rp_["first_avg"]:.1f}' if rp_["first_avg"] is not None else "–"
-            kpi = (f'<div class="kpi"><div class="l">Spiele mit Ramp</div><div class="v">{h_pct(rp_["games"])}</div>'
-                   f'<div class="s">mehr Mana als Länder</div></div>'
-                   f'<div class="kpi"><div class="l">Erstmals Ø in</div><div class="v">{first}</div></div>'
-                   f'<div class="kpi"><div class="l">Ø Angriffe ausgelassen</div><div class="v">{rp_["held_back"]:.2f}</div>'
-                   f'<div class="s">Kreatur für Mana getappt</div></div>')
+            first = i18n.t("Runde {n}", n=f'{rp_["first_avg"]:.1f}') if rp_["first_avg"] is not None else "–"
+            kpi = (f'<div class="kpi"><div class="l">{i18n.t("Spiele mit Ramp")}</div><div class="v">{h_pct(rp_["games"])}</div>'
+                   f'<div class="s">{i18n.t("mehr Mana als Länder")}</div></div>'
+                   f'<div class="kpi"><div class="l">{i18n.t("Erstmals Ø in")}</div><div class="v">{first}</div></div>'
+                   f'<div class="kpi"><div class="l">{i18n.t("Ø Angriffe ausgelassen")}</div><div class="v">{rp_["held_back"]:.2f}</div>'
+                   f'<div class="s">{i18n.t("Kreatur für Mana getappt")}</div></div>')
             if rp_["treasure_made"]:
-                kpi += (f'<div class="kpi"><div class="l">Treasure Ø</div>'
+                kpi += (f'<div class="kpi"><div class="l">{i18n.t("Treasure Ø")}</div>'
                         f'<div class="v">{rp_["treasure_used"]:.2f} / {rp_["treasure_made"]:.2f}</div>'
-                        f'<div class="s">genutzt / erzeugt pro Spiel</div></div>')
+                        f'<div class="s">{i18n.t("genutzt / erzeugt pro Spiel")}</div></div>')
             turns = sorted(rp_["extra"])
-            table = h_table(["Runde"] + [str(t) for t in turns],
-                            [['<td class="l">Ø zusätzliches Mana</td>'] + [f'<td>{rp_["extra"][t]:.2f}</td>' for t in turns]])
+            table = h_table([i18n.t("Runde")] + [str(t) for t in turns],
+                            [['<td class="l">' + i18n.t("Ø zusätzliches Mana") + '</td>'] + [f'<td>{rp_["extra"][t]:.2f}</td>' for t in turns]])
             panels.append(f'<div class="panel"><b>{esc(l)}</b><div class="grid g4" style="margin:10px 0">{kpi}</div>'
                           f'{table}</div>')
-        add("ramp", "Ramp", "Mana außer Ländern – Karten im Deck: " + esc(", ".join(ctx["ramp_names"])),
+        add("ramp", "Ramp", i18n.t("Mana außer Ländern – Karten im Deck:") + " " + esc(", ".join(ctx["ramp_names"])),
             f'<div class="grid">{"".join(panels)}</div>')
 
     # ---------------- Tempo
     rows_t = []
     for l in labels:
         r = res[l]
-        for title, key in (("Hand komplett leer", "empty_hand"), ("Keine Zauber mehr auf der Hand", "empty_spells"),
-                           ("Top Card spielbar", "top")):
+        for title, key in ((i18n.t("Hand komplett leer"), "empty_hand"), (i18n.t("Keine Zauber mehr auf der Hand"), "empty_spells"),
+                           (i18n.t("Top Card spielbar"), "top")):
             if key == "top" and ctx["top_mv"] is None:
                 continue
             st = timing_stats(r[key], sims)
             rows_t.append([h_mode(l), f'<td class="l">{esc(title)}</td>'] +
                           ([f"<td>{st[0]:.1f}</td>", f"<td>{st[1]:.1f}</td>", h_bar_cell(st[2], cls=LABEL_CLASS.get(l, ""))] if st
                            else ['<td class="muted">–</td>'] * 2 + [h_bar_cell(0)]))
-    body = (f'<div class="panel">{h_table(["", "Ereignis", "Ø Runde", "Median", "Eintritt"], rows_t, left=(0, 1))}'
-            + (f'<div class="note">Top Card: {esc(", ".join(ctx["top_names"]))} (Manawert {ctx["top_mv"]}).</div>' if ctx["top_mv"] is not None else "")
+    body = (f'<div class="panel">{h_table(["", i18n.t("Ereignis"), i18n.t("Ø Runde"), i18n.t("Median"), i18n.t("Eintritt")], rows_t, left=(0, 1))}'
+            + ('<div class="note">' + i18n.t("Top Card: {names} (Manawert {n}).", names=esc(", ".join(ctx["top_names"])), n=ctx["top_mv"]) + '</div>' if ctx["top_mv"] is not None else "")
             + '</div>')
     add("tempo", "Tempo", "", body)
 
@@ -734,18 +743,18 @@ def render_html(ctx):
     multi = len(decks) > 1
     sections, nav_parts = [], []
     if multi:
-        cmp_body = h_section("vergleich", "Deck-Vergleich",
-                             f"Hauptdeck gegen {len(ctx['alts'])} Alternative(n), mit statistischer Einordnung der Unterschiede.",
+        cmp_body = h_section("vergleich", i18n.t("Deck-Vergleich"),
+                             i18n.t("Hauptdeck gegen {n} Alternative(n), mit statistischer Einordnung der Unterschiede.", n=len(ctx['alts'])),
                              render_compare_section(ctx), "hiw-vergleich")
         sections.append(cmp_body)
-        cmp_nav = [("vergleich", "Deck-Vergleich")]
+        cmp_nav = [("vergleich", i18n.t("Deck-Vergleich"))]
         btns = "".join(f'<button type="button" data-g="{i}" class="{"on" if i == 0 else ""}">{esc(d["name"])}</button>'
                        for i, d in enumerate(decks))
-        sections.append(f'<div class="grpbar"><b>Details für:</b> {btns}</div>')
+        sections.append('<div class="grpbar"><b>' + i18n.t("Details für:") + f'</b> {btns}</div>')
         for i, d in enumerate(decks):
             sec, nv = render_details(d, "" if i == 0 else f"-{i}", switch=(i, [x["name"] for x in decks]))
             sections.append(f'<div class="grp{" on" if i == 0 else ""}" data-g="{i}">'
-                            f'<h2 class="gh">Details: {esc(d["name"])}</h2>{"".join(sec)}</div>')
+                            f'<h2 class="gh">' + i18n.t("Details: {name}", name=esc(d["name"])) + f'</h2>{"".join(sec)}</div>')
             nav_parts.append(f'<div class="in grpnav{" on" if i == 0 else ""}" data-g="{i}">'
                              + "".join(f'<a href="#{k}">{esc(t)}</a>' for k, t in cmp_nav + nv) + "</div>")
         nav_html = "".join(nav_parts)
@@ -755,10 +764,10 @@ def render_html(ctx):
         nav_html = '<div class="in">' + "".join(f'<a href="#{k}">{esc(t)}</a>' for k, t in nv) + "</div>"
 
     present = {re.sub(r"-\d+$", "", sid) for sid in re.findall(r'<section id="([^"]+)"', "".join(sections))}
-    chips = ([f"Vergleich mit {len(ctx['alts'])} Alternative(n)"] if ctx.get("alts") else []) + (
-        [f"Seed {a.seed}"] if a.seed is not None else []) + [f"{sims} gespielte Spiele pro Modus", "Mulligan an" if mu0["on"] else "ohne Mulligan", f"Auswertung Runde {T}", f"Beobachtung bis Runde {H}",
-             f"{a.schaden} Schaden", f"Flood ab {a.flood} Ländern"]
-    missing_html = ('<div class="warnbox" style="margin-top:14px"><b>Nicht bei Scryfall gefunden (nicht simuliert):</b> '
+    chips = ([i18n.t("Vergleich mit {n} Alternative(n)", n=len(ctx['alts']))] if ctx.get("alts") else []) + (
+        [f"Seed {a.seed}"] if a.seed is not None else []) + [i18n.t("{n} gespielte Spiele pro Modus", n=sims), i18n.t("Mulligan an") if mu0["on"] else i18n.t("ohne Mulligan"), i18n.t("Auswertung Runde {n}", n=T), i18n.t("Beobachtung bis Runde {n}", n=H),
+             i18n.t("{n} Schaden", n=a.schaden), i18n.t("Flood ab {n} Ländern", n=a.flood)]
+    missing_html = ('<div class="warnbox" style="margin-top:14px"><b>' + i18n.t("Nicht bei Scryfall gefunden (nicht simuliert):") + '</b> '
                     + esc(", ".join(ctx["missing"])) + "</div>") if ctx.get("missing") else ""
     stamp = datetime.datetime.now().strftime("%d.%m.%Y %H:%M")
     help_html = render_help_view(present=present)
@@ -768,19 +777,21 @@ def render_html(ctx):
                            for i, d in enumerate(decks))
     else:
         kpi_html = f'<div class="sidekpi">{sidebar_kpis(ctx)}</div>'
-    side_html = (f'<h3>Kernzahlen</h3>{kpi_html}<div class="navsep"></div><h3>Abschnitte</h3>{nav_html}'
-                 f'<div class="navsep"></div><h3>Einstellungen</h3>'
+    side_html = (f'<h3>{i18n.t("Kernzahlen")}</h3>{kpi_html}<div class="navsep"></div><h3>{i18n.t("Abschnitte")}</h3>{nav_html}'
+                 f'<div class="navsep"></div><h3>{i18n.t("Einstellungen")}</h3>'
                  f'<div class="chips">{"".join(f"<span class=chip>{esc(c)}</span>" for c in chips)}</div>')
     css = HTML_CSS + symbols.symbol_css(symbols.used())
-    return (f'<!DOCTYPE html><html lang="de"><head><meta charset="utf-8">'
+    return (f'<!DOCTYPE html><html lang="{i18n.html_lang()}"><head><meta charset="utf-8">'
             f'<meta name="viewport" content="width=device-width,initial-scale=1">'
-            f'<title>{esc(ctx["name"])} – MTG Simulation</title><style>{css}</style></head><body>'
+            f'<title>{esc(ctx["name"])} – ' + i18n.t("MTG Simulation") + f'</title><style>{css}</style></head><body>'
             f'<header class="top" id="top"><h1>{esc(ctx["name"])}</h1>'
-            f'<span class="sub">Starthand-Simulation · erstellt am {stamp}</span>'
-            '<div class="views"><a href="#top" data-view="report" class="on">Bericht</a>'
-            '<a href="#hiw-start" data-view="help">So funktioniert es</a></div>' + FIGHT_BAR + '</header>'
+            '<span class="sub">' + i18n.t("Starthand-Simulation · erstellt am {stamp}", stamp=stamp) + '</span>'
+            '<div class="views"><a href="#top" data-view="report" class="on">' + i18n.t("Bericht") + '</a>'
+            '<a href="#hiw-start" data-view="help">' + i18n.t("So funktioniert es") + '</a></div>'
+            + i18n.tr_block(FIGHT_BAR, FIGHT_BAR_EN) + '</header>'
             f'<div class="view on" id="view-report"><div class="layout"><nav>{side_html}</nav>'
             f'<main>{missing_html}{"".join(sections)}</main></div></div>'
             f'{help_html}'
-            f'<footer>Erzeugt mit mtg_sim.py · Kartendaten von Scryfall</footer>'
-            + LAYOUT_JS + (SWITCH_JS if multi else "") + VIEW_JS + FIGHT_JS + '</body></html>')
+            '<footer>' + i18n.t("Erzeugt mit mtg_sim.py · Kartendaten von Scryfall") + '</footer>'
+            + LAYOUT_JS + (i18n.tr_block(SWITCH_JS, SWITCH_JS_EN) if multi else "") + VIEW_JS
+            + i18n.tr_block(FIGHT_JS, FIGHT_JS_EN) + '</body></html>')
