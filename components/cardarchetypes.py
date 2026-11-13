@@ -2,7 +2,8 @@
 
 Die Zuordnung steht je Kartenname in einer eigenen JSON-Datei (Standard kartenarchetypen.json, nicht im Git): eine
 Liste von Archetyp-Schluesseln, das sind die Farbpaare aus components/archetypes.py (z. B. ["BR", "RW"]). Eine Karte
-kann zu mehreren Archetypen passen.
+kann zu mehreren Archetypen passen. Ist einer davon der beste Archetyp der Karte, steht statt der Liste
+{"arch": [...], "best": "BR"} da (Knoepfe im Drafthelper: neutral -> gruen = gut -> lila = best).
 
 Erkennung (detect): Jede Nichtland-Karte zaehlt mit dem Gewicht ihrer Bewertung (Matchwinner 3, Splashworthy und MustPlay 2,
 unbewertet und Filler 1, NeverPlay 0) je Kopie
@@ -11,8 +12,11 @@ unbewertet und Filler 1, NeverPlay 0) je Kopie
 Erkannt ist der Archetyp mit den meisten Punkten, wenn er mindestens MIN_POINTS hat und allein vorn liegt; sonst ist
 der Archetyp noch offen. Eine eigene Wahl (manual) geht vor.
 
+Hinweis (hint): Karten ab MustPlay mit bestem Archetyp, wenn wir in ihm sind ("in": erkannt oder selbst gewaehlt) oder
+nahe dran ("near": er hat Punkte und liegt hoechstens NEAR_POINTS hinter dem besten Archetyp).
+
 Pack (rank): Punkte je Karte = Bewertung (Matchwinner 5, Splashworthy 4, MustPlay 3, unbewertet 1,5, Filler 1) + 3, wenn sie dem
-erkannten Archetyp zugeordnet ist, sonst + 1, wenn ihre Farben in dessen Farben liegen. NeverPlay hat immer 0.
+erkannten Archetyp zugeordnet ist (+ 4, wenn er ihr bester ist), sonst + 1, wenn ihre Farben in dessen Farben liegen. NeverPlay hat immer 0.
 """
 import json
 import os
@@ -23,8 +27,10 @@ from components.archetypes import PAIRS
 WEIGHT = {"matchwinner": 3, "splashworthy": 2, "mustplay": 2, "filler": 1, "neverplay": 0}  # unbewertet: 1
 POINTS = {"matchwinner": 5, "splashworthy": 4, "mustplay": 3, "filler": 1, "neverplay": 0}  # unbewertet: 1.5
 RATING_ORDER = {"matchwinner": -1, "splashworthy": 0, "mustplay": 1, "": 2, "filler": 3, "neverplay": 4}
-LEVEL_POINTS = {"arch": 3, "color": 1, "": 0}
+LEVEL_POINTS = {"best": 4, "arch": 3, "color": 1, "": 0}
 MIN_POINTS = 3
+NEAR_POINTS = 3
+HINT_RATINGS = ("matchwinner", "splashworthy", "mustplay")
 
 
 def _clean(pairs):
@@ -34,9 +40,17 @@ def _clean(pairs):
     return [p for p in PAIRS if p in pairs]
 
 
-def load_assign(path):
-    """{Kartenname: [Archetyp-Schluessel]}; fehlende oder kaputte Datei, unbekannte Schluessel und leere Listen
-    zaehlen nicht."""
+def _entry(value):
+    """(Archetypen, bester Archetyp oder "") eines Eintrags: Liste oder {"arch": [...], "best": "BR"}; der beste
+    Archetyp gehoert immer mit zur Zuordnung."""
+    if isinstance(value, dict):
+        best = value.get("best") if value.get("best") in PAIRS else ""
+        pairs = value.get("arch") if isinstance(value.get("arch"), list) else []
+        return _clean(pairs + ([best] if best else [])), best
+    return _clean(value), ""
+
+
+def _load(path):
     try:
         data = json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -44,35 +58,59 @@ def load_assign(path):
     if not isinstance(data, dict):
         return {}
     out = {}
-    for name, pairs in data.items():
-        clean = _clean(pairs)
-        if clean:
-            out[str(name)] = clean
+    for name, value in data.items():
+        pairs, best = _entry(value)
+        if pairs:
+            out[str(name)] = (pairs, best)
     return out
 
 
-def save_assign(path, data):
-    """Schreibt die Zuordnung alphabetisch sortiert und lesbar (erst in eine Hilfsdatei, dann ersetzen)."""
+def load_assign(path):
+    """{Kartenname: [Archetyp-Schluessel]}; fehlende oder kaputte Datei, unbekannte Schluessel und leere Listen
+    zaehlen nicht."""
+    return {n: pairs for n, (pairs, _best) in _load(path).items()}
+
+
+def load_best(path):
+    """{Kartenname: bester Archetyp} (nur Karten, bei denen einer gesetzt ist)."""
+    return {n: best for n, (_pairs, best) in _load(path).items() if best}
+
+
+def save_assign(path, data, best=None):
+    """Schreibt die Zuordnung alphabetisch sortiert und lesbar (erst in eine Hilfsdatei, dann ersetzen); Karten mit
+    bestem Archetyp (best: {Name: Schluessel}) als {"arch", "best"}, sonst als Liste."""
     path = pathlib.Path(path)
+    best = best or {}
+    out = {n: ({"arch": pairs, "best": best[n]} if best.get(n) in pairs else pairs)
+           for n, pairs in sorted(data.items(), key=lambda kv: kv[0].lower())}
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps(dict(sorted(data.items(), key=lambda kv: kv[0].lower())), ensure_ascii=False,
-                              indent=1) + "\n", encoding="utf-8")
+    tmp.write_text(json.dumps(out, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     os.replace(tmp, path)
 
 
-def set_assign(path, name, pairs):
-    """Setzt die Archetypen einer Karte; eine leere Liste entfernt sie. Gibt die ganze Zuordnung zurueck."""
+def set_assign(path, name, pairs, best=None):
+    """Setzt die Archetypen einer Karte; eine leere Liste entfernt sie. best: bester Archetyp (kommt mit in die
+    Zuordnung), "" entfernt ihn, None laesst ihn, solange er zugeordnet bleibt. Gibt die ganze Zuordnung zurueck."""
     if not name or not isinstance(name, str):
         raise ValueError("Kartenname fehlt")
     if not isinstance(pairs, list) or any(p not in PAIRS for p in pairs):
         raise ValueError("Unbekannter Archetyp")
-    data = load_assign(path)
+    if best not in (None, "") and best not in PAIRS:
+        raise ValueError("Unbekannter Archetyp")
+    loaded = _load(path)
+    data = {n: p for n, (p, _b) in loaded.items()}
+    bests = {n: b for n, (_p, b) in loaded.items() if b}
+    if best is not None:
+        bests.pop(name, None)
+        if best:
+            bests[name] = best
+            pairs = pairs + [best]
     clean = _clean(pairs)
     if clean:
         data[name] = clean
     else:
         data.pop(name, None)
-    save_assign(path, data)
+    save_assign(path, data, bests)
     return data
 
 
@@ -125,22 +163,41 @@ def archetype_map(archetypes, assign, picks, pack):
     return out
 
 
-def level(card, assign, main):
-    """"arch" (dem Archetyp zugeordnet), "color" (Farben passen) oder "" fuer eine Karte im Pack."""
+def level(card, assign, main, best=None):
+    """"best" (sein bester Archetyp), "arch" (dem Archetyp zugeordnet), "color" (Farben passen) oder "" fuer eine
+    Karte im Pack."""
     if not main:
         return ""
+    if (best or {}).get(card["name"]) == main:
+        return "best"
     if main in (assign or {}).get(card["name"], []):
         return "arch"
     return "color" if _fits(card.get("colors"), main) else ""
 
 
-def rank(pack, ratings, assign, main):
-    """Pack-Karten mit "rating", "arch", "level" und "points", nach Punkten sortiert (Gleichstand: Bewertung, Name)."""
+def near(detect, pair):
+    """"in", wenn pair der erkannte (oder selbst gewaehlte) Archetyp ist, "near", wenn er Punkte hat und hoechstens
+    NEAR_POINTS hinter dem besten liegt, sonst ""."""
+    if not detect or not pair:
+        return ""
+    if detect.get("main") == pair:
+        return "in"
+    scores = detect.get("scores") or []
+    mine = next((s["score"] for s in scores if s["colors"] == pair), 0)
+    top = max((s["score"] for s in scores), default=0)
+    return "near" if mine > 0 and mine >= top - NEAR_POINTS else ""
+
+
+def rank(pack, ratings, assign, main, best=None, detect=None):
+    """Pack-Karten mit "rating", "arch", "best", "level", "hint" und "points", nach Punkten sortiert (Gleichstand:
+    Bewertung, Name). hint nur mit detect (siehe Modulbeschreibung)."""
     out = []
     for c in pack:
         r = (ratings or {}).get(c["name"], "")
-        lv = level(c, assign, main)
+        lv = level(c, assign, main, best)
+        top = (best or {}).get(c["name"], "")
         points = 0 if r == "neverplay" else POINTS.get(r, 1.5) + LEVEL_POINTS[lv]
-        out.append(dict(c, rating=r, arch=list((assign or {}).get(c["name"], [])), level=lv, points=points))
+        out.append(dict(c, rating=r, arch=list((assign or {}).get(c["name"], [])), best=top, level=lv, points=points,
+                        hint=near(detect, top) if r in HINT_RATINGS else ""))
     out.sort(key=lambda c: (-c["points"], RATING_ORDER.get(c["rating"], 2), c["name"]))
     return out

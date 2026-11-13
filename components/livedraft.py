@@ -391,9 +391,10 @@ class LiveDraft:
         count = Counter(c["set"] for c in cards if c.get("set"))
         return count.most_common(1)[0][0] if count else None
 
-    def snapshot(self, ratings, assign, manual, cardstats=None):
+    def snapshot(self, ratings, assign, manual, cardstats=None, best=None):
         """Stand fuer die Seite und das Seitenfenster (siehe Modulbeschreibung); cardstats: Zahlen je Karte aus der
-        Draft-Statistik, sie kommen als "stats" an die Pack-Karten."""
+        Draft-Statistik, sie kommen als "stats" an die Pack-Karten; best: bester Archetyp je Karte (Hinweis "hints"
+        auf Karten ab MustPlay, wenn wir in ihrem besten Archetyp oder nahe dran sind)."""
         with self.lock:
             game = gamestate.game_view(self.game, {g: self._card(g) for g in self.game.deck if self._card(g)})
             if game.get("active"):
@@ -420,11 +421,15 @@ class LiveDraft:
         archmap = cardarchetypes.archetype_map(found, assign, [c["name"] for c in picks],
                                                [c["name"] for c in cardarchetypes.rank(pack, ratings, assign,
                                                                                       detect["main"])])
-        ranked = cardarchetypes.rank(pack, ratings, assign, detect["main"])
+        ranked = cardarchetypes.rank(pack, ratings, assign, detect["main"], best, detect)
         for c in ranked:
             c["stats"] = (cardstats or {}).get(c["name"])
         names = {c["name"] for c in pack + picks}
         complete = deck["ready"] or n_picks >= DRAFT_PICKS
+        arch_names = {a["colors"]: a["name"] for a in found or []}
+        hints = [] if complete or waiting else [
+            {"name": c["name"], "rating": c["rating"], "best": c["best"],
+             "best_name": arch_names.get(c["best"], c["best"]), "state": c["hint"]} for c in ranked if c["hint"]]
         deckinfo = None
         if complete:
             if main_deck is not None:
@@ -441,4 +446,5 @@ class LiveDraft:
                 "draftinfo": draftinfo, "archmap": archmap, "enemy_saved": self._saved(), "signals": sig,
                 "archetypes": found,
                 "cardarch": {n: v for n, v in (assign or {}).items() if n in names},
+                "cardbest": {n: v for n, v in (best or {}).items() if n in names}, "hints": hints,
                 "ratings": {n: v for n, v in (ratings or {}).items() if n in names}}

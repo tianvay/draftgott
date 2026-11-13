@@ -221,10 +221,10 @@ def checked_proposal(body, pool, marks, cats):
     return proposal
 
 
-def variant_entries(pool, marks, basics, cats, proposal=None, cardarch=None, cardstats=None):
+def variant_entries(pool, marks, basics, cats, proposal=None, cardarch=None, cardstats=None, cardbest=None):
     """Deck-Eintraege fuer Simulation und Kampf: die Varianten der Zuordnung, dazu ggf. der Deckvorschlag.
-    cardarch: Archetyp-Zuordnung je Kartenname, cardstats: Zahlen der Draft-Statistik je Kartenname (beides nur fuer
-    die Karten des Pools, fuer den Bericht)."""
+    cardarch: Archetyp-Zuordnung je Kartenname, cardstats: Zahlen der Draft-Statistik je Kartenname, cardbest: bester
+    Archetyp je Kartenname (alles nur fuer die Karten des Pools, fuer den Bericht)."""
     entries = entries_from_marks(pool, marks, basics, cats)
     if proposal:
         deck = dict(proposal["deck"])
@@ -233,8 +233,10 @@ def variant_entries(pool, marks, basics, cats, proposal=None, cardarch=None, car
     names = {c["name"] for c in pool}
     mine = {n: list(v) for n, v in (cardarch or {}).items() if n in names}
     stats = {n: dict(v) for n, v in (cardstats or {}).items() if n in names}
+    best = {n: v for n, v in (cardbest or {}).items() if n in names}
     for e in entries:
         e["cardarch"] = dict(mine)
+        e["cardbest"] = dict(best)
         e["cardstats"] = dict(stats)
     return entries
 
@@ -313,6 +315,7 @@ def make_handler(app):
                             "options": app["options"], "file": app["file"],
                             "signature": app["signature"], "archetypes": set_archetypes.info(app["pool"]),
                             "cardarch": {n: v for n, v in self._assign().items() if n in names},
+                            "cardbest": {n: v for n, v in self._best().items() if n in names},
                             "cardstats": {n: v for n, v in self._stats().items() if n in names},
                             "archsets": {code: [{"colors": a["colors"], "name": a["name"]} for a in lst]
                                          for code, lst in set_archetypes.ARCHETYPES.items()},
@@ -416,10 +419,10 @@ def make_handler(app):
             run_args = argparse.Namespace(**vars(app["args"]))
             run_args.sims, run_args.core = sims, "Core"  # core: Herkunft der Karten (Core/Splash/NoSplash) im Bericht
 
-            cardarch, cardstats = self._assign(), self._stats()
+            cardarch, cardstats, cardbest = self._assign(), self._stats(), self._best()
 
             def work(progress):
-                entries = variant_entries(pool, marks, basics, cats, proposal, cardarch, cardstats)
+                entries = variant_entries(pool, marks, basics, cats, proposal, cardarch, cardstats, cardbest)
                 html = app["simulate"](entries, run_args, progress)
                 app["save"](html, run_args)
                 app["report_html"] = html
@@ -466,6 +469,10 @@ def make_handler(app):
             """Archetyp-Zuordnung aller Karten (aus der Datei, leer ohne Datei)."""
             return cardarchetypes.load_assign(app["cardarch"]) if app.get("cardarch") else {}
 
+        def _best(self):
+            """Bester Archetyp je Karte (aus derselben Datei, leer ohne Datei)."""
+            return cardarchetypes.load_best(app["cardarch"]) if app.get("cardarch") else {}
+
         def _known_names(self):
             """Karten, die bewertet und zugeordnet werden duerfen: Pool, Live-Draft und geladene Set-Karten."""
             names = {c["name"] for c in app["pool"]} | app.get("setnames", set())
@@ -483,7 +490,8 @@ def make_handler(app):
             if not app.get("live"):
                 return {"status": "off", "message": "Kein Live-Draft (Drafthelper mit --live starten)."}
             ratings = card_ratings.load_ratings(app["ratings"]) if app.get("ratings") else {}
-            return app["live"].snapshot(ratings, self._assign(), app.get("live_manual"), self._stats())
+            return app["live"].snapshot(ratings, self._assign(), app.get("live_manual"), self._stats(),
+                                        self._best())
 
         def _card_archetype(self, path):
             """Archetypen einer Karte speichern (/api/cardarch) bzw. den Archetyp des Live-Drafts selbst festlegen
@@ -502,11 +510,14 @@ def make_handler(app):
                 name = body.get("name")
                 if name not in self._known_names():
                     raise ValueError("Unbekannte Karte")
-                data = cardarchetypes.set_assign(app["cardarch"], name, body.get("arch") or [])
+                best = body.get("best")
+                if best is not None and not isinstance(best, str):
+                    raise ValueError("Unbekannter Archetyp")
+                data = cardarchetypes.set_assign(app["cardarch"], name, body.get("arch") or [], best)
             except (ValueError, TypeError, OSError) as exc:
                 self._json({"ok": False, "error": str(exc)}, 400)
                 return
-            self._json({"ok": True, "cardarch": data})
+            self._json({"ok": True, "cardarch": data, "cardbest": self._best()})
 
         def _set_cards(self, query):
             """Alle Karten eines Sets (Scryfall) fuer die Set-Ansicht: Bewertung und Archetypen vorab festlegen."""
@@ -522,6 +533,7 @@ def make_handler(app):
             ratings = card_ratings.load_ratings(app["ratings"]) if app.get("ratings") else {}
             self._json({"ok": True, "set": code.upper(), "cards": cards,
                         "cardarch": {n: v for n, v in self._assign().items() if n in names},
+                        "cardbest": {n: v for n, v in self._best().items() if n in names},
                         "cardstats": {n: v for n, v in self._stats().items() if n in names},
                         "ratings": {n: v for n, v in ratings.items() if n in names}})
 
@@ -537,7 +549,7 @@ def make_handler(app):
                 try:
                     marks, basics, cats = parse_state(body, pool)
                     entries = variant_entries(pool, marks, basics, cats, checked_proposal(body, pool, marks, cats),
-                                              self._assign(), self._stats())
+                                              self._assign(), self._stats(), self._best())
                 except (ValueError, KeyError, TypeError) as e:
                     self._json({"ok": False, "error": str(e)}, 400)
                     return
@@ -814,6 +826,12 @@ h2 small{color:var(--muted);font-weight:400}
 .achips button .m.ms{margin:0;width:11px;height:11px;vertical-align:middle}
 .achips button.on{background:#e3f4ea;border-color:#2e9e5b;color:#146c3d;font-weight:700}
 .achips button.main{box-shadow:0 0 0 2px #2e9e5b}
+.achips button.best{background:#f1e4fb;border-color:#8e2bd6;color:#5b1d99;font-weight:700;animation:bestpulse 1.6s ease-in-out infinite}
+.achips button.best.main{box-shadow:0 0 0 2px #8e2bd6}
+@keyframes bestpulse{0%,100%{box-shadow:0 0 0 1px #8e2bd6aa}50%{box-shadow:0 0 0 3px #c77dffcc}}
+@keyframes bestglow{0%,100%{border-color:#8e2bd6;box-shadow:0 0 0 3px #8e2bd655}50%{border-color:#c77dff;box-shadow:0 0 0 6px #c77dff88}}
+.tile.a-best{outline:3px solid #8e2bd6;outline-offset:1px;animation:bestglow 1.6s ease-in-out infinite}
+.tile.a-best .abadge,.mtile.lv-best .abadge{display:block;background:#7b2fbf}
 .abadge{position:absolute;top:6px;right:6px;border-radius:999px;padding:2px 8px;font-size:11.5px;font-weight:700;
   color:#fff;background:#1f7a45;box-shadow:0 1px 3px rgba(0,0,0,.35);display:none}
 .tile.a-main .abadge,.mtile.lv-arch .abadge{display:block}
@@ -876,6 +894,15 @@ h2 small{color:var(--muted);font-weight:400}
 .mtile{background:var(--card);border:3px solid var(--line);border-radius:12px;padding:6px;position:relative}
 .mtile.lv-arch{border-color:#2e9e5b;box-shadow:0 0 0 3px #2e9e5b55;background:#f2fbf5}
 .mtile.lv-color{border-color:#9fc5ae}
+.mtile.lv-best{border-color:#8e2bd6;background:#f8f0fd;animation:bestglow 1.6s ease-in-out infinite}
+.mtile.lv-best .why{color:#5b1d99}
+.mtile.hint .rank{background:#8e2bd6}
+#lhint{display:none;margin:10px 0 0;padding:8px 12px;border:2px solid #8e2bd6;border-radius:10px;background:#f6ecfd;
+  color:#3d1166;font-size:14px;animation:bestglow 1.6s ease-in-out infinite}
+#lhint.show{display:block}
+#lhint b{color:#5b1d99}
+#lhint div+div{margin-top:3px}
+@media (prefers-reduced-motion:reduce){.achips button.best,.tile.a-best,.mtile.lv-best,#lhint{animation:none}}
 .mtile.c-neverplay img{filter:grayscale(.75)}
 .mtile img{width:100%;display:block;border-radius:8px;cursor:zoom-in;aspect-ratio:488/680;background:#e9edf3}
 .mtile .rank{position:absolute;top:-9px;left:-9px;background:var(--ink);color:#fff;border-radius:999px;width:24px;
@@ -922,6 +949,7 @@ h2 small{color:var(--muted);font-weight:400}
       <label class="filter">Archetyp <select id="lmanual" title="Automatisch erkennen oder selbst festlegen"></select></label>
       <div class="lscores" id="lscores"></div>
       <button class="btn" id="ldeck" title="Schreibt das in Arena abgegebene Deck (Deck und Sideboard) in die Kartenpool-Datei">Deck + Sideboard übernehmen</button></div>
+    <div id="lhint" title="Karten ab Must Play, deren bester Archetyp (lila Knopf unter der Karte) dein Archetyp ist oder nahe dran (höchstens 3 Punkte hinter dem besten)"></div>
     <div id="linfo"></div>
     <div id="lsignals" title="Offene Farben: starke Karten (Must Play oder höher), die zurückkommen oder spät im Pack liegen; umkämpft: starke Karten, die andere genommen haben"></div>
     <div id="lmap"></div>
@@ -930,7 +958,7 @@ h2 small{color:var(--muted);font-weight:400}
     <div class="mgrid" id="lpack"></div>
     <div class="ltipbox" id="ltipbox"><h3 id="ltiphead"></h3><ul class="ltips" id="ltips"></ul></div>
     <div class="lmsg">Reihenfolge: Kategorie (★ 4, MP 3, ohne 1,5, Fi 1, NP immer 0) + 3, wenn die Karte dem
-      Archetyp zugeordnet ist (grün), sonst + 1, wenn ihre Farben passen (hellgrün). Archetyp: aus deinen Picks
+      Archetyp zugeordnet ist (grün), + 4, wenn er ihr bester ist (lila), sonst + 1, wenn ihre Farben passen (hellgrün). Archetyp: aus deinen Picks
       (Farben, Zuordnung, Kategorien), siehe <a href="/howitworks.html#hiw-live" target="_blank">So funktioniert es</a>.
       Die Picks landen in der Kartenpool-Datei, die Karten unten zeigen den Pool.</div></section>
   <details class="help" id="archetypes" open><summary id="archtitle">Archetypen</summary>
@@ -1110,14 +1138,16 @@ function tile(t){
   const o0=el("option",null,"Kategorie: –");o0.value="";sel.appendChild(o0);
   for(const c of CATS){const o=el("option",null,c.abbr+" "+c.label);o.value=c.key;o.title=c.hint;sel.appendChild(o)}
   sel.onchange=()=>setCat(t.card.name,sel.value);t.sel=sel;d.appendChild(sel);
-  w.appendChild(el("div","abadge","Archetyp"));
+  t.ab=el("div","abadge","Archetyp");w.appendChild(t.ab);
   t.chips=archChips(t.card);if(t.chips)d.appendChild(t.chips);
   paint(t);return d;
 }
 function paint(t){
   const k=catOf(t.card.name),c=CATS.find(x=>x.key===k),f=$("catfilter").value;
   const hidden=(f&&(f==="none"?k:k!==f))||(searchQ&&!((t.card.name+" "+(t.card.type||"")).toLowerCase().includes(searchQ)));
-  t.node.className="tile m-"+t.mark+(k?" c-"+k:"")+(mainArch()&&(cardarch[t.card.name]||[]).includes(mainArch())?" a-main":"");
+  const isBest=!!mainArch()&&cardbest[t.card.name]===mainArch();
+  t.node.className="tile m-"+t.mark+(k?" c-"+k:"")+(mainArch()&&(cardarch[t.card.name]||[]).includes(mainArch())?" a-main":"")+(isBest?" a-best":"");
+  if(t.ab)t.ab.textContent=isBest?"Bester Archetyp":"Archetyp";
   if(t.chips)paintChips(t.chips,t.card);
   t.badge.textContent=c?c.abbr+" "+c.label:"";t.badge.style.display=c?"":"none";
   t.sel.value=k;
@@ -1674,7 +1704,7 @@ function statLine(st){
   d.append("Gedraftet "+st.drafted+" · Deck "+st.decks);
   if(st.games){d.append(" · ");d.appendChild(el("b",null,Math.round(100*st.wins/st.games)+" %"));d.append(" in "+st.games+" G.")}
   return d}
-let cardarch={},archsets={},poolDetect=null,detectTimer=null,live=null,liveJson="",liveVersion=0,setCards=[];
+let cardarch={},cardbest={},archsets={},poolDetect=null,detectTimer=null,live=null,liveJson="",liveVersion=0,setCards=[];
 const RATING_SHORT={matchwinner:"♛ Matchwinner",splashworthy:"★ Splashworthy",mustplay:"MP MustPlay",filler:"Fi Filler",neverplay:"NP NeverPlay"};
 // Archetyp, nach dem hervorgehoben wird: im Live-Draft der des Drafts, sonst der aus den Core-Karten erkannte
 function mainArch(){return live&&live.detect?live.detect.main:(poolDetect?poolDetect.main:null)}
@@ -1682,39 +1712,46 @@ function archName(colors){for(const list of Object.values(archsets)){const a=lis
   return colors}
 function archChips(card){
   const list=archsets[(card.set||"").toLowerCase()];if(!list)return null;
-  const box=el("div","achips");box.title="Archetypen dieser Karte (mehrere möglich, gilt für alle Pools)";
+  const box=el("div","achips");box.title="Archetypen dieser Karte (mehrere möglich, gilt für alle Pools). Klick: neutral → grün (passt gut) → lila (bester Archetyp, nur einer) → neutral";
   for(const a of list){const b=el("button");b.dataset.a=a.colors;b.title=a.name;
     [...a.colors].forEach(c=>b.appendChild(manaSym(c)||document.createTextNode(c)));
     b.onclick=()=>toggleArch(card.name,a.colors);box.appendChild(b)}
   paintChips(box,card);return box}
-function paintChips(box,card){const mine=cardarch[card.name]||[],m=mainArch();
-  box.querySelectorAll("button").forEach(b=>{b.classList.toggle("on",mine.includes(b.dataset.a));
-    b.classList.toggle("main",b.dataset.a===m)})}
+function paintChips(box,card){const mine=cardarch[card.name]||[],m=mainArch(),top=cardbest[card.name]||"";
+  box.querySelectorAll("button").forEach(b=>{const a=b.dataset.a;b.classList.toggle("on",mine.includes(a)&&a!==top);
+    b.classList.toggle("best",a===top);b.classList.toggle("main",a===m);
+    const nm=b.dataset.n||(b.dataset.n=b.title);b.title=nm+(a===top?" · bester Archetyp":mine.includes(a)?" · passt gut":"")})}
+// Drei Stufen je Archetyp: neutral -> gruen (zugeordnet) -> lila (bester, hoechstens einer je Karte) -> neutral
 async function toggleArch(name,colors){
-  const mine=cardarch[name]||[],next=mine.includes(colors)?mine.filter(x=>x!==colors):[...mine,colors];
-  let r=null;try{r=await api("/api/cardarch",{name,arch:next})}catch(e){}
+  const mine=cardarch[name]||[],top=cardbest[name]||"";let next=mine,best=top;
+  if(top===colors){next=mine.filter(x=>x!==colors);best=""}
+  else if(mine.includes(colors))best=colors;  // bisher bester wird wieder gruen
+  else next=[...mine,colors];
+  let r=null;try{r=await api("/api/cardarch",{name,arch:next,best})}catch(e){}
   if(!r||!r.ok){showErr("Archetyp nicht gespeichert: "+((r&&r.error)||"Fehler"));return}
-  cardarch=r.cardarch||{};state.forEach(paint);scheduleDetect();renderAux();if(live)pollLive(true)}
+  cardarch=r.cardarch||{};cardbest=r.cardbest||{};state.forEach(paint);scheduleDetect();renderAux();if(live)pollLive(true)}
 function scheduleDetect(){clearTimeout(detectTimer);detectTimer=setTimeout(loadDetect,250)}
 async function loadDetect(){
   if(!archetypes){poolDetect=null;return}
   try{const r=await api("/api/archdetect",{marks:marksPerCard(),basics:basicsBody(),cats});
     if(r.ok){poolDetect=r.detect;renderArchetypes();if(!live)state.forEach(paint)}}catch(e){}}
 function miniTile(c,info){
-  const k=catOf(c.name),d=el("div","mtile"+(info.level?" lv-"+info.level:"")+(k?" c-"+k:""));
+  const k=catOf(c.name),d=el("div","mtile"+(info.level?" lv-"+info.level:"")+(k?" c-"+k:"")+(c.hint?" hint":""));
   if(info.rank)d.appendChild(el("div","rank",String(info.rank)));
   const w=el("div","imgw");
   if(c.image){const im=el("img");im.src=c.image;im.alt=c.name;im.loading="lazy";
     im.onclick=()=>{$("lightbox").querySelector("img").src=c.large||c.image;$("lightbox").classList.add("show")};w.appendChild(im)}
   else w.appendChild(el("div","ph",c.name));
   const badge=el("div","badge",k?RATING_SHORT[k]:"");badge.style.display=k?"":"none";w.appendChild(badge);
-  w.appendChild(el("div","abadge","Archetyp"));d.appendChild(w);
+  w.appendChild(el("div","abadge",info.level==="best"?"Bester Archetyp":"Archetyp"));d.appendChild(w);
   const cap=el("div","cap");cap.appendChild(el("b",null,c.name));
   if(info.points!=null)cap.appendChild(el("span","pts",String(info.points).replace(".",",")+" P."));d.appendChild(cap);
   if(c.removal){const rt=el("span","rtag","Removal "+String(c.removal).replace(".",","));
     rt.title="Removal-Punkte der Karte (wie im Bericht)";cap.appendChild(rt)}
   const stl=statLine(c.stats||cardstats[c.name]);if(stl)d.appendChild(stl);
   if(info.level==="arch")d.appendChild(el("div","why","passt zu "+archName(mainArch())));
+  if(info.level==="best")d.appendChild(el("div","why","am besten in "+archName(mainArch())));
+  else if(c.hint==="near")d.appendChild(el("div","why","◆ am besten in "+archName(c.best)+" (nahe dran)"));
   const mine=cardarch[c.name]||[];
   if(info.rank&&mine.length)d.appendChild(el("div","anames","Archetyp: "+mine.map(archName).join(" · ")));
   const sel=el("select","catsel");sel.title="Kategorie dieser Karte";
@@ -1728,7 +1765,7 @@ function renderAux(){renderLive();renderSet()}
 async function pollLive(once){
   let r=null;try{r=await (await fetch("/api/live")).json()}catch(e){}
   if(r){if(r.version!==undefined&&r.version!==liveVersion){location.reload();return}
-    Object.assign(cardarch,r.cardarch||{});for(const [n,v] of Object.entries(r.ratings||{}))cats[n]=v;
+    Object.assign(cardarch,r.cardarch||{});Object.assign(cardbest,r.cardbest||{});for(const [n,v] of Object.entries(r.ratings||{}))cats[n]=v;
     const j=JSON.stringify(r);if(j!==liveJson){liveJson=j;live=r;renderLive();state.forEach(paint)}}
   if(!once)setTimeout(()=>pollLive(false),1500)}
 function renderLive(){
@@ -1757,12 +1794,19 @@ function renderLive(){
   const a=live.complete?null:(live.archetypes||[]).find(x=>x.colors===m);  // nur waehrend des Drafts
   if(a)a.tips.forEach(t=>tips.appendChild(el("li",null,t)));
   $("ltiphead").textContent=a?"Tipps zu "+a.name:"";$("ltipbox").classList.toggle("show",!!(a&&a.tips.length));
-  renderInfo();renderSignals();renderMap();renderGame();
+  renderHints();renderInfo();renderSignals();renderMap();renderGame();
   const g=$("lpack");g.textContent="";
   if(live.game&&live.game.active)return;
   (live.pack||[]).forEach((c,i)=>g.appendChild(miniTile(c,{level:c.level,points:c.points,rank:i+1})))}
 const num=x=>String(Math.round(x*100)/100).replace(".",",");
 const pc=p=>p<=0?"0 %":p<0.005?"< 1 %":Math.round(p*100)+" %";
+// Top-Picks (cardarchetypes.near): Karten ab MustPlay in ihrem besten Archetyp oder nahe dran
+function renderHints(){
+  const box=$("lhint"),h=(live.game&&live.game.active)||live.complete?[]:(live.hints||[]);box.textContent="";
+  box.classList.toggle("show",h.length>0);
+  for(const x of h){const d=el("div");d.append("◆ Top-Pick: ");d.appendChild(el("b",null,x.name));
+    d.append(" ("+(RATING_SHORT[x.rating]||x.rating)+") – am besten in "+x.best_name+
+      (x.state==="in"?", deinem Archetyp":" – du bist nahe dran"));box.appendChild(d)}}
 // Kennzahlen der Picks (livedraft.pool_info): gesamt und in den Farben des Archetyps
 function renderInfo(){
   const box=$("linfo");box.textContent="";const i=live.draftinfo;
@@ -1839,7 +1883,6 @@ function renderTricks(box,t){
   if(!t.open)d.appendChild(el("div","lmsg","Kein Mana offen: jetzt keine Tricks."));
   else if(!t.now.length)d.appendChild(el("div","lmsg","Keine Instants oder Flash-Karten mit diesem Mana."));
   else d.appendChild(list(t.now));
-  if(t.next&&t.next.length){d.appendChild(el("div","lmsg","Nächster Gegnerzug (alle Länder + 1) zusätzlich:"));d.appendChild(list(t.next,"next"))}
   box.appendChild(d)}
 $("ldeck").onclick=async()=>{let r=null;try{r=await api("/api/live/deck",{})}catch(e){}
   if(!r||!r.ok){showErr("Deck nicht übernommen: "+((r&&r.error)||"Fehler"));return}
@@ -1854,7 +1897,7 @@ async function loadSet(){
   $("setnote").textContent="Lade Set "+code.toUpperCase()+" von Scryfall …";$("setgrid").textContent="";
   let r=null;try{r=await (await fetch("/api/setcards?set="+encodeURIComponent(code))).json()}catch(e){}
   if(!r||!r.ok){$("setnote").textContent="Set konnte nicht geladen werden: "+((r&&r.error)||"Fehler");return}
-  setCards=r.cards;Object.assign(cardarch,r.cardarch||{});Object.assign(cardstats,r.cardstats||{});for(const [n,v] of Object.entries(r.ratings||{}))cats[n]=v;
+  setCards=r.cards;Object.assign(cardarch,r.cardarch||{});Object.assign(cardbest,r.cardbest||{});Object.assign(cardstats,r.cardstats||{});for(const [n,v] of Object.entries(r.ratings||{}))cats[n]=v;
   renderSet()}
 function renderSet(){
   if(!$("setview").classList.contains("show"))return;
@@ -1901,7 +1944,7 @@ $("quit").onclick=async()=>{if(!confirm("Draft-Helper beenden?"))return;
   document.body.innerHTML="<main><h2>Draft-Helper wurde beendet.</h2><p>Du kannst dieses Fenster jetzt schließen.</p></main>"};
 (async()=>{
   const d=await api("/api/pool");pool=d.cards;archetypes=d.archetypes||null;
-  cardarch=d.cardarch||{};archsets=d.archsets||{};cardstats=d.cardstats||{};liveVersion=d.pool_version||0;
+  cardarch=d.cardarch||{};cardbest=d.cardbest||{};archsets=d.archsets||{};cardstats=d.cardstats||{};liveVersion=d.pool_version||0;
   try{if(localStorage.getItem("dh-archclosed")==="1")$("archetypes").open=false}catch(e){}
   $("archetypes").addEventListener("toggle",()=>{try{localStorage.setItem("dh-archclosed",$("archetypes").open?"0":"1")}catch(e){}});
   // Speicherstand je Inhalt der Pool-Datei: ein anderer Kartenpool startet mit den Vorgaben der Datei

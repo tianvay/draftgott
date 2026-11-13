@@ -146,8 +146,8 @@ class OverlayTests(unittest.TestCase):
         text = "\n".join(r[0] for r in rows)
         self.assertIn("Gegner offen 2", text)
         self.assertIn("Trick 1W", text)
-        self.assertIn("Nächster Gegnerzug", text)
-        self.assertIn("Bolt R", text)
+        self.assertNotIn("Nächster Gegnerzug", text)  # Nutzer 13.11.2026: nur Tricks mit jetzt offenem Mana
+        self.assertNotIn("Bolt R", text)
         self.assertLess(text.index("Trick 1W"), text.index("Chance nächste Karte"))  # Tricks oben
         self.assertTrue(all(ord(ch) <= 0xFFFF for r in rows for ch in r[0]))
 

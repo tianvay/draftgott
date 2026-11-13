@@ -349,8 +349,13 @@ def _live_help():
         + _panel("Aktuelles Pack", _ul([
             "Oben auf der Seite steht das Pack, aus dem du gerade wählst, als Rangliste. Punkte je Karte: Kategorie "
             "(♛ Matchwinner 5, ★ Splashworthy 4, MustPlay 3, ohne Kategorie 1,5, Filler 1) + 3, wenn die Karte dem Archetyp "
-            "zugeordnet ist (grün hervorgehoben, „passt zu …“), sonst + 1, wenn ihre Farben in den Farben des "
+            "zugeordnet ist (grün hervorgehoben, „passt zu …“), + 4, wenn er ihr bester Archetyp ist (lila, "
+            "pulsierender Rand, „am besten in …“), sonst + 1, wenn ihre Farben in den Farben des "
             "Archetyps liegen (hellgrün). NeverPlay hat immer 0 Punkte.",
+            "<b>Top-Pick</b>: Eine Karte ab MustPlay, deren bester Archetyp dein Archetyp ist (erkannt oder selbst "
+            "gewählt) oder bei der du nahe dran bist (ihr bester Archetyp hat Punkte und liegt höchstens 3 Punkte "
+            "hinter dem führenden), steht lila und pulsierend oben im Live-Bereich („◆ Top-Pick: …“) und blinkend "
+            "oben im Seitenfenster, auch im minimierten Kasten.",
             "Kategorie und Archetypen lassen sich direkt an den Pack-Karten festlegen; das gilt sofort.",
             "Pick Two: beide gewählten Karten zählen als Picks."]))
         + _panel("Kennzahlen der Picks", _ul([
@@ -368,7 +373,12 @@ def _live_help():
             "Es zählt nur deine eigene Zuordnung (Knöpfe unter den Karten, kartenarchetypen.json): Karten ohne "
             "Zuordnung gehören keinem Archetyp an, eine Karte kann zu mehreren gehören. Archetypen ohne Karten "
             "fehlen.",
-            "Pack-Karten nennen ihre Archetypen zusätzlich unter dem Namen."]))
+            "Pack-Karten nennen ihre Archetypen zusätzlich unter dem Namen.",
+            "<b>Drei Stufen</b> je Archetyp-Knopf: Klick schaltet neutral → grün (passt gut) → lila (bester "
+            "Archetyp) → neutral. Eine Karte hat höchstens einen besten Archetyp; wird ein anderer lila, wird der "
+            "bisherige wieder grün. Der beste zählt wie eine Zuordnung, im Pack mit + 4 statt + 3. Im Pool trägt "
+            "eine Karte, deren bester Archetyp der erkannte ist, einen lila pulsierenden Rahmen. Der Bericht nennt "
+            "im Archetyp-Kasten „Am besten in …“."]))
         + _panel("Offene Farben", _ul([
             "Während des Drafts zeigen Live-Bereich und Seitenfenster, welche Farben offen sind („Signale (Pick Two): "
             "R offen +3 · G umkämpft −2“). Stark ist eine Karte mit deiner Kategorie MustPlay oder höher "
@@ -388,8 +398,7 @@ def _live_help():
             "die der Gegner mit seinen ungetappten Ländern jetzt wirken könnte, mit Kosten, deiner Kategorie und "
             "Removal-Punkten. Aktivierbare Fähigkeiten auf dem Feld zählen nicht, ebenso wenig Mana aus Kreaturen "
             "oder Treasure.",
-            "Darunter, was im <b>nächsten Gegnerzug</b> zusätzlich möglich wird: alle seine Länder ungetappt und ein "
-            "weiteres Land in einer seiner Farben. Die Liste ändert sich mit jedem Land, das er spielt oder tappt.",
+            "Die Liste ändert sich mit jedem Land, das er spielt oder tappt.",
             "Gegnerfarben: Hat der Gegner Zauber in mindestens zwei Farben offen gezeigt, kommen nur Tricks in diesen "
             "Farben und in den Farben seiner Standardländer in Frage (ein Tri-Land zeigt sonst Farben, die er gar "
             "nicht spielt). Farblose Tricks gehen immer.",
@@ -441,7 +450,8 @@ def _live_help():
             "stehen die Hinweise zum Archetyp und die Punkte der führenden Archetypen."]))
         + _panel("Seitenfenster", _ul([
             "Startet mit dem Live-Draft (abschalten mit <code>--kein-overlay</code>): ein kleines Fenster, das immer im "
-            "Vordergrund bleibt, mit Pick-Nummer, Archetyp und der Rangliste des Packs (● dem Archetyp zugeordnet, "
+            "Vordergrund bleibt, mit Pick-Nummer, Archetyp und der Rangliste des Packs (◆ bester Archetyp der "
+            "Karte, ● dem Archetyp zugeordnet, "
             "○ Farben passen, dazu Farben, Kategorie und zugeordnete Archetypen).",
             "Arena dafür im Fenster oder im randlosen Vollbild spielen; über exklusivem Vollbild liegt kein Fenster. "
             "Das Fenster lässt sich verschieben und schließt sich, wenn der Drafthelper beendet wird. Einzeln: "

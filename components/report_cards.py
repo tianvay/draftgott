@@ -233,8 +233,18 @@ def _assignment_html(ctx, archetypes):
     detected = (f'<b>{esc(main["name"])}</b> ({main["score"]} Punkte)' if main else
                 'noch offen (kein Archetyp liegt allein vorn mit mindestens '
                 f'{cardarch.MIN_POINTS} Punkten)')
+    names = {c["name"] for c in cards if not c["land"]}
+    best = {}
+    for n, pair in sorted((ctx.get("cardbest") or {}).items()):
+        if n in names:
+            best.setdefault(pair, []).append(n)
+    by_name = {s["colors"]: s["name"] for s in found["scores"]}
+    best_html = "".join(
+        f'<div style="margin-top:4px"><b style="color:#7b2fbf">Am besten in {esc(by_name.get(p, p))}:</b> '
+        + ", ".join(esc(n) for n in lst) + "</div>"
+        for p, lst in sorted(best.items(), key=lambda kv: (kv[0] != found["main"], -len(kv[1]), kv[0])))
     return ('<div style="margin-top:10px"><b>Deine Zuordnung:</b> ' + " · ".join(counts) + '</div>'
-            f'<div style="margin-top:4px">Erkannt aus Zuordnung, Farben und Kategorien: {detected}</div>')
+            f'<div style="margin-top:4px">Erkannt aus Zuordnung, Farben und Kategorien: {detected}</div>' + best_html)
 
 
 def render_stats_panel(ctx):

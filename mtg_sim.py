@@ -64,7 +64,7 @@ def build_deck(entry, data, args):
     return dict(
         double_pips=double_pip_colors(nonlands), pip_checks=pip_checks(nonlands),
         name=entry["name"], deck=entry["deck"], parts=entry.get("parts", []), rows=rows, cards=cards, missing=missing,
-        cats=entry.get("cats", {}), cardarch=entry.get("cardarch", {}), cardstats=entry.get("cardstats", {}), role=entry.get("role"), coverage=coverage, info=info,
+        cats=entry.get("cats", {}), cardarch=entry.get("cardarch", {}), cardbest=entry.get("cardbest", {}), cardstats=entry.get("cardstats", {}), role=entry.get("role"), coverage=coverage, info=info,
         n_lands=len(cards) - len(nonlands),
         avg_mv=sum(c.mv for c in nonlands) / len(nonlands) if nonlands else 0,
         unsure=sorted({n for n, _, c, _ in rows if c.is_land and c.tap_mode == "tapped?"}),

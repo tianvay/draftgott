@@ -226,8 +226,7 @@ In Arena muss unter Optionen → Konto „Detailed Logs (Plugin Support)“ eing
   (hypergeometrisch), dazu übriges Removal (Karten und Punkte). Gilt für jedes Spiel (`components/gamestate.py`).
   „Spielbar“: Karten, die mit den eigenen Ländern auf dem Spielfeld bezahlbar sind (Haken an der Karte).
 - **Im Spiel: Tricks bei offenem Mana:** Oben in der Spielansicht alle Instants und Flash-Karten des Sets, die der
-  Gegner mit seinen ungetappten Ländern jetzt wirken könnte, dazu was im nächsten Gegnerzug (alle Länder + 1)
-  zusätzlich geht. Hat er Zauber in mindestens zwei Farben gezeigt, nur Tricks in diesen Farben (und denen seiner
+  Gegner mit seinen ungetappten Ländern jetzt wirken könnte. Hat er Zauber in mindestens zwei Farben gezeigt, nur Tricks in diesen Farben (und denen seiner
   Standardländer). Aktivierbare Fähigkeiten zählen nicht (`components/tricks.py`).
 - **Offene Farben:** Signale im Draft (`components/signals.py`): eine starke Karte (MustPlay oder höher), die mit dem
   Pack zurückkommt (Wheel, +2), spät im Pack liegt (mindestens 3 andere Spieler, +1) oder von anderen genommen wurde

@@ -5,7 +5,10 @@ Holt ein Deck seinen 4. Sieg (Gegnerdeck gespeichert), feiert das Fenster kurz m
 (celebrate) und meldet die Aufnahme in die "Hall of Game" der Gegnerdecks.
 
 Der Knopf oben rechts (oder ein Doppelklick ins Fenster) minimiert es zu einem kleinen Kasten (mini_rows): im Spiel
-nur die Chancen auf Removal, Land und Kreatur, im Draft Pick, Archetyp und beste Karte. Noch einmal klicken klappt es
+nur die Chancen auf Removal, Land und Kreatur, im Draft Pick, Archetyp und beste Karte.
+
+Top-Pick (hint_rows): Karten ab MustPlay, deren bester Archetyp unserer ist oder nahe dran (snap["hints"]), stehen
+lila und blinkend oben; im Pack steht vor ihnen ◆. Noch einmal klicken klappt es
 wieder auf. Arena muss dafuer im Fenster oder im randlosen Vollbild laufen; ueber exklusivem Vollbild liegt kein Fenster.
 Nur Standardbibliothek (tkinter). Das Fenster schliesst sich, wenn der Drafthelper beendet wurde.
 """
@@ -16,9 +19,17 @@ import urllib.error
 import urllib.request
 
 RATING_ABBR = {"matchwinner": "♛", "splashworthy": "★", "mustplay": "MP", "filler": "Fi", "neverplay": "NP"}
-MARK = {"arch": "●", "color": "○", "": "  "}
+MARK = {"best": "◆", "arch": "●", "color": "○", "": "  "}
 COLORS = {"bg": "#161b24", "ink": "#e8ecf3", "muted": "#8d97a8", "arch": "#1f7a45", "color": "#2c3a52",
-          "head": "#ffd166", "never": "#6b7280"}
+          "head": "#ffd166", "never": "#6b7280", "best": "#6d28b8", "hint": "#8e2bd6", "hint2": "#5b1d99"}
+HINT_STATE = {"in": "dein Archetyp", "near": "nahe dran"}
+
+
+def hint_rows(snap):
+    """Top-Picks im Pack: Karten ab MustPlay in ihrem besten Archetyp (oder nahe dran)."""
+    return [(f"{MARK['best']} Top-Pick: {h['name']} ({RATING_ABBR.get(h.get('rating'), h.get('rating') or '')}) – "
+             f"am besten in {h.get('best_name') or h.get('best')} ({HINT_STATE.get(h.get('state'), '')})", "hint")
+            for h in (snap or {}).get("hints") or []]
 
 
 def _arch_name(snap, colors):
@@ -152,8 +163,8 @@ def _trick_text(t):
 
 
 def trick_rows(t):
-    """Tricks bei offenem Mana des Gegners (components/tricks.py): jetzt moeglich und im naechsten Gegnerzug
-    zusaetzlich."""
+    """Tricks bei offenem Mana des Gegners (components/tricks.py): nur, was er jetzt wirken koennte (der naechste
+    Gegnerzug wird berechnet, aber nicht gezeigt)."""
     if not t:
         return []
     colors = " ".join(f"{c}×{n}" for c, n in (t.get("colors") or {}).items())
@@ -167,9 +178,6 @@ def trick_rows(t):
         rows.append(("Keine Instants/Flash-Karten mit diesem Mana", "sub"))
     for c in t["now"]:
         rows.append(("• " + _trick_text(c), "arch" if c.get("removal") else "color"))
-    if t.get("next"):
-        rows.append(("Nächster Gegnerzug (alle Länder + 1) zusätzlich:", "sub"))
-        rows += [("   " + _trick_text(c), "tip") for c in t["next"]]
     return rows
 
 
@@ -261,7 +269,7 @@ def mini_rows(snap):
     if snap.get("status") in ("pack", "waiting"):
         main = (snap.get("detect") or {}).get("main")
         head = f"Pick {snap.get('pick', 1)} · " + (_arch_name(snap, main) if main else "offen")
-        rows = [(head, "head")]
+        rows = [(head, "head")] + [(f"{MARK['best']} {h['name']}", "hint") for h in snap.get("hints") or []][:1]
         if snap.get("pack"):
             best = snap["pack"][0]
             rows.append((f"1. {best['name']}", best.get("level") or "plain"))
@@ -303,6 +311,8 @@ def rows_for(snap):
         f"Archetyp: {_arch_name(snap, main)} ({main})" + (" – eigene Wahl" if detect.get("manual") else "")
         if main else "Archetyp: noch offen")
     rows = [(head, "head")]
+    if status != "waiting":
+        rows += hint_rows(snap)
     scores = [s for s in detect.get("scores") or [] if s["score"]][:3]
     if scores:
         rows.append((" · ".join(f"{s['name']} {s['score']:g}" for s in scores), "sub"))
@@ -424,18 +434,21 @@ def run(url, interval_ms=1000):
     text.tag_configure("sub", foreground=COLORS["muted"], font=("Segoe UI", 9), spacing3=6)
     text.tag_configure("arch", background=COLORS["arch"], font=("Segoe UI", 11, "bold"), spacing1=2, spacing3=2)
     text.tag_configure("color", background=COLORS["color"], spacing1=2, spacing3=2)
+    text.tag_configure("best", background=COLORS["best"], font=("Segoe UI", 11, "bold"), spacing1=2, spacing3=2)
+    text.tag_configure("hint", background=COLORS["hint"], foreground="#ffffff", font=("Segoe UI", 12, "bold"),
+                       spacing1=4, spacing3=4)
     text.tag_configure("plain", spacing1=2, spacing3=2)
     text.tag_configure("never", foreground=COLORS["never"], spacing1=2, spacing3=2)
     text.tag_configure("msg", foreground=COLORS["muted"], font=("Segoe UI", 10, "italic"))
     text.tag_configure("head2", foreground=COLORS["head"], font=("Segoe UI", 11, "bold"), spacing1=2, spacing3=4)
     text.tag_configure("tip", foreground=COLORS["ink"], font=("Segoe UI", 10), lmargin1=6, lmargin2=18,
                        spacing3=2)
-    for tag in ("arch", "color", "plain", "head", "msg"):  # Kasten: groessere Schrift
+    for tag in ("arch", "color", "best", "hint", "plain", "head", "msg"):  # Kasten: groessere Schrift
         text.tag_configure("mini_" + tag, font=("Segoe UI", 13, "bold"), spacing1=3, spacing3=3,
-                           background=COLORS.get(tag, COLORS["bg"]) if tag in ("arch", "color") else COLORS["bg"],
+                           background=COLORS[tag] if tag in ("arch", "color", "best", "hint") else COLORS["bg"],
                            foreground=COLORS["head"] if tag == "head" else COLORS["ink"])
     state = {"last": None, "seen": False, "misses": 0, "mini": False, "big": None, "snap": None,
-             "party": None, "first": True}
+             "party": None, "first": True, "blink": False}
 
     def set_mini(mini):
         x, y = root.winfo_x(), root.winfo_y()
@@ -459,7 +472,7 @@ def run(url, interval_ms=1000):
     def render():
         snap = state["snap"]
         if state["mini"]:
-            rows = [(line, "mini_" + (tag if tag in ("arch", "color", "plain", "head") else "msg"))
+            rows = [(line, "mini_" + (tag if tag in ("arch", "color", "best", "hint", "plain", "head") else "msg"))
                     for line, tag in mini_rows(snap)]
         else:
             rows = rows_for(snap)
@@ -489,6 +502,9 @@ def run(url, interval_ms=1000):
             state["seen"], state["misses"] = True, 0
         state["snap"] = snap
         render()
+        state["blink"] = not state["blink"]  # Top-Pick blinkt
+        for tag in ("hint", "mini_hint"):
+            text.tag_configure(tag, background=COLORS["hint2" if state["blink"] else "hint"])
         party = new_celebration(state["party"], snap)
         if party:
             state["party"] = party
