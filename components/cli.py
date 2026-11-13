@@ -84,6 +84,17 @@ def parse_args(argv=None):
                     help="Kaempfe je Deck und Modus (On the Play / On the Draw) gegen jedes Gegnerdeck (Standard 500)")
     ap.add_argument("--kampf-runden", type=int, default=20,
                     help="Rundengrenze im Kampf; danach gilt das Spiel als unentschieden (Standard 20)")
+    ap.add_argument("--turnier", nargs="?", const="", default=None, metavar="ORDNER",
+                    help="Turnier: die Gegnerdecks eines Unterordners von enemydecks (z. B. wc32) spielen gegeneinander; "
+                         "ohne ORDNER wird gefragt. Ohne --paarung wird nach den Paarungen gefragt (Enter = jeder gegen "
+                         "jeden)")
+    ap.add_argument("--paarung", action="append", metavar="A-B", default=None,
+                    help="Turnier: Paarung aus Nummern oder Namensteilen der Decks, z. B. 1-3 oder manfield-chang; "
+                         "mehrfach angeben moeglich")
+    ap.add_argument("--turnier-spiele", type=int, default=500,
+                    help="Turnier: Spiele je Paarung (Standard 500; Spiel 1 beginnt per Zufall, danach der Verlierer)")
+    ap.add_argument("--turnier-ausgabe", default=None, metavar="DATEI",
+                    help="Turnier: Name des Berichts (Standard: turnier_<ORDNER>.html)")
     ap.add_argument("--ausgabe", "--html", dest="ausgabe", default="mtg_bericht.html", metavar="DATEI",
                     help="Name des HTML-Berichts (Standard: mtg_bericht.html)")
     ap.add_argument("--nicht-oeffnen", action="store_true",
@@ -92,6 +103,6 @@ def parse_args(argv=None):
                     help="Sprache von Bericht, Drafthelper, Setauswertung, Overlay und Konsole (de oder en, Standard de)")
     args = ap.parse_args(argv)
     if not args.deckfile and args.drafthelper is None and args.overlay is None and args.setauswertung is None \
-            and not args.statistik_neu:
+            and not args.statistik_neu and args.turnier is None:
         ap.error("Bitte eine Deckliste angeben oder --drafthelper verwenden")
     return args

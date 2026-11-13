@@ -247,6 +247,10 @@ def run(args):
         from components.setreport import run as run_set_report
         run_set_report(args)
         return
+    if args.turnier is not None:  # Turnier der Gegnerdecks eines Unterordners von enemydecks
+        from components.tournament import run as run_tournament
+        run_tournament(args, build_deck, fetch_cards_cached)
+        return
     if args.overlay is not None:  # nur das Seitenfenster des Live-Drafts
         from components.overlay import run as run_overlay
         run_overlay(args.overlay)

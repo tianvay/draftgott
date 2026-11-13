@@ -9674,10 +9674,12 @@ def _finish(entry, me, opp):
     entry["hand"] = {me.name: len(me.hand), opp.name: len(opp.hand)}
 
 
-def play_game(cards_a, cards_b, a_starts, max_turns=20, mulligan=True, min_hand=5):
+def play_game(cards_a, cards_b, a_starts, max_turns=20, mulligan=True, min_hand=5, a_never_concede=False):
     """Ein Spiel 'Wir' (cards_a) gegen 'Gegner' (cards_b). Gibt {winner: 'a'/'b'/None, round, log, opening} zurueck."""
     # Wir geben auf, wenn die Hand durch Mulligan unter min_hand faellt; der Gegner gibt nie auf
-    a, b = Player("Wir", cards_a, mulligan, min_hand), Player("Gegner", cards_b, mulligan, min_hand, never_concede=True)
+    # (a_never_concede: wir auch nicht, z. B. im Turnier zweier Gegnerdecks)
+    a = Player("Wir", cards_a, mulligan, min_hand, never_concede=a_never_concede)
+    b = Player("Gegner", cards_b, mulligan, min_hand, never_concede=True)
     result = {"winner": None, "round": 0, "log": [], "opening": {"Wir": [c.name for c in a.opening],
                                                                  "Gegner": [c.name for c in b.opening]},
               "mulligans": {"Wir": a.mulls, "Gegner": b.mulls}}
