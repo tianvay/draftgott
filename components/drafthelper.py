@@ -589,7 +589,8 @@ def serve(args, simulate, save, battle=None, save_battle=None):
            "ratings": ratings_path(args), "cardarch": archetypes_path(args), "stats": stats_path(args)}
     if live_mode:
         log = pathlib.Path(args.arena_log) if args.arena_log else default_log_path()
-        live = LiveDraft(log, pool_path(args.drafthelper), stats=app["stats"], enemy_dir=SCRIPT_DIR / "enemydecks")
+        live = LiveDraft(log, pool_path(args.drafthelper), stats=app["stats"], enemy_dir=SCRIPT_DIR / "enemydecks",
+                         fetch_set=fetch_set_cards)
         print(f"Live-Draft: lese {log}, Draft-Statistik in {app['stats']}", file=sys.stderr)
         live.read_previous(log.with_name("Player-prev.log"))
         live.step()  # bisheriger Stand des Protokolls (laufender Draft), danach im Hintergrund weiter
@@ -851,6 +852,19 @@ h2 small{color:var(--muted);font-weight:400}
 #lgame td.l,#lgame th.l{text-align:left}
 #lgame tr.land td{background:#f2f7f3}#lgame tr.cast td{font-weight:700;background:#eef4fd}#lgame tr.rem td{background:#fff6e6}
 #lgame .gcols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:4px 24px}
+#lgame .tricks{border-left:4px solid #8e2bd6;background:#f7f0fd;border-radius:6px;padding:6px 12px;margin:0 0 10px}
+#lgame .tricks h3{margin:0 0 4px;font-size:14px}
+#lgame .tricks .tl{display:flex;flex-wrap:wrap;gap:4px 6px;font-size:13px}
+#lgame .tricks .tl span{background:#fff;border:1px solid #d9c6ee;border-radius:8px;padding:1px 8px}
+#lgame .tricks .tl span.rem{background:#fff3d6;border-color:#e8c97a}
+#lgame .tricks .tl.next span{opacity:.75}
+#lsignals{display:none;flex-wrap:wrap;gap:6px;margin-top:8px;font-size:12.5px;align-items:center}
+#lsignals.show{display:flex}
+#lsignals span{border:1px solid var(--line);border-radius:999px;padding:1px 9px;background:#fafbfc}
+#lsignals span.open{background:#e3f4ea;border-color:#2e9e5b;font-weight:700}
+#lsignals span.maybe{background:#f3f9f5;border-color:#9fc5ae}
+#lsignals span.contested{background:#fdecec;border-color:#d68a8a}
+#lsignals .snote{flex-basis:100%;color:var(--muted);font-size:12px}
 .mtile .rtag{background:#fff3d6;color:#7a5200;border-radius:6px;padding:0 5px;font-size:11px;font-weight:700}
 #live .lmsg{color:var(--muted);margin:8px 0 0;font-size:13.5px}
 #live .ltipbox{display:none;margin:10px 0 0;padding:8px 12px;border-left:4px solid #1f7a45;background:#eef6f0;
@@ -909,6 +923,7 @@ h2 small{color:var(--muted);font-weight:400}
       <div class="lscores" id="lscores"></div>
       <button class="btn" id="ldeck" title="Schreibt das in Arena abgegebene Deck (Deck und Sideboard) in die Kartenpool-Datei">Deck + Sideboard übernehmen</button></div>
     <div id="linfo"></div>
+    <div id="lsignals" title="Offene Farben: starke Karten (Must Play oder höher), die zurückkommen oder spät im Pack liegen; umkämpft: starke Karten, die andere genommen haben"></div>
     <div id="lmap"></div>
     <div id="lgame"></div>
     <div class="lmsg" id="lmsg"></div>
@@ -1742,7 +1757,7 @@ function renderLive(){
   const a=live.complete?null:(live.archetypes||[]).find(x=>x.colors===m);  // nur waehrend des Drafts
   if(a)a.tips.forEach(t=>tips.appendChild(el("li",null,t)));
   $("ltiphead").textContent=a?"Tipps zu "+a.name:"";$("ltipbox").classList.toggle("show",!!(a&&a.tips.length));
-  renderInfo();renderMap();renderGame();
+  renderInfo();renderSignals();renderMap();renderGame();
   const g=$("lpack");g.textContent="";
   if(live.game&&live.game.active)return;
   (live.pack||[]).forEach((c,i)=>g.appendChild(miniTile(c,{level:c.level,points:c.points,rank:i+1})))}
@@ -1760,6 +1775,18 @@ function renderInfo(){
   const m=live.detect&&live.detect.main;
   if(i.arch&&m){add("In "+archName(m),i.arch.cards+" Karten");add("Kreaturen",String(i.arch.creatures));
     add("Removal",i.arch.removal+" ("+num(i.arch.removal_points)+" P.)");add("Kartenfluss",String(i.arch.flow))}}
+// Offene Farben (components/signals.py): Farben mit Signal und die letzten Hinweise
+const SIG_LABEL={open:"offen",maybe:"evtl. offen",contested:"umkämpft"};
+function renderSignals(){
+  const box=$("lsignals"),s=live.signals;box.textContent="";
+  const marked=s&&!live.complete&&!(live.game&&live.game.active)?Object.entries(s.colors||{}).filter(([c,v])=>v.level)
+    .sort((a,b)=>b[1].score-a[1].score||"WUBRG".indexOf(a[0])-"WUBRG".indexOf(b[0])):[];
+  box.classList.toggle("show",marked.length>0);if(!marked.length)return;
+  box.appendChild(el("b",null,"Signale ("+s.format+"):"));
+  for(const [c,v] of marked){const sp=el("span",v.level);const sym=manaSym(c);if(sym)sp.appendChild(sym);
+    sp.append(" "+SIG_LABEL[v.level]+" "+(v.score>0?"+":"")+v.score);
+    sp.title="offen "+v.open+" (Wheel 2, spät 1), umkämpft "+v.contested;box.appendChild(sp)}
+  for(const n of (s.notes||[]).slice(0,3))box.appendChild(el("div","snote","• "+n))}
 // Archetypen im Draft (cardarchetypes.archetype_map): je Archetyp die zugeordneten Picks und Pack-Karten
 function renderMap(){
   const box=$("lmap"),m=live.archmap||[];box.textContent="";
@@ -1779,6 +1806,7 @@ function renderGame(){
   const box=$("lgame"),g=live.game;box.textContent="";
   box.classList.toggle("show",!!(g&&g.active));if(!g||!g.active)return;
   box.appendChild(el("div","gtop","Im Spiel · Zug "+g.turn+" · Bibliothek "+g.library+" Karten · Hand "+g.hand));
+  renderTricks(box,g.tricks);
   const mn=g.mana||{},mc=Object.entries(mn.colors||{}).sort((a,b)=>"WUBRGC".indexOf(a[0])-"WUBRGC".indexOf(b[0]));
   box.appendChild(el("div","lmsg","Mana "+(mn.lands||0)+(mc.length?" ("+mc.map(([c,n])=>c+"×"+n).join(" ")+")":"")+
     " · Spielbar: Karten, die du mit deinen Ländern auf dem Spielfeld bezahlen kannst (✓)"));
@@ -1799,6 +1827,20 @@ function renderGame(){
     if(c.removal)n.append(" ",el("span","rtag","R"+num(c.removal)));
     tr.append(n,el("td",null,c.n+" / "+c.deck),el("td",null,pc(c.next)),el("td",null,pc(c.in3)));t2.appendChild(tr)}
   right.appendChild(t2)}
+// Tricks bei offenem Mana des Gegners (components/tricks.py)
+function renderTricks(box,t){
+  if(!t)return;const d=el("div","tricks");
+  const cols=Object.entries(t.colors||{}).map(([c,n])=>c+"×"+n).join(" ");
+  d.appendChild(el("h3",null,"Tricks bei offenem Mana · Gegner offen "+t.open+(cols?" ("+cols+")":"")+" von "+t.lands+" Ländern"+
+    (t.spell_colors&&t.spell_colors.length?" · zeigt "+t.spell_colors.join(""):"")));
+  const list=(cards,cls)=>{const l=el("div","tl"+(cls?" "+cls:""));
+    for(const c of cards){const s=el("span",c.removal?"rem":null,c.name+" "+(c.cost||"{0}")+(c.rating?" · "+(RATING_SHORT[c.rating]||c.rating):""));
+      if(c.removal)s.title="Removal "+num(c.removal)+" P.";l.appendChild(s)}return l};
+  if(!t.open)d.appendChild(el("div","lmsg","Kein Mana offen: jetzt keine Tricks."));
+  else if(!t.now.length)d.appendChild(el("div","lmsg","Keine Instants oder Flash-Karten mit diesem Mana."));
+  else d.appendChild(list(t.now));
+  if(t.next&&t.next.length){d.appendChild(el("div","lmsg","Nächster Gegnerzug (alle Länder + 1) zusätzlich:"));d.appendChild(list(t.next,"next"))}
+  box.appendChild(d)}
 $("ldeck").onclick=async()=>{let r=null;try{r=await api("/api/live/deck",{})}catch(e){}
   if(!r||!r.ok){showErr("Deck nicht übernommen: "+((r&&r.error)||"Fehler"));return}
   pollLive(true)};

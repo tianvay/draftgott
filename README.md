@@ -72,6 +72,8 @@ Projektordner geklärt; Abweichungen davon stehen mit Regelnummer im Code bzw. i
 | `components/livedraft.py` | Live-Draft: Protokoll mitlesen, Picks in die Pool-Datei, Pack bewerten |
 | `components/overlay.py` | Seitenfenster des Live-Drafts (tkinter, immer im Vordergrund) |
 | `components/gamestate.py` | Im Spiel: Bibliothek aus dem Arena-Protokoll, Ziehchancen, übriges Removal |
+| `components/tricks.py` | Im Spiel: Instants und Flash-Karten, die der Gegner mit offenem Mana wirken könnte |
+| `components/signals.py` | Im Draft: offene Farben (Wheel, späte und genommene starke Karten), Pick Two erkennen |
 | `components/draftstats.py` | Draft-Statistik (`draftstatistik.json`): Decks und Matches sammeln, Zahlen je Karte |
 | `components/setreport.py` | Setauswertung als HTML-Seite (`--setauswertung`) |
 | `components/symbols.py` | Original-Manasymbole von Scryfall (Cache `scryfall_symbols.json`) |
@@ -223,11 +225,18 @@ In Arena muss unter Optionen → Konto „Detailed Logs (Plugin Support)“ eing
   und je Karte die Chance für die nächste Karte und für mindestens eine unter den nächsten 3 Karten
   (hypergeometrisch), dazu übriges Removal (Karten und Punkte). Gilt für jedes Spiel (`components/gamestate.py`).
   „Spielbar“: Karten, die mit den eigenen Ländern auf dem Spielfeld bezahlbar sind (Haken an der Karte).
+- **Im Spiel: Tricks bei offenem Mana:** Oben in der Spielansicht alle Instants und Flash-Karten des Sets, die der
+  Gegner mit seinen ungetappten Ländern jetzt wirken könnte, dazu was im nächsten Gegnerzug (alle Länder + 1)
+  zusätzlich geht. Hat er Zauber in mindestens zwei Farben gezeigt, nur Tricks in diesen Farben (und denen seiner
+  Standardländer). Aktivierbare Fähigkeiten zählen nicht (`components/tricks.py`).
+- **Offene Farben:** Signale im Draft (`components/signals.py`): eine starke Karte (MustPlay oder höher), die mit dem
+  Pack zurückkommt (Wheel, +2), spät im Pack liegt (mindestens 3 andere Spieler, +1) oder von anderen genommen wurde
+  (umkämpft, −1). Pick Two wird an zwei Karten je Pick erkannt; das Wheel daran, dass ein früheres Pack wiederkommt.
 - **Seitenfenster minimieren:** Knopf oben rechts oder Doppelklick: kleiner Kasten mit den Chancen auf Removal, Land
   und Kreatur (im Draft Pick, Archetyp, beste Karte). Im Spiel ist der Knopf „Deck übernehmen“ ausgeblendet.
 - **Deck-Übersicht nach dem Draft:** Nach dem Draft und zwischen den Spielen zeigt das Seitenfenster statt „Pick 43“
   Archetyp und Bilanz, Karten/Länder/Zauber mit Ø Manawert, Mana-Kurve, Kreaturen, Removal, Kartenfluss, Zauber je
-  Farbe und die Bomben (Matchwinner, Splashworthy) des in Arena abgegebenen Hauptdecks (vorher: aller Picks).
+  Farbe und die Bomben (nur Matchwinner) des in Arena abgegebenen Hauptdecks (vorher: aller Picks).
 - **Deck übernehmen:** Nach dem Draft (42 Picks oder sobald Arena ein Deck meldet) erscheint auf der Seite und im
   Seitenfenster der Knopf „Deck + Sideboard übernehmen“. Er wird klickbar, sobald der Deckbau in Arena mit „Fertig“
   abgeschlossen ist, und schreibt Deck (mit Standardländern) und Sideboard in die Kartenpool-Datei: Deckkarten auf

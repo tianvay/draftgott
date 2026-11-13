@@ -27,14 +27,14 @@ DECK_CARDS = [card("Plains", 0, 9, "", land=True), card("Mountain", 0, 8, "", la
 
 class SummaryTests(unittest.TestCase):
     def test_numbers(self):
-        s = ld.deck_summary(DECK_CARDS, {"Big": "splashworthy", "Bolt": "mustplay", "Bear": "filler"}, "arena")
+        s = ld.deck_summary(DECK_CARDS, {"Big": "matchwinner", "Bolt": "mustplay", "Bear": "filler"}, "arena")
         self.assertEqual(s["source"], "arena")
         self.assertEqual((s["cards"], s["lands"], s["spells"]), (26, 17, 9))
         self.assertEqual(s["curve"], [3, 3, 1, 0, 0, 2])  # <=1, 2, 3, 4, 5, 6+ (Laender zaehlen nicht)
         self.assertEqual(s["avg_mv"], round((0 + 1 * 2 + 2 * 3 + 3 + 6 + 7) / 9, 2))
         self.assertEqual((s["creatures"], s["removal"], s["removal_points"], s["flow"]), (6, 2, 3.0, 1))
         self.assertEqual(s["colors"], {"W": 5, "R": 3, "B": 1})
-        self.assertEqual(s["top"], ["Big"])  # nur Matchwinner und Splashworthy, Must-Play und Filler nicht
+        self.assertEqual(s["top"], ["Big"])  # nur Matchwinner (Nutzer 13.11.2026), Must-Play und Filler nicht
 
     def test_empty(self):
         s = ld.deck_summary([], {}, "picks")
@@ -43,7 +43,7 @@ class SummaryTests(unittest.TestCase):
 
 class RowsTests(unittest.TestCase):
     def snap(self, **kw):
-        info = dict(ld.deck_summary(DECK_CARDS, {"Big": "splashworthy"}, "arena"),
+        info = dict(ld.deck_summary(DECK_CARDS, {"Big": "matchwinner"}, "arena"),
                     record={"wins": 2, "losses": 1, "matches": 3})
         base = {"status": "waiting", "pick": 43, "complete": True, "deckinfo": info, "set": "TST",
                 "detect": {"main": "WR", "scores": []}, "archetypes": [{"colors": "WR", "name": "Boros"}],
@@ -131,7 +131,7 @@ class SnapshotTests(unittest.TestCase):
         self.write(auth_line(), *DRAFT)
         self.assertIsNone(self.live.snapshot({}, {}, None).get("deckinfo"))  # Draft laeuft noch
         self.write(DECK, start_line("m1", event=EVENT), end_line("m1", [2, 2], 2))
-        info = self.live.snapshot({"Test Bear": "splashworthy"}, {}, None)["deckinfo"]
+        info = self.live.snapshot({"Test Bear": "matchwinner"}, {}, None)["deckinfo"]
         self.assertEqual(info["source"], "arena")
         self.assertEqual((info["cards"], info["lands"], info["spells"]), (19, 17, 2))
         self.assertEqual((info["creatures"], info["flow"]), (1, 1))

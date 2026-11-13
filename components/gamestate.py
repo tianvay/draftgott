@@ -26,6 +26,9 @@ from components.mana import can_pay, cost_alternatives
 KNOWN_ZONES = {"ZoneType_Hand", "ZoneType_Battlefield", "ZoneType_Graveyard", "ZoneType_Exile", "ZoneType_Stack",
                "ZoneType_Command"}
 LOOK_AHEAD = 3  # "in den naechsten 3 Zuegen"
+PUBLIC_ZONES = {"ZoneType_Battlefield", "ZoneType_Graveyard", "ZoneType_Exile", "ZoneType_Stack"}
+COLOR_CODES = {"CardColor_White": "W", "CardColor_Blue": "U", "CardColor_Black": "B", "CardColor_Red": "R",
+               "CardColor_Green": "G"}
 
 
 def at_least_one(n, library, k):
@@ -74,9 +77,13 @@ class GameState:
                 self.zones[z["zoneId"]] = {"type": z.get("type"), "owner": z.get("ownerSeatId"),
                                            "ids": list(z.get("objectInstanceIds") or [])}
         for o in g.get("gameObjects") or []:
-            if isinstance(o, dict) and "instanceId" in o:
-                self.objects[o["instanceId"]] = {"grp": o.get("grpId"), "owner": o.get("ownerSeatId"),
-                                                 "controller": o.get("controllerSeatId", o.get("ownerSeatId"))}
+            if isinstance(o, dict) and "instanceId" in o:  # Arena schickt geaenderte Objekte immer ganz
+                self.objects[o["instanceId"]] = {
+                    "grp": o.get("grpId"), "owner": o.get("ownerSeatId"),
+                    "controller": o.get("controllerSeatId", o.get("ownerSeatId")),
+                    "land": "CardType_Land" in (o.get("cardTypes") or []), "tapped": bool(o.get("isTapped")),
+                    "subtypes": [s for s in o.get("subtypes") or [] if isinstance(s, str)],
+                    "colors": [COLOR_CODES[c] for c in o.get("color") or [] if c in COLOR_CODES]}
         for iid in g.get("diffDeletedInstanceIds") or []:
             self.objects.pop(iid, None)
         turn = (g.get("turnInfo") or {}).get("turnNumber")
@@ -145,6 +152,32 @@ class GameState:
     def hand_size(self):
         hand = self._zone("ZoneType_Hand")
         return len(hand["ids"]) if hand else 0
+
+    def _opponent(self, o):
+        return o is not None and self.seat is not None and o["controller"] is not None and o["controller"] != self.seat
+
+    def opponent_lands(self):
+        """Laender des Gegners auf dem Spielfeld: [{"grp", "tapped", "subtypes"}]."""
+        out = []
+        for z in self.zones.values():
+            if z["type"] == "ZoneType_Battlefield":
+                for iid in z["ids"]:
+                    o = self.objects.get(iid)
+                    if self._opponent(o) and o["land"]:
+                        out.append({"grp": o["grp"], "tapped": o["tapped"], "subtypes": o["subtypes"]})
+        return out
+
+    def opponent_spell_colors(self):
+        """Farben der Nichtland-Karten, die der Gegner offen gezeigt hat (Spielfeld, Friedhof, Exil, Stapel)."""
+        colors = set()
+        for z in self.zones.values():
+            if z["type"] not in PUBLIC_ZONES:
+                continue
+            for iid in z["ids"]:
+                o = self.objects.get(iid)
+                if o and not o["land"] and o["owner"] is not None and o["owner"] != self.seat and self.seat is not None:
+                    colors |= set(o["colors"])
+        return colors
 
 
 def _group(key, label, n, library):

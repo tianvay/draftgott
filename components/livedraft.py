@@ -16,6 +16,8 @@ from components import archetypes as set_archetypes
 from components import cardarchetypes
 from components import draftstats
 from components import gamestate
+from components import signals
+from components import tricks
 from components.cardkinds import FLOW_ORDER, flow_kinds
 from components.cards import land_produced
 from components.removal import removal_info
@@ -66,14 +68,14 @@ def pool_info(cards, main):
     return out
 
 
-TOP_RATINGS = ("matchwinner", "splashworthy")
+TOP_RATINGS = ("matchwinner",)  # Bomben: nur Matchwinner
 
 
 def deck_summary(cards, ratings, source):
     """Kurze Deck-Uebersicht nach dem Draft (wie auf der Drafthelper-Seite). cards: Kartenangaben mit "qty";
     source: "arena" (in Arena abgegebenes Hauptdeck) oder "picks" (noch kein Deck, alle Picks). curve: Zauber je
     Manawert <=1, 2, 3, 4, 5, 6+; colors: Zauber je Farbe (mehrfarbige zaehlen fuer jede); top: die Bomben (eigene
-    Bewertung Matchwinner, dann Splashworthy), hoechstens drei."""
+    Bewertung Matchwinner), hoechstens drei."""
     ratings = ratings or {}
     spells = [c for c in cards if not c.get("land")]
     n = sum(c.get("qty", 1) for c in spells)
@@ -139,9 +141,11 @@ def rebuild_stats(args):
 
 
 class LiveDraft:
-    def __init__(self, log_path, pool_file, names=None, fetch=fetch_cards_cached, stats=None, enemy_dir=None):
+    def __init__(self, log_path, pool_file, names=None, fetch=fetch_cards_cached, stats=None, enemy_dir=None,
+                 fetch_set=None):
         """stats: Pfad der Draft-Statistik (components/draftstats.py) oder None (keine Statistik); enemy_dir: Ordner
-        fuer Decks mit 4 Siegen (Gegnerdecks)."""
+        fuer Decks mit 4 Siegen (Gegnerdecks); fetch_set: alle Karten eines Sets fuer die Tricks im Spiel (z. B.
+        scryfall.fetch_set_cards; None: keine Tricks)."""
         self.log_path, self.pool_file = pathlib.Path(log_path), pathlib.Path(pool_file)
         self.tracker = draftstats.Tracker(stats, self._lookup, self._set_lookup, enemy_dir=enemy_dir,
                                           card_info=self._card_info) if stats else None
@@ -155,6 +159,8 @@ class LiveDraft:
         self.game = gamestate.GameState()  # laufendes Spiel (Ziehchancen)
         self.deck = None  # zuletzt in Arena abgegebenes Deck eines Draft-Events {"main", "side"} (GrpId -> Anzahl)
         self.seen = set()  # Arena-Nummern aller Karten, die in Packs dieses Programmlaufs zu sehen waren
+        self.fetch_set = fetch_set
+        self.tricks = {}  # Setcode -> Tricks des Sets (components/tricks.py)
 
     def _card_info(self, grp):
         """Name, Set, Nummer und Farben (Scryfall, sonst ohne Farben) fuer die Gegnerdeck-Datei."""
@@ -319,7 +325,9 @@ class LiveDraft:
                             self.deck = deck
                         changed = True
         if game_changed:
-            self._load_cards(list(self.game.deck))
+            self._load_cards(list(self.game.deck) + [x["grp"] for x in self.game.opponent_lands()])
+            if self.game.active:
+                self._load_tricks()
         if not changed:
             return game_changed
         self._load_cards(self.state.pack + self.state.picks + list((self.deck or {}).get("main", {}))
@@ -329,6 +337,35 @@ class LiveDraft:
                 self._write_pool()
                 self._written = list(self.state.picks)
         return True
+
+    def _game_set(self):
+        """Setcode fuer die Tricks: aus dem Event, sonst das haeufigste Set des eigenen Decks; klein geschrieben."""
+        code = self._set_code([c for c in (self._card(g) for g in self.game.deck) if c])
+        return code.lower() if code else None
+
+    def _load_tricks(self):
+        """Tricks des Sets einmal laden (Scryfall-Set-Cache, sonst Netz); ohne Daten bleibt die Liste leer."""
+        code = self._game_set()
+        if not code or code in self.tricks or self.fetch_set is None:
+            return
+        try:
+            cards = self.fetch_set(code) or []
+        except (urllib.error.URLError, OSError, ValueError) as e:
+            print(f"Set {code.upper()} fuer die Tricks nicht geladen: {e}", file=sys.stderr)
+            cards = []
+        with self.lock:
+            self.tricks[code] = tricks.trick_cards(cards)
+
+    def _tricks_view(self, ratings):
+        if not self.game.active:
+            return None
+        code = self._game_set()
+        if code not in self.tricks:
+            return None
+        view = tricks.tricks_view(self.game, self._card, self.tricks[code])
+        for part in ("now", "next"):
+            view[part] = [dict(t, rating=(ratings or {}).get(t["name"], "")) for t in view[part]]
+        return view
 
     def start(self, interval=1.0):
         def loop():
@@ -359,6 +396,8 @@ class LiveDraft:
         Draft-Statistik, sie kommen als "stats" an die Pack-Karten."""
         with self.lock:
             game = gamestate.game_view(self.game, {g: self._card(g) for g in self.game.deck if self._card(g)})
+            if game.get("active"):
+                game["tricks"] = self._tricks_view(ratings)
             if not self.log_path.exists():
                 return {"status": "nolog", "version": self.version,
                         "message": f"Arena-Protokoll nicht gefunden: {self.log_path}. {DETAILED_LOGS}"}
@@ -373,6 +412,7 @@ class LiveDraft:
             deck = self._deck_info()
             main_deck = [(g, q) for g, q in self.deck["main"].items()] if deck["ready"] else None
             draft_id = self.state.draft
+            sig = signals.analyze([dict(h) for h in self.state.history], self._card, ratings, event)
         code = self._set_code(pack + picks)
         found = set_archetypes.for_set(code)
         detect = cardarchetypes.detect([dict(c, qty=1) for c in picks], assign, ratings, found, manual)
@@ -398,7 +438,7 @@ class LiveDraft:
                 "event": event or "", "set": code or "", "pick": n_picks + 1, "pack": ranked,
                 "picks": [c["name"] for c in picks], "unknown": unknown, "detect": detect,
                 "deck": deck, "complete": complete, "deckinfo": deckinfo, "game": game,
-                "draftinfo": draftinfo, "archmap": archmap, "enemy_saved": self._saved(),
+                "draftinfo": draftinfo, "archmap": archmap, "enemy_saved": self._saved(), "signals": sig,
                 "archetypes": found,
                 "cardarch": {n: v for n, v in (assign or {}).items() if n in names},
                 "ratings": {n: v for n, v in (ratings or {}).items() if n in names}}

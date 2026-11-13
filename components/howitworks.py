@@ -369,6 +369,32 @@ def _live_help():
             "Zuordnung gehören keinem Archetyp an, eine Karte kann zu mehreren gehören. Archetypen ohne Karten "
             "fehlen.",
             "Pack-Karten nennen ihre Archetypen zusätzlich unter dem Namen."]))
+        + _panel("Offene Farben", _ul([
+            "Während des Drafts zeigen Live-Bereich und Seitenfenster, welche Farben offen sind („Signale (Pick Two): "
+            "R offen +3 · G umkämpft −2“). Stark ist eine Karte mit deiner Kategorie MustPlay oder höher "
+            "(★ Splashworthy, ♛ Matchwinner); mehrfarbige zählen für jede ihrer Farben, farblose nicht.",
+            "<b>Wheel</b> (+2): Ein Pack kommt zurück und eine starke Karte liegt noch drin – das Hauptsignal. Ein Pack "
+            "gilt als zurückgekommen, wenn es eine Teilmenge eines früheren Packs derselben Runde (ohne deine Picks "
+            "daraus) ist; das klappt für jede Spielerzahl, für Pick Two wie für den normalen Draft.",
+            "<b>Spät</b> (+1): eine starke Karte in einem Pack, das schon mindestens 3 andere Spieler gesehen haben. "
+            "Gezählt werden Spieler, nicht Karten: Pick Two nimmt 2 Karten je Pick, ein Pack mit 8 von 14 Karten "
+            "haben also 3 Spieler gesehen (im normalen Draft 6).",
+            "<b>Umkämpft</b> (−1): eine starke Karte, die zwischen zwei Besuchen eines Packs von anderen genommen wurde.",
+            "Wert je Farbe = offen − umkämpft: ab 3 offen, ab 1 evtl. offen, ab −2 umkämpft. Pick Two erkennt der "
+            "Drafthelper an zwei Karten je Pick (sonst am Eventnamen). Darunter stehen die letzten Hinweise "
+            "(„Pick 9: … kam zurück“)."]))
+        + _panel("Im Spiel: Tricks bei offenem Mana", _ul([
+            "Oben in der Spielansicht (Seite und Seitenfenster) stehen alle Instants und Karten mit Flash des Sets, "
+            "die der Gegner mit seinen ungetappten Ländern jetzt wirken könnte, mit Kosten, deiner Kategorie und "
+            "Removal-Punkten. Aktivierbare Fähigkeiten auf dem Feld zählen nicht, ebenso wenig Mana aus Kreaturen "
+            "oder Treasure.",
+            "Darunter, was im <b>nächsten Gegnerzug</b> zusätzlich möglich wird: alle seine Länder ungetappt und ein "
+            "weiteres Land in einer seiner Farben. Die Liste ändert sich mit jedem Land, das er spielt oder tappt.",
+            "Gegnerfarben: Hat der Gegner Zauber in mindestens zwei Farben offen gezeigt, kommen nur Tricks in diesen "
+            "Farben und in den Farben seiner Standardländer in Frage (ein Tri-Land zeigt sonst Farben, die er gar "
+            "nicht spielt). Farblose Tricks gehen immer.",
+            "Die Karten des Sets kommen von Scryfall (einmal geladen, dann aus <code>scryfall_set_cache.json</code>). "
+            "Minimiert zeigt das Seitenfenster „Tricks 3 · offen 2“."]))
         + _panel("Im Spiel: Ziehchancen", _ul([
             "Während eines Spiels zeigen Seite und Seitenfenster statt des Packs die eigene Bibliothek. Arena meldet "
             "beim Spielstart das Deck des Spiels und danach laufend, wo die eigenen Karten liegen; Bibliothek = Deck "
@@ -388,7 +414,7 @@ def _live_help():
             "Nach dem Draft und zwischen den Spielen zeigt das Seitenfenster statt „Pick 43“ eine kurze "
             "<b>Deck-Übersicht</b>: Archetyp und Bilanz (Siege–Niederlagen), Karten, Länder und Zauber mit Ø Manawert, "
             "Mana-Kurve, Kreaturen, Removal (Karten und Punkte), Kartenfluss, Zauber je Farbe und die Bomben (eigene "
-            "Bewertung Matchwinner oder Splashworthy; Must-Play zählt nicht). Grundlage ist das in Arena abgegebene Hauptdeck, vorher alle "
+            "Bewertung Matchwinner; Splashworthy und Must-Play zählen nicht). Grundlage ist das in Arena abgegebene Hauptdeck, vorher alle "
             "Picks. Minimiert: Bilanz, Kreaturen und Removal.",
             "Karten, die per Mulligan oder Scry unter die Bibliothek gelegt wurden, zählen wie alle anderen (ihre "
             "Lage ist nicht bekannt). Passt die Rechnung nicht genau zur Bibliothek (z. B. durch Token oder "

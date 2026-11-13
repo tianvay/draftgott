@@ -58,10 +58,10 @@ class DeckBuildingTests(unittest.TestCase):
 
 
 class BombTests(unittest.TestCase):
-    def test_bombs_are_matchwinner_and_splashworthy(self):
+    def test_bombs_are_only_matchwinner(self):  # Nutzer 13.11.2026: Splashworthy ist keine Bombe mehr
         cards = [{"name": n, "mv": 3, "qty": 1, "colors": ["W"]} for n in ("A", "B", "C", "D")]
         r = {"A": "mustplay", "B": "splashworthy", "C": MW, "D": "filler"}
-        self.assertEqual(livedraft.deck_summary(cards, r, "arena")["top"], ["C", "B"])  # Matchwinner zuerst
+        self.assertEqual(livedraft.deck_summary(cards, r, "arena")["top"], ["C"])
 
     def test_help_and_readme(self):
         from components.howitworks import render_help_page

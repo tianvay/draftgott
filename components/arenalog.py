@@ -215,10 +215,12 @@ class DraftState:
         self.pack, self.picks = [], []
         self.pick_sizes = []  # je Pick: Groesse des Packs, aus dem gewaehlt wurde (None: unbekannt)
         self.waiting = False
-        self._packs = []  # [(Kartenmenge, schon gewaehlt?)] der gesehenen Packs, neueste zuletzt
+        self._packs = []  # [(Kartenmenge, schon gewaehlt?, Eintrag in history)] der gesehenen Packs, neueste zuletzt
+        self.history = []  # je gesehenem Pack {"cards", "picked" (eigene Picks daraus), "pick" (Nummer)}: Signale
 
     def _reset(self):
         self.pack, self.picks, self.pick_sizes, self.waiting, self._packs = [], [], [], False, []
+        self.history = []
 
     def feed(self, ev):
         """Verarbeitet ein Ereignis aus scan_line; True, wenn sich etwas geaendert hat."""
@@ -233,7 +235,9 @@ class DraftState:
         if ev["kind"] == "pack":
             if cards != self.pack or self.waiting:
                 self.pack, self.waiting = cards, False
-                self._packs.append([set(cards), False])
+                entry = {"cards": cards, "picked": [], "pick": len(self.picks) + 1}
+                self.history.append(entry)
+                self._packs.append([set(cards), False, entry])
         elif ev["kind"] == "picked":
             if cards[:len(self.picks)] == self.picks:
                 self.pick_sizes = self.pick_sizes[:len(self.picks)] + [None] * (len(cards) - len(self.picks))
@@ -245,6 +249,7 @@ class DraftState:
             if source is not None:
                 if not source[1]:
                     source[1] = True
+                    source[2]["picked"] = list(cards)
                     self.picks += cards
                     self.pick_sizes += [len(source[0])] * len(cards)
                 if source is self._packs[-1]:

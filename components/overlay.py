@@ -142,9 +142,42 @@ def _pct(p):
     return "< 1 %" if p < 0.005 else f"{round(p * 100)} %"
 
 
+def _trick_text(t):
+    text = f"{t['name']}  {t['cost'] or '{0}'}"
+    if t.get("rating"):
+        text += "  " + RATING_ABBR.get(t["rating"], t["rating"])
+    if t.get("removal"):
+        text += f"  R{_num(t['removal'])}"
+    return text
+
+
+def trick_rows(t):
+    """Tricks bei offenem Mana des Gegners (components/tricks.py): jetzt moeglich und im naechsten Gegnerzug
+    zusaetzlich."""
+    if not t:
+        return []
+    colors = " ".join(f"{c}×{n}" for c, n in (t.get("colors") or {}).items())
+    head = f"Gegner offen {t['open']}" + (f" ({colors})" if colors else "") + f" von {t['lands']} Ländern"
+    if t.get("spell_colors"):
+        head += " · zeigt " + "".join(t["spell_colors"])
+    rows = [(head, "head2")]
+    if not t["open"]:
+        rows.append(("Kein Mana offen: jetzt keine Tricks", "sub"))
+    elif not t["now"]:
+        rows.append(("Keine Instants/Flash-Karten mit diesem Mana", "sub"))
+    for c in t["now"]:
+        rows.append(("• " + _trick_text(c), "arch" if c.get("removal") else "color"))
+    if t.get("next"):
+        rows.append(("Nächster Gegnerzug (alle Länder + 1) zusätzlich:", "sub"))
+        rows += [("   " + _trick_text(c), "tip") for c in t["next"]]
+    return rows
+
+
 def game_rows(g):
-    """Zeilen im Spiel: Bibliothek, Chancen je Gruppe (naechste Karte / in 3 Zuegen), Removal, Karten der Bibliothek."""
+    """Zeilen im Spiel: Tricks des Gegners, Bibliothek, Chancen je Gruppe (naechste Karte / in 3 Zuegen), Removal,
+    Karten der Bibliothek."""
     rows = [(f"Im Spiel · Zug {g.get('turn', 0)} · Bibliothek {g['library']} · Hand {g.get('hand', 0)}", "head")]
+    rows += trick_rows(g.get("tricks"))
     mana = g.get("mana") or {}
     colors = " ".join(f"{c}×{n}" for c, n in sorted((mana.get("colors") or {}).items(),
                                                      key=lambda kv: "WUBRGC".find(kv[0])))
@@ -215,8 +248,12 @@ def mini_rows(snap):
     g = snap.get("game") or {}
     if g.get("active"):
         by = {r["key"]: r for r in g.get("groups") or []}
-        return [(f"{label} {_pct(by[key]['next'])}", {"land": "color", "removal": "arch"}.get(key, "plain"))
+        rows = [(f"{label} {_pct(by[key]['next'])}", {"land": "color", "removal": "arch"}.get(key, "plain"))
                 for key, label in MINI_KEYS if key in by]
+        t = g.get("tricks")
+        if t:
+            rows.append((f"Tricks {len(t['now'])} · offen {t['open']}", "head"))
+        return rows
     if snap.get("complete") and snap.get("deckinfo"):
         info = snap["deckinfo"]
         return [(_record(info) or "Dein Deck", "head"),
@@ -269,6 +306,7 @@ def rows_for(snap):
     scores = [s for s in detect.get("scores") or [] if s["score"]][:3]
     if scores:
         rows.append((" · ".join(f"{s['name']} {s['score']:g}" for s in scores), "sub"))
+    rows += signal_rows(snap.get("signals"))
     if snap.get("draftinfo") and snap["draftinfo"].get("cards"):
         rows += info_rows(snap["draftinfo"], _arch_name(snap, main) if main else None)
     for a in snap.get("archmap") or []:
@@ -293,6 +331,30 @@ def rows_for(snap):
             parts.append(f"{round(100 * stats['wins'] / stats['games'])} % ({stats['games']} G.)")
         rows.append(("  ".join(parts), tag))
     return rows + tip_rows(snap, main)
+
+
+SIGNAL_LABEL = {"open": "offen", "maybe": "evtl. offen", "contested": "umkämpft"}
+
+
+def _signed(n):
+    return f"+{n}" if n > 0 else (f"−{-n}" if n < 0 else "0")
+
+
+def signal_rows(sig):
+    """Offene Farben (components/signals.py): eine Zeile mit den Farben, die ein Signal haben, und die letzten zwei
+    Hinweise; nichts, solange keine Farbe ein Signal hat."""
+    if not sig:
+        return []
+    marked = sorted(((c, v) for c, v in (sig.get("colors") or {}).items() if v.get("level")),
+                    key=lambda cv: (-cv[1]["score"], "WUBRG".find(cv[0])))
+    if not marked:
+        return []
+    text = f"Signale ({sig.get('format', 'Draft')}): " + " · ".join(
+        f"{c} {SIGNAL_LABEL[v['level']]} {_signed(v['score'])}" for c, v in marked)
+    best = marked[0][1]["level"]
+    rows = [(text, "arch" if best == "open" else "color")]
+    rows += [(f"• {n}", "sub") for n in (sig.get("notes") or [])[:2]]
+    return rows
 
 
 def tip_rows(snap, main):
@@ -380,7 +442,7 @@ def run(url, interval_ms=1000):
         if mini:
             state["big"] = root.geometry()
             right = x + root.winfo_width()
-            root.geometry(f"210x150+{max(0, right - 210)}+{y}")
+            root.geometry(f"210x180+{max(0, right - 210)}+{y}")
             toggle.configure(text="▢")
             button.pack_forget()
         else:
