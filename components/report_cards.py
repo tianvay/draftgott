@@ -7,6 +7,7 @@ from components import archetypes as arch
 from components import cardarchetypes as cardarch
 from components.html_base import esc, h_level_td, h_table, html_cost
 from components.removal import removal_level
+from components import synergy
 
 COLOR_HEX = {"W": "#f1e7b8", "U": "#3b82d6", "B": "#4a4a4a", "R": "#d6453b", "G": "#3f9b4f", "M": "#d9a400",
              "C": "#b7bcc6"}
@@ -427,3 +428,46 @@ def render_color_availability(ctx):
                      f'<div class="muted" style="font-size:12px">wegen {ch["color"] * ch["k"]} in: '
                      f'{esc(", ".join(ch["cards"]))}</div></td>'] + cells)
     return f'<div class="panel">{h_table(["Kennzahl"] + [esc(l) for l in labels], rows)}</div>'
+
+
+def render_synergy_table(ctx):
+    """Abschnitt Synergie (components/synergy.py): Kennzahlen, je Nehmer die Ressource, Geber im Deck, Erfuellung,
+    Punkte und Partner, dazu die Nehmer ohne Partner. '' ohne Nehmer im Deck."""
+    res = synergy.deck_synergy(synergy.entries_from_rows(ctx["rows"]))
+    if not res["rows"]:
+        return ""
+    deck_size = sum(q for _n, q, _c, _s in ctx["rows"])
+    lvl = synergy.level(res["score"], deck_size)
+    pill = {"green": "good", "yellow": "warn", "red": "bad"}[lvl]
+    payoffs = len({r["name"] for r in res["rows"]})
+    rows = []
+    for r in res["rows"]:
+        partners = ", ".join(f'{p["name"]}' + (f' ×{p["n"]:g}' if p["n"] != 1 else "") for p in r["partners"][:5])
+        if len(r["partners"]) > 5:
+            partners += f' … (+{len(r["partners"]) - 5})'
+        rows.append([f'<td class="l">{esc(r["name"])}</td>', f'<td>{r["qty"]}</td>',
+                     f'<td class="l">{esc(r["label"])}</td>', f'<td>{r["givers"]:g}</td>',
+                     h_level_td("green" if r["fill"] >= 0.6 else ("yellow" if r["fill"] >= synergy.ORPHAN else "red"),
+                                f'{r["fill"]:.0%}'),
+                     f'<td>{r["points"]:.2f}</td>',
+                     f'<td class="l muted" style="font-size:12.5px">{esc(partners) or "–"}</td>'])
+    missing = {}
+    for r in res["orphans"]:
+        missing.setdefault(r["name"], []).append(r["label"])
+    orphans = [f"{n} ({', '.join(labels)})" for n, labels in sorted(missing.items())]
+    kpis = (f'<div class="grid g4" style="margin-bottom:12px">'
+            f'<div class="panel kpi"><div class="l">Synergie-Punkte</div>'
+            f'<div class="v"><span class="pill {pill}">{res["score"]:.1f}</span></div>'
+            f'<div class="s">grün ab {synergy.GREEN * deck_size / 40:.1f}, gelb ab {synergy.YELLOW * deck_size / 40:.1f}'
+            f'</div></div>'
+            f'<div class="panel kpi"><div class="l">Karten mit Synergie-Bedarf</div><div class="v">{payoffs}</div>'
+            f'<div class="s">profitieren von anderen Karten</div></div>'
+            f'<div class="panel kpi" style="grid-column:span 2"><div class="l">Ohne Partner (Erfüllung unter '
+            f'{synergy.ORPHAN:.0%})</div><div class="s" style="font-size:14px;margin-top:6px">'
+            f'{esc(", ".join(orphans)) or "keine"}</div></div></div>')
+    note = ('<div class="muted" style="font-size:12.5px;margin-top:8px">Erfüllung = 1 − (1 − p)<sup>k</sup> mit k '
+            'Geber-Einheiten im Deck (ohne die eigene Kopie): der dritte Geber bringt weniger als der erste. Punkte = '
+            'Gewicht × Erfüllung × Anzahl. Länder zählen nicht.</div>')
+    return (kpis + '<div class="panel">'
+            + h_table(["Karte", "Anz.", "profitiert von", "Geber im Deck", "Erfüllung", "Punkte", "Partner im Deck"],
+                      rows, left=(0, 2, 6)) + note + '</div>')

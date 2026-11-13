@@ -54,6 +54,7 @@ Projektordner geklärt; Abweichungen davon stehen mit Regelnummer im Code bzw. i
 | `components/removal.py` | Removal-Erkennung und Removal-Score, Flash/Deathtouch, Abwerfen |
 | `components/graveyard.py` | Friedhof-Score (Zweitverwertung, Zurückholen, Ressource) |
 | `components/cardkinds.py` | Kartentypen und Kartenfluss für Seitenleiste und Bericht |
+| `components/synergy.py` | Synergiewert: Geber/Nehmer je Karte aus den Kartenfeldern, Deckwert (Bericht) und Synergie-Bonus im Live-Draft |
 | `components/coverage.py` | Modell-Abdeckung: erkennt aus dem Kartentext, welche Effekte noch nicht simuliert werden |
 | `components/jace.py` | Jace-Zustand in der Simulation, Effekt-Filter, Deck-Analyse |
 | `components/mulligan.py` | Mulligan-Regeln und Starthand |

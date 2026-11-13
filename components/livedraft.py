@@ -17,9 +17,10 @@ from components import cardarchetypes
 from components import draftstats
 from components import gamestate
 from components import signals
+from components import synergy
 from components import tricks
 from components.cardkinds import FLOW_ORDER, flow_kinds
-from components.cards import land_produced
+from components.cards import card_info, land_produced
 from components.removal import removal_info
 from components.deckfile import parse_pool
 from components.scryfall import CACHE_FILE, card_image_url, fetch_cards_cached
@@ -48,7 +49,17 @@ def card_summary(sc, name, set_code="", number=""):
             "land": land, "found": bool(sc), "creature": "Creature" in front,
             "removal": (removal_info(sc) or {}).get("points", 0) if sc else 0,
             "flow": [k for k in FLOW_ORDER if k in set(flow_kinds(sc))] if sc else [],
-            "produces": land_produced(sc) if sc and land else []}
+            "produces": land_produced(sc) if sc and land else [], "syn": _syn_tags(sc)}
+
+
+def _syn_tags(sc):
+    """Synergie-Tags (components/synergy.py) einer Scryfall-Karte; ohne Karte oder bei einem Parserfehler leer."""
+    if not sc:
+        return {"gives": {}, "wants": {}}
+    try:
+        return synergy.card_tags(card_info(sc)[0])
+    except Exception:  # noqa: BLE001 - der Live-Draft darf an einer einzelnen Karte nicht scheitern
+        return {"gives": {}, "wants": {}}
 
 
 def pool_info(cards, main):
@@ -421,7 +432,7 @@ class LiveDraft:
         archmap = cardarchetypes.archetype_map(found, assign, [c["name"] for c in picks],
                                                [c["name"] for c in cardarchetypes.rank(pack, ratings, assign,
                                                                                       detect["main"])])
-        ranked = cardarchetypes.rank(pack, ratings, assign, detect["main"], best, detect)
+        ranked = cardarchetypes.rank(pack, ratings, assign, detect["main"], best, detect, pool=picks)
         for c in ranked:
             c["stats"] = (cardstats or {}).get(c["name"])
         names = {c["name"] for c in pack + picks}

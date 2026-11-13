@@ -10,11 +10,17 @@ from components.html_base import HTML_CSS, esc
 from components.report_cards import AVAIL_GREEN, AVAIL_YELLOW
 from components.report_sections import JACE_RULES, render_logic_section
 from components.stats import TRAFFIC
+from components import synergy
 
 _D = parse_args(["deck.txt"])  # Standardwerte der Kommandozeile
 # Abschnitte, die nur erscheinen, wenn der Bericht sie auch hat (z. B. Deck-Vergleich nur bei mehreren Decks)
 CONDITIONAL = {"vergleich", "great", "mulligan", "jace", "farben", "landcycling", "ziehen", "surveil", "prepared",
                "splashkarten", "removal", "ramp", "friedhof"}
+
+
+def _de(x):
+    """Zahl mit deutschem Komma (6,0 -> "6", 3,5 -> "3,5")."""
+    return f"{x:g}".replace(".", ",")
 
 
 def _ul(items):
@@ -99,6 +105,22 @@ def _sections():
              "Kontrolle. Der Goldfish nutzt den Score nicht (es gibt keinen Gegner); im Kampfmodell wirken die "
              "Removal-Effekte selbst, der Score dient dort nur bei Gleichstand (z. B. welche Karte aus der Hand des "
              "Gegners gewählt wird)."]))),
+        ("synergie", "Synergie", _panel("Geber und Nehmer", _ul([
+            "Jede Karte bekommt aus ihren erkannten Effekten Tags: was sie dem Deck <b>gibt</b> (Lebensgewinn, "
+            "+1/+1-Marken, Buffs, Schutz wie Hexproof oder Indestructible, Nichtkreatur-Zauber, Surveil, Token, "
+            "Opfer-Möglichkeiten, Artefakte, Kreaturtypen …) und wovon sie <b>profitiert</b> (z. B. „Whenever you gain "
+            "life“, Prowess, Belohnungen für Marken, Sterbe- und Opfer-Auslöser, Friedhofsgröße).",
+            "<b>Aktive Synergie</b>: Wer Marken, Buffs oder Schutz verteilt, profitiert von Kreaturen im Deck; Auren und "
+            "Ausrüstung profitieren von guten Trägern (Flying, Menace, Trample, Double Strike, Hexproof, Ward, "
+            "unblockbar) und von Schutz.",
+            "<b>Erfüllung</b> je Nehmer = 1 − (1 − p)<sup>k</sup>, k = Geber-Einheiten im Deck ohne die eigene Kopie, p "
+            "je Ressource (z. B. Lebensgewinn 0,2, Nichtkreatur-Zauber 0,12, Kreaturen 0,08). Der dritte Geber bringt "
+            "also weniger als der erste. Punkte = Gewicht des Nehmers × Erfüllung × Anzahl; die Summe ist der "
+            f"Synergiewert. Ampel je 40 Karten: grün ab {_de(synergy.GREEN)}, gelb ab {_de(synergy.YELLOW)}.",
+            f"<b>Ohne Partner</b>: Nehmer, deren Erfüllung unter {synergy.ORPHAN:.0%} liegt – die Karte wartet im Deck auf "
+            "Karten, die es kaum gibt.",
+            "Länder zählen nicht (Landfall ist in jedem Deck erfüllt). Im Live-Draft kommt der Zuwachs des "
+            "Synergiewerts durch eine Pack-Karte (× 2, höchstens + 2) zu ihren Punkten."]))),
         ("friedhof", "Friedhof", _panel("Friedhof-Score", _ul([
             "Jede Karte bekommt Punkte für ihre beste Nutzung des Friedhofs (aus dem Kartentext): <b>Zweitverwertung</b> "
             "1,0 (die Karte selbst noch einmal: Flashback, Escape, Unearth, Disturb, Jump-start, Retrace, „return this "
@@ -352,6 +374,12 @@ def _live_help():
             "zugeordnet ist (grün hervorgehoben, „passt zu …“), + 4, wenn er ihr bester Archetyp ist (lila, "
             "pulsierender Rand, „am besten in …“), sonst + 1, wenn ihre Farben in den Farben des "
             "Archetyps liegen (hellgrün). NeverPlay hat immer 0 Punkte.",
+            "<b>Synergie</b>: Dazu kommt, wie viel die Karte den Synergiewert deiner Picks erhöht (bis + 2, „Synergie "
+            "+ … mit …“ unter der Karte, im Seitenfenster „Syn+“). Mit erkanntem Archetyp zählen nur Picks in seinen "
+            "Farben. Synergie heißt: Eine Karte profitiert von anderen (Lebensgewinn-Auslöser und Lebensgewinn, Prowess "
+            "und Nichtkreatur-Zauber, Marken-Belohnungen und Marken, Auren und Ausrüstung mit fliegenden oder "
+            "geschützten Trägern, Marken und Buffs verteilen mit genug Kreaturen, Kreaturtypen …). Der Bericht hat "
+            "dazu den Abschnitt „Synergie“.",
             "<b>Top-Pick</b>: Eine Karte ab MustPlay, deren bester Archetyp dein Archetyp ist (erkannt oder selbst "
             "gewählt) oder bei der du nahe dran bist (ihr bester Archetyp hat Punkte und liegt höchstens 3 Punkte "
             "hinter dem führenden), steht lila und pulsierend oben im Live-Bereich („◆ Top-Pick: …“) und blinkend "

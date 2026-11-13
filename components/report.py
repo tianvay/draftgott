@@ -14,7 +14,8 @@ from components.mulligan import MULL_COLORS, MULL_LANDS_HIGH, MULL_LANDS_LOW
 from components.report_sections import render_compare_section, render_jace_section, render_logic_section
 from components.coverage import METRIC_ORDER, STATUS_TEXT, metrics_of, summarize
 from components.report_cards import (all_colors_row, render_archetype_panel, render_stats_panel, avail_level, render_color_availability, render_color_curves,
-                                     render_graveyard_table, render_removal_table, render_type_table)
+                                     render_graveyard_table, render_removal_table, render_synergy_table,
+                                     render_type_table)
 from components.simulation import card_label
 from components.stats import TRAFFIC, lethal_level, timing_stats, traffic_level
 
@@ -363,6 +364,12 @@ def render_details(ctx, suffix="", switch=None):
     removal_html = render_removal_table(ctx)
     if removal_html:
         add("removal", "Removal", "Wie viel Removal hat das Deck? Bewertung je Karte aus dem Kartentext.", removal_html)
+
+    # ---------------- Synergie (Geber/Nehmer aus den Kartenfeldern, components/synergy.py)
+    synergy_html = render_synergy_table(ctx)
+    if synergy_html:
+        add("synergie", "Synergie", "Welche Karten profitieren von anderen Karten im Deck, und wie gut ist das erfüllt?",
+            synergy_html)
 
     # ---------------- Friedhof (Score aus dem Kartentext und Messung in der Simulation)
     gy_html = render_graveyard_table(ctx)

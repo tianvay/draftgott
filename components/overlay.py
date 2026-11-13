@@ -336,6 +336,8 @@ def rows_for(snap):
             parts.append("[" + ", ".join(_arch_name(snap, a) for a in c["arch"]) + "]")
         if c.get("removal"):
             parts.append(f"R{_num(c['removal'])}")
+        if c.get("synergy"):
+            parts.append(f"Syn+{_num(c['synergy'])}")
         stats = c.get("stats") or {}
         if stats.get("games"):
             parts.append(f"{round(100 * stats['wins'] / stats['games'])} % ({stats['games']} G.)")

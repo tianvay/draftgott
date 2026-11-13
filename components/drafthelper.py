@@ -909,6 +909,7 @@ h2 small{color:var(--muted);font-weight:400}
   height:24px;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;z-index:2}
 .mtile .pts{color:var(--muted);font-size:11.5px;white-space:nowrap}
 .mtile .why{font-size:11.5px;color:#146c3d;font-weight:700;margin:0 2px 2px}
+.mtile .why.syn{color:#0f5f86}
 .mtile.c-matchwinner .badge{background:#8e2bd6}.mtile.c-splashworthy .badge{background:#e0a800;color:#2d2100}.mtile.c-mustplay .badge{background:#2e9e5b}
 .mtile.c-filler .badge{background:#6b7d99}.mtile.c-neverplay .badge{background:#8b2f2f}
 #setview{display:none;position:fixed;inset:0;z-index:12;background:var(--bg);flex-direction:column}
@@ -958,7 +959,7 @@ h2 small{color:var(--muted);font-weight:400}
     <div class="mgrid" id="lpack"></div>
     <div class="ltipbox" id="ltipbox"><h3 id="ltiphead"></h3><ul class="ltips" id="ltips"></ul></div>
     <div class="lmsg">Reihenfolge: Kategorie (★ 4, MP 3, ohne 1,5, Fi 1, NP immer 0) + 3, wenn die Karte dem
-      Archetyp zugeordnet ist (grün), + 4, wenn er ihr bester ist (lila), sonst + 1, wenn ihre Farben passen (hellgrün). Archetyp: aus deinen Picks
+      Archetyp zugeordnet ist (grün), + 4, wenn er ihr bester ist (lila), sonst + 1, wenn ihre Farben passen (hellgrün), + Synergie mit deinen Picks (bis 2). Archetyp: aus deinen Picks
       (Farben, Zuordnung, Kategorien), siehe <a href="/howitworks.html#hiw-live" target="_blank">So funktioniert es</a>.
       Die Picks landen in der Kartenpool-Datei, die Karten unten zeigen den Pool.</div></section>
   <details class="help" id="archetypes" open><summary id="archtitle">Archetypen</summary>
@@ -1749,6 +1750,10 @@ function miniTile(c,info){
   if(c.removal){const rt=el("span","rtag","Removal "+String(c.removal).replace(".",","));
     rt.title="Removal-Punkte der Karte (wie im Bericht)";cap.appendChild(rt)}
   const stl=statLine(c.stats||cardstats[c.name]);if(stl)d.appendChild(stl);
+  if(c.synergy){const sy=el("div","why syn","Synergie +"+String(c.synergy).replace(".",",")+
+    (c.syn_with&&c.syn_with.length?" mit "+c.syn_with.slice(0,3).join(", ")+(c.syn_with.length>3?" …":""):""));
+    sy.title="Zuwachs des Synergiewerts, wenn die Karte zu deinen Picks kommt (zählt zu den Punkten, höchstens +2)";
+    d.appendChild(sy)}
   if(info.level==="arch")d.appendChild(el("div","why","passt zu "+archName(mainArch())));
   if(info.level==="best")d.appendChild(el("div","why","am besten in "+archName(mainArch())));
   else if(c.hint==="near")d.appendChild(el("div","why","◆ am besten in "+archName(c.best)+" (nahe dran)"));

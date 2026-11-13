@@ -17,11 +17,14 @@ nahe dran ("near": er hat Punkte und liegt hoechstens NEAR_POINTS hinter dem bes
 
 Pack (rank): Punkte je Karte = Bewertung (Matchwinner 5, Splashworthy 4, MustPlay 3, unbewertet 1,5, Filler 1) + 3, wenn sie dem
 erkannten Archetyp zugeordnet ist (+ 4, wenn er ihr bester ist), sonst + 1, wenn ihre Farben in dessen Farben liegen. NeverPlay hat immer 0.
+Mit pool (bisherige Picks) kommt der Synergie-Zuwachs der Karte zum Pool dazu (components/synergy.pick_bonus, bis
++2); mit erkanntem Archetyp zaehlen nur Picks in dessen Farben (farblose immer).
 """
 import json
 import os
 import pathlib
 
+from components import synergy
 from components.archetypes import PAIRS
 
 WEIGHT = {"matchwinner": 3, "splashworthy": 2, "mustplay": 2, "filler": 1, "neverplay": 0}  # unbewertet: 1
@@ -188,16 +191,26 @@ def near(detect, pair):
     return "near" if mine > 0 and mine >= top - NEAR_POINTS else ""
 
 
-def rank(pack, ratings, assign, main, best=None, detect=None):
+def rank(pack, ratings, assign, main, best=None, detect=None, pool=None):
     """Pack-Karten mit "rating", "arch", "best", "level", "hint" und "points", nach Punkten sortiert (Gleichstand:
-    Bewertung, Name). hint nur mit detect (siehe Modulbeschreibung)."""
+    Bewertung, Name). hint nur mit detect (siehe Modulbeschreibung). Mit pool zusaetzlich "synergy" (Bonus) und
+    "syn_with" (Partner im Pool)."""
+    if pool is not None:
+        mine = [dict(c, qty=c.get("qty", 1)) for c in pool
+                if not c.get("land") and (not main or set(c.get("colors") or []) <= set(main))]
     out = []
     for c in pack:
         r = (ratings or {}).get(c["name"], "")
         lv = level(c, assign, main, best)
         top = (best or {}).get(c["name"], "")
         points = 0 if r == "neverplay" else POINTS.get(r, 1.5) + LEVEL_POINTS[lv]
+        extra = {}
+        if pool is not None:
+            bonus, partners = synergy.pick_bonus(mine, c) if c.get("syn") else (0, [])
+            extra = {"synergy": bonus, "syn_with": partners}
+            if r != "neverplay":
+                points = round(points + bonus, 1)
         out.append(dict(c, rating=r, arch=list((assign or {}).get(c["name"], [])), best=top, level=lv, points=points,
-                        hint=near(detect, top) if r in HINT_RATINGS else ""))
+                        hint=near(detect, top) if r in HINT_RATINGS else "", **extra))
     out.sort(key=lambda c: (-c["points"], RATING_ORDER.get(c["rating"], 2), c["name"]))
     return out
