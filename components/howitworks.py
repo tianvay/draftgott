@@ -427,6 +427,9 @@ def _live_help():
             "Removal-Punkten. Aktivierbare Fähigkeiten auf dem Feld zählen nicht, ebenso wenig Mana aus Kreaturen "
             "oder Treasure.",
             "Die Liste ändert sich mit jedem Land, das er spielt oder tappt.",
+            "Fährt die Maus über einen Trick, erscheint ein kleines Fenster mit dem Kartentext (Kosten, Typzeile, "
+            "Stärke/Widerstand, Text und Removal-Punkte, englisch von Scryfall); auf der Seite steht derselbe Text "
+            "als Hinweis an der Karte.",
             "Gegnerfarben: Hat der Gegner Zauber in mindestens zwei Farben offen gezeigt, kommen nur Tricks in diesen "
             "Farben und in den Farben seiner Standardländer in Frage (ein Tri-Land zeigt sonst Farben, die er gar "
             "nicht spielt). Farblose Tricks gehen immer.",

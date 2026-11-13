@@ -49,9 +49,13 @@ def trick_cards(set_cards):
         cost = sc.get("mana_cost") or front.get("mana_cost") or ""
         colors = sc.get("colors") or front.get("colors") or []
         mv = sc.get("cmc") or 0
+        type_line = (front.get("type_line") or sc.get("type_line") or "").split(" // ")[0]
+        power, tough = front.get("power", sc.get("power")), front.get("toughness", sc.get("toughness"))
         out.append({"name": sc["name"], "cost": cost, "mv": int(mv), "colors": [c for c in ORDER if c in colors],
                     "flash": "Instant" not in (front.get("type_line") or sc.get("type_line") or ""),
-                    "removal": (removal_info(sc) or {}).get("points", 0)})
+                    "removal": (removal_info(sc) or {}).get("points", 0),
+                    "type": type_line, "text": front.get("oracle_text") or sc.get("oracle_text") or "",
+                    "pt": f"{power}/{tough}" if power is not None and tough is not None else ""})
     return out
 
 

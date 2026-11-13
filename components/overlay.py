@@ -181,6 +181,86 @@ def trick_rows(t):
     return rows
 
 
+def trick_tip(c):
+    """Kartentext fuer das Mausfenster im Trick-Warner: Name und Kosten, Typzeile (mit Staerke/Widerstand), Text."""
+    lines = [f"{c['name']}  {c.get('cost') or '{0}'}"]
+    if c.get("type"):
+        lines.append(c["type"] + (f" · {c['pt']}" if c.get("pt") else ""))
+    lines += ["", c.get("text") or "Kein Kartentext gespeichert (Drafthelper neu starten)."]
+    if c.get("removal"):
+        lines += ["", f"Removal {_num(c['removal'])} P."]
+    return "\n".join(lines)
+
+
+def trick_tips(snap):
+    """Mausfenster-Texte der jetzt moeglichen Tricks, nach Kartenname."""
+    g = (snap or {}).get("game") or {}
+    t = g.get("tricks") if g.get("active") else None
+    return {c["name"]: trick_tip(c) for c in (t or {}).get("now") or []}
+
+
+def tip_for_line(line, tips):
+    """Text fuer eine Zeile des Trick-Warners ("• Name  {Kosten} ..."), sonst None."""
+    if not line.startswith("• "):
+        return None
+    name = line[2:].split("  ")[0]
+    return tips.get(name)
+
+
+class _Tooltip:
+    """Kleines randloses Fenster am Mauszeiger, das den Kartentext zeigt."""
+
+    def __init__(self, master):
+        import tkinter as tk
+        self.win = tk.Toplevel(master)
+        self.win.withdraw()
+        self.win.overrideredirect(True)
+        self.win.attributes("-topmost", True)
+        self.label = tk.Label(self.win, bg="#232b38", fg=COLORS["ink"], font=("Segoe UI", 10), justify="left",
+                              wraplength=300, padx=10, pady=8, highlightthickness=1,
+                              highlightbackground=COLORS["hint"])
+        self.label.pack()
+        self.text = None
+
+    def show(self, text, x, y):
+        if text != self.text:
+            self.label.configure(text=text)
+            self.text = text
+        self.win.update_idletasks()
+        w, h = self.win.winfo_reqwidth(), self.win.winfo_reqheight()
+        sw, sh = self.win.winfo_screenwidth(), self.win.winfo_screenheight()
+        px = x + 16 if x + 16 + w <= sw else max(0, x - w - 16)
+        py = min(y + 12, max(0, sh - h))
+        self.win.geometry(f"+{px}+{py}")
+        self.win.deiconify()
+        self.win.lift()
+
+    def hide(self, _e=None):
+        if self.text is not None:
+            self.win.withdraw()
+            self.text = None
+
+
+def _bind_trick_tips(text, get_tips):
+    """Maus ueber einer Trick-Zeile zeigt deren Kartentext; get_tips() liefert die aktuellen Texte."""
+    tip = _Tooltip(text)
+
+    def motion(e):
+        idx = text.index(f"@{e.x},{e.y}")
+        line = text.get(f"{idx} linestart", f"{idx} lineend")
+        bbox = text.dlineinfo(idx)
+        inside = bbox is not None and bbox[1] <= e.y <= bbox[1] + bbox[3]
+        found = tip_for_line(line, get_tips()) if inside else None
+        if found:
+            tip.show(found, e.x_root, e.y_root)
+        else:
+            tip.hide()
+
+    text.bind("<Motion>", motion)
+    text.bind("<Leave>", tip.hide)
+    return tip
+
+
 def trick_window_rows(snap):
     """Zeilen des Trick-Warners (eigenes Fenster): Zug und die Tricks bei offenem Mana des Gegners."""
     g = (snap or {}).get("game") or {}
@@ -631,6 +711,7 @@ def run(url, interval_ms=1000):
         _styles(t)
     state = {"last": None, "tricks": None, "seen": False, "misses": 0, "mini": False, "big": None, "snap": None,
              "party": None, "first": True, "blink": False}
+    trick_tip_win = _bind_trick_tips(trick_text, lambda: trick_tips(state["snap"]))
 
     def set_mini(mini):
         x, y = root.winfo_x(), root.winfo_y()
@@ -671,6 +752,7 @@ def run(url, interval_ms=1000):
         trows = trick_window_rows(snap)
         if trows != state["tricks"]:
             state["tricks"] = trows
+            trick_tip_win.hide()
             _fill(trick_text, trows)
         show_windows()
 

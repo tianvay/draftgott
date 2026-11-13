@@ -1911,7 +1911,8 @@ function renderTricks(box,t){
     (t.spell_colors&&t.spell_colors.length?" · zeigt "+t.spell_colors.join(""):"")));
   const list=(cards,cls)=>{const l=el("div","tl"+(cls?" "+cls:""));
     for(const c of cards){const s=el("span",c.removal?"rem":null,c.name+" "+(c.cost||"{0}")+(c.rating?" · "+(RATING_SHORT[c.rating]||c.rating):""));
-      if(c.removal)s.title="Removal "+num(c.removal)+" P.";l.appendChild(s)}return l};
+      s.title=[c.name+" "+(c.cost||"{0}"),(c.type||"")+(c.pt?" · "+c.pt:""),"",c.text||"",
+        c.removal?"\nRemoval "+num(c.removal)+" P.":""].join("\n").trim();l.appendChild(s)}return l};
   if(!t.open)d.appendChild(el("div","lmsg","Kein Mana offen: jetzt keine Tricks."));
   else if(!t.now.length)d.appendChild(el("div","lmsg","Keine Instants oder Flash-Karten mit diesem Mana."));
   else d.appendChild(list(t.now));
