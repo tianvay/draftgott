@@ -278,7 +278,7 @@ def rows_for(snap):
         rows.append((text, "arch" if a["pack"] and a["colors"] == main else ("color" if a["pack"] else "sub")))
     if status == "waiting" or not snap.get("pack"):
         rows.append(("Warte auf das nächste Pack …", "msg"))
-        return rows
+        return rows + tip_rows(snap, main)
     for c in snap["pack"]:
         tag = "never" if c.get("rating") == "neverplay" else (c.get("level") or "plain")
         parts = [MARK.get(c.get("level") or "", "  "), c["name"], "".join(c.get("colors") or []) or "C"]
@@ -292,7 +292,16 @@ def rows_for(snap):
         if stats.get("games"):
             parts.append(f"{round(100 * stats['wins'] / stats['games'])} % ({stats['games']} G.)")
         rows.append(("  ".join(parts), tag))
-    return rows
+    return rows + tip_rows(snap, main)
+
+
+def tip_rows(snap, main):
+    """Hinweise zum erkannten Archetyp (components/archetypes.py) als letzte Zeilen; leer ohne Archetyp oder ohne
+    hinterlegte Archetypen fuer das Set."""
+    a = next((a for a in snap.get("archetypes") or [] if main and a["colors"] == main), None)
+    if not a or not a.get("tips"):
+        return []
+    return [(f"Tipps zu {a['name']}", "head2")] + [(f"• {t}", "tip") for t in a["tips"]]
 
 
 def deck_button(snap):
@@ -357,6 +366,8 @@ def run(url, interval_ms=1000):
     text.tag_configure("never", foreground=COLORS["never"], spacing1=2, spacing3=2)
     text.tag_configure("msg", foreground=COLORS["muted"], font=("Segoe UI", 10, "italic"))
     text.tag_configure("head2", foreground=COLORS["head"], font=("Segoe UI", 11, "bold"), spacing1=2, spacing3=4)
+    text.tag_configure("tip", foreground=COLORS["ink"], font=("Segoe UI", 10), lmargin1=6, lmargin2=18,
+                       spacing3=2)
     for tag in ("arch", "color", "plain", "head", "msg"):  # Kasten: groessere Schrift
         text.tag_configure("mini_" + tag, font=("Segoe UI", 13, "bold"), spacing1=3, spacing3=3,
                            background=COLORS.get(tag, COLORS["bg"]) if tag in ("arch", "color") else COLORS["bg"],

@@ -853,7 +853,11 @@ h2 small{color:var(--muted);font-weight:400}
 #lgame .gcols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:4px 24px}
 .mtile .rtag{background:#fff3d6;color:#7a5200;border-radius:6px;padding:0 5px;font-size:11px;font-weight:700}
 #live .lmsg{color:var(--muted);margin:8px 0 0;font-size:13.5px}
-#live .ltips{margin:6px 0 0;padding-left:20px;font-size:13px;color:#33415c}
+#live .ltipbox{display:none;margin:10px 0 0;padding:8px 12px;border-left:4px solid #1f7a45;background:#eef6f0;
+  border-radius:6px}
+#live .ltipbox.show{display:block}
+#live .ltipbox h3{margin:0;font-size:14px}
+#live .ltips{margin:4px 0 0;padding-left:20px;font-size:13px;color:#33415c}
 .mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-top:10px}
 .mtile{background:var(--card);border:3px solid var(--line);border-radius:12px;padding:6px;position:relative}
 .mtile.lv-arch{border-color:#2e9e5b;box-shadow:0 0 0 3px #2e9e5b55;background:#f2fbf5}
@@ -907,8 +911,9 @@ h2 small{color:var(--muted);font-weight:400}
     <div id="linfo"></div>
     <div id="lmap"></div>
     <div id="lgame"></div>
-    <div class="lmsg" id="lmsg"></div><ul class="ltips" id="ltips"></ul>
+    <div class="lmsg" id="lmsg"></div>
     <div class="mgrid" id="lpack"></div>
+    <div class="ltipbox" id="ltipbox"><h3 id="ltiphead"></h3><ul class="ltips" id="ltips"></ul></div>
     <div class="lmsg">Reihenfolge: Kategorie (★ 4, MP 3, ohne 1,5, Fi 1, NP immer 0) + 3, wenn die Karte dem
       Archetyp zugeordnet ist (grün), sonst + 1, wenn ihre Farben passen (hellgrün). Archetyp: aus deinen Picks
       (Farben, Zuordnung, Kategorien), siehe <a href="/howitworks.html#hiw-live" target="_blank">So funktioniert es</a>.
@@ -1734,7 +1739,9 @@ function renderLive(){
     live.status==="waiting"?"Warte auf das nächste Pack …":(live.message||""));
   $("lmsg").textContent=msg+(live.unknown&&live.unknown.length?" ("+live.unknown.length+" Karten ohne Namen: Arena-Kartendatenbank nicht gefunden?)":"");
   const tips=$("ltips");tips.textContent="";
-  const a=(live.archetypes||[]).find(x=>x.colors===m);if(a)a.tips.forEach(t=>tips.appendChild(el("li",null,t)));
+  const a=live.complete?null:(live.archetypes||[]).find(x=>x.colors===m);  // nur waehrend des Drafts
+  if(a)a.tips.forEach(t=>tips.appendChild(el("li",null,t)));
+  $("ltiphead").textContent=a?"Tipps zu "+a.name:"";$("ltipbox").classList.toggle("show",!!(a&&a.tips.length));
   renderInfo();renderMap();renderGame();
   const g=$("lpack");g.textContent="";
   if(live.game&&live.game.active)return;

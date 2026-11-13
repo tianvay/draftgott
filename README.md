@@ -216,6 +216,8 @@ In Arena muss unter Optionen → Konto „Detailed Logs (Plugin Support)“ eing
 - **Archetypen im Draft:** Tabelle (und im Seitenfenster kurz) je Archetyp mit den zugeordneten Picks und
   Pack-Karten. Nur die eigene Zuordnung zählt: Karten ohne Zuordnung gehören keinem Archetyp an, eine Karte kann zu
   mehreren gehören.
+- **Tipps zum Archetyp:** Ist ein Archetyp erkannt (oder gewählt) und hat das Set Archetypen mit Hinweisen
+  (`components/archetypes.py`), stehen dessen Tipps während des Drafts unten auf der Seite und im Seitenfenster.
 - **Im Spiel: Ziehchancen:** Während eines Spiels zeigen Seite und Seitenfenster die eigene Bibliothek (Deck beim
   Spielstart minus Hand, Spielfeld, Friedhof, Exil, Stapel): je Gruppe (Land, Kreatur, Removal, Quellen je Farbe)
   und je Karte die Chance für die nächste Karte und für mindestens eine unter den nächsten 3 Karten

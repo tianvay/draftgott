@@ -363,6 +363,8 @@ def _live_help():
             "Eine Tabelle zeigt je Archetyp, welche deiner Picks und welche Karten des aktuellen Packs ihm "
             "zugeordnet sind (Picks mit Anzahl). Grün: der erkannte Archetyp. Das Seitenfenster zeigt dasselbe "
             "kurz („Sacrifice: 3 Picks · im Pack: …“).",
+            "Tipps zum Archetyp: Ist ein Archetyp erkannt oder gewählt und hat das Set Archetypen mit Hinweisen, "
+            "stehen dessen Tipps während des Drafts unten im Live-Bereich und unten im Seitenfenster.",
             "Es zählt nur deine eigene Zuordnung (Knöpfe unter den Karten, kartenarchetypen.json): Karten ohne "
             "Zuordnung gehören keinem Archetyp an, eine Karte kann zu mehreren gehören. Archetypen ohne Karten "
             "fehlen.",

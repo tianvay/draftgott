@@ -317,5 +317,40 @@ class OverlayRowsTests(unittest.TestCase):
         self.assertTrue(overlay.rows_for(None))  # Drafthelper nicht erreichbar
 
 
+class OverlayTipsTests(unittest.TestCase):
+    """Hinweise des erkannten Archetyps stehen unten im Seitenfenster, wenn das Set Archetypen hat."""
+    ARCHS = [{"colors": "WB", "name": "Testgilde", "tips": ["Erster Tipp", "Zweiter Tipp"]},
+             {"colors": "RG", "name": "Andere", "tips": ["Falscher Tipp"]}]
+
+    def snap(self, main, status="pack", archetypes=ARCHS):
+        return {"status": status, "pick": 5, "message": "", "archetypes": archetypes,
+                "detect": {"main": main, "manual": False, "scores": []},
+                "pack": [] if status == "waiting" else
+                [{"name": "Test Gold", "level": "arch", "rating": "", "colors": ["W", "B"], "arch": [], "points": 4}]}
+
+    def test_tips_of_the_detected_archetype_come_last(self):
+        rows = overlay.rows_for(self.snap("WB"))
+        texts = [t for t, _ in rows]
+        gold = next(i for i, t in enumerate(texts) if "Test Gold" in t)
+        head = next(i for i, t in enumerate(texts) if t.startswith("Tipps"))
+        self.assertGreater(head, gold)
+        self.assertIn("Testgilde", texts[head])
+        self.assertEqual([t for t, s in rows[head + 1:]], ["• Erster Tipp", "• Zweiter Tipp"])
+        self.assertEqual({s for _, s in rows[head + 1:]}, {"tip"})
+        self.assertNotIn("Falscher Tipp", " ".join(texts))
+
+    def test_tips_also_while_waiting(self):
+        rows = overlay.rows_for(self.snap("WB", status="waiting"))
+        self.assertEqual(rows[-1][0], "• Zweiter Tipp")
+        self.assertTrue(any("nächste Pack" in t for t, _ in rows))
+
+    def test_no_tips_without_archetype_or_set(self):
+        for snap in (self.snap(None), self.snap("WB", archetypes=None), self.snap("UB")):
+            self.assertFalse(any(t.startswith("Tipps") or t.startswith("•") for t, _ in overlay.rows_for(snap)))
+
+    def test_no_tips_in_the_mini_box(self):
+        self.assertFalse(any("Tipp" in t for t, _ in overlay.mini_rows(self.snap("WB"))))
+
+
 if __name__ == "__main__":
     unittest.main()
