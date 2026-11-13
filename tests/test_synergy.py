@@ -165,3 +165,57 @@ class ReportTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DrafthelperTest(unittest.TestCase):
+    """Synergiewert je Variante (Core + Splash bzw. Core + NoSplash) fuer die Seitenleiste des Drafthelpers."""
+
+    def pool(self):
+        return [{"name": "Monk", "qty": 2, "land": False, "syn": synergy.card_tags(PROWESS)},
+                {"name": "Shock", "qty": 4, "land": False, "syn": synergy.card_tags(INSTANT)},
+                {"name": "Plains", "qty": 1, "land": True, "syn": {"gives": {}, "wants": {}}}]
+
+    def test_variants_count_core_plus_group(self):
+        marks = [["core", "core"], ["splash", "splash", "off", "off"], ["core"]]
+        out = synergy.variant_synergy(self.pool(), marks, {"Plains": {"core": 9, "splash": 0, "nosplash": 1}})
+        self.assertGreater(out["splash"]["score"], 0)
+        self.assertEqual(out["nosplash"]["score"], 0)
+        self.assertEqual(out["splash"]["cards"], 2 + 2 + 1 + 9)
+        self.assertEqual(out["nosplash"]["cards"], 2 + 1 + 10)
+        self.assertEqual(out["nosplash"]["orphans"], ["Monk (Nichtkreatur-Zauber)"])
+        self.assertIn(out["splash"]["level"], ("green", "yellow", "red"))
+
+    def test_pool_cards_carry_tags(self):
+        from tests.test_drafthelper import load
+        cards, _basics, _sig = load()
+        spell = next(c for c in cards if c["name"] == "Test Spell")
+        self.assertIn("spells", spell["syn"]["gives"])
+
+    def test_endpoint(self):
+        import io
+        import threading
+        import urllib.request
+        from unittest import mock
+        from components import drafthelper as dh
+        from tests.fixtures import args_for
+        from tests.test_drafthelper import load
+        cards, basics, sig = load()
+        app = {"pool": cards, "basics": basics, "signature": sig, "args": args_for(["--drafthelper"]),
+               "simulate": lambda entries, args, progress: "", "save": lambda html, args: None,
+               "job": dh.Job(), "options": [1000], "file": "pool.txt"}
+        with mock.patch("sys.stderr", io.StringIO()):
+            server = dh.LocalServer(("127.0.0.1", 0), dh.make_handler(app))
+            threading.Thread(target=server.serve_forever, daemon=True).start()
+            try:
+                marks = [["core" if not c["land"] else "off"] * c["qty"] for c in cards]
+                req = urllib.request.Request(f"http://127.0.0.1:{server.server_address[1]}/api/synergy",
+                                             data=json.dumps({"marks": marks, "basics": {}}).encode(),
+                                             headers={"Content-Type": "application/json"})
+                with urllib.request.urlopen(req, timeout=10) as r:
+                    answer = json.loads(r.read())
+            finally:
+                server.shutdown()
+                server.server_close()
+        self.assertTrue(answer["ok"])
+        self.assertEqual(set(answer["variants"]), {"splash", "nosplash"})
+        self.assertIn("score", answer["variants"]["splash"])

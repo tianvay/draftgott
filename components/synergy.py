@@ -436,6 +436,28 @@ def level(score, deck_size):
     return "green" if score + 1e-9 >= GREEN * s else ("yellow" if score + 1e-9 >= YELLOW * s else "red")
 
 
+def variant_synergy(pool, marks, basics=None):
+    """Drafthelper: Synergiewert je Variante. pool: Kartenangaben mit "name", "qty", "land", "syn"; marks: je Karte
+    die Markierung jeder Kopie (core/splash/nosplash/off); basics: {Landname: {core, splash, nosplash}}. Gibt
+    {"splash"|"nosplash": {"score", "level", "cards", "orphans": ["Name (Ressource, ...)"]}} zurueck."""
+    out = {}
+    for g in ("splash", "nosplash"):
+        entries, cards = [], 0
+        for c, ms in zip(pool, marks):
+            n = sum(1 for m in ms if m in ("core", g))
+            cards += n
+            if n and not c.get("land"):
+                entries.append({"name": c["name"], "qty": n, "syn": c.get("syn") or {}})
+        cards += sum(int((b or {}).get("core") or 0) + int((b or {}).get(g) or 0) for b in (basics or {}).values())
+        res = deck_synergy(entries)
+        missing = {}
+        for r in res["orphans"]:
+            missing.setdefault(r["name"], []).append(r["label"])
+        out[g] = {"score": res["score"], "level": level(res["score"], cards), "cards": cards,
+                  "orphans": [f"{n} ({', '.join(ls)})" for n, ls in sorted(missing.items())]}
+    return out
+
+
 def entries_from_rows(rows):
     """Bericht: ctx["rows"] (Name, Anzahl, Card, Text) -> Eintraege fuer deck_synergy."""
     return [{"name": n, "qty": q, "syn": card_tags(c)} for n, q, c, _s in rows]

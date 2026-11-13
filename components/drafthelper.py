@@ -37,6 +37,7 @@ from components import archetypes as set_archetypes
 from components import cardarchetypes
 from components import draftstats
 from components import ratings as card_ratings
+from components import synergy
 from components.arenalog import default_log_path
 from components.livedraft import LiveDraft, card_summary
 from components.scryfall import fetch_set_cards
@@ -132,6 +133,7 @@ def load_pool(path, refresh=False, allow_empty=False):
             "ramp": bool(model and (model.mana_src or model.treasure)),  # Manaquelle oder Treasure
             "gy_points": (gy_info(sc) or {}).get("points", 0) if sc else 0,  # Friedhof-Score
             "gy_enabler": bool(sc and gy_enabler(sc)),
+            "syn": synergy.card_tags(model),  # Synergie-Tags (Geber/Nehmer), Wert je Variante ueber /api/synergy
         })
     order = {"deck": 0, "sideboard": 1}  # je Bereich: Nichtlaender nach Manawert, Laender zuletzt
     cards.sort(key=lambda c: (order.get(c["section"], 2), c["land"], c["mv"], c["name"]))
@@ -368,7 +370,7 @@ def make_handler(app):
                 self._card_archetype(path)
                 return
             if path not in ("/api/simulate", "/api/suggest", "/api/propose", "/api/lands", "/api/colors",
-                            "/api/archdetect"):
+                            "/api/archdetect", "/api/synergy"):
                 self._send("Nicht gefunden", "text/plain; charset=utf-8", 404)
                 return
             pool = app["pool"]
@@ -404,6 +406,9 @@ def make_handler(app):
                 return
             if path == "/api/colors":
                 self._json({"ok": True, **color_overview(pool, marks, basics)})
+                return
+            if path == "/api/synergy":  # Synergiewert je Variante (components/synergy.py, wie im Bericht)
+                self._json({"ok": True, "variants": synergy.variant_synergy(pool, marks, basics)})
                 return
             if path == "/api/archdetect":  # Archetyp aus den Core-Karten (Zuordnung, Farben, Kategorien)
                 found = set_archetypes.info(pool)
@@ -792,6 +797,7 @@ h2 small{color:var(--muted);font-weight:400}
 .types td.sub{padding-left:14px;color:var(--muted)}
 .types tr.sep td{border-top:2px solid var(--line)}
 .types .diff{font-weight:700}
+.types td.small{font-size:11px;color:var(--muted);vertical-align:top}
 .cc-controls{display:flex;flex-wrap:wrap;gap:6px 12px;margin:4px 0 8px;font-size:12px}
 .cc-controls label{display:flex;align-items:center;gap:5px}
 .cc-controls select{font-size:12px;padding:3px 6px}
@@ -1169,7 +1175,7 @@ function summary(){
   s.appendChild(document.createTextNode("Splash-Variante: "));s.appendChild(el("b",null,a+" Karten"));
   s.appendChild(document.createTextNode(" · NoSplash-Variante: "));s.appendChild(el("b",null,b+" Karten"));
   if(a!==b)s.appendChild(el("span","warn","  – unterschiedlich groß"));
-  overview();curve();typeOverview();renderColorCurve();scheduleColors();renderArchetypes();scheduleDetect();
+  overview();curve();typeOverview();renderColorCurve();scheduleColors();scheduleSynergy();renderArchetypes();scheduleDetect();
 }
 // Archetypen des Sets (components/archetypes.py); Hauptfarben wie archetypes.main_pair, aus den Core-Karten
 const PAIRS=["WU","UB","BR","RG","GW","WB","UR","BG","RW","UG"],COLOR_DE={W:"Weiß",U:"Blau",B:"Schwarz",R:"Rot",G:"Grün"};
@@ -1203,6 +1209,13 @@ function renderArchetypes(){
 // Farben und Quellen: gerechnet auf dem Server (components/landadvice.py, wie Land-Empfehlung und Bericht)
 let colorTimer=null,colorData=null;
 function scheduleColors(){clearTimeout(colorTimer);colorTimer=setTimeout(loadColors,200)}
+// Synergiewert je Variante vom Server (components/synergy.py, dieselbe Rechnung wie im Bericht)
+let synData=null,synTimer=null;
+function scheduleSynergy(){clearTimeout(synTimer);synTimer=setTimeout(loadSynergy,200)}
+async function loadSynergy(){
+  try{const r=await api("/api/synergy",{marks:marksPerCard(),basics:basicsBody(),cats});
+    if(r.ok){synData=r.variants;typeOverview()}}catch(e){}
+}
 async function loadColors(){
   try{const r=await api("/api/colors",{marks:marksPerCard(),basics:basicsBody(),cats});if(r.ok){colorData=r;renderColors()}}
   catch(e){}
@@ -1416,6 +1429,19 @@ function typeOverview(){
     }
     body.appendChild(tr);
   }
+  if(synData){
+    const SYN={green:"good",yellow:"warn",red:"bad"},a=synData.splash,b=synData.nosplash;
+    const tr=el("tr","sep");tr.appendChild(el("td","l","Σ Synergie-Punkte"));
+    for(const v of [a,b])tr.appendChild(el("td",SYN[v.level]+(a.score!==b.score?" diff":""),
+      v.score.toFixed(1).replace(".",",")));
+    tr.title="Wie gut die Karten zusammenpassen (Abschnitt Synergie im Bericht); Ampel grün ab 6, gelb ab 3,5 bei 40 Karten";
+    body.appendChild(tr);
+    if(a.orphans.length||b.orphans.length){
+      const o=el("tr");o.appendChild(el("td","l sub","Ohne Partner"));
+      for(const v of [a,b])o.appendChild(el("td","l small",v.orphans.join(", ")||"–"));
+      body.appendChild(o);
+    }
+  }
   tb.appendChild(body);
   const box=$("types");box.textContent="";box.className="types";box.appendChild(tb);
   box.appendChild(el("div","note",
@@ -1426,7 +1452,8 @@ function typeOverview(){
     "vorkommen. Empower Jace zählt nicht dazu (eigene Zeile). Prepared: Karten, deren Zauberhälfte als Kopie "+
     "gewirkt werden kann (nur, wenn der Pool solche Karten hat). Flash nur bei bleibenden Karten. Removal-Punkte: "+
     "1 = entfernt jede gegnerische Kreatur (Details unter „So funktioniert es“); Ampel grün ab 4, gelb ab 2,5 "+
-    "Punkten bei 40 Karten."));
+    "Punkten bei 40 Karten. Synergie-Punkte: Karten, die von anderen Karten im Deck profitieren, und wie gut das "+
+    "erfüllt ist (Ampel grün ab 6, gelb ab 3,5 bei 40 Karten); „Ohne Partner“: Karten, deren Bedarf kaum erfüllt ist."));
 }
 // Sortierung nur der Anzeige (die Reihenfolge der Zuordnungen bleibt unberuehrt)
 const COLOR_ORDER=["W","U","B","R","G","M","C","L"];
