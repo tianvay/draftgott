@@ -7,9 +7,10 @@ Gespeichert werden Anteile an der Groesse des Arena-Fensters (kartenoverlay.json
 auch, wenn das Fenster gleich proportioniert groesser oder kleiner wird; bei anderem Seitenverhaeltnis
 (size_changed) besser neu kalibrieren.
 
-Reihenfolge: die Karten werden in der Reihenfolge des Packs im Protokoll ("order" im Live-Stand) zeilenweise auf das
-Raster gelegt; jede Karte zeigt zur Kontrolle klein ihren Namen. Stimmt er nicht mit der Karte darunter, zeigt Arena
-die Karten anders sortiert.
+Reihenfolge: Arena zeigt das Pack nach Seltenheit (mythic, rare, uncommon, common) und dann nach Sammlernummer, nicht
+in der Reihenfolge des Protokolls ("order" im Live-Stand). So werden die Karten zeilenweise auf das Raster gelegt;
+fehlen Seltenheit oder Nummer, bleibt die Reihenfolge des Protokolls. Jede Karte zeigt zur Kontrolle klein ihren
+Namen. Stimmt er nicht mit der Karte darunter, sortiert Arena in diesem Fall anders.
 
 Inhalt je Karte (pack_views): oben links der Rang im Pack (nach Punkten wie im Drafthelper), oben rechts die
 Bewertung (♛ MW, ★ SW, MP, Fi, NP), unten eine Leiste mit Punkten, den Farben des besten Archetyps, der Passung
@@ -31,6 +32,7 @@ CAL_FILE = SCRIPT_DIR / "kartenoverlay.json"
 CAL_KEYS = ("x", "y", "w", "h", "dx", "dy", "cols", "size")
 RATING_LABEL = {"matchwinner": "♛ MW", "splashworthy": "★ SW", "mustplay": "MP", "filler": "Fi", "neverplay": "NP"}
 ASPECT_TOLERANCE = 0.03
+RARITY_ORDER = {"mythic": 0, "rare": 1, "uncommon": 2, "common": 3}
 
 
 # ---------------------------------------------------------------- Kalibrierung und Raster
@@ -137,20 +139,26 @@ def card_view(c, rank, main):
             "frame": _frame(c), "chips": _chips(c), "stats": _stats(c)}
 
 
+def _arena_key(c):
+    """Sortierschluessel wie in Arena: Seltenheit (mythic zuerst), dann Sammlernummer; Unbekanntes ans Ende."""
+    digits = "".join(ch for ch in str(c.get("number") or "").split("/")[0] if ch.isdigit())
+    return RARITY_ORDER.get(c.get("rarity"), len(RARITY_ORDER)), int(digits) if digits else float("inf")
+
+
 def pack_views(snap):
-    """Inhalt je Karte in der Reihenfolge des Packs im Protokoll; Rang nach Punkten (gleiche Karten nacheinander)."""
+    """Inhalt je Karte in der Reihenfolge, in der Arena das Pack zeigt (Seltenheit, dann Sammlernummer; bei gleichem
+    Schluessel wie im Protokoll); Rang nach Punkten (gleiche Karten nacheinander)."""
     ranks = {}
     for i, c in enumerate(snap.get("pack") or []):
         ranks.setdefault(c["name"], []).append((i + 1, c))
     main = (snap.get("detect") or {}).get("main")
-    out = []
+    cards = []
     for name in snap.get("order") or []:
         queue = ranks.get(name)
         if not queue:
             continue
-        rank, c = queue.pop(0) if len(queue) > 1 else queue[0]
-        out.append(card_view(c, rank, main))
-    return out
+        cards.append(queue.pop(0) if len(queue) > 1 else queue[0])
+    return [card_view(c, rank, main) for rank, c in sorted(cards, key=lambda rc: _arena_key(rc[1]))]
 
 
 def status_text(cal, arena):

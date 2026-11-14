@@ -141,6 +141,48 @@ class ViewTests(unittest.TestCase):
         self.assertEqual(german_leftovers(text, allow=["Grand Nagus Zek", "Tactical Officer", "Quark's Bar"]), [])
 
 
+def arena_card(name, rarity, number, points=1):
+    return dict(ranked(name, points), rarity=rarity, number=number)
+
+
+class ArenaOrderTests(unittest.TestCase):
+    """Arena zeigt das Pack nach Seltenheit (mythic, rare, uncommon, common) und dann nach Sammlernummer, nicht in der
+    Reihenfolge des Protokolls (Pack aus dem Screenshot vom 14.11.2026, TRK)."""
+
+    PACK = [("Tactical Officer", "common", "38"), ("Open Communications", "common", "76"),
+            ("Moopsy", "common", "207"), ("Cetacean Ops", "common", "48"), ("He's Dead, Jim", "common", "114"),
+            ("Oberth-Class Starship", "common", "26"), ("Plasma Cascade", "common", "164"),
+            ("Transporter Malfunction", "uncommon", "178"), ("Saru, Unthreatened", "uncommon", "212"),
+            ("La'An Noonien-Singh, Security", "uncommon", "156"), ("Hallowed Fountain", "rare", "286"),
+            ("Organic Avulsion Unit", "uncommon", "121"), ("Spatial Anomaly", "uncommon", "296"),
+            ("Risa", "common", "293")]
+    ARENA = ["Hallowed Fountain", "Organic Avulsion Unit", "La'An Noonien-Singh, Security", "Transporter Malfunction",
+             "Saru, Unthreatened", "Spatial Anomaly", "Oberth-Class Starship", "Tactical Officer", "Cetacean Ops",
+             "Open Communications", "He's Dead, Jim", "Plasma Cascade", "Moopsy", "Risa"]
+
+    def snap(self, pack):
+        cards = [arena_card(n, r, no, points=i) for i, (n, r, no) in enumerate(pack)]
+        return dict(SNAP, order=[n for n, _, _ in pack], pack=sorted(cards, key=lambda c: -c["points"]))
+
+    def test_screenshot_pack(self):
+        self.assertEqual([v["name"] for v in po.pack_views(self.snap(self.PACK))], self.ARENA)
+
+    def test_mythic_before_rare_and_numbers_numeric(self):
+        pack = [("C9", "common", "9"), ("C10", "common", "10"), ("R", "rare", "300"), ("M", "mythic", "301"),
+                ("U2", "uncommon", "2a")]
+        self.assertEqual([v["name"] for v in po.pack_views(self.snap(pack))], ["M", "R", "U2", "C9", "C10"])
+
+    def test_rank_stays_with_card(self):
+        views = po.pack_views(self.snap(self.PACK))
+        self.assertEqual(views[-1]["name"], "Risa")
+        self.assertEqual(views[-1]["rank"], 1)  # meiste Punkte
+        self.assertEqual(views[0]["rank"], 4)  # Hallowed Fountain: Punkte 10 von 0..13
+
+    def test_without_rarity_protocol_order(self):  # fehlen Seltenheit oder Nummer: Reihenfolge des Protokolls
+        pack = [("A", "", ""), ("B", "rare", ""), ("C", "rare", "")]
+        self.assertEqual([v["name"] for v in po.pack_views(self.snap(pack))], ["B", "C", "A"])
+
+
 class ShowTests(unittest.TestCase):
     def setUp(self):
         self.cal = po.calibrate(CLICKS, CLIENT)
