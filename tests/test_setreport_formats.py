@@ -192,6 +192,14 @@ class FormatReportTests(unittest.TestCase):
         self.assertIn('class="sctip"', html)
         self.assertEqual(html.count('data-img=""'), 3)  # B-D ohne Bild: nur der Text
 
+    def test_scatter_without_card_labels(self):
+        data = two_formats()
+        for m in data["drafts"][3]["matches"]:
+            m["deck"] = {"A": 1, "B": 1, "C": 1, "D": 1}
+        html = render(data)
+        svg = html[html.index('<svg class="scatter"'):html.index("</svg>", html.index('<svg class="scatter"'))]
+        self.assertNotIn('class="lb"', svg)  # Namen nur noch im Hover-Fenster mit Minibild
+
     def test_english(self):
         with english():
             html = render()

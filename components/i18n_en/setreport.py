@@ -144,8 +144,8 @@ EN = {
     "Überschätzt?": "Overrated?",
     "Zu Recht spät": "Rightly late",
     "{name}: {p} in {g} Games, Ø Pick {pick}": "{name}: {p} in {g} games, avg pick {pick}",
-    "Gestrichelt: Ø Siegquote dieser Karten ({p}). Kreisgröße = Games; mit der Maus auf einen Punkt zeigen für Name und Zahlen.":
-        "Dashed: average win rate of these cards ({p}). Circle size = games; hover a dot for name and numbers.",
+    "Gestrichelt: Ø Siegquote dieser Karten ({p}). Kreisgröße = Games; mit der Maus auf einen Punkt zeigen für Bild, Name und Zahlen.":
+        "Dashed: average win rate of these cards ({p}). Circle size = games; hover a dot for image, name and numbers.",
     # Runs
     "Neueste zuerst; S = Sieg, N = Niederlage, grau = läuft noch. Die Leiter zeigt die Siege bis zur Trophäe, die Herzen die Niederlagen, die das Format erlaubt.":
         "Newest first; W = win, L = loss, gray = still running. The ladder shows the wins up to the trophy, the hearts the losses the format allows.",

@@ -161,7 +161,6 @@ h3.sub{font-size:15px;margin:14px 0 2px}
 .scatter .avg{stroke:#9aa3b2;stroke-width:1;stroke-dasharray:4 4}
 .scatter text{font-size:11px;fill:#667085}
 .scatter text.q{font-size:12px;font-weight:700;fill:#b0b7c3}
-.scatter text.lb{fill:#1d2430;font-weight:600}
 .scatter circle{fill:var(--fc,#2f6fd6);fill-opacity:.75;stroke:#fff;stroke-width:2}
 .scatter circle:hover{fill-opacity:1;stroke:#1d2430}
 .scbox{position:relative}
@@ -656,9 +655,8 @@ def _scatter(stats, cards, key):
              f'<text class="q" x="{ml + 6}" y="{mt + 14}">{t("Früh und stark")}</text>'
              f'<text class="q" x="{ml + 6}" y="{h - mb - 8}">{t("Überschätzt?")}</text>'
              f'<text class="q" x="{w - mr - 6}" y="{h - mb - 8}" text-anchor="end">{t("Zu Recht spät")}</text>')
-    dots, labels = [], []
+    dots = []
     order = sorted(pts, key=lambda p: -p[1]["games"])
-    pearls = sorted(pts, key=lambda p: -((p[1]["wins"] / p[1]["games"] - avg) * (p[1]["avg_pick"] - 1)))[:4]
     for n, s in order:
         r = s["wins"] / s["games"]
         rad = 4 + 7 * math.sqrt(s["games"] / gmax)
@@ -668,25 +666,12 @@ def _scatter(stats, cards, key):
         img = _image(sc, "small") or _image(sc, "normal")
         dots.append(f'<circle cx="{x(s["avg_pick"]):.1f}" cy="{y(r):.1f}" r="{rad:.1f}" data-img="{esc(img)}">'
                     f'<title>{esc(tip)}</title></circle>')
-    placed = []
-    for n, s in pearls:
-        r = s["wins"] / s["games"]
-        if r <= avg:
-            continue
-        cx = x(s["avg_pick"])
-        anchor = "end" if cx > w * .7 else "start"
-        span = (cx - 12 - 7 * len(n), cx) if anchor == "end" else (cx, cx + 12 + 7 * len(n))
-        if any(abs(y(r) - py) < 16 and span[0] < b and a < span[1] for a, b, py in placed):
-            continue  # Beschriftungen ueberlappen nicht: der Punkt bleibt, der Name steht im Tooltip
-        placed.append((span[0], span[1], y(r)))
-        labels.append(f'<text class="lb" x="{cx + (-12 if anchor == "end" else 12):.1f}" y="{y(r) + 4:.1f}" '
-                      f'text-anchor="{anchor}">{esc(n)}</text>')
     cls = f' f-{key}' if key != "all" else ""
     return (f'<div class="cardbox scbox{cls}"><svg class="scatter" viewBox="0 0 {w} {h}" role="img" '
-            f'aria-label="{t("Pick-Wert")}">{grid}{"".join(dots)}{"".join(labels)}</svg>'
+            f'aria-label="{t("Pick-Wert")}">{grid}{"".join(dots)}</svg>'
             '<div class="sctip" hidden><img alt=""><span></span></div>'
             f'<div class="hint2">' + t("Gestrichelt: Ø Siegquote dieser Karten ({p}). Kreisgröße = Games; mit der Maus "
-                                       "auf einen Punkt zeigen für Name und Zahlen.", p=f"{round(avg * 100)} %")
+                                       "auf einen Punkt zeigen für Bild, Name und Zahlen.", p=f"{round(avg * 100)} %")
             + '</div></div>')
 
 
