@@ -596,7 +596,7 @@ def _drafthelper_help():
             t("<b>MustPlay</b> – wird auf jeden Fall gespielt, wenn wir diese Farbe spielen."),
             t("<b>Playable</b> – solide, wird meist gespielt, wenn wir diese Farbe spielen, aber nicht zwingend. Zählt im Draft zwischen MustPlay und Filler (Pack 2 Punkte, Archetyp-Gewicht 1,5), aber nicht als starke Karte (Top-Pick, Signale)."),
             t("<b>Filler</b> – füllt das Deck auf, wenn wir die Farbe spielen und nicht splashen."),
-            t("<b>NeverPlay</b> – zu schlecht oder zu situativ."),
+            t("<b>NeverPlay</b> – zu schlecht oder zu situativ. Standardländer zählen im Draft immer so."),
             t("Eine Kategorie gilt für alle Kopien einer Karte und beeinflusst die Simulation nicht; ♛ Matchwinner, ★ Splashworthy und "
             "MustPlay erscheinen im Bericht in einem eigenen Abschnitt („Great in this deck“).")]))
         + _panel(t("Zuordnung nach Kategorien setzen"), _ul([

@@ -193,6 +193,15 @@ def near(detect, pair):
     return "near" if mine > 0 and mine >= top - NEAR_POINTS else ""
 
 
+BASIC_NAMES = ("Plains", "Island", "Swamp", "Mountain", "Forest", "Wastes")
+
+
+def is_basic(card):
+    """Standardland (auch verschneit), am Typ oder, ohne Scryfall-Daten, am Namen."""
+    front = (card.get("type") or "").split(" // ")[0].split("—")[0]
+    return ("Basic" in front and "Land" in front) or card.get("name") in BASIC_NAMES
+
+
 def rank(pack, ratings, assign, main, best=None, detect=None, pool=None):
     """Pack-Karten mit "rating", "arch", "best", "level", "hint" und "points", nach Punkten sortiert (Gleichstand:
     Bewertung, Name). hint nur mit detect (siehe Modulbeschreibung). Mit pool zusaetzlich "synergy" (Bonus) und
@@ -202,7 +211,8 @@ def rank(pack, ratings, assign, main, best=None, detect=None, pool=None):
                 if not c.get("land") and (not main or set(c.get("colors") or []) <= set(main))]
     out = []
     for c in pack:
-        r = (ratings or {}).get(c["name"], "")
+        # Nutzer 14.11.2026: Standardlaender nie empfehlen, sie zaehlen wie NeverPlay
+        r = "neverplay" if is_basic(c) else (ratings or {}).get(c["name"], "")
         lv = level(c, assign, main, best)
         top = (best or {}).get(c["name"], "")
         points = 0 if r == "neverplay" else POINTS.get(r, 1.5) + LEVEL_POINTS[lv]

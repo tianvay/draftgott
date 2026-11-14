@@ -430,8 +430,8 @@ EN = {
         '<b>Playable</b> – solid, usually played if we play this color, but not a must. Counts between MustPlay and Filler in the draft (pack 2 points, archetype weight 1.5), but not as a strong card (top pick, signals).',
     '<b>Filler</b> – füllt das Deck auf, wenn wir die Farbe spielen und nicht splashen.':
         "<b>Filler</b> – fills up the deck if we play the color and don't splash.",
-    '<b>NeverPlay</b> – zu schlecht oder zu situativ.':
-        '<b>NeverPlay</b> – too bad or too situational.',
+    '<b>NeverPlay</b> – zu schlecht oder zu situativ. Standardländer zählen im Draft immer so.':
+        '<b>NeverPlay</b> – too bad or too situational. Basic lands always count like this in the draft.',
     'Eine Kategorie gilt für alle Kopien einer Karte und beeinflusst die Simulation nicht; ♛ Matchwinner, ★ Splashworthy und MustPlay erscheinen im Bericht in einem eigenen Abschnitt („Great in this deck“).':
         'A category applies to all copies of a card and does not affect the simulation; ♛ Matchwinner, ★ Splashworthy and MustPlay appear in the report in their own section (“Great in this deck”).',
     'Zuordnung nach Kategorien setzen':
