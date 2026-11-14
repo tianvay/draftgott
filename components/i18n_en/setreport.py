@@ -79,4 +79,77 @@ EN = {
     "Setauswertung gespeichert: {path}": "Set report saved: {path}",
     "Gegnerdeck nicht gespeichert: {e}": "Opponent deck not saved: {e}",
     "Gegnerdeck gespeichert: {path}": "Opponent deck saved: {path}",
+    # Formate (Pick Two, Pick One, ...)
+    "{w} Siege / {l} Niederlagen": "{w} wins / {l} losses",
+    "{n} Matches": "{n} matches",
+    "1 Trophäe": "1 trophy",
+    "{n} Trophäen": "{n} trophies",
+    "{n} Runs, {d} abgeschlossen": "{n} runs, {d} finished",
+    "1 Run, {d} abgeschlossen": "1 run, {d} finished",
+    "Siege je abgeschlossenem Run": "wins per finished run",
+    "Ansicht": "View",
+    "Alle Formate": "All formats",
+    "Formate": "Formats",
+    "Formate im Vergleich": "Formats compared",
+    "Je Format: wie viele Siege deine Runs am Ende hatten (Gold = Trophäe), wie oft du das 1., 2., 3. … Match gewinnst (später triffst du auf Gegner mit ähnlicher Bilanz; blass = weniger als 3 Matches) und wie lange gewonnene und verlorene Games dauern (Spielstatistik, Züge beider Spieler).":
+        "Per format: how many wins your runs ended with (gold = trophy), how often you win the 1st, 2nd, 3rd … match (later you meet opponents with a similar record; faded = fewer than 3 matches) and how long won and lost games last (game statistics, turns of both players).",
+    "{d} abgeschlossene Runs von {n}": "{d} finished runs of {n}",
+    "Wie weit kommen deine Runs? (Siege am Ende)": "How far do your runs get? (wins at the end)",
+    "{w} Siege: 1 Run": "{w} wins: 1 run",
+    "{w} Siege: {n} Runs": "{w} wins: {n} runs",
+    "Siegquote je Match-Nummer": "Win rate by match number",
+    "Match {i}: {w} von {n} gewonnen": "Match {i}: {w} of {n} won",
+    "Spieltempo (Ø je Game)": "Game pace (avg per game)",
+    "Züge": "Turns",
+    "Zauber": "Spells",
+    "Besiegt": "Killed",
+    "Schaden": "Damage",
+    "Gewonnen": "Won",
+    "Verloren": "Lost",
+    "{n}× · Ø {w} Siege": "{n}× · avg {w} wins",
+    # Formatvorteil
+    "Formatvorteil": "Format edge",
+    "Karten, die in einem Format deutlich besser abschneiden als im anderen (mindestens {n} Games in jedem). Bei Pick Two kommt der Synergie-Partner oft im selben Pick mit – solche Karten steigen hier nach oben.":
+        "Cards that perform clearly better in one format than in the other (at least {n} games in each). In Pick Two the synergy partner often comes along in the same pick – such cards rise to the top here.",
+    "Punkt = Siegquote der Games mit der Karte im Deck; Linie = Unterschied.":
+        "Dot = game win rate with the card in the deck; line = difference.",
+    "Noch keine Karte mit mindestens {n} Games in beiden Formaten und {d} Prozentpunkten Unterschied.":
+        "No card with at least {n} games in both formats and a difference of {d} percentage points yet.",
+    "{a}: {ra} in {ga} Games · {b}: {rb} in {gb} Games": "{a}: {ra} in {ga} games · {b}: {rb} in {gb} games",
+    "Stärker in {f}": "Stronger in {f}",
+    "Keine.": "None.",
+    # Duos
+    "Pick-Two-Duos": "Pick Two duos",
+    "Duos": "Duos",
+    "Paare, die du im selben Pick zusammen genommen hast und die beide im Hauptdeck gelandet sind, nach Games mit beiden im Deck. 🔗 = die Karten haben Synergie (Geber und Nehmer wie im Drafthelper).":
+        "Pairs you took together in the same pick that both ended up in the main deck, by games with both in the deck. 🔗 = the cards have synergy (givers and takers as in the draft helper).",
+    "Duos in {n} Pick-Two-Drafts": "duos in {n} Pick Two drafts",
+    "beide im Hauptdeck": "both in the main deck",
+    "Games gewonnen mit Synergie-Duo ({n} Games)": "games won with a synergy duo ({n} games)",
+    "ohne Synergie ({n} Games)": "without synergy ({n} games)",
+    "Noch kein Duo, bei dem beide Karten im Hauptdeck gelandet sind.": "No duo with both cards in the main deck yet.",
+    "Duo": "Duo",
+    "Zusammen gepickt": "Picked together",
+    "Beide im Deck": "Both in deck",
+    "Synergie": "Synergy",
+    # Pick-Wert
+    "Pick-Wert": "Pick value",
+    "Wann du eine Karte genommen hast gegen wie gut sie lief (mindestens {n} Games). Rechts oben stehen späte Picks mit hoher Siegquote – die lohnt es sich früher zu nehmen; links unten frühe Picks, die enttäuscht haben.":
+        "When you took a card versus how well it did (at least {n} games). Top right: late picks with a high win rate – worth taking earlier; bottom left: early picks that disappointed.",
+    "Noch zu wenige Karten mit mindestens {n} Games und bekanntem Pick.":
+        "Too few cards with at least {n} games and a known pick yet.",
+    "Ø Pick (rechts = später genommen)": "Avg pick (right = taken later)",
+    "Späte Perlen": "Late gems",
+    "Früh und stark": "Early and strong",
+    "Überschätzt?": "Overrated?",
+    "Zu Recht spät": "Rightly late",
+    "{name}: {p} in {g} Games, Ø Pick {pick}": "{name}: {p} in {g} games, avg pick {pick}",
+    "Gestrichelt: Ø Siegquote dieser Karten ({p}). Kreisgröße = Games; mit der Maus auf einen Punkt zeigen für Name und Zahlen.":
+        "Dashed: average win rate of these cards ({p}). Circle size = games; hover a dot for name and numbers.",
+    # Runs
+    "Neueste zuerst; S = Sieg, N = Niederlage, grau = läuft noch. Die Leiter zeigt die Siege bis zur Trophäe, die Herzen die Niederlagen, die das Format erlaubt.":
+        "Newest first; W = win, L = loss, gray = still running. The ladder shows the wins up to the trophy, the hearts the losses the format allows.",
+    "Trophäe": "Trophy",
+    "ausgeschieden": "eliminated",
+    "läuft": "running",
 }

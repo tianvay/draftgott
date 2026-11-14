@@ -109,6 +109,142 @@ def color_name(main, colors):
     return "".join(COLOR_WORD[c] for c in main_colors) + "".join("splash" + COLOR_WORD[c] for c in splash)
 
 
+FORMATS = {  # Format eines Events: Name, Siege bis zur Trophaee, Niederlagen bis zum Aus (Traditional: 3 Matches)
+    "picktwo": {"label": "Pick Two", "wins": 4, "losses": 2},
+    "pickone": {"label": "Pick One", "wins": 7, "losses": 3},
+    "trad": {"label": "Traditional", "wins": 3, "losses": 3, "matches": 3},
+    "sealed": {"label": "Sealed", "wins": 7, "losses": 3},
+}
+
+
+def event_format(event):
+    """Formatschluessel (FORMATS) eines Eventnamens: Pick Two "picktwo", Traditional "trad", Sealed "sealed", sonst
+    (Premier, Quick und andere Drafts mit einer Karte je Pick) "pickone"."""
+    name = (event or "").lower()
+    if "picktwo" in name:
+        return "picktwo"
+    if "trad" in name:
+        return "trad"
+    if "sealed" in name:
+        return "sealed"
+    return "pickone"
+
+
+def run_state(rec):
+    """Stand eines Runs: {"format", "wins", "losses", "open" (laufende Matches), "done", "trophy"}; ein Run ist
+    vorbei mit der hoechsten Zahl an Siegen, der hoechsten Zahl an Niederlagen oder (Traditional) allen Matches."""
+    key = event_format(rec.get("event"))
+    f = FORMATS[key]
+    ms = rec.get("matches") or []
+    wins = sum(1 for m in ms if m.get("win") is True)
+    losses = sum(1 for m in ms if m.get("win") is False)
+    done = wins >= f["wins"] or losses >= f["losses"] or wins + losses >= f.get("matches", 99)
+    return {"format": key, "wins": wins, "losses": losses, "open": sum(1 for m in ms if m.get("win") is None),
+            "done": done, "trophy": wins >= f["wins"]}
+
+
+def formats_in(data, set_code=None):
+    """Formatschluessel der Drafts eines Sets in der Reihenfolge von FORMATS."""
+    seen = {event_format(r.get("event")) for r in data.get("drafts", []) if _in_set(r, set_code)}
+    return [k for k in FORMATS if k in seen]
+
+
+def _game_won(m, number):
+    games = m.get("games") or []
+    try:
+        i = int(number) - 1
+    except (TypeError, ValueError):
+        return None
+    return games[i] if 0 <= i < len(games) else None
+
+
+TEMPO = ("turns", "spells", "kills", "damage_dealt")
+
+
+def format_summary(data, set_code=None):
+    """Je Format (Schluessel wie FORMATS, nur vorhandene): Runs, abgeschlossene Runs ("done"), Trophaeen, Ø Siege der
+    abgeschlossenen Runs ("avg_wins"), Verteilung der Siege abgeschlossener Runs ("dist": Index = Siege), Matches und
+    Games mit Siegen, Siegquote je Match-Nummer ("by_match": [[Siege, Matches]] fuer Match 1, 2, ...) und das
+    Spieltempo aus der Spielstatistik ("tempo": {"win"|"loss": {"games", Ø je TEMPO-Feld}})."""
+    out = {}
+    for rec in data.get("drafts", []):
+        if not _in_set(rec, set_code):
+            continue
+        st = run_state(rec)
+        f = FORMATS[st["format"]]
+        s = out.setdefault(st["format"], {
+            "runs": 0, "done": 0, "trophies": 0, "avg_wins": None, "dist": [0] * (f["wins"] + 1),
+            "matches": 0, "match_wins": 0, "games": 0, "wins": 0, "by_match": [], "_tempo": {"win": [], "loss": []}})
+        s["runs"] += 1
+        if st["done"]:
+            s["done"] += 1
+            s["dist"][min(st["wins"], f["wins"])] += 1
+        s["trophies"] += 1 if st["trophy"] else 0
+        results = [m for m in rec.get("matches") or [] if m.get("win") is not None]
+        for i, m in enumerate(results):
+            while len(s["by_match"]) <= i:
+                s["by_match"].append([0, 0])
+            s["by_match"][i][1] += 1
+            s["by_match"][i][0] += 1 if m["win"] else 0
+            s["matches"] += 1
+            s["match_wins"] += 1 if m["win"] else 0
+            s["games"] += len(m.get("games") or [])
+            s["wins"] += sum(1 for g in m.get("games") or [] if g)
+            for number, gs in (m.get("game_stats") or {}).items():
+                won = _game_won(m, number)
+                if won is not None:
+                    s["_tempo"]["win" if won else "loss"].append(gs)
+    for s in out.values():
+        if s["done"]:
+            s["avg_wins"] = round(sum(w * n for w, n in enumerate(s["dist"])) / s["done"], 2)
+        tempo = s.pop("_tempo")
+        s["tempo"] = {k: dict({"games": len(v)}, **{f: round(sum(g.get(f, 0) for g in v) / len(v), 1)
+                                                     for f in TEMPO}) if v else {"games": 0}
+                      for k, v in tempo.items()}
+    return out
+
+
+def pick_pairs(rec):
+    """Pick Two: die zusammen genommenen Karten eines Drafts als Liste sortierter Namenspaare (zwei Picks
+    hintereinander aus gleich grossem Pack). Andere Formate: leer. Standardlaender und gleiche Karten zaehlen nicht."""
+    if event_format(rec.get("event")) != "picktwo":
+        return []
+    picks, sizes = rec.get("picks") or [], rec.get("pick_sizes") or []
+    out, i = [], 0
+    while i + 1 < len(picks):
+        if i + 1 < len(sizes) and sizes[i] and sizes[i] == sizes[i + 1]:
+            pair = (picks[i], picks[i + 1])
+            if pair[0] != pair[1] and not any(n in BASICS or n.startswith("#") for n in pair):
+                out.append(tuple(sorted(pair)))
+            i += 2
+        else:
+            i += 1
+    return out
+
+
+def pair_stats(data, set_code=None):
+    """{(A, B): {"count" (Drafts mit dem Paar), "decks" (beide im Hauptdeck), "games", "wins" (beide im Deck des
+    Matches)}} ueber alle Pick-Two-Drafts des Sets."""
+    out = {}
+    for rec in data.get("drafts", []):
+        if not _in_set(rec, set_code):
+            continue
+        main = (rec.get("deck") or {}).get("main") or {}
+        for pair in set(pick_pairs(rec)):
+            p = out.setdefault(pair, {"count": 0, "decks": 0, "games": 0, "wins": 0})
+            p["count"] += 1
+            if all(n in main for n in pair):
+                p["decks"] += 1
+            for m in rec.get("matches") or []:
+                if m.get("win") is None:
+                    continue
+                deck = m.get("deck") or main
+                if all(n in deck for n in pair):
+                    p["games"] += len(m.get("games") or [])
+                    p["wins"] += sum(1 for g in m.get("games") or [] if g)
+    return out
+
+
 def max_wins(event):
     """Hoechste Zahl an Match-Siegen eines Events: Pick Two 4, Traditional (Best of 3) 3, sonst 7 (Quick, Premier,
     Sealed). Ohne bekanntes Event bleibt es beim bisherigen Wert 4 (ENEMY_WINS)."""
@@ -416,15 +552,16 @@ def _blank():
             "avg_pick": None, "_picks": []}
 
 
-def card_stats(data, set_code=None):
-    """{Name: Zahlen} (siehe Modulbeschreibung), nur Drafts des Sets (ohne Set: alle)."""
+def card_stats(data, set_code=None, fmt=None):
+    """{Name: Zahlen} (siehe Modulbeschreibung), nur Drafts des Sets (ohne Set: alle) und mit fmt nur Drafts dieses
+    Formats (event_format)."""
     out = {}
 
     def get(name):
         return out.setdefault(name, _blank())
 
     for rec in data.get("drafts", []):
-        if not _in_set(rec, set_code):
+        if not _in_set(rec, set_code) or (fmt and event_format(rec.get("event")) != fmt):
             continue
         all_sizes = list(rec.get("pick_sizes") or [])
         sizes = [s for s in all_sizes if s]
