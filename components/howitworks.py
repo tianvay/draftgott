@@ -560,6 +560,8 @@ def _live_help():
             t("Kategorie per Knopf (♛ Matchwinner bis NP NeverPlay) oder mit der Tastatur: Maus auf die Karte, Taste "
               "1 bis 6, 0 entfernt. Archetypen per Klick: neutral → grün (passt gut) → lila (bester Archetyp) → "
               "neutral."),
+            t("Klick aufs Kartenbild öffnet die Großansicht: Karte groß, Knöpfe mit Namen, ← → (Tasten oder "
+              "Pfeilknöpfe) zur vorigen bzw. nächsten der gerade gezeigten Karten, Esc schließt."),
             t("Alles wird sofort in <code>kartenbewertung.json</code> und <code>kartenarchetypen.json</code> "
               "gespeichert und gilt je Kartenname für jeden Pool, den Drafthelper und den Live-Draft: ein Set wird "
               "einmal bewertet, nicht nach jedem Draft. Der Balken zeigt den Fortschritt (fertig = Kategorie und "

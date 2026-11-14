@@ -174,6 +174,12 @@ class ServerTests(unittest.TestCase):
                      "NeverPlay"):
             self.assertIn(part, page)
 
+    def test_page_has_detail_view_with_arrows(self):
+        status, page = self.get("/")
+        for part in ('id="detail"', 'id="dprev"', 'id="dnext"', 'id="dimg"', 'id="dcats"', 'id="darchs"',
+                     '"ArrowLeft"', '"ArrowRight"'):
+            self.assertIn(part, page)
+
     def test_page_in_english_has_no_german_leftovers(self):
         with english():
             page = setrating.render_page()

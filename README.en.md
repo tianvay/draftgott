@@ -280,7 +280,9 @@ versus result per category, list of drafts.
 Menu item **5** in `draftgott.bat`: opens a page of its own in the browser. First choose a fully supported set (all
 sets with archetypes, currently **TRK** and **FRA**), then set the category of each card (♛ Matchwinner to NP
 NeverPlay) and its archetypes (click: neutral → green = fits well → purple = best archetype → neutral). The keyboard
-is faster: hover over the card, key **1–6** sets the category, **0** removes it. Filters: search, “Still open”,
+is faster: hover over the card, key **1–6** sets the category, **0** removes it. Clicking the card image opens the
+**large view**: the card in big, category and archetype buttons with names, **← →** (keys or arrow buttons) to the
+previous/next of the cards currently shown, **Esc** closes. Filters: search, “Still open”,
 without category, without archetype, color, rarity; the bar at the top shows the progress (done = category and
 archetype, NeverPlay needs no archetype). Everything is saved at once to `kartenbewertung.json` and
 `kartenarchetypen.json` and applies per card name to every pool, the Draft Helper and the live draft – so you rate a

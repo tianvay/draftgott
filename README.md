@@ -284,6 +284,8 @@ Menüpunkt **5** in `draftgott.bat`: öffnet eine eigene Seite im Browser. Zuers
 (alle Sets mit Archetypen, derzeit **TRK** und **FRA**), dann je Karte die Kategorie (♛ Matchwinner bis NP
 NeverPlay) und die Archetypen festlegen (Klick: neutral → grün = passt gut → lila = bester Archetyp → neutral).
 Schneller geht es mit der Tastatur: Maus auf die Karte, Taste **1–6** setzt die Kategorie, **0** entfernt sie.
+Ein Klick aufs Kartenbild öffnet die **Großansicht**: Karte groß, Kategorie- und Archetyp-Knöpfe mit Namen, mit **← →**
+(Tasten oder Pfeilknöpfe) zur vorigen/nächsten der gerade gezeigten Karten, **Esc** schließt.
 Filter: Suche, „Noch offen“, ohne Kategorie, ohne Archetyp, Farbe, Seltenheit; der Balken oben zeigt den Fortschritt
 (fertig = Kategorie und Archetyp, NeverPlay braucht keinen Archetyp). Alles wird sofort in `kartenbewertung.json` und
 `kartenarchetypen.json` gespeichert und gilt je Kartenname für jeden Pool, den Drafthelper und den Live-Draft – man

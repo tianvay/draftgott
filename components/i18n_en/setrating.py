@@ -25,12 +25,25 @@ EN = {
     "Ohne Kategorie": "Without category",
     "Ohne Archetyp": "Without archetype",
     "Seltenheit": "Rarity",
-    "Tipp: Maus auf eine Karte und Taste 1 bis 6 drücken (1 = Matchwinner … 6 = NeverPlay, noch einmal = entfernen, "
+    "Tipp: Klick auf ein Kartenbild öffnet die Großansicht, dort wechseln die Pfeiltasten zur nächsten Karte. Auch "
+    "hier: Maus auf eine Karte und Taste 1 bis 6 drücken (1 = Matchwinner … 6 = NeverPlay, noch einmal = entfernen, "
     "0 = entfernen). Archetypen: neutral → grün (passt gut) → lila (bester Archetyp) → neutral. Alles wird sofort "
     "gespeichert und gilt für jeden Pool und jeden Draft.":
-        "Tip: hover over a card and press 1 to 6 (1 = Matchwinner … 6 = NeverPlay, same key again = remove, "
-        "0 = remove). Archetypes: neutral → green (fits well) → purple (best archetype) → neutral. Everything is "
-        "saved at once and applies to every pool and every draft.",
+        "Tip: clicking a card image opens the large view, where the arrow keys switch to the next card. Here too: "
+        "hover over a card and press 1 to 6 (1 = Matchwinner … 6 = NeverPlay, same key again = remove, 0 = remove). "
+        "Archetypes: neutral → green (fits well) → purple (best archetype) → neutral. Everything is saved at once "
+        "and applies to every pool and every draft.",
+    "Karte {i} von {n}": "Card {i} of {n}",
+    "Klick aufs Kartenbild öffnet die Großansicht: Karte groß, Knöpfe mit Namen, ← → (Tasten oder Pfeilknöpfe) zur "
+    "vorigen bzw. nächsten der gerade gezeigten Karten, Esc schließt.":
+        "Clicking the card image opens the large view: the card in big, buttons with names, ← → (keys or arrow "
+        "buttons) to the previous or next of the cards currently shown, Esc closes.",
+    "Kategorie": "Category",
+    "Archetypen": "Archetypes",
+    "← → nächste Karte · 1 bis 6 Kategorie, 0 entfernen · Esc schließen. Archetypen: Klick wechselt neutral → grün "
+    "(passt gut) → lila (bester Archetyp) → neutral.":
+        "← → next card · 1 to 6 category, 0 remove · Esc close. Archetypes: click switches neutral → green (fits "
+        "well) → purple (best archetype) → neutral.",
     "Welches Set willst du bewerten? Kategorie und Archetypen legst du hier einmal je Karte fest; Drafthelper und "
     "Live-Draft nutzen sie danach in jedem Draft.":
         "Which set do you want to rate? Here you set the category and archetypes of each card once; the Draft "

@@ -204,6 +204,7 @@ def page_texts():
         "fits": t("passt gut"),
         "archTitle": t("Archetypen dieser Karte. Klick: neutral → grün (passt gut) → lila (bester Archetyp, nur einer) "
                        "→ neutral"),
+        "count": t("Karte {i} von {n}"),
         "quitAsk": t("Set bewerten beenden?"),
         "quitDone": t("Set bewerten wurde beendet. Du kannst dieses Fenster jetzt schließen."),
         "cats": {
@@ -278,8 +279,43 @@ main{padding:12px 20px 60px}
 .achips button.on{background:#e3f4ea;border-color:#2e9e5b;color:#146c3d;font-weight:700}
 .achips button.best{background:#f1e4fb;border-color:#8e2bd6;color:#5b1d99;font-weight:700}
 .anames{font-size:11.5px;color:var(--muted);min-height:15px}
-#lightbox{display:none;position:fixed;inset:0;z-index:20;background:#000c;align-items:center;justify-content:center}
-#lightbox.show{display:flex}#lightbox img{max-height:92vh;max-width:92vw;border-radius:14px}
+#detail{display:none;position:fixed;inset:0;z-index:20;background:#000d;align-items:center;justify-content:center;padding:16px 70px}
+#detail.show{display:flex}
+#detail .dpanel{display:flex;gap:22px;align-items:flex-start;max-width:1100px;width:100%;max-height:100%;overflow:auto;
+  background:var(--card);border-radius:16px;padding:18px;position:relative}
+#dimg{height:min(78vh,680px);max-width:52vw;border-radius:16px;display:block;flex:none}
+#detail .dph{width:340px;aspect-ratio:488/680;border-radius:16px;background:#e6e9ef;display:flex;align-items:center;
+  justify-content:center;font-weight:800;font-size:20px;text-align:center;padding:16px;flex:none}
+#detail .dside{flex:1;min-width:240px;display:flex;flex-direction:column;gap:12px}
+#dname{font-size:22px;font-weight:800;margin:0;padding-right:36px}
+#dmeta,#dcount{color:var(--muted);font-size:13px}
+#detail h3{font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:6px 0 0}
+#dcats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+#dcats button{font:inherit;text-align:left;padding:8px 10px;border-radius:10px;border:2px solid var(--line);background:var(--card);
+  color:var(--ink);cursor:pointer}
+#dcats button b{display:inline-block;min-width:30px}
+#dcats button kbd{float:right;color:var(--muted);font:12px monospace}
+#dcats button.on{color:#fff;border-color:transparent}
+#dcats button.on kbd{color:#fff9}
+#dcats button.on.matchwinner{background:var(--mw)}#dcats button.on.splashworthy{background:var(--sw);color:#2d2100}
+#dcats button.on.mustplay{background:var(--mp)}#dcats button.on.playable{background:var(--pl)}
+#dcats button.on.filler{background:var(--fi)}#dcats button.on.neverplay{background:var(--np)}
+#darchs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+#darchs button{font:inherit;text-align:left;padding:7px 10px;border-radius:10px;border:2px solid var(--line);background:var(--card);
+  color:var(--ink);cursor:pointer;display:flex;align-items:center;gap:6px}
+#darchs button .m.ms{margin:0;width:15px;height:15px}
+#darchs button.on{background:#e3f4ea;border-color:#2e9e5b;color:#146c3d;font-weight:700}
+#darchs button.best{background:#f1e4fb;border-color:#8e2bd6;color:#5b1d99;font-weight:700}
+#dclose{position:absolute;top:10px;right:10px;font-size:20px;line-height:1;width:34px;height:34px;padding:0}
+.dnav{position:fixed;top:50%;transform:translateY(-50%);z-index:21;width:52px;height:84px;border-radius:14px;border:0;
+  background:#fffc;color:#1d2430;font-size:36px;cursor:pointer;display:none}
+#detail.show~.dnav{display:block}
+.dnav:disabled{opacity:.3;cursor:default}
+#dprev{left:8px}#dnext{right:8px}
+.dhint{font-size:12.5px;color:var(--muted)}
+@media (max-width:800px){#detail{padding:12px 12px 76px}#detail .dpanel{flex-direction:column;align-items:center}
+  #dimg{height:auto;width:100%;max-width:420px}#detail .dph{width:100%;max-width:340px}#detail .dside{width:100%;min-width:0}
+  .dnav{top:auto;bottom:10px;transform:none;height:56px}}
 #toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#8b2f2f;color:#fff;padding:8px 14px;
   border-radius:8px;display:none;z-index:30}
 @media (max-width:700px){header{position:static}main{padding:12px 16px 60px}header{padding:10px 16px}}
@@ -288,7 +324,9 @@ main{padding:12px 20px 60px}
   header,.btn,#sets button,#start .big button,input[type=search],select{background:#1d232d;color:var(--ink)}
   #sets button.on{background:#1f3357;color:#cfe0ff}
   .cats button,.achips button{background:#252c37}
-  .achips button.on{background:#1f3b2b;color:#9fe0b8}.achips button.best{background:#35204a;color:#e0c2ff}
+  .achips button.on,#darchs button.on{background:#1f3b2b;color:#9fe0b8}
+  .achips button.best,#darchs button.best{background:#35204a;color:#e0c2ff}
+  #detail .dph{background:#2a313d}
   .bar{background:#2a313d}.tile .ph{background:#2a313d}
 }
 /*SYMBOL_CSS*/
@@ -316,14 +354,19 @@ main{padding:12px 20px 60px}
   <div id="start"><p>__INTRO__</p><div class="big" id="bigsets"></div><p id="startnote"></p></div>
   <div id="grid"></div>
 </main>
-<div id="lightbox"><img alt=""></div><div id="toast"></div>
+<div id="detail"><div class="dpanel"><img id="dimg" alt=""><div class="dph" id="dph"></div>
+  <div class="dside"><button class="btn" id="dclose" title="Esc">×</button><h2 id="dname"></h2><div id="dmeta"></div>
+    <div id="dcount"></div><h3>__CATEGORY__</h3><div id="dcats"></div><h3>__ARCHETYPES__</h3><div id="darchs"></div>
+    <div class="dhint">__DKEYS__</div></div></div></div>
+<button class="dnav" id="dprev" title="←">‹</button><button class="dnav" id="dnext" title="→">›</button>
+<div id="toast"></div>
 <script>
 const TX=__TX__;
 const SYMBOLS=__SYMBOLS__;
 const CATS=[["matchwinner","♛","Matchwinner"],["splashworthy","★","Splashworthy"],["mustplay","MP","MustPlay"],
   ["playable","Pl","Playable"],["filler","Fi","Filler"],["neverplay","NP","NeverPlay"]];
 const CATCOL={matchwinner:"var(--mw)",splashworthy:"var(--sw)",mustplay:"var(--mp)",playable:"var(--pl)",filler:"var(--fi)",neverplay:"var(--np)"};
-let sets=[],code="",cards=[],archs=[],ratings={},cardarch={},cardbest={},prog=null,hover=null;
+let sets=[],code="",cards=[],archs=[],ratings={},cardarch={},cardbest={},prog=null,hover=null,dlist=[],dpos=-1;
 const tiles=new Map();
 const $=id=>document.getElementById(id);
 const el=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e};
@@ -371,8 +414,8 @@ function makeTile(c){
   const d=el("div","tile"),t={node:d,card:c};
   d.onmouseenter=()=>{hover=c.name;d.classList.add("hover")};d.onmouseleave=()=>{if(hover===c.name)hover=null;d.classList.remove("hover")};
   if(c.image){const pic=el("img");pic.src=c.image;pic.alt=c.name;pic.loading="lazy";
-    pic.onclick=()=>{$("lightbox").querySelector("img").src=c.large||c.image;$("lightbox").classList.add("show")};d.appendChild(pic)}
-  else d.appendChild(el("div","ph",c.name));
+    pic.onclick=()=>openDetail(c.name);d.appendChild(pic)}
+  else{const ph=el("div","ph",c.name);ph.onclick=()=>openDetail(c.name);d.appendChild(ph)}
   const nm=el("div","nm",c.name);nm.appendChild(el("small",null,(c.rarity||"").charAt(0).toUpperCase()));
   nm.title=(c.type||"")+(c.rarity?" · "+(TX.rarity[c.rarity]||c.rarity):"");d.appendChild(nm);
   t.cats=el("div","cats");
@@ -395,7 +438,34 @@ function applyAnswer(name,r){
   if(!r||!r.ok){toast(fmt(TX.notSaved,{err:(r&&r.error)||TX.error}));return}
   if(r.rating)ratings[name]=r.rating;else delete ratings[name];
   cardarch[name]=r.cardarch[name]||[];if(r.cardbest[name])cardbest[name]=r.cardbest[name];else delete cardbest[name];
-  prog=r.progress;paint(tiles.get(name));renderProgress()}
+  prog=r.progress;paint(tiles.get(name));renderProgress();if(dname()===name)paintDetail()}
+// Grossansicht: Klick auf eine Karte; Pfeile (Knoepfe oder Tasten) wechseln zur vorigen/naechsten der gezeigten Karten
+const dname=()=>dpos>=0&&$("detail").classList.contains("show")?dlist[dpos]:null;
+function openDetail(name){dlist=shownCards().map(c=>c.name);dpos=dlist.indexOf(name);if(dpos<0){dlist=[name];dpos=0}
+  $("detail").classList.add("show");showDetail()}
+function closeDetail(){$("detail").classList.remove("show");const t=tiles.get(dlist[dpos]);
+  if(t)t.node.scrollIntoView({block:"nearest"})}
+function moveDetail(step){const n=dpos+step;if(n<0||n>=dlist.length)return;dpos=n;showDetail()}
+function showDetail(){
+  const c=tiles.get(dlist[dpos]).card,img=$("dimg");
+  img.style.display=c.image?"":"none";$("dph").style.display=c.image?"none":"";$("dph").textContent=c.name;
+  if(c.image){img.src=c.large||c.image;img.alt=c.name}
+  const nx=dlist[dpos+1]&&tiles.get(dlist[dpos+1]).card;if(nx&&(nx.large||nx.image))(new Image()).src=nx.large||nx.image;
+  $("dname").textContent=c.name;$("dmeta").textContent=(c.type||"")+(c.rarity?" · "+(TX.rarity[c.rarity]||c.rarity):"");
+  $("dcount").textContent=fmt(TX.count,{i:dpos+1,n:dlist.length});
+  const dc=$("dcats");dc.textContent="";
+  CATS.forEach(([k,ab,lb],i)=>{const b=el("button",k);b.dataset.k=k;b.title=TX.cats[k];b.appendChild(el("b",null,ab));
+    b.appendChild(document.createTextNode(lb));b.appendChild(el("kbd",null,String(i+1)));
+    b.onclick=()=>setCat(c.name,ratings[c.name]===k?"":k);dc.appendChild(b)});
+  const da=$("darchs");da.textContent="";
+  for(const a of archs){const b=el("button");b.dataset.a=a.colors;[...a.colors].forEach(x=>b.appendChild(manaSym(x)));
+    b.appendChild(el("span",null,a.name));b.onclick=()=>toggleArch(c.name,a.colors);da.appendChild(b)}
+  $("dprev").disabled=dpos<=0;$("dnext").disabled=dpos>=dlist.length-1;paintDetail()}
+function paintDetail(){
+  const n=dlist[dpos],k=ratings[n]||"",mine=cardarch[n]||[],top=cardbest[n]||"";
+  $("dcats").querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.k===k));
+  $("darchs").querySelectorAll("button").forEach(b=>{const a=b.dataset.a;b.classList.toggle("on",mine.includes(a)&&a!==top);
+    b.classList.toggle("best",a===top);b.title=TX.archTitle+(a===top?" · "+TX.best:mine.includes(a)?" · "+TX.fits:"")})}
 async function setCat(name,cat){let r=null;try{r=await api("/api/rating",{name,cat})}catch(e){}applyAnswer(name,r)}
 // Drei Stufen je Archetyp wie im Drafthelper: neutral -> gruen (zugeordnet) -> lila (bester, nur einer) -> neutral
 async function toggleArch(name,colors){
@@ -405,13 +475,18 @@ async function toggleArch(name,colors){
   else next=[...mine,colors];
   let r=null;try{r=await api("/api/cardarch",{name,arch:next,best})}catch(e){}applyAnswer(name,r)}
 document.addEventListener("keydown",e=>{
-  if(e.key==="Escape"){$("lightbox").classList.remove("show");return}
-  if(!hover||e.target.tagName==="INPUT"||e.target.tagName==="SELECT"||e.ctrlKey||e.altKey||e.metaKey)return;
+  const open=dname();
+  if(e.key==="Escape"){if(open)closeDetail();return}
+  if(open&&e.key==="ArrowLeft"){moveDetail(-1);e.preventDefault();return}
+  if(open&&e.key==="ArrowRight"){moveDetail(1);e.preventDefault();return}
+  const target=open||hover;
+  if(!target||e.target.tagName==="INPUT"||e.target.tagName==="SELECT"||e.ctrlKey||e.altKey||e.metaKey)return;
   const i="123456".indexOf(e.key);
-  if(i>=0){const k=CATS[i][0];setCat(hover,ratings[hover]===k?"":k);e.preventDefault()}
-  else if(e.key==="0"||e.key==="Backspace"){setCat(hover,"");e.preventDefault()}});
+  if(i>=0){const k=CATS[i][0];setCat(target,ratings[target]===k?"":k);e.preventDefault()}
+  else if(e.key==="0"||e.key==="Backspace"){setCat(target,"");e.preventDefault()}});
 ["search","filter","color","rarity"].forEach(i=>$(i)[i==="search"?"oninput":"onchange"]=()=>{renderGrid();renderProgress()});
-$("lightbox").onclick=()=>$("lightbox").classList.remove("show");
+$("detail").onclick=e=>{if(e.target===$("detail"))closeDetail()};$("dclose").onclick=closeDetail;
+$("dprev").onclick=()=>moveDetail(-1);$("dnext").onclick=()=>moveDetail(1);
 $("quit").onclick=async()=>{if(!confirm(TX.quitAsk))return;try{await api("/api/quit",{})}catch(e){}
   document.body.innerHTML="";document.body.appendChild(el("h2",null,TX.quitDone)).style.margin="40px"};
 (async()=>{
@@ -432,9 +507,14 @@ def render_page():
         "__COLOR__": t("Farbe"), "__W__": t("Weiß"), "__U__": t("Blau"), "__B__": t("Schwarz"), "__R__": t("Rot"),
         "__G__": t("Grün"), "__MULTI__": t("Mehrfarbig"), "__COLORLESS__": t("Farblos"),
         "__RARITY__": t("Seltenheit"),
-        "__KEYS__": t("Tipp: Maus auf eine Karte und Taste 1 bis 6 drücken (1 = Matchwinner … 6 = NeverPlay, noch "
-                      "einmal = entfernen, 0 = entfernen). Archetypen: neutral → grün (passt gut) → lila (bester "
-                      "Archetyp) → neutral. Alles wird sofort gespeichert und gilt für jeden Pool und jeden Draft."),
+        "__CATEGORY__": t("Kategorie"), "__ARCHETYPES__": t("Archetypen"),
+        "__DKEYS__": t("← → nächste Karte · 1 bis 6 Kategorie, 0 entfernen · Esc schließen. Archetypen: Klick "
+                       "wechselt neutral → grün (passt gut) → lila (bester Archetyp) → neutral."),
+        "__KEYS__": t("Tipp: Klick auf ein Kartenbild öffnet die Großansicht, dort wechseln die Pfeiltasten zur "
+                      "nächsten Karte. Auch hier: Maus auf eine Karte und Taste 1 bis 6 drücken (1 = Matchwinner … "
+                      "6 = NeverPlay, noch einmal = entfernen, 0 = entfernen). Archetypen: neutral → grün (passt "
+                      "gut) → lila (bester Archetyp) → neutral. Alles wird sofort gespeichert und gilt für jeden "
+                      "Pool und jeden Draft."),
         "__INTRO__": t("Welches Set willst du bewerten? Kategorie und Archetypen legst du hier einmal je Karte fest; "
                        "Drafthelper und Live-Draft nutzen sie danach in jedem Draft."),
     }
