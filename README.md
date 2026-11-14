@@ -223,8 +223,9 @@ In Arena muss unter Optionen → Konto „Detailed Logs (Plugin Support)“ eing
 - **Karten-Overlay:** legt beim Picken Rang, Bewertung, Punkte, Archetyp-Passung, Removal, Kartenfluss, Synergie und
   die eigene Siegquote direkt auf die Karten im Arena-Fenster (Rahmen lila = Top-Pick, grün = passt, grau = fremd).
   Einmal bei vollem Pack im Steuerfenster „Kalibrieren“ und fünf Kartenecken anklicken (gespeichert in
-  `kartenoverlay.json`, nicht im Git). Die Karten liegen wie in Arena nach Seltenheit und Sammlernummer, jede zeigt klein
-  ihren Namen zur Kontrolle; Klicks gehen durch zu Arena.
+  `kartenoverlay.json`, nicht im Git). Die Karten liegen wie in Arena nach Seltenheit, Farbe und Sammlernummer, jede zeigt klein
+  ihren Namen zur Kontrolle; Klicks gehen durch zu Arena. Solange es an und kalibriert ist, lässt das
+  Seitenfenster Pack-Liste und Top-Pick weg (Signale, Archetyp-Tracker und Tipps bleiben).
 - **Kennzahlen der Picks:** Kreaturen, Removal (Karten und Punkte wie im Bericht) und Kartenfluss der Picks, mit
   erkanntem Archetyp zusätzlich nur in dessen Farben. Pack-Karten zeigen ihre Removal-Punkte.
 - **Archetypen im Draft:** Tabelle (und im Seitenfenster kurz) je Archetyp mit den zugeordneten Picks und

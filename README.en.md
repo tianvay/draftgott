@@ -220,8 +220,9 @@ In Arena, “Detailed Logs (Plugin Support)” must be enabled under Options →
 - **Card overlay:** while picking, puts rank, rating, points, archetype fit, removal, card flow, synergy and your own
   win rate directly onto the cards in the Arena window (frame purple = top pick, green = fits, grey = other). Once,
   with a full pack, press "Calibrate" in the control window and click five card corners (saved in
-  `kartenoverlay.json`, not in Git). The cards follow Arena's order by rarity and collector number, each shows its
-  name in small print as a check; clicks go through to Arena.
+  `kartenoverlay.json`, not in Git). The cards follow Arena's order by rarity, color and collector number, each shows its
+  name in small print as a check; clicks go through to Arena. While it is on and calibrated, the side window
+  leaves out the pack list and top pick (signals, archetype tracker and tips stay).
 - **Pick metrics:** creatures, removal (cards and points as in the report) and card flow of the picks, with the
   detected archetype additionally only in its colors. Pack cards show their removal points.
 - **Archetypes in the draft:** Table (and briefly in the overlay) per archetype with the assigned picks and

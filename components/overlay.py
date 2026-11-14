@@ -400,9 +400,10 @@ MINI_KEYS = (("removal", "Removal"), ("land", "Land"), ("creature", "Kreatur"))
 MINI_TAGS = ("arch", "color", "best", "hint", "plain", "head", "warn")  # Stile mit eigener Kasten-Form (mini_*)
 
 
-def mini_rows(snap):
+def mini_rows(snap, slim=False):
     """Kleiner Kasten (minimiert): im Spiel die Chancen auf Removal, Land und Kreatur fuer die naechste Karte, im Draft
-    Pick, Archetyp und die beste Karte des Packs."""
+    Pick, Archetyp und die beste Karte des Packs (slim: Karten-Overlay zeigt das Pack, dann ohne Top-Pick und beste
+    Karte)."""
     if not snap:
         return [("draftgott", "msg")]
     g = snap.get("game") or {}
@@ -423,12 +424,15 @@ def mini_rows(snap):
     if snap.get("status") in ("pack", "waiting"):
         main = (snap.get("detect") or {}).get("main")
         head = f"Pick {snap.get('pick', 1)} · " + (_arch_name(snap, main) if main else t("offen"))
-        rows = [(head, "head")] + [(f"{MARK['best']} {h['name']}", "hint") for h in snap.get("hints") or []][:1]
+        rows = [(head, "head")]
+        if not (slim and snap.get("pack")):
+            rows += [(f"{MARK['best']} {h['name']}", "hint") for h in snap.get("hints") or []][:1]
         if snap.get("curve_warning"):
             rows.append(("⚠ " + t("Kurve zu hoch"), "warn"))
         if snap.get("pack"):
-            best = snap["pack"][0]
-            rows.append((f"1. {best['name']}", best.get("level") or "plain"))
+            if not slim:
+                best = snap["pack"][0]
+                rows.append((f"1. {best['name']}", best.get("level") or "plain"))
         else:
             rows.append((t("Warte auf Pack …"), "msg"))
         return rows
@@ -447,8 +451,10 @@ def info_rows(info, main_name):
     return rows
 
 
-def rows_for(snap):
-    """Zeilen [(Text, Stil)] fuer einen Stand von /api/live; Stile: head, sub, arch, color, never, plain, msg."""
+def rows_for(snap, slim=False):
+    """Zeilen [(Text, Stil)] fuer einen Stand von /api/live; Stile: head, sub, arch, color, never, plain, msg.
+    slim (Karten-Overlay angeschaltet und kalibriert, packoverlay.covers_pack): Pack-Liste und Top-Pick-Zeilen stehen
+    auf den Karten und fallen weg; Signale, Archetyp-Tracker und Tipps bleiben (Nutzer 14.11.2026)."""
     if not snap:
         return [("draftgott Live", "head"), (t("Drafthelper nicht erreichbar …"), "msg")]
     if (snap.get("game") or {}).get("active"):
@@ -457,7 +463,7 @@ def rows_for(snap):
         return ([(t("★ {n} Siege: aufgenommen in die Hall of Fame der Gegnerdecks",
                     n=saved_wins(snap["enemy_saved"])), "head2"),
                  (t("Gegnerdeck gespeichert: {name}", name=snap['enemy_saved']), "arch")]
-                + rows_for(dict(snap, enemy_saved=None)))
+                + rows_for(dict(snap, enemy_saved=None), slim))
     status = snap.get("status")
     if status in ("nolog", "idle", "off"):
         return [("draftgott Live", "head"), (snap.get("message") or t("Kein Live-Draft."), "msg")]
@@ -470,7 +476,8 @@ def rows_for(snap):
         (t(" – eigene Wahl") if detect.get("manual") else "")
         if main else t("Archetyp: noch offen"))
     rows = [(head, "head")] + curve_rows(snap.get("curve_warning"), _arch_name(snap, main) if main else None)
-    if status != "waiting":
+    slim = slim and status != "waiting" and bool(snap.get("pack"))
+    if status != "waiting" and not slim:
         rows += hint_rows(snap)
     scores =[s for s in detect.get("scores") or [] if s["score"]][:3]
     if scores:
@@ -485,6 +492,9 @@ def rows_for(snap):
         rows.append((text, "arch" if a["pack"] and a["colors"] == main else ("color" if a["pack"] else "sub")))
     if status == "waiting" or not snap.get("pack"):
         rows.append((t("Warte auf das nächste Pack …"), "msg"))
+        return rows + tip_rows(snap, main)
+    if slim:
+        rows.append((t("Bewertungen stehen auf den Karten (Karten-Overlay)"), "msg"))
         return rows + tip_rows(snap, main)
     for c in snap["pack"]:
         tag = "never" if c.get("rating") == "neverplay" else (c.get("level") or "plain")
@@ -876,6 +886,10 @@ def run(url, interval_ms=1000):
         if cards_hint.cget("text") != hint:
             cards_hint.configure(text=hint)
         snap = state["snap"]
+        slim = packoverlay.covers_pack(cards_on.get(), snap, cal, arena)
+        if slim != state["slim"]:
+            state["slim"] = slim
+            render()
         if not cards_state["busy"] and packoverlay.should_show(cards_on.get(), snap, cal, arena):
             try:
                 cards.show(packoverlay.pack_views(snap), cal, arena)
@@ -908,7 +922,7 @@ def run(url, interval_ms=1000):
     for tw in (text, trick_text):
         _styles(tw)
     state = {"last": None, "tricks": None, "seen": False, "misses": 0, "mini": False, "big": None, "snap": None,
-             "party": None, "first": True, "blink": False}
+             "party": None, "first": True, "blink": False, "slim": False}
     trick_tip_win = _bind_trick_tips(trick_text, lambda: trick_tips(state["snap"]))
 
     def set_mini(mini):
@@ -934,9 +948,9 @@ def run(url, interval_ms=1000):
         snap = state["snap"]
         if state["mini"]:
             rows = [(line, "mini_" + (tag if tag in MINI_TAGS else "msg"))
-                    for line, tag in mini_rows(snap)]
+                    for line, tag in mini_rows(snap, state["slim"])]
         else:
-            rows = rows_for(snap)
+            rows = rows_for(snap, state["slim"])
             btn = deck_button(snap)
             if btn is None:
                 button.pack_forget()

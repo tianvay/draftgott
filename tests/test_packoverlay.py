@@ -183,6 +183,32 @@ class ArenaOrderTests(unittest.TestCase):
         self.assertEqual([v["name"] for v in po.pack_views(self.snap(pack))], ["B", "C", "A"])
 
 
+class ArenaColorOrderTests(unittest.TestCase):
+    """Innerhalb der Seltenheit sortiert Arena nach Farbe, nicht nach Sammlernummer (Screenshot 14.11.2026, TRK):
+    Spock (UR, Nr. 253) steht vor L'Rell (BR, Nr. 247). Reihenfolge: einfarbig WUBRG, mehrfarbig nach Farben in
+    WUBRG-Folge, farblos, Laender; danach Sammlernummer."""
+
+    def snap(self, pack):
+        cards = [dict(arena_card(n, r, no, points=i), colors=list(col), land=land)
+                 for i, (n, r, no, col, land) in enumerate(pack)]
+        return dict(SNAP, order=[p[0] for p in pack], pack=sorted(cards, key=lambda c: -c["points"]))
+
+    def names(self, pack):
+        return [v["name"] for v in po.pack_views(self.snap(pack))]
+
+    def test_screenshot_multicolor(self):
+        pack = [("L'Rell, Fierce Visionary", "uncommon", "247", "BR", False),
+                ("Spock, Always Your Friend", "uncommon", "253", "RU", False)]
+        self.assertEqual(self.names(pack), ["Spock, Always Your Friend", "L'Rell, Fierce Visionary"])
+
+    def test_groups(self):
+        pack = [("Land", "common", "1", "", True), ("Artifact", "common", "2", "", False),
+                ("GW", "common", "3", "GW", False), ("UB", "common", "4", "BU", False),
+                ("G", "common", "5", "G", False), ("W2", "common", "7", "W", False), ("W1", "common", "6", "W", False),
+                ("Rare", "rare", "9", "G", False)]
+        self.assertEqual(self.names(pack), ["Rare", "W1", "W2", "G", "GW", "UB", "Artifact", "Land"])
+
+
 class ShowTests(unittest.TestCase):
     def setUp(self):
         self.cal = po.calibrate(CLICKS, CLIENT)

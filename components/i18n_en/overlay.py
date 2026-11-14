@@ -64,6 +64,7 @@ EN = {
     "Archetyp: noch offen": "Archetype: still open",
     " · im Pack: ": " · in pack: ",
     "Warte auf das nächste Pack …": "Waiting for the next pack …",
+    "Bewertungen stehen auf den Karten (Karten-Overlay)": "Ratings are shown on the cards (card overlay)",
     "{p} % ({g} G.)": "{p}% ({g} g.)",
     "evtl. offen": "maybe open",
     "umkämpft": "contested",

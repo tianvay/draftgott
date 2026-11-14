@@ -139,10 +139,21 @@ def card_view(c, rank, main):
             "frame": _frame(c), "chips": _chips(c), "stats": _stats(c)}
 
 
+def _color_key(c):
+    """Farbgruppe wie in Arena: einfarbig (WUBRG), mehrfarbig (Farben in WUBRG-Folge), farblos, Laender."""
+    if c.get("land"):
+        return (3, ())
+    idx = tuple(sorted("WUBRG".index(col) for col in c.get("colors") or [] if col in "WUBRG"))
+    return (0 if len(idx) == 1 else 1 if idx else 2, idx)
+
+
 def _arena_key(c):
-    """Sortierschluessel wie in Arena: Seltenheit (mythic zuerst), dann Sammlernummer; Unbekanntes ans Ende."""
+    """Sortierschluessel wie in Arena: Seltenheit (mythic zuerst), Farbe (_color_key; Screenshot 14.11.2026: Spock UR
+    Nr. 253 vor L'Rell BR Nr. 247), dann Sammlernummer; Unbekanntes ans Ende."""
     digits = "".join(ch for ch in str(c.get("number") or "").split("/")[0] if ch.isdigit())
-    return RARITY_ORDER.get(c.get("rarity"), len(RARITY_ORDER)), int(digits) if digits else float("inf")
+    known = c.get("rarity") in RARITY_ORDER  # ohne Scryfall-Daten: Reihenfolge des Protokolls
+    return (RARITY_ORDER.get(c.get("rarity"), len(RARITY_ORDER)), _color_key(c) if known else (4, ()),
+            int(digits) if digits else float("inf"))
 
 
 def pack_views(snap):
@@ -181,6 +192,19 @@ def should_show(enabled, snap, cal, arena):
     if not snap.get("order"):
         return False
     return bool(arena.get("found") and not arena.get("minimized") and arena.get("foreground"))
+
+
+def covers_pack(enabled, snap, cal, arena):
+    """Steht das Pack auf den Karten (Seitenfenster schlank, overlay.rows_for slim)? Schalter an, kalibriert, Arena da und
+    passend proportioniert, Pack mit Reihenfolge; anders als should_show ohne Vordergrund, damit das Seitenfenster beim
+    Alt-Tab nicht springt."""
+    if not (enabled and snap and cal and (arena or {}).get("found")) or arena.get("minimized"):
+        return False
+    if size_changed(cal, arena["size"]):
+        return False
+    if snap.get("status") != "pack" or snap.get("complete") or (snap.get("game") or {}).get("active"):
+        return False
+    return bool(snap.get("order") and snap.get("pack"))
 
 
 # ---------------------------------------------------------------- Arena-Fenster (Windows)
