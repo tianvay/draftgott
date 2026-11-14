@@ -892,12 +892,15 @@ def run(url, interval_ms=1000):
             render()
         if not cards_state["busy"] and packoverlay.should_show(cards_on.get(), snap, cal, arena):
             try:
-                cards.show(packoverlay.pack_views(snap), cal, arena)
+                views = packoverlay.pack_views(snap)
+                hidden = packoverlay.hover_hidden(cal, len(views), arena["origin"], arena["size"],
+                                                  packoverlay.cursor_pos())
+                cards.show(views, cal, arena, hidden)
             except tk.TclError:
                 pass
         else:
             cards.hide()
-        control.after(300, cards_tick)
+        control.after(100, cards_tick)  # schnell genug fuer das Hovern ueber Karten
 
     def show_windows():
         shown = visible_windows({k: v.get() for k, v in enabled.items()}, state["snap"])

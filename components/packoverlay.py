@@ -20,7 +20,8 @@ grau fremd, dunkel NeverPlay.
 
 Sichtbar (should_show) nur beim Picken (Pack liegt an, nicht im Spiel, Draft nicht fertig), wenn Arena gefunden,
 nicht minimiert und im Vordergrund ist und eine Kalibrierung vorliegt. Das Fenster ist durchsichtig und laesst Klicks
-zu Arena durch (Windows).
+zu Arena durch (Windows). Liegt die Maus auf einer Karte, verschwinden die Infos rechts davon, wo Arena die grosse
+Kartenansicht oeffnet (hover_hidden, Mausposition alle 100 ms).
 """
 import json
 import pathlib
@@ -79,6 +80,34 @@ def card_rects(cal, n, origin, client):
         top = oy + round((cal["y"] + row * cal["dy"]) * ch)
         out.append((left, top, left + round(cal["w"] * cw), top + round(cal["h"] * ch)))
     return out
+
+
+def hover_hidden(cal, n, origin, client, cursor):
+    """Indizes der Karten, deren Infos verschwinden, weil die Maus auf einer Karte liegt: Arena oeffnet rechts daneben
+    die grosse Ansicht (in Arena so eingestellt, Nutzer 14.11.2026), ausgeblendet werden alle Karten rechts davon (alle
+    Reihen). Ohne Maus auf einer Karte: leer."""
+    if not cursor:
+        return set()
+    mx, my = cursor
+    rects = card_rects(cal, n, origin, client)
+    hit = next((i for i, (l, t_, r, b) in enumerate(rects) if l <= mx < r and t_ <= my < b), None)
+    if hit is None:
+        return set()
+    cols = cal["cols"]
+    return {i for i in range(n) if i % cols > hit % cols}
+
+
+def cursor_pos():
+    """Mausposition auf dem Bildschirm (Windows), sonst None."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+        pt = wintypes.POINT()
+        if ctypes.windll.user32.GetCursorPos(ctypes.byref(pt)):
+            return pt.x, pt.y
+    except (ImportError, AttributeError, OSError):
+        pass
+    return None
 
 
 def size_changed(cal, client):
@@ -283,9 +312,10 @@ class PackOverlay:
             self.win.withdraw()
         self.last = None
 
-    def show(self, views, cal, arena):
+    def show(self, views, cal, arena, hidden=()):
+        """Infos auf die Karten legen; hidden: Indizes ohne Infos (Maus auf einer Karte, hover_hidden)."""
         (ox, oy), (cw, ch) = arena["origin"], arena["size"]
-        key = (json.dumps(views, ensure_ascii=False), ox, oy, cw, ch)
+        key = (json.dumps(views, ensure_ascii=False), ox, oy, cw, ch, tuple(sorted(hidden)))
         if self.win.state() == "withdrawn":
             self.win.deiconify()
             self.win.attributes("-topmost", True)
@@ -294,8 +324,9 @@ class PackOverlay:
         self.last = key
         self.win.geometry(f"{cw}x{ch}+{ox}+{oy}")
         self.canvas.delete("all")
-        for v, rect in zip(views, card_rects(cal, len(views), (0, 0), (cw, ch))):
-            self._card(v, rect)
+        for i, (v, rect) in enumerate(zip(views, card_rects(cal, len(views), (0, 0), (cw, ch)))):
+            if i not in hidden:
+                self._card(v, rect)
 
     def _card(self, v, rect):
         c = self.canvas
