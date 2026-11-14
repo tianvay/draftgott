@@ -506,13 +506,17 @@ def _archetypes(records, code, colors, assign, ratings, show_formats=False):
                 _fchip(k, f'{_fmt_label(k)} · ' + t("{n}× · Ø {w} Siege", n=v[0], w=dec(f"{v[1] / v[0]:.1f}"))
                        + (f" · {v[2]}🏆" if v[2] else ""))
                 for k, v in sorted(b["fmt"].items(), key=lambda kv: list(ds.FORMATS).index(kv[0]))) + "</div>"
+        m_pct, g_pct = _pct(b["mw"], b["matches"]), _pct(b["gw"], b["games"])
+        # Games-Zeile nur, wenn sie etwas anderes zeigt (bei Bo1 ist jedes Match genau ein Game)
+        games_row = ("" if g_pct == m_pct else
+                     f'<div class="mrow"><span>{t("Games gewonnen")}</span><b>{g_pct}</b></div>'
+                     f'{_meter(b["gw"], b["games"], color)}')
         out.append(f'<div class="arch" style="--ac:{accent}"><div class="ah">{title}</div>'
                    f'<div class="am">{b["drafts"]} Draft{"s" if b["drafts"] != 1 else ""} · Matches '
                    f'{b["mw"]}-{b["matches"] - b["mw"]}</div>'
-                   f'<div class="mrow"><span>{t("Matches gewonnen")}</span><b>{_pct(b["mw"], b["matches"])}</b></div>'
+                   f'<div class="mrow"><span>{t("Matches gewonnen")}</span><b>{m_pct}</b></div>'
                    f'{_meter(b["mw"], b["matches"], color)}'
-                   f'<div class="mrow"><span>{t("Games gewonnen")}</span><b>{_pct(b["gw"], b["games"])}</b></div>'
-                   f'{_meter(b["gw"], b["games"], color)}{chips}</div>')
+                   f'{games_row}{chips}</div>')
     return f'<div class="archs">{"".join(out)}</div>'
 
 
