@@ -236,6 +236,7 @@ NEUTRAL = (
     "cycle_target", "cycle_mv", "empower_text", "draws", "prepared", "is_copy", "mana_src", "landfall",
     "self_damage", "is_instant", "flash", "removal", "discard", "abilities", "combat_draw", "gy_ability_sorcery",
     "combat_draw_loss", "tap_spell", "kw_choice",  # SOS Paket A
+    "prepare_on", "brainstorm", "reanimate_any", "tomekeeper", "opp_draws",  # SOS Paket B
     "is_token", "sac_mana", "opp_spell_tax", "extra_cost", "hexproof_until_damage", "alt_draws",
     "finality", "combat_land_return", "domain_power", "x_search_basics", "choices", "is_mode", "removal_exile",
     "removal_points", "hand_pick", "attack_exile_gy", "own_turn_kw", "debuff", "impulse",

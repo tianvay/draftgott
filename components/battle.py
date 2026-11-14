@@ -2210,6 +2210,11 @@ def end_step_prepare(players, e):
     """Zu Beginn jedes Endsegments: Bloodline Recollector wird prepared, wenn in diesem Zug 3 oder mehr Kreaturen
     gestorben sind (beide Spieler)."""
     died = sum(p.deaths - p.deaths_mark for p in players)
+    for p in players:  # SOS Joined Researchers: jedes Endsegment, wenn ein Gegner mehr Handkarten hat
+        if p.opponent is not None and len(p.opponent.hand) > len(p.hand):
+            prepare_by(p, "end_opp_hand", e)
+    if died >= 2:  # SOS Emeritus of Woe: nur im eigenen Endsegment (players[0] ist am Zug)
+        prepare_by(players[0], "end_deaths2", e)
     if died < 3:
         return
     for p in players:
@@ -3036,8 +3041,11 @@ def gain_life(p, n, events=1):
     Marken nur fuer Kreaturen, die noch leben (nach dem Kampfschaden); die Quelle selbst darf dabei gestorben sein."""
     if n <= 0:
         return
+    first = p.gained == 0
     p.life += n
     p.gained += n
+    if first:  # SOS Leech Collector: "for the first time each turn"
+        prepare_by(p, "first_life")
     events *= 1 + sum(1 for c in p.creatures if c.card.lifegain_double and not c.dead)  # Dr. Beverly Crusher
     for _ in range(events):
         for c in p.creatures:  # Dina, Flesh Sower
@@ -3133,6 +3141,13 @@ def emblem_cast(p, step, e):
 def on_cast(p, card, step, e):
     """Ein Zauber wurde gewirkt: Jace-Ausloeser, Marken fuer Zauber mit Ziel beim Gegner (Danitha)."""
     _jace_on_cast(p, card, step, e)
+    turn, n = getattr(p, "sos_casts", (None, 0))  # SOS Emeritus of Conflict: dritter Zauber in diesem Zug
+    p.sos_casts = (step, n + 1 if turn == step else 1)
+    if p.sos_casts[1] == 3:
+        prepare_by(p, "third_spell", e)
+    if card.is_creature:  # SOS Abigale: nicht durch sich selbst (sie ist beim Wirken noch nicht im Spiel)
+        prepare_by(p, "creature_cast", e,
+                   skip=next((c for c in reversed(p.creatures) if c.card is card and c.entered == step), None))
     foe = p.opponent
     for c in list(foe.creatures) if foe is not None else ():  # Nyota Uhura, Kai Winn
         if c.dead:
@@ -3868,6 +3883,7 @@ def on_land(me, opp, land, step, e, with_mana=True, untapped=False):
     """Ein Land kommt ins Spiel: Landfall, Surveil des Landes, Jace-Ausloeser, Leben und Modi des Landes (TRK: "When
     this land enters untapped, choose one" nur, wenn es ungetappt kam). Gibt zusaetzliches Mana zurueck."""
     mana = []
+    prepare_by(me, "landfall", e)  # SOS Tam
     if "forest" in land.land_types:  # Roiling Canopy: mindestens 5 andere Forests
         others = sum("forest" in x.land_types for x in me.lands) - (1 if land in me.lands else 0)
         alive = [c for c in me.creatures if not c.dead]
@@ -4288,6 +4304,7 @@ def gy_leave_check(players, e):
         if p.gy_left <= p.gy_seen:
             continue
         p.gy_seen = p.gy_left
+        prepare_by(p, "gy_leave", e)  # SOS Kirol
         for src in [c for c in p.creatures if c.card.gy_leave and not c.dead]:
             kind, value, once = src.card.gy_leave
             if once:
@@ -6100,6 +6117,114 @@ def mill_pick(p, milled):
     return lands[0] if lands and not any(h.is_land for h in p.hand) else None
 
 
+def prepare_by(p, kind, e=None, only=None, skip=None):
+    """SOS Paket B: eigene Kreaturen mit diesem Ausloeser (Card.prepare_on) werden prepared; only: nur diese Kreatur,
+    skip: diese nicht (die gerade gewirkte Kreatur selbst)."""
+    for c in p.creatures:
+        if c.dead or c.prepared or not c.card.prepared or kind not in c.card.prepare_on:
+            continue
+        if (only is not None and c is not only) or c is skip:
+            continue
+        c.prepared = True
+        if e is not None:
+            e["events"].append(i18n.t("{p}: {c_card_name} wird prepared", p=i18n.t(p.name), c_card_name=c.card.name))
+
+
+def sos_upkeep(p, e):
+    """Upkeep (nach dem Surveil der Upkeep-Ausloeser): Grave Researcher wird mit 3+ Kreaturenkarten im Friedhof
+    prepared."""
+    if sum(1 for c in p.graveyard if c.is_creature) >= 3:
+        prepare_by(p, "upkeep_gy3", e)
+
+
+def sos_main1(me, opp, step, e):
+    """Beginn der ersten Main Phase: Scathing Shadelock wird prepared; Lluwen exiliert (als Hexerei) die schwaechste
+    Kreaturenkarte aus dem Friedhof, wenn sie nicht prepared ist."""
+    prepare_by(me, "main1", e)
+    for c in [c for c in me.creatures if "gy_creature" in c.card.prepare_on and not c.prepared and not c.dead]:
+        cands = [g for g in me.graveyard if g.is_creature]
+        if not cands:
+            break
+        pick = min(cands, key=lambda g: (g.mv, g.power, g.name))
+        me.graveyard.remove(pick)
+        e["events"].append(i18n.t("{me}: {card_name} exiliert {pick_name} aus dem Friedhof", me=i18n.t(me.name), card_name=c.card.name, pick_name=pick.name))
+        prepare_by(me, "gy_creature", e, only=c)
+
+
+def sos_main2(me, e):
+    """Beginn der zweiten Main Phase: Scheming Silvertongue mit 2+ Leben in diesem Zug."""
+    if me.gained >= 2:
+        prepare_by(me, "main2_life2", e)
+
+
+def sos_attack_prepare(me, a, e):
+    """Angriffs-Ausloeser fuer Prepared: Encouraging Aviator immer, Emeritus of Abundance mit 8+ Laendern, Emeritus of
+    Ideation exiliert acht Karten (Laender und billige zuerst), wenn sie nicht prepared ist."""
+    kinds = a.card.prepare_on
+    if "attack" in kinds:
+        prepare_by(me, "attack", e, only=a)
+    if "attack_lands8" in kinds and len(me.lands) >= 8:
+        prepare_by(me, "attack_lands8", e, only=a)
+    if "attack_exile8" in kinds and not a.prepared and len(me.graveyard) >= 8:
+        for g in sorted(me.graveyard, key=lambda g: (not g.is_land, g.mv, g.name))[:8]:
+            me.graveyard.remove(g)
+        prepare_by(me, "attack_exile8", e, only=a)
+
+
+def sos_end_step(dfn, act, step, e):
+    """Ende des gegnerischen Zugs: Harmonized Trio tappt sich und zwei andere Kreaturen (sie enttappen in unserem
+    Zug), dann Instant-Kopien ohne Removal (Brainstorm, Ancestral Recall, Bind to Life) mit offenem Mana."""
+    for trio in [c for c in dfn.creatures if "tap3" in c.card.prepare_on and not c.prepared]:
+        helpers = [c for c in dfn.creatures if c is not trio and not c.dead and not c.tapped]
+        if not tap_ready(dfn, trio) or len(helpers) < 2:
+            continue
+        for c in [trio] + sorted(helpers, key=lambda c: (c.power, c.card.name))[:2]:
+            c.tapped = True
+        prepare_by(dfn, "tap3", e, only=trio)
+    for card in sorted(copies(dfn), key=lambda c: -c.mv):
+        if not card.is_instant or card.removal or _trick_atoms(card) or card.choices or card.counter or card.grant_kw:
+            continue
+        if card in copies(dfn) and _pay_open(dfn, _alts(dfn, card)):
+            e["events"].append(i18n.t("{dfn}: {card_name} am Ende des Zugs", dfn=i18n.t(dfn.name), card_name=card.name))
+            _resolve(dfn, act, card, step, e)
+
+
+def sos_pre_attack_grants(me, opp, step, e):
+    """Vor dem Angriff: Instants, die nur ein Schluesselwort verleihen (Jump, auch als Prepared-Kopie), fuer den
+    staerksten Angreifer, den sonst ein Blocker aufhalten wuerde und der mit dem Schluesselwort frei ist."""
+    if opp is None:
+        return
+    cards = [c for c in me.hand if c.is_instant] + [c for c in copies(me) if c.is_instant]
+    for card in cards:
+        if not card.grant_kw or card.modes or card.removal:
+            continue
+        ready = [a for a in me.creatures if not a.dead and can_attack(a, step)
+                 and not all(a.has(k) for k in card.grant_kw)]
+        fits = []
+        for a in ready:
+            if stopping_blocker(me, opp, [a]) is None:
+                continue
+            added = set(card.grant_kw) - a.extra
+            a.extra |= added
+            free = stopping_blocker(me, opp, [a]) is None
+            a.extra -= added
+            if free:
+                fits.append(a)
+        if not fits or not _pay_open(me, _alts(me, card)):
+            continue
+        pick = max(fits, key=lambda a: (a.power, a.card.name))
+        if card.is_copy:
+            src = next((c for c in me.creatures if c.prepared and c.card.prepared[1] == card), None)
+            if src is not None:
+                src.prepared = False
+        else:
+            me.hand.remove(card)
+            me.graveyard.append(card)
+        on_cast(me, card, step, e)
+        pick.extra |= set(card.grant_kw)
+        e["events"].append(i18n.t("{me}: {card_name} – {target_name} bekommt {kw}", me=i18n.t(me.name), card_name=card.name, target_name=pick.card.name, kw=", ".join(card.grant_kw)))
+
+
 def sos_tap_instants(me, opp, step, e):
     """SOS Rapier Wit vor dem eigenen Angriff: nur, wenn ein Blocker einen unserer Angreifer aufhalten wuerde (dann
     mit Stun-Marke); sonst bleibt er fuer das Ende des gegnerischen Zugs auf der Hand (tappt dann einen Blocker fuer
@@ -6112,6 +6237,43 @@ def sos_tap_instants(me, opp, step, e):
             continue
         e["events"].append(i18n.t("{me}: {card_name} vor dem Angriff", me=i18n.t(me.name), card_name=card.name))
         _resolve(me, opp, card, step, e)
+
+
+INKLING = token_card("Inkling", creature=True, power=1, toughness=1, artifact=False, kw=("flying",),
+                     types=("inkling",))
+
+
+def sos_truce(me, opp, card, step, e):
+    """Emeritus of Truce: das Inkling-Token bekommt der Gegner, wenn er dadurch mehr Kreaturen hat als wir und eine
+    Kreatur hat, die Swords to Plowshares lohnt (staerker als das Token); sonst wir. Danach: hat ein Gegner mehr
+    Kreaturen, wird sie prepared."""
+    src = next((c for c in reversed(me.creatures) if c.card is card and not c.dead), None)
+    mine = sum(1 for c in me.creatures if not c.dead)
+    theirs = [c for c in opp.creatures if not c.dead]
+    worth = any(c.power + c.toughness > 2 and not hexproof(c) for c in theirs)
+    target = opp if worth and len(theirs) + 1 > mine else me
+    make_tokens(target, [(1, INKLING)], step, e, me if target is opp else opp, card.name)
+    if src is not None and sum(1 for c in opp.creatures if not c.dead) > sum(1 for c in me.creatures if not c.dead):
+        prepare_by(me, "etb_inkling", e, only=src)
+
+
+def sos_reanimate_cands(me, opp):
+    """Reanimate: Kreaturenkarten aus beiden Friedhoefen, die uns nicht toeten (Manawert < Leben)."""
+    return [(g, p) for p in (me, opp) if p is not None for g in p.graveyard if g.is_creature and g.mv < me.life]
+
+
+def sos_reanimate(me, opp, card, step, e):
+    cands = sos_reanimate_cands(me, opp)
+    if not cands:
+        return
+    pick, owner = max(cands, key=lambda gp: (gp[0].mv, gp[0].power, gp[0].name))
+    owner.graveyard.remove(pick)
+    c = Creature(pick, step)
+    c.owner = owner if owner is not me else None
+    me.creatures.append(c)
+    creature_enters(me, c, step, e, opp, cast=False)
+    me.life -= pick.mv
+    e["events"].append(i18n.t("{me}: {card_name} holt {pick_name} (verliert {n} Leben)", me=i18n.t(me.name), card_name=card.name, pick_name=pick.name, n=pick.mv))
 
 
 def sos_effects(me, opp, card, step, entry):
@@ -6141,6 +6303,23 @@ def sos_effects(me, opp, card, step, entry):
         if target is not None and stun:
             target.stun += stun
             entry["events"].append(i18n.t("{me}: {card_name} – {n} Stun-Marken auf {target_name}", me=i18n.t(me.name), card_name=card.name, n=stun, target_name=target.card.name))
+    if card.opp_draws and opp is not None:  # Secret Rendezvous
+        _draw(opp, card.opp_draws)
+    if "etb_inkling" in card.prepare_on and opp is not None:
+        sos_truce(me, opp, card, step, entry)
+    if card.tomekeeper:  # Biblioplex Tomekeeper: eigene Kreatur prepared (teuerste Zauberhaelfte), sonst Gegner unprepared
+        own = [c for c in me.creatures if not c.dead and c.card.prepared and not c.prepared]
+        theirs = [c for c in (opp.creatures if opp is not None else ()) if not c.dead and c.prepared]
+        if own:
+            pick = max(own, key=lambda c: (c.card.prepared[1].mv, c.card.name))
+            pick.prepared = True
+            entry["events"].append(i18n.t("{p}: {c_card_name} wird prepared", p=i18n.t(me.name), c_card_name=pick.card.name))
+        elif theirs:
+            pick = max(theirs, key=lambda c: (c.card.prepared[1].mv, c.card.name))
+            pick.prepared = False
+            entry["events"].append(i18n.t("{me}: {card_name} – {target_name} nicht mehr prepared", me=i18n.t(me.name), card_name=card.name, target_name=pick.card.name))
+    if card.reanimate_any and opp is not None:  # Reanimate: aus beiden Friedhoefen, Leben = Manawert
+        sos_reanimate(me, opp, card, step, entry)
     if card.kw_choice:  # Practiced Offense: Double Strike fuer den staerksten Angreifer, sonst Lifelink
         alive = [c for c in me.creatures if not c.dead]
         ready = [c for c in alive if can_attack(c, step)]
@@ -6225,7 +6404,8 @@ _DIG_OK = {
     "any": lambda c: True,
 }
 _TUTOR_OK = {"aura": lambda c: c.is_aura, "equipment": lambda c: bool(c.equip), "spacecraft": lambda c: bool(c.station),
-             "whale": lambda c: "whale" in c.creature_types}
+             "whale": lambda c: "whale" in c.creature_types,
+             "any": lambda c: True, "instant_sorcery": lambda c: c.is_instant_sorcery}  # SOS Demonic Tutor, Wild Idea
 
 
 def flow_effects(me, opp, card, step, entry):
@@ -6818,11 +6998,17 @@ def card_effects(me, opp, card, step, entry, modes=None):
             me.predrawn[card] -= 1
         else:
             _draw(me, card.draws)
+    for _k in range(card.brainstorm):  # SOS Brainstorm: die schwaechsten Handkarten oben auf die Bibliothek
+        back = choose_discard(me)
+        if back is not None:
+            me.hand.remove(back)
+            me.library.insert(0, back)
+            entry["events"].append(i18n.t("{me}: {card_name} – {back_name} oben auf die Bibliothek", me=i18n.t(me.name), card_name=card.name, back_name=back.name))
     if card.surveil:
         surveil_cards(me, [card.surveil], entry, card.name)
     gain_life(me, card.spell_life)
     if card.reanimate:
-        reanimate(me, opp, card.reanimate, step, entry)
+        reanimate(me, opp, card.reanimate, step, entry, source=card)
     make_tokens(me, card.creates_tokens, step, entry, opp, card.name)
 
 
@@ -6836,12 +7022,14 @@ def make_tokens(p, tokens, step, e, opp=None, source=""):
             p.creatures.append(c)
             creature_enters(p, c, step, e, opp, cast=False)
         e["events"].append(i18n.t("{p}: {source} – {n} {token_name}-Token", p=i18n.t(p.name), source=source, n=n, token_name=token.name))
+    if any(n > 0 for n, _t in tokens):  # SOS Spiritcall Enthusiast: "one or more tokens you control enter"
+        prepare_by(p, "tokens", e)
 
 
 def _tough_ratio(card):
     """Verhaeltnis Toughness/Power des ersten Pumps einer Karte (+2/+2 -> 1, +3/+1 -> 1/3)."""
     for mode, tough in zip(card.modes, card.pump_tough or ()):
-        pumps = [a for a in mode if a[0] in ("pump", "pump_all")]
+        pumps = [a for a in mode if a[0] in ("pump", "pump_all", "pump_each")]
         if pumps and tough and pumps[0][1]:
             return tough[0] / pumps[0][1]
     return 1.0
@@ -6872,6 +7060,8 @@ def _gy_matches(card, filt, mv_max):
         ok = not card.is_land and not card.is_instant_sorcery
     elif filt == "land":
         ok = card.is_land
+    elif filt == "card":  # SOS Regrowth: jede Karte
+        ok = True
     else:
         ok = not card.is_instant_sorcery
     return ok and card.mv <= mv_max
@@ -6938,10 +7128,11 @@ def reliant_back(p, opp, n, step, e, source="U.S.S. Reliant"):
     put_back(p, pick, "battlefield", step, e, opp, finality=True)
 
 
-def reanimate(p, opp, spec, step, e):
-    """Zauber "Return target/all ... from your graveyard to the battlefield/your hand" (Card.reanimate)."""
+def reanimate(p, opp, spec, step, e, source=None):
+    """Zauber "Return target/all ... from your graveyard to the battlefield/your hand" (Card.reanimate); source: der
+    Zauber selbst liegt schon im Friedhof, ist aber kein Ziel (SOS Regrowth)."""
     count, filt, mv_max, dest, counters = spec
-    cands = gy_candidates(p, filt, mv_max)
+    cands = gy_candidates(p, filt, mv_max, exclude=source)
     if not cands:
         return
     picks = cands if count == "all" else [_best_from_gy(p, cands)]
@@ -6977,6 +7168,8 @@ def main_phase_spells(me, opp):
             and (not c.animate_artifact or animate_target(me) is not None)
             and (not c.rummage_spell or surplus_land(me) is not None)
             and (not c.discard_cost or len([h for h in me.hand if h is not c]) >= c.discard_cost)
+            and (not c.reanimate_any or bool(sos_reanimate_cands(me, opp)))
+            and (not c.opp_draws or len([h for h in me.hand if h is not c]) < 3)  # Secret Rendezvous (Nutzer)
             and (not c.twin or twin_host(me, opp) is not None)
             and (not c.mirror_copy or (opp is not None and any(not x.dead for x in opp.creatures)))
             and sweep_etb_ok(me, opp, c) and kobayashi_ok(me, opp, c) and not c.sunburst_bomb and city_ok(me, opp, c)
@@ -7142,6 +7335,9 @@ def instant_removals(p):
     for card in p.graveyard:
         if card.flashback and card.is_instant and card.removal and card.removal[4] == "spell":
             out.append((card, _flashback_version(p, card).alts, card, True, "flashback"))
+    for card in dict.fromkeys(copies(p)):  # SOS: Instant-Haelften prepared Kreaturen (Swords, Lightning Bolt)
+        if card.is_instant and card.removal and card.removal[4] == "spell":
+            out.append((card, _alts(p, card), card, True, "prepared"))
     return out
 
 
@@ -7186,7 +7382,7 @@ def _any_mana(card):
 def _zone(p, zone):
     if zone == "board":
         return [c.card for c in p.creatures if not c.dead]
-    return {"exile": p.exiled, "flashback": p.graveyard}.get(zone, p.hand)
+    return {"exile": p.exiled, "flashback": p.graveyard, "prepared": copies(p)}.get(zone, p.hand)
 
 
 def _use_removal(p, card, alts, is_spell, step, e, zone="hand", other=None, fx=None, target=None):
@@ -7197,6 +7393,10 @@ def _use_removal(p, card, alts, is_spell, step, e, zone="hand", other=None, fx=N
         return False
     if zone == "flashback":  # aus dem Friedhof, danach ins Exil
         p.graveyard.remove(card)
+    elif zone == "prepared":  # Kopie: die Kreatur ist nicht mehr prepared, kein Friedhof
+        src = next((c for c in p.creatures if c.prepared and c.card.prepared[1] == card and not c.dead), None)
+        if src is not None:
+            src.prepared = False
     elif zone == "board":  # die Kreatur opfert sich als Kosten
         src = next(c for c in p.creatures if c.card == card and not c.dead)
         src.dead = True
@@ -7362,6 +7562,7 @@ def end_step_instants(dfn, act, e, step):
         if card in dfn.hand and reanimate_ok(dfn, card) and _cast_from_open(dfn, card):
             e["events"].append(i18n.t("{dfn}: {card_name} am Ende des Zugs", dfn=i18n.t(dfn.name), card_name=card.name))
             _resolve(dfn, act, card, step, e)
+    sos_end_step(dfn, act, step, e)
     for card in sorted(flashbacks, key=lambda c: -c.mv):  # nur Karten, die schon vorher im Friedhof lagen
         if card not in dfn.graveyard or not reanimate_ok(dfn, card):
             continue
@@ -9000,6 +9201,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     upkeep(me)
     upkeep_triggers(me, opp, step, e)
     eye_upkeep(me, opp, e)
+    sos_upkeep(me, e)
     if not skip_draw:  # Draw
         if not me.library:
             me.lost = True
@@ -9018,6 +9220,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
         if opp.life <= 0 or me.life <= 0:
             return e
     main1_loot(me, e)  # Seven of Nine
+    sos_main1(me, opp, step, e)
     disc, orig = discount(me), {}  # Kostensenkung, Steuer, Zusatzkosten: angepasste Handkarten fuer die Main Phase
     for i, c in enumerate(me.hand):
         cheap = _discounted(c, disc, me)
@@ -9411,6 +9614,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
             if _use_removal(me, card, alts, is_spell, step, e, zone, opp, rc, target=max(eaters, key=danger)):
                 cast_removal(rc, me, opp, e, step, target=max(eaters, key=danger))
     sos_tap_instants(me, opp, step, e)
+    sos_pre_attack_grants(me, opp, step, e)
     # Jace surveilt schon vor dem Kampf, wenn das in diesem Kampf etwas bringt (Prudent Fateseer, Futurescribe)
     alive = [c for c in me.creatures if not c.dead]
     if 0 < me.jace.loyalty < 3 and not me.surveilled and not walker_engine(me) and any(
@@ -9515,6 +9719,8 @@ def take_turn(me, opp, step, rnd, skip_draw):
             discover(me, opp, a.card.discover, step, e)
     for a in attackers:  # Angriffs-Ausloeser der Kreatur selbst
         a.attacked = step
+        if a.card.prepare_on:
+            sos_attack_prepare(me, a, e)
         for g in a.gear:  # Medic's Kitesail
             gain_life(me, g.equip_attack_life)
             if g.equip_attack_choice:  # Hunter's Axe: Deathtouch, wenn ein Blocker sonst ueberlebt, sonst Trample
@@ -9618,6 +9824,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     if opp.life <= 0 or opp.lost:
         return e
     # Main 2
+    sos_main2(me, e)
     for c in main2:
         resolve(c)
     e["main2"] = [c.name for c in main2]

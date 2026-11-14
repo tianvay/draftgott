@@ -663,7 +663,11 @@ full log. The rules of the battle model are described in detail at the end of th
 - Secrets of Strixhaven (SOS), package A: archetypes of the five colleges; drain on entering and attacking (life
   loss, not damage), loot with two cards, rummage on entering, tapping with stun counters (Rapier Wit, Procrastinate,
   Fractal Mascot), countering creature spells, a keyword of your choice (Practiced Offense), discarding as an
-  additional cost. More SOS packages will follow; until then, open cards only have their already modelled effects.
+  additional cost. Package B (prepared): creatures also become prepared through triggers (attacking, landfall,
+  creature spells, tokens, the first life gain each turn, the third spell, leaving the graveyard, main phase, end
+  step, upkeep, tap ability), instant halves are cast as copies (removal, card draw at the end of the opponent's
+  turn, Jump before the attack), plus Brainstorm, Demonic Tutor, Regrowth, Reanimate, and Biblioplex Tomekeeper. More
+  SOS packages will follow; until then, open cards only have their already modelled effects.
 - Alchemy: Reality Fracture (YFRA), package A: perpetual, conjuring named cards, seek (Killian), Avoided
   Stairwurm, Zimone, Dina, Asymmetry Sage, Sparks Ablaze, Paradox Kraken, Boisterous Clique, Searing Soloist
   (cards to conjure are in `components/conjure.py`).

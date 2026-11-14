@@ -670,7 +670,11 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
 - Secrets of Strixhaven (SOS), Paket A: Archetypen der fünf Colleges; Lebensentzug beim Betreten und Angriff
   (Lebensverlust, kein Schaden), Loot mit zwei Karten, Rummage beim Betreten, Tappen mit Stun-Marken (Rapier Wit,
   Procrastinate, Fractal Mascot), Kontern von Kreaturzaubern, Schlüsselwort nach Wahl (Practiced Offense), Abwerfen
-  als Zusatzkosten. Weitere SOS-Pakete folgen; bis dahin wirken offene Karten nur mit den schon modellierten
+  als Zusatzkosten. Paket B (Prepared): Kreaturen werden auch durch Auslöser prepared (Angriff, Landfall,
+  Kreaturzauber, Token, erstes Leben im Zug, dritter Zauber, Friedhof verlassen, Main Phase, Endsegment, Upkeep,
+  Tap-Fähigkeit), Instant-Hälften werden als Kopie gewirkt (Removal, Ziehen am Ende des gegnerischen Zugs, Jump vor
+  dem Angriff), dazu Brainstorm, Demonic Tutor, Regrowth, Reanimate und Biblioplex Tomekeeper. Weitere SOS-Pakete
+  folgen; bis dahin wirken offene Karten nur mit den schon modellierten
   Effekten.
 - Alchemy: Reality Fracture (YFRA), Paket A: Perpetual, Conjure benannter Karten, Seek (Killian), Avoided
   Stairwurm, Zimone, Dina, Asymmetry Sage, Sparks Ablaze, Paradox Kraken, Boisterous Clique, Searing Soloist

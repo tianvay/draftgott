@@ -62,6 +62,9 @@ class DrawParsingTests(unittest.TestCase):
         self.assertEqual(draws("When Test Draw enters, draw two cards.", type_line=f"Creature {DASH} Test",
                                power="1", toughness="1"), 2)
 
+    def test_target_player_draws(self):  # Nutzer 2026-11-14: wir waehlen uns selbst (frueher 0, nicht modelliert)
+        self.assertEqual(draws("Target player draws two cards.", type_line="Sorcery"), 2)
+
     def test_not_modelled(self):
         for text, type_line in (
                 ("Choose one —\n• Destroy target creature.\n• Draw a card.", "Sorcery"),
@@ -69,7 +72,6 @@ class DrawParsingTests(unittest.TestCase):
                 ("Draw two cards, then discard a card.", "Instant"),
                 ("Draw X cards, where X is the number of creatures you control.", "Sorcery"),
                 ("You may discard a card. If you do, draw a card.", "Sorcery"),
-                ("Target player draws two cards.", "Sorcery"),
                 ("Whenever you gain life, draw a card.", f"Creature {DASH} Test"),
                 ("{T}, Discard a card: Draw a card.", f"Creature {DASH} Test"),
                 ("When this creature dies, draw a card.", f"Creature {DASH} Test"),

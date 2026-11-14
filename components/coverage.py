@@ -179,7 +179,7 @@ def _classify(low, is_planeswalker):
 
 
 # Felder, die nur der Bericht nutzt (setzen sie sich, ist die Zeile nicht simuliert)
-_REPORT_ONLY = {"name", "removal_points", "pw_tags", "empower_text", "is_jace", "legendary"}
+_REPORT_ONLY = {"name", "removal_points", "pw_tags", "empower_text", "is_jace", "legendary", "targets_opp"}
 
 
 def _model_fields(card, face, text):

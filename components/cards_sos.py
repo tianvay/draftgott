@@ -37,11 +37,116 @@ _RES = {
 }
 
 
+_PREP = r"(?:~|this creature) becomes prepared\."
+# Paket B: Ausloeser, die eine Kreatur prepared machen (Art -> Muster der Zeile der Vorderseite)
+_PREPARE_RES = {
+    "etb_inkling": re.compile(r"^when (?:~|this creature) enters, target player creates a 1/1 white and black inkling "
+                              r"creature token with flying\. then if an opponent controls more creatures than you, "
+                              + _PREP + "$"),
+    "end_opp_hand": re.compile(r"^at the beginning of each end step, if an opponent has more cards in hand than you, "
+                               + _PREP + "$"),
+    "tokens": re.compile(r"^whenever one or more tokens you control enter, " + _PREP + "$"),
+    "attack": re.compile(r"^whenever (?:~|this creature) attacks, it becomes prepared\.$"),
+    "tap3": re.compile(r"^\{t\}, tap two untapped creatures you control: " + _PREP + "$"),
+    "end_deaths2": re.compile(r"^at the beginning of your end step, if two or more creatures died this turn, "
+                              + _PREP + "$"),
+    "upkeep_gy3": re.compile(r"^at the beginning of your upkeep, surveil 1\. then if there are three or more creature "
+                             r"cards in your graveyard, " + _PREP + "$"),
+    "first_life": re.compile(r"^whenever you gain life for the first time each turn, " + _PREP + "$"),
+    "main1": re.compile(r"^at the beginning of your first main phase, " + _PREP + "$"),
+    "main2_life2": re.compile(r"^at the beginning of your second main phase, if you gained 2 or more life this turn, "
+                              + _PREP + "$"),
+    "third_spell": re.compile(r"^whenever you cast your third spell each turn, " + _PREP + "$"),
+    "creature_cast": re.compile(r"^whenever you cast a creature spell, " + _PREP + "$"),
+    "gy_leave": re.compile(r"^whenever one or more cards leave your graveyard, " + _PREP + "$"),
+    "landfall": re.compile(r"^landfall — whenever a land you control enters, " + _PREP + "$"),
+    "attack_exile8": re.compile(r"^whenever (?:~|this creature) attacks, you may exile eight cards from your "
+                                r"graveyard\. if you do, " + _PREP + "$"),
+    "attack_lands8": re.compile(r"^whenever (?:~|this creature) attacks, if you control eight or more lands, "
+                                + _PREP + "$"),
+    "gy_creature": re.compile(r"^exile a creature card from your graveyard: " + _PREP + r" activate only as a "
+                              r"sorcery\.$"),
+}
+_SPELL_RES = {
+    "pump_each": re.compile(r"^one or two target creatures each get \+(\d+)/\+(\d+) until end of turn\.$"),
+    "brainstorm": re.compile(r"^draw three cards, then put two cards from your hand on top of your library in any "
+                             r"order\.$"),
+    "tutor_any": re.compile(r"^search your library for a card, put that card into your hand, then shuffle\.$"),
+    "tutor_instsorc": re.compile(r"^search your library for an instant or sorcery card, reveal it, put it into your "
+                                 r"hand, then shuffle\.$"),
+    "regrowth": re.compile(r"^return target card from your graveyard to your hand\.$"),
+    "reanimate_any": re.compile(r"^put target creature card from a graveyard onto the battlefield under your control\. "
+                                r"you lose life equal to that card's mana value\.$"),
+    # Pack a Punch (auch der Rest, den die Modell-Abdeckung nach den Marken prueft)
+    # "target player": wir waehlen uns selbst (Ancestral Recall, Sign in Blood, FRA Ancestral Craving)
+    "target_draws": re.compile(r"^target player draws (a|one|two|three) cards?(?: and loses (\d+) life)?\.$"),
+    "each_draw": re.compile(r"^you and target opponent each draw (a|one|two|three) cards?\.$"),
+    "mill_counters_kw": re.compile(r"^mill a card\. (?:put two \+1/\+1 counters on target creature\. )?it gains "
+                                   r"([a-z ]+?) until end of turn\.$"),
+}
+_TOMEKEEPER_HEAD = re.compile(r"^when (?:~|this creature) enters, choose up to one —$")
+_TOMEKEEPER_BULLETS = ("target creature becomes prepared.", "target creature becomes unprepared.")
+
+
+def prepare_triggers(card):
+    """Paket B: Arten der Ausloeser, die die Vorderseite prepared machen (Reihenfolge wie im Text)."""
+    if card.get("layout") != "prepare":
+        return ()
+    found = []
+    for _raw, low in _clean_lines(card):
+        for kind, rx in _PREPARE_RES.items():
+            if rx.match(low):
+                found.append(kind)
+    return tuple(found)
+
+
+def _spell_traits(low, base):
+    """Paket B: offene Zauberhaelften (auch als eigene Karten)."""
+    res, out = _SPELL_RES, {}
+    m = res["pump_each"].match(low)
+    if m:  # Scrollboost: zwei Ziele
+        out["modes"] = ((("pump_each", int(m.group(1)), 2),),)
+        out["pump_tough"] = ((int(m.group(2)),),)
+    if res["brainstorm"].match(low):
+        out["draws"], out["brainstorm"] = 3, 2
+    if res["tutor_any"].match(low):
+        out["tutor"] = ("any",)
+    if res["tutor_instsorc"].match(low):
+        out["tutor"] = ("instant_sorcery",)
+    if res["regrowth"].match(low):
+        out["reanimate"] = ("target", "card", 99, "hand", 0)
+    if res["reanimate_any"].match(low):
+        out["reanimate_any"] = True
+    m = res["target_draws"].match(low)
+    if m:  # wir waehlen uns selbst (Nutzer 2026-11-14: zaehlt als Ziehen, auch im Goldfish)
+        out["draws"] = _count(m.group(1))
+        if m.group(2):
+            out["life_loss"] = int(m.group(2))
+    m = res["each_draw"].match(low)
+    if m:  # Secret Rendezvous: der Gegner zieht genauso viele
+        out["draws"] = out["opp_draws"] = _count(m.group(1))
+    m = res["mill_counters_kw"].match(low)
+    if m and m.group(1) in GRANTABLE:
+        out["mill_self"], out["grant_kw"] = 1, (m.group(1),)
+    return out
+
+
 def sos_traits(card, type_line, base):
     """Card-Felder aus den SOS-Wortlauten (nur Felder, die sich aendern)."""
     spell = "Instant" in type_line or "Sorcery" in type_line
     res, out = _RES, {}
-    for _raw, low in _clean_lines(card):
+    if base.prepared:
+        kinds = prepare_triggers(card)
+        if kinds:
+            out["prepare_on"] = kinds
+            if "upkeep_gy3" in kinds:
+                out["upkeep_surveil"] = 1  # Grave Researcher: Surveil vor der Pruefung
+    lines = list(_clean_lines(card))
+    if not spell and lines and any(_TOMEKEEPER_HEAD.match(low) for _r, low in lines):
+        bullets = [low.lstrip("•").strip() for r, low in lines if r.strip().startswith("•")]
+        if all(b in _TOMEKEEPER_BULLETS for b in bullets):
+            out["tomekeeper"] = True
+    for _raw, low in lines:
         trigger = bool(re.match(r"^(when|whenever|at the beginning)\b", low))
         if not spell:
             m = res["etb_drain"].match(low)
@@ -68,6 +173,7 @@ def sos_traits(card, type_line, base):
             out["loot"] = _count({"two": "2", "three": "3"}[m.group(1)])
         if not spell or trigger:
             continue
+        out.update(_spell_traits(low, base))
         m = res["you_draw_life"].search(low)
         if m:
             out["draws"] = base.draws + _count(m.group(1))

@@ -355,6 +355,11 @@ EN = {
     "{me}: {card_name} – wirft {gone_name} ab (Zusatzkosten)": "{me}: {card_name} – discards {gone_name} (additional cost)",
     "{me}: {card_name} – {n} Stun-Marken auf {target_name}": "{me}: {card_name} – {n} stun counters on {target_name}",
     "{me}: {card_name} – {target_name} bekommt {kw}": "{me}: {card_name} – {target_name} gains {kw}",
+    # SOS Paket B
+    "{me}: {card_name} – {back_name} oben auf die Bibliothek": "{me}: {card_name} – {back_name} on top of the library",
+    "{me}: {card_name} – {target_name} nicht mehr prepared": "{me}: {card_name} – {target_name} no longer prepared",
+    "{me}: {card_name} exiliert {pick_name} aus dem Friedhof": "{me}: {card_name} exiles {pick_name} from the graveyard",
+    "{me}: {card_name} holt {pick_name} (verliert {n} Leben)": "{me}: {card_name} brings back {pick_name} (loses {n} life)",
     "{me}: {a_card_name} – Gegner verliert {loss}, {life} Leben": "{me}: {a_card_name} – opponent loses {loss}, {life} life",
     # Namen der Spieler im Protokoll
     "Wir": "We",

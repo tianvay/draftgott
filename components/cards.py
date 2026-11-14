@@ -510,6 +510,12 @@ class Card(NamedTuple):
     tap_spell: tuple = ()  # Zauber tappt eine gegnerische Kreatur: (Stun im eigenen Zug, Stun sonst, Stun je X)
     kw_choice: tuple = ()  # "gains your choice of A or B until end of turn": (A, B) (Practiced Offense)
     discard_cost: int = 0  # Zusatzkosten: N Karten abwerfen (Seize the Spoils)
+    # SOS Paket B (Prepared)
+    prepare_on: tuple = ()  # Ausloeser, die die Kreatur prepared machen (cards_sos.prepare_triggers)
+    brainstorm: int = 0  # nach dem Ziehen N Handkarten oben auf die Bibliothek (Brainstorm)
+    reanimate_any: bool = False  # Kreaturenkarte aus irgendeinem Friedhof aufs Feld, Leben = Manawert (Reanimate)
+    tomekeeper: bool = False  # Betreten: eine Kreatur prepared oder unprepared machen (Biblioplex Tomekeeper)
+    opp_draws: int = 0  # der Gegner zieht N Karten ("you and target opponent each draw", Secret Rendezvous)
 
 
 LANDCYCLE_RE = re.compile(
@@ -2284,6 +2290,10 @@ def prepared_mode(card):
     if not enters and not upkeep and re.search(r"at the beginning of each end step, if three or more creatures died "
                                                r"this turn, this creature becomes prepared", low):
         return "deaths3"  # Bloodline Recollector
+    if not enters and not upkeep:
+        from components.cards_sos import prepare_triggers  # spaet importiert: cards_sos nutzt Helfer aus cards
+        if prepare_triggers(card):
+            return "trigger"  # SOS: erst ein Ausloeser macht sie prepared (Card.prepare_on)
     return "both" if enters and upkeep else "enters" if enters else "upkeep" if upkeep else ""
 
 

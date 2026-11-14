@@ -576,6 +576,19 @@ RULES = [
     "gefährlichste andere Kreatur. Essence Scatter kontert nur Kreaturzauber. Practiced Offense: Double Strike für den "
     "stärksten Angreifer, ohne Angreifer Lifelink. Seize the Spoils: Abwerfen als Zusatzkosten (601.2f), nur mit "
     "einer weiteren Handkarte.",
+    "SOS-Paket B (Prepared): Kreaturen werden auch durch Auslöser prepared – Angriff (Encouraging Aviator; Emeritus "
+    "of Abundance mit 8+ Ländern; Emeritus of Ideation exiliert acht Friedhofskarten, Länder und billige zuerst), "
+    "Landfall, eigener Kreaturzauber (nicht die Kreatur selbst), Token kommen ins Spiel, erstes Leben im Zug, dritter "
+    "Zauber im Zug, Karten verlassen den Friedhof, Beginn der ersten Main Phase (Lluwen exiliert dann die schwächste "
+    "Kreaturenkarte), zweite Main Phase nach 2+ Leben, jedes Endsegment mit mehr Handkarten beim Gegner, eigenes "
+    "Endsegment nach 2+ gestorbenen Kreaturen, Upkeep mit 3+ Kreaturenkarten im Friedhof (nach Surveil 1). Harmonized "
+    "Trio tappt sich und zwei andere am Ende des gegnerischen Zugs. Emeritus of Truce gibt das Inkling dem Gegner, wenn "
+    "er dadurch mehr Kreaturen hat und eine Kreatur, die Swords to Plowshares lohnt, sonst uns. Instant-Hälften werden "
+    "als Kopie gewirkt: Removal wie Removal-Instants (Swords, Lightning Bolt), Ziehen am Ende des gegnerischen Zugs "
+    "(Brainstorm, Ancestral Recall), Jump vor dem Angriff für einen sonst aufgehaltenen Angreifer. „Target player "
+    "draws“: wir ziehen (auch im Goldfish); Secret Rendezvous nur mit weniger als drei anderen Handkarten (auch der Gegner zieht). Biblioplex Tomekeeper macht die eigene "
+    "Kreatur mit der teuersten Zauberhälfte prepared, sonst eine gegnerische unprepared. Reanimate holt die teuerste "
+    "Kreatur aus beiden Friedhöfen, die uns nicht tötet.",
     "Noch nicht im Kampf: weitere Auslöser und Fähigkeiten (siehe Modell-Abdeckung). Solche Karten werden gewirkt, "
     "wirken aber nur mit den schon modellierten Effekten.",
 ]

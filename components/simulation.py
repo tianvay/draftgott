@@ -715,6 +715,10 @@ def _run_mode(mode, board, bonus, pump, turn):
             for i in _ranked(board, bonus, pump, turn, True):
                 pump[i] = pump.get(i, 0) + atom[1]
                 gain += atom[1]
+        elif kind == "pump_each":  # SOS Scrollboost: ("pump_each", n, Ziele) - verschiedene Kreaturen
+            for i in _ranked(board, bonus, pump, turn, True)[:atom[2]]:
+                pump[i] = pump.get(i, 0) + atom[1]
+                gain += atom[1]
     return gain, face, counters
 
 
