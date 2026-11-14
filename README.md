@@ -226,7 +226,7 @@ In Arena muss unter Optionen → Konto „Detailed Logs (Plugin Support)“ eing
   Einmal bei vollem Pack im Steuerfenster „Kalibrieren“ und fünf Kartenecken anklicken (gespeichert in
   `kartenoverlay.json`, nicht im Git). Die Karten liegen wie in Arena nach Seltenheit, Farbe und Sammlernummer, jede zeigt klein
   ihren Namen zur Kontrolle; Klicks gehen durch zu Arena; zeigt die Maus auf eine Karte, verschwinden die
-  Zahlen dort, wo Arena die große Kartenansicht öffnet. Solange es an und kalibriert ist, lässt das
+  Zahlen auf allen anderen Karten, damit die große Kartenansicht von Arena frei bleibt. Solange es an und kalibriert ist, lässt das
   Seitenfenster Pack-Liste und Top-Pick weg (Signale, Archetyp-Tracker und Tipps bleiben).
 - **Kennzahlen der Picks:** Kreaturen, Removal (Karten und Punkte wie im Bericht) und Kartenfluss der Picks, mit
   erkanntem Archetyp zusätzlich nur in dessen Farben. Pack-Karten zeigen ihre Removal-Punkte.

@@ -20,8 +20,8 @@ grau fremd, dunkel NeverPlay.
 
 Sichtbar (should_show) nur beim Picken (Pack liegt an, nicht im Spiel, Draft nicht fertig), wenn Arena gefunden,
 nicht minimiert und im Vordergrund ist und eine Kalibrierung vorliegt. Das Fenster ist durchsichtig und laesst Klicks
-zu Arena durch (Windows). Liegt die Maus auf einer Karte, verschwinden die Infos rechts davon, wo Arena die grosse
-Kartenansicht oeffnet (hover_hidden, Mausposition alle 100 ms).
+zu Arena durch (Windows). Liegt die Maus auf einer Karte, verschwinden die Infos aller anderen Karten, weil Arena die
+grosse Kartenansicht mal rechts, mal links oeffnet (hover_others, Mausposition alle 100 ms).
 """
 import json
 import pathlib
@@ -82,19 +82,15 @@ def card_rects(cal, n, origin, client):
     return out
 
 
-def hover_hidden(cal, n, origin, client, cursor):
-    """Indizes der Karten, deren Infos verschwinden, weil die Maus auf einer Karte liegt: Arena oeffnet rechts daneben
-    die grosse Ansicht (in Arena so eingestellt, Nutzer 14.11.2026), ausgeblendet werden alle Karten rechts davon (alle
-    Reihen). Ohne Maus auf einer Karte: leer."""
+def hover_others(cal, n, origin, client, cursor):
+    """Indizes aller Karten ausser der unter der Maus: Arena oeffnet die grosse Ansicht im Live-Draft mal rechts, mal
+    links (Nutzer 14.11.2026), daher verschwinden die Infos aller anderen Karten. Ohne Maus auf einer Karte: leer."""
     if not cursor:
         return set()
     mx, my = cursor
     rects = card_rects(cal, n, origin, client)
     hit = next((i for i, (l, t_, r, b) in enumerate(rects) if l <= mx < r and t_ <= my < b), None)
-    if hit is None:
-        return set()
-    cols = cal["cols"]
-    return {i for i in range(n) if i % cols > hit % cols}
+    return set() if hit is None else set(range(n)) - {hit}
 
 
 def cursor_pos():
@@ -313,7 +309,7 @@ class PackOverlay:
         self.last = None
 
     def show(self, views, cal, arena, hidden=()):
-        """Infos auf die Karten legen; hidden: Indizes ohne Infos (Maus auf einer Karte, hover_hidden)."""
+        """Infos auf die Karten legen; hidden: Indizes ohne Infos (Maus auf einer Karte, hover_others)."""
         (ox, oy), (cw, ch) = arena["origin"], arena["size"]
         key = (json.dumps(views, ensure_ascii=False), ox, oy, cw, ch, tuple(sorted(hidden)))
         if self.win.state() == "withdrawn":

@@ -895,7 +895,7 @@ def run(url, interval_ms=1000):
         if not cards_state["busy"] and packoverlay.should_show(cards_on.get(), snap, cal, arena):
             try:
                 views = packoverlay.pack_views(snap)
-                hidden = packoverlay.hover_hidden(cal, len(views), arena["origin"], arena["size"],
+                hidden = packoverlay.hover_others(cal, len(views), arena["origin"], arena["size"],
                                                   packoverlay.cursor_pos())
                 cards.show(views, cal, arena, hidden)
             except tk.TclError:

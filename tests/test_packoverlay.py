@@ -209,34 +209,27 @@ class ArenaColorOrderTests(unittest.TestCase):
         self.assertEqual(self.names(pack), ["Rare", "W1", "W2", "G", "GW", "UB", "Artifact", "Land"])
 
 
-class HoverTests(unittest.TestCase):
-    """Zeigt die Maus auf eine Karte, oeffnet Arena rechts daneben die grosse Ansicht (Screenshot 14.11.2026): die
-    Infos aller Karten rechts davon (alle Reihen) verschwinden."""
+class HoverOthersTests(unittest.TestCase):
+    """Arena oeffnet die grosse Ansicht im Live-Draft mal rechts, mal links (Nutzer 14.11.2026): liegt die Maus auf
+    einer Karte, verschwinden die Infos aller anderen Karten."""
 
     def setUp(self):
         self.cal = po.calibrate(CLICKS, CLIENT)  # 7 Spalten, Karte 200x280, Abstand 220/300, Start (100, 200)
         self.origin = (50, 30)
 
     def hidden(self, x, y, n=14):
-        return po.hover_hidden(self.cal, n, self.origin, CLIENT, (self.origin[0] + x, self.origin[1] + y))
+        return po.hover_others(self.cal, n, self.origin, CLIENT, (self.origin[0] + x, self.origin[1] + y))
 
     def test_nothing_without_hover(self):
         self.assertEqual(self.hidden(10, 10), set())
         self.assertEqual(self.hidden(310, 300), set())  # Luecke zwischen Karte 1 und 2
-        self.assertEqual(po.hover_hidden(self.cal, 14, self.origin, CLIENT, None), set())
+        self.assertEqual(po.hover_others(self.cal, 14, self.origin, CLIENT, None), set())
 
-    def test_hides_right_of_card_in_all_rows(self):
-        self.assertEqual(self.hidden(330, 300), {2, 3, 4, 5, 6, 9, 10, 11, 12, 13})  # Karte 2, erste Reihe
-        self.assertEqual(self.hidden(330, 600), {2, 3, 4, 5, 6, 9, 10, 11, 12, 13})  # Karte 9, zweite Reihe
-
-    def test_small_pack(self):
-        self.assertEqual(self.hidden(330, 300, n=4), {2, 3})
-        self.assertEqual(self.hidden(330, 600, n=4), set())  # dort liegt keine Karte
-
-    def test_always_right(self):
-        """Arena ist so eingestellt, dass die grosse Ansicht immer rechts aufgeht (Nutzer 14.11.2026)."""
-        self.assertEqual(self.hidden(1210, 300), {6, 13})  # vorletzte Spalte
-        self.assertEqual(self.hidden(1500, 300), set())  # letzte Spalte: rechts liegt nichts
+    def test_all_but_hovered(self):
+        self.assertEqual(self.hidden(330, 300), set(range(14)) - {1})
+        self.assertEqual(self.hidden(1500, 600), set(range(14)) - {13})
+        self.assertEqual(self.hidden(330, 300, n=3), {0, 2})
+        self.assertEqual(self.hidden(330, 600, n=3), set())  # dort liegt keine Karte
 
 
 class ShowTests(unittest.TestCase):

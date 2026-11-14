@@ -223,7 +223,7 @@ In Arena, “Detailed Logs (Plugin Support)” must be enabled under Options →
   with a full pack, press "Calibrate" in the control window and click five card corners (saved in
   `kartenoverlay.json`, not in Git). The cards follow Arena's order by rarity, color and collector number, each shows its
   name in small print as a check; clicks go through to Arena; when the mouse rests on a card, the numbers
-  disappear where Arena opens the large card view. While it is on and calibrated, the side window
+  on all other cards disappear so the large card view in Arena stays clear. While it is on and calibrated, the side window
   leaves out the pack list and top pick (signals, archetype tracker and tips stay).
 - **Pick metrics:** creatures, removal (cards and points as in the report) and card flow of the picks, with the
   detected archetype additionally only in its colors. Pack cards show their removal points.
