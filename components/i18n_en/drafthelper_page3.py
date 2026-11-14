@@ -100,6 +100,8 @@ PAGE = {
     '" von "+t.lands+" Ländern"': '" of "+t.lands+" lands"',
     '" · zeigt "': '" · shows "',
     'Kein Mana offen: jetzt keine Tricks.': 'No mana open: no tricks right now.',
+    'Gegner hat keine Handkarten: keine Tricks.': 'Opponent has no cards in hand: no tricks.',
+    '" · Hand "+t.hand': '" · hand "+t.hand',
     'Keine Instants oder Flash-Karten mit diesem Mana.': 'No instants or flash cards with this mana.',
     '"Deck nicht übernommen: "': '"Deck not applied: "',
     '"Lade Set "': '"Loading set "',

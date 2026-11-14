@@ -96,7 +96,10 @@ def tricks_view(game, card_of, tricks):
     if known:
         all_lands = [s for s, _ in sets] + [known]
         nxt = [t for t in possible if t["name"] not in names and can_cast(t["cost"], all_lands)]
-    return {"open": len(untapped), "lands": len(lands),
+    hand = game.opponent_hand_size()
+    if hand == 0:  # ohne Handkarten keine Tricks (Nutzer 14.11.2026)
+        now, nxt = [], []
+    return {"open": len(untapped), "lands": len(lands), "hand": hand,
             "colors": {c: colors_open[c] for c in ORDER if colors_open[c]},
             "spell_colors": [c for c in ORDER if c in spell_colors],
             "now": _sort(now), "next": _sort(nxt)}

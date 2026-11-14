@@ -153,6 +153,15 @@ class GameState:
         hand = self._zone("ZoneType_Hand")
         return len(hand["ids"]) if hand else 0
 
+    def opponent_hand_size(self):
+        """Handkarten des Gegners (Arena nennt nur ihre Kennungen; eine leere Hand kommt ohne Liste), None, solange
+        Platz oder Zone unbekannt sind."""
+        if self.seat is None:
+            return None
+        hand = next((z for z in self.zones.values() if z["type"] == "ZoneType_Hand" and z["owner"] is not None
+                     and z["owner"] != self.seat), None)
+        return len(hand["ids"]) if hand else None
+
     def _opponent(self, o):
         return o is not None and self.seat is not None and o["controller"] is not None and o["controller"] != self.seat
 

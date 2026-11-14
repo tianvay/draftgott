@@ -1939,12 +1939,13 @@ function renderTricks(box,t){
   if(!t)return;const d=el("div","tricks");
   const cols=Object.entries(t.colors||{}).map(([c,n])=>c+"×"+n).join(" ");
   d.appendChild(el("h3",null,"Tricks bei offenem Mana · Gegner offen "+t.open+(cols?" ("+cols+")":"")+" von "+t.lands+" Ländern"+
-    (t.spell_colors&&t.spell_colors.length?" · zeigt "+t.spell_colors.join(""):"")));
+    (t.spell_colors&&t.spell_colors.length?" · zeigt "+t.spell_colors.join(""):"")+(t.hand!=null?" · Hand "+t.hand:"")));
   const list=(cards,cls)=>{const l=el("div","tl"+(cls?" "+cls:""));
     for(const c of cards){const s=el("span",c.removal?"rem":null,c.name+" "+(c.cost||"{0}")+(c.rating?" · "+(RATING_SHORT[c.rating]||c.rating):""));
       s.title=[c.name+" "+(c.cost||"{0}"),(c.type||"")+(c.pt?" · "+c.pt:""),"",c.text||"",
         c.removal?"\nRemoval "+num(c.removal)+" P.":""].join("\n").trim();l.appendChild(s)}return l};
-  if(!t.open)d.appendChild(el("div","lmsg","Kein Mana offen: jetzt keine Tricks."));
+  if(t.hand===0)d.appendChild(el("div","lmsg","Gegner hat keine Handkarten: keine Tricks."));
+  else if(!t.open)d.appendChild(el("div","lmsg","Kein Mana offen: jetzt keine Tricks."));
   else if(!t.now.length)d.appendChild(el("div","lmsg","Keine Instants oder Flash-Karten mit diesem Mana."));
   else d.appendChild(list(t.now));
   box.appendChild(d)}

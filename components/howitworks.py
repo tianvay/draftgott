@@ -443,6 +443,9 @@ def _live_help():
             "Removal-Punkten. Aktivierbare Fähigkeiten auf dem Feld zählen nicht, ebenso wenig Mana aus Kreaturen "
             "oder Treasure."),
             t("Die Liste ändert sich mit jedem Land, das er spielt oder tappt."),
+            t("Die Kopfzeile nennt die Zahl seiner Handkarten. Hat der Gegner keine Handkarten, kann er keine Tricks "
+            "wirken: Dann steht dort nur „Gegner hat keine Handkarten: keine Tricks“, minimiert „Gegner ohne "
+            "Handkarten“."),
             t("Fährt die Maus über einen Trick, erscheint ein kleines Fenster mit dem Kartentext (Kosten, Typzeile, "
             "Stärke/Widerstand, Text und Removal-Punkte, englisch von Scryfall); auf der Seite steht derselbe Text "
             "als Hinweis an der Karte."),

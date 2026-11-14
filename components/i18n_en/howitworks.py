@@ -312,6 +312,8 @@ EN = {
         'When the mouse moves over a trick, a small window with the card text appears (cost, type line, power/toughness, text and removal points, in English from Scryfall); on the page the same text appears as a hint on the card.',
     'Gegnerfarben: Hat der Gegner Zauber in mindestens zwei Farben offen gezeigt, kommen nur Tricks in diesen Farben und in den Farben seiner Standardländer in Frage (ein Tri-Land zeigt sonst Farben, die er gar nicht spielt). Farblose Tricks gehen immer.':
         "Opponent colors: If the opponent has shown spells in at least two colors, only tricks in these colors and in the colors of his basic lands are considered (a tri-land otherwise shows colors he doesn't play at all). Colorless tricks always apply.",
+    'Die Kopfzeile nennt die Zahl seiner Handkarten. Hat der Gegner keine Handkarten, kann er keine Tricks wirken: Dann steht dort nur „Gegner hat keine Handkarten: keine Tricks“, minimiert „Gegner ohne Handkarten“.':
+        'The header shows how many cards they hold. If the opponent has no cards in hand, they cannot cast tricks: then it only says “Opponent has no cards in hand: no tricks”, minimized “Opponent: no cards in hand”.',
     'Die Karten des Sets kommen von Scryfall (einmal geladen, dann aus <code>scryfall_set_cache.json</code>). Minimiert zeigt das Seitenfenster „Tricks 3 · offen 2“.':
         "The set's cards come from Scryfall (loaded once, then from <code>scryfall_set_cache.json</code>). Minimized, the overlay shows “Tricks 3 · open 2”.",
     'Im Spiel: Ziehchancen':

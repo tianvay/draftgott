@@ -184,8 +184,12 @@ def trick_rows(tr):
             t(" von {lands} Ländern", lands=tr['lands']))
     if tr.get("spell_colors"):
         head += t(" · zeigt ") + "".join(tr["spell_colors"])
+    if tr.get("hand") is not None:
+        head += " · " + t("Hand {n}", n=tr["hand"])
     rows = [(head, "head2")]
-    if not tr["open"]:
+    if tr.get("hand") == 0:  # ohne Handkarten keine Tricks (Nutzer 14.11.2026)
+        rows.append((t("Gegner hat keine Handkarten: keine Tricks"), "sub"))
+    elif not tr["open"]:
         rows.append((t("Kein Mana offen: jetzt keine Tricks"), "sub"))
     elif not tr["now"]:
         rows.append((t("Keine Instants/Flash-Karten mit diesem Mana"), "sub"))
@@ -398,7 +402,9 @@ def mini_rows(snap):
         rows = [(f"{t(label)} {_pct(by[key]['next'])}", {"land": "color", "removal": "arch"}.get(key, "plain"))
                 for key, label in MINI_KEYS if key in by]
         tr = g.get("tricks")
-        if tr:
+        if tr and tr.get("hand") == 0:
+            rows.append((t("Gegner ohne Handkarten"), "head"))
+        elif tr:
             rows.append((t("Tricks {n} · offen {open}", n=len(tr['now']), open=tr['open']), "head"))
         return rows
     if snap.get("complete") and snap.get("deckinfo"):

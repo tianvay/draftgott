@@ -92,4 +92,7 @@ EN = {
     ", auf 23 Zauber {x} (gut: mindestens {min})": ", {x} per 23 spells (good: at least {min})",
     "Tipp: jetzt günstige Karten (bis 2–3 Mana) bevorzugen": "Tip: prefer cheap cards (up to 2–3 mana) now",
     "Kurve zu hoch": "Curve too high",
+    "Hand {n}": "hand {n}",
+    "Gegner hat keine Handkarten: keine Tricks": "Opponent has no cards in hand: no tricks",
+    "Gegner ohne Handkarten": "Opponent: no cards in hand",
 }
