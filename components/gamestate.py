@@ -21,6 +21,7 @@ import json
 import math
 from collections import Counter
 
+from components.i18n import t
 from components.mana import can_pay, cost_alternatives
 
 KNOWN_ZONES = {"ZoneType_Hand", "ZoneType_Battlefield", "ZoneType_Graveyard", "ZoneType_Exile", "ZoneType_Stack",
@@ -223,9 +224,9 @@ def game_view(game, info):
                 mana_colors[col] += 1
     castable_grps = {g for g in remaining if not card(g)["land"] and can_cast(card(g).get("cost"), producing)}
     castable = sum(remaining[g] for g in castable_grps)
-    groups = [_group("castable", "Spielbar", castable, library),
-              _group("land", "Land", lands, library), _group("creature", "Kreatur", creatures, library),
-              _group("removal", "Removal", removal, library)]
+    groups = [_group("castable", t("Spielbar"), castable, library),
+              _group("land", t("Land"), lands, library), _group("creature", t("Kreatur"), creatures, library),
+              _group("removal", t("Removal"), removal, library)]
     deck_colors = set()
     for g in game.deck:
         c = card(g)
@@ -234,7 +235,7 @@ def game_view(game, info):
     for color in "WUBRG":
         if color in deck_colors:
             n = sum(n for g, n in remaining.items() if card(g)["land"] and color in (card(g).get("produces") or []))
-            groups.append(_group(f"src_{color}", f"{color}-Quelle", n, library))
+            groups.append(_group(f"src_{color}", t("{color}-Quelle", color=color), n, library))
     rem_total = sum(n for g, n in game.deck.items() if card(g).get("removal"))
     points_total = sum(n * card(g).get("removal", 0) for g, n in game.deck.items())
     points_left = sum(n * card(g).get("removal", 0) for g, n in remaining.items())
