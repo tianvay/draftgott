@@ -79,6 +79,7 @@ project folder; deviations from it are noted in the code with the rule number or
 | `components/signals.py` | In the draft: open colors (wheel, late and taken strong cards), detect Pick Two |
 | `components/draftstats.py` | Draft statistics (`draftstatistik.json`): collect decks and matches, numbers per card |
 | `components/setreport.py` | Set report as an HTML page (`--setauswertung`) |
+| `components/setrating.py` | Rate a set: category and archetypes per card of a set (`--set-bewerten`) |
 | `components/symbols.py` | Original mana symbols from Scryfall (cache `scryfall_symbols.json`) |
 | `components/stats.py` | Traffic-light thresholds, timing metrics, significance calculation |
 | `components/html_base.py` | Shared design (CSS in the style of the Draft Helper), page layout, tables, SVG charts |
@@ -181,7 +182,7 @@ a message describing what the file must look like.
   language (**1 = Deutsch**, **2 = English**; all pages, the overlay and the messages in the window then appear in
   that language, passed on as `--lang de` or `--lang en`), then for the mode: **1 = Deck analysis** (simulates `_normaldeck.txt` with 10,000 games, writes `meinbericht.html` and
   shows it via the report server so that “Simulate battle” works in the report) or **2 = Draft Helper**
-  (card page with `_draftedcardpool.txt`), **3 = Live draft** or **4 = Set report** (see below). The script finds Python itself (`py` or `python`). In all cases
+  (card page with `_draftedcardpool.txt`), **3 = Live draft**, **4 = Set report** or **5 = Rate a set** (see below). The script finds Python itself (`py` or `python`). In all cases
   leave the black window open and use the “Quit” button on the page to exit, or close the window.
   Further parameters are appended to the chosen call (`draftgott.bat --sims 1000`).
 - **Simulate** builds the variants *Core + Splash* and *Core + NoSplash*, simulates both and shows the
@@ -273,6 +274,17 @@ Menu item **4** in `draftgott.bat`: writes `setauswertung_<set>.html` from the d
 (without SET, the set with the most drafts). Sections: overview, archetypes, best and weakest cards (from 10
 games), all cards (sortable: drafted, avg pick number in the pack, in deck, games, win rate, matches), rating
 versus result per category, list of drafts.
+
+### Rate a set (`--set-bewerten [SET]`)
+
+Menu item **5** in `draftgott.bat`: opens a page of its own in the browser. First choose a fully supported set (all
+sets with archetypes, currently **TRK** and **FRA**), then set the category of each card (♛ Matchwinner to NP
+NeverPlay) and its archetypes (click: neutral → green = fits well → purple = best archetype → neutral). The keyboard
+is faster: hover over the card, key **1–6** sets the category, **0** removes it. Filters: search, “Still open”,
+without category, without archetype, color, rarity; the bar at the top shows the progress (done = category and
+archetype, NeverPlay needs no archetype). Everything is saved at once to `kartenbewertung.json` and
+`kartenarchetypen.json` and applies per card name to every pool, the Draft Helper and the live draft – so you rate a
+set once instead of after every draft. With SET (e.g. `--set-bewerten FRA`) the page starts in that set.
 ## Quick start
 
 ```
@@ -422,6 +434,7 @@ activation per turn are fixed in the script (see “Fixed assumptions”).
 | `--statistik FILE` | `draftstatistik.json` | Draft statistics of the live draft (not in Git). |
 | `--statistik-neu` | | Rebuild the draft statistics from `Player-prev.log` and `Player.log` (old file saved as `draftstatistik.backup.json`). |
 | `--setauswertung [SET]` | | Set report as an HTML page `setauswertung_<set>.html` (without SET: the set with the most drafts). |
+| `--set-bewerten [SET]` | | Rate a set: page to set the category and archetypes of every card of a fully supported set (TRK, FRA) (without SET: choose on the page). |
 | `--neu-laden` | off | Card data is stored in `scryfall_cache.json` next to the script, and on later runs only unknown cards are fetched. With `--neu-laden`, everything is fetched fresh from Scryfall. |
 | `--ausgabe FILE` (also `--html FILE`) | `mtg_bericht.html` | Name and location of the HTML report. An existing file is overwritten. |
 | `--nicht-oeffnen` | off (report is opened) | The report is only saved; the browser does not open. |

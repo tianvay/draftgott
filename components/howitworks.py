@@ -553,6 +553,17 @@ def _live_help():
             "Live-Draft, aus dem Hauptdeck), beste und schwächste Karten (ab 10 Games), alle Karten als sortierbare "
             "Tabelle (gedraftet, Ø Pick-Nummer im Pack, im Deck, Games, Siegquote, Matches), Bewertung gegen "
             "Ergebnis je Kategorie und die Liste der Drafts.")]))
+        + _panel(t("Set bewerten"), _ul([
+            t("Menüpunkt <b>5</b> in <code>draftgott.bat</code> oder <code>python mtg_sim.py --set-bewerten "
+              "[SET]</code>: eigene Seite im Browser. Zuerst ein fertig umgesetztes Set wählen (alle Sets mit "
+              "Archetypen, derzeit TRK und FRA), dann je Karte Kategorie und Archetypen festlegen."),
+            t("Kategorie per Knopf (♛ Matchwinner bis NP NeverPlay) oder mit der Tastatur: Maus auf die Karte, Taste "
+              "1 bis 6, 0 entfernt. Archetypen per Klick: neutral → grün (passt gut) → lila (bester Archetyp) → "
+              "neutral."),
+            t("Alles wird sofort in <code>kartenbewertung.json</code> und <code>kartenarchetypen.json</code> "
+              "gespeichert und gilt je Kartenname für jeden Pool, den Drafthelper und den Live-Draft: ein Set wird "
+              "einmal bewertet, nicht nach jedem Draft. Der Balken zeigt den Fortschritt (fertig = Kategorie und "
+              "Archetyp, NeverPlay braucht keinen Archetyp); der Filter „Noch offen“ zeigt die übrigen Karten.")]))
     )
 
 

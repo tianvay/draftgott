@@ -7,7 +7,8 @@ rem   2 = Drafthelper (Kartenseite im Browser mit _draftedcardpool.txt)
 rem   3 = Live-Draft  (Drafthelper liest MTG Arena mit: Picks nach _livedraft.txt, Pack mit Bewertung und
 rem                   Archetyp auf der Seite und im Seitenfenster ueber Arena)
 rem   4 = Setauswertung (Draft-Statistik des Live-Drafts als HTML-Seite)
-rem   5 = Turnier     (versteckt, nicht im Menue angezeigt: Gegnerdecks eines Unterordners von enemydecks, z. B. wc32, spielen gegeneinander;
+rem   5 = Set bewerten (Seite im Browser: je Karte eines Sets Kategorie und Archetypen einmal festlegen)
+rem   6 = Turnier     (versteckt, nicht im Menue angezeigt: Gegnerdecks eines Unterordners von enemydecks, z. B. wc32, spielen gegeneinander;
 rem                   Paarungen werden abgefragt, Bericht turnier_<Ordner>.html)
 rem Zusaetzliche Parameter werden an den gewaehlten Aufruf angehaengt,
 rem z. B.:  draftgott.bat --sims 1000
@@ -50,10 +51,12 @@ echo   1 = Analyse       (_normaldeck.txt simulieren, Bericht meinbericht.html, 
 echo   2 = Drafthelper   (Karten aus _draftedcardpool.txt auswaehlen und vergleichen)
 echo   3 = Live-Draft    (Arena mitlesen: Pack bewerten, Archetyp erkennen, Seitenfenster)
 echo   4 = Setauswertung (Statistik der Drafts eines Sets als HTML-Seite)
-rem    5 = Turnier       (versteckt: Decks aus einem Unterordner von enemydecks gegeneinander, je Paarung 500 Spiele)
+echo   5 = Set bewerten  (je Karte eines Sets Kategorie und Archetypen einmal festlegen)
+rem    6 = Turnier       (versteckt: Decks aus einem Unterordner von enemydecks gegeneinander, je Paarung 500 Spiele)
 echo.
-choice /c 12345 /n /m "Auswahl (1, 2, 3 oder 4): "
-if errorlevel 5 goto turnier
+choice /c 123456 /n /m "Auswahl (1, 2, 3, 4 oder 5): "
+if errorlevel 6 goto turnier
+if errorlevel 5 goto setbewerten
 if errorlevel 4 goto setauswertung
 if errorlevel 3 goto live
 if errorlevel 2 goto drafthelper
@@ -67,10 +70,12 @@ echo   1 = Deck analysis (simulate _normaldeck.txt, report meinbericht.html, bat
 echo   2 = Draft Helper  (pick and compare cards from _draftedcardpool.txt)
 echo   3 = Live draft    (follow MTG Arena: rate the pack, detect the archetype, overlay)
 echo   4 = Set report    (statistics of the drafts of a set as an HTML page)
-rem    5 = Tournament    (hidden: decks from a subfolder of enemydecks against each other, 500 games per pairing)
+echo   5 = Rate a set    (set the category and archetypes of every card of a set once)
+rem    6 = Tournament    (hidden: decks from a subfolder of enemydecks against each other, 500 games per pairing)
 echo.
-choice /c 12345 /n /m "Choice (1, 2, 3 or 4): "
-if errorlevel 5 goto en_turnier
+choice /c 123456 /n /m "Choice (1, 2, 3, 4 or 5): "
+if errorlevel 6 goto en_turnier
+if errorlevel 5 goto en_setbewerten
 if errorlevel 4 goto en_setauswertung
 if errorlevel 3 goto en_live
 if errorlevel 2 goto en_drafthelper
@@ -157,6 +162,26 @@ goto run_setauswertung
 
 :run_setauswertung
 %PY% mtg_sim.py --setauswertung %LANGARG% %*
+goto ende
+
+:setbewerten
+echo.
+echo Set bewerten: Die Seite oeffnet sich gleich im Browser. Dort zuerst das Set waehlen (TRK oder FRA),
+echo dann je Karte Kategorie und Archetypen festlegen. Alles wird sofort gespeichert und gilt fuer jeden Draft.
+echo Dieses Fenster bitte offen lassen. Zum Beenden: Button "Beenden" auf der Seite.
+echo.
+goto run_setbewerten
+
+:en_setbewerten
+echo.
+echo Rate a set: the page opens in your browser in a moment. Choose the set first (TRK or FRA),
+echo then set the category and archetypes of each card. Everything is saved at once and applies to every draft.
+echo Please keep this window open. To quit: button "Quit" on the page.
+echo.
+goto run_setbewerten
+
+:run_setbewerten
+%PY% mtg_sim.py --set-bewerten %LANGARG% %*
 goto ende
 
 :turnier

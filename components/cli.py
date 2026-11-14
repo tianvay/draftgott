@@ -39,6 +39,9 @@ def parse_args(argv=None):
     ap.add_argument("--setauswertung", nargs="?", const="", default=None, metavar="SET",
                     help="Setauswertung: die Draft-Statistik eines Sets als HTML-Seite setauswertung_<set>.html "
                          "(ohne SET: das Set mit den meisten Drafts)")
+    ap.add_argument("--set-bewerten", nargs="?", const="", default=None, metavar="SET",
+                    help="Set bewerten: Seite im Browser, auf der man je Karte eines fertig umgesetzten Sets (TRK, FRA) "
+                         "Kategorie und Archetypen einmal festlegt (ohne SET: Auswahl auf der Seite)")
     ap.add_argument("--neu-laden", action="store_true",
                     help="Kartendaten neu von Scryfall laden und den lokalen Cache (scryfall_cache.json) ueberschreiben")
     ap.add_argument("--sims", type=int, default=10000)
@@ -103,6 +106,7 @@ def parse_args(argv=None):
                     help="Sprache von Bericht, Drafthelper, Setauswertung, Overlay und Konsole (de oder en, Standard de)")
     args = ap.parse_args(argv)
     if not args.deckfile and args.drafthelper is None and args.overlay is None and args.setauswertung is None \
-            and not args.statistik_neu and args.turnier is None:
+            and not args.statistik_neu and args.turnier is None \
+            and args.set_bewerten is None:
         ap.error("Bitte eine Deckliste angeben oder --drafthelper verwenden")
     return args

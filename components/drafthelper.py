@@ -43,6 +43,7 @@ from components.arenalog import default_log_path
 from components.i18n import get_lang, html_lang, t, tr_block
 from components.livedraft import LiveDraft, card_summary
 from components.scryfall import fetch_set_cards
+from components.setrating import rating_name
 
 PORT = 8765
 MARKS = ("core", "splash", "nosplash", "off")
@@ -539,7 +540,8 @@ def make_handler(app):
                 self._json({"ok": False, "error": t("Unbekanntes Set")}, 400)
                 return
             raw = (app.get("fetch_set") or fetch_set_cards)(code)
-            cards = [card_summary(sc, sc["name"], code, sc.get("collector_number") or "") for sc in raw
+            # Name wie in Arena (zweiseitige Karten nur mit Vorderseite), sonst greift die Bewertung im Draft nicht
+            cards = [card_summary(sc, rating_name(sc), code, sc.get("collector_number") or "") for sc in raw
                      if sc.get("name")]
             names = {c["name"] for c in cards}
             app["setnames"] = app.get("setnames", set()) | names

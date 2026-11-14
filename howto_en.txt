@@ -11,3 +11,7 @@ python mtg_sim.py --drafthelper _livedraft.txt --live --lang en
 
 Set report:
 python mtg_sim.py --setauswertung --lang en
+
+
+Rate a set (category and archetypes per card of a set):
+python mtg_sim.py --set-bewerten --lang en

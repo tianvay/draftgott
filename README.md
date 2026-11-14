@@ -79,6 +79,7 @@ Projektordner geklärt; Abweichungen davon stehen mit Regelnummer im Code bzw. i
 | `components/signals.py` | Im Draft: offene Farben (Wheel, späte und genommene starke Karten), Pick Two erkennen |
 | `components/draftstats.py` | Draft-Statistik (`draftstatistik.json`): Decks und Matches sammeln, Zahlen je Karte |
 | `components/setreport.py` | Setauswertung als HTML-Seite (`--setauswertung`) |
+| `components/setrating.py` | Set bewerten: Kategorie und Archetypen je Karte eines Sets (`--set-bewerten`) |
 | `components/symbols.py` | Original-Manasymbole von Scryfall (Cache `scryfall_symbols.json`) |
 | `components/stats.py` | Ampel-Schwellen, Zeitkennzahlen, Signifikanz-Rechnung |
 | `components/html_base.py` | Gemeinsames Design (CSS im Stil des Drafthelpers), Seitenlayout, Tabellen, SVG-Diagramme |
@@ -184,7 +185,7 @@ einer Meldung ab, die beschreibt, wie die Datei aussehen muss.
   Sprache (**1 = Deutsch**, **2 = English**; alle Seiten, das Overlay und die Meldungen im Fenster erscheinen dann in
   dieser Sprache, weitergegeben als `--lang de` bzw. `--lang en`), danach nach der Betriebsart: **1 = Analyse** (simuliert `_normaldeck.txt` mit 10 000 Spielen, schreibt `meinbericht.html` und
   zeigt ihn über den Berichts-Server, damit „Kampf simulieren“ im Bericht funktioniert) oder **2 = Drafthelper**
-  (Kartenseite mit `_draftedcardpool.txt`), **3 = Live-Draft** oder **4 = Setauswertung** (siehe unten). Das Skript sucht Python selbst (`py` oder `python`). In allen Fällen
+  (Kartenseite mit `_draftedcardpool.txt`), **3 = Live-Draft**, **4 = Setauswertung** oder **5 = Set bewerten** (siehe unten). Das Skript sucht Python selbst (`py` oder `python`). In allen Fällen
   das schwarze Fenster offen lassen und zum Beenden den Button „Beenden“ auf der Seite benutzen oder das Fenster
   schließen. Weitere Parameter werden an den gewählten Aufruf angehängt (`draftgott.bat --sims 1000`).
 - **Simulieren** baut die Varianten *Core + Splash* und *Core + NoSplash*, simuliert beide und zeigt den
@@ -276,6 +277,18 @@ Menüpunkt **4** in `draftgott.bat`: schreibt `setauswertung_<set>.html` aus der
 (ohne SET das Set mit den meisten Drafts). Abschnitte: Überblick, Archetypen, beste und schwächste Karten (ab 10
 Games), alle Karten (sortierbar: gedraftet, Ø Pick-Nummer im Pack, im Deck, Games, Siegquote, Matches), Bewertung
 gegen Ergebnis je Kategorie, Liste der Drafts.
+
+### Set bewerten (`--set-bewerten [SET]`)
+
+Menüpunkt **5** in `draftgott.bat`: öffnet eine eigene Seite im Browser. Zuerst ein fertig umgesetztes Set wählen
+(alle Sets mit Archetypen, derzeit **TRK** und **FRA**), dann je Karte die Kategorie (♛ Matchwinner bis NP
+NeverPlay) und die Archetypen festlegen (Klick: neutral → grün = passt gut → lila = bester Archetyp → neutral).
+Schneller geht es mit der Tastatur: Maus auf die Karte, Taste **1–6** setzt die Kategorie, **0** entfernt sie.
+Filter: Suche, „Noch offen“, ohne Kategorie, ohne Archetyp, Farbe, Seltenheit; der Balken oben zeigt den Fortschritt
+(fertig = Kategorie und Archetyp, NeverPlay braucht keinen Archetyp). Alles wird sofort in `kartenbewertung.json` und
+`kartenarchetypen.json` gespeichert und gilt je Kartenname für jeden Pool, den Drafthelper und den Live-Draft – man
+bewertet ein Set also einmal und nicht nach jedem Draft. Mit SET (z. B. `--set-bewerten FRA`) startet die Seite
+gleich in diesem Set.
 
 ## Schnellstart
 
@@ -426,6 +439,7 @@ Aktivierung pro Runde sind fest im Skript (siehe „Feste Annahmen“).
 | `--statistik DATEI` | `draftstatistik.json` | Draft-Statistik des Live-Drafts (nicht im Git). |
 | `--statistik-neu` | | Draft-Statistik aus `Player-prev.log` und `Player.log` neu aufbauen (alte Datei als `draftstatistik.backup.json`). |
 | `--setauswertung [SET]` | | Setauswertung als HTML-Seite `setauswertung_<set>.html` (ohne SET: Set mit den meisten Drafts). |
+| `--set-bewerten [SET]` | | Set bewerten: Seite, auf der man je Karte eines fertig umgesetzten Sets (TRK, FRA) Kategorie und Archetypen festlegt (ohne SET: Auswahl auf der Seite). |
 | `--neu-laden` | aus | Kartendaten werden in `scryfall_cache.json` neben dem Script gespeichert, bei späteren Läufen werden nur unbekannte Karten nachgeladen. Mit `--neu-laden` wird alles frisch von Scryfall geholt. |
 | `--ausgabe DATEI` (auch `--html DATEI`) | `mtg_bericht.html` | Name und Ort des HTML-Berichts. Eine vorhandene Datei wird überschrieben. |
 | `--nicht-oeffnen` | aus (Bericht wird geöffnet) | Der Bericht wird nur gespeichert, der Browser öffnet sich nicht. |

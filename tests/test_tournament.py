@@ -336,8 +336,8 @@ class CliTests(unittest.TestCase):
 
     def test_launcher_mode_5(self):
         bat = (pathlib.Path(__file__).resolve().parent.parent / "draftgott.bat").read_text(encoding="utf-8")
-        self.assertIn("5 = Turnier", bat)
-        self.assertIn("5 = Tournament", bat)
+        self.assertIn("6 = Turnier", bat)  # Nutzer 14.11.2026: Taste 5 ist jetzt "Set bewerten"
+        self.assertIn("6 = Tournament", bat)
         self.assertIn("--turnier", bat)
         self.assertEqual(bat.count("choice /c 12345"), 2)
 

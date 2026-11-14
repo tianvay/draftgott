@@ -247,6 +247,11 @@ def run(args):
         from components.setreport import run as run_set_report
         run_set_report(args)
         return
+    if args.set_bewerten is not None:  # Set bewerten: Kategorie und Archetypen je Karte eines Sets
+        from components.setrating import serve as serve_set_rating
+        fetch_symbols(args.neu_laden)
+        serve_set_rating(args)
+        return
     if args.turnier is not None:  # Turnier der Gegnerdecks eines Unterordners von enemydecks
         from components.tournament import run as run_tournament
         run_tournament(args, build_deck, fetch_cards_cached)
