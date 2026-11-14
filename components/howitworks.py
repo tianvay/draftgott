@@ -480,7 +480,7 @@ def _live_help():
             "Mana-Kurve (als Balken, der höchste gelb), Kreaturen, Removal (Karten und Punkte), Kartenfluss, Zauber je Farbe "
             "(als Balken in den Manafarben) und die Bomben (eigene "
             "Bewertung Matchwinner; Splashworthy und Must-Play zählen nicht). Grundlage ist das in Arena abgegebene Hauptdeck, vorher alle "
-            "Picks. Minimiert: Bilanz, Kreaturen und Removal."),
+            "Picks. Minimiert: Bilanz, Kreaturen, Removal und die Bomben."),
             t("Karten, die per Mulligan oder Scry unter die Bibliothek gelegt wurden, zählen wie alle anderen (ihre "
             "Lage ist nicht bekannt). Passt die Rechnung nicht genau zur Bibliothek (z. B. durch Token oder "
             "Sideboard), steht ein Hinweis dabei.")]))

@@ -93,6 +93,12 @@ class RowsTests(unittest.TestCase):
         self.assertIn("Kreaturen 6", text)
         self.assertIn("Removal 2", text)
 
+    def test_mini_bombs(self):  # Nutzer 14.11.2026: Bomben auch im minimierten Kasten
+        rows = overlay.mini_rows(self.snap())
+        self.assertIn(("♛ Big", "hint"), rows)
+        info = dict(ld.deck_summary(DECK_CARDS, {}, "picks"), record=None)
+        self.assertFalse(any("♛" in r[0] for r in overlay.mini_rows(self.snap(deckinfo=info))))
+
 
 class RecordTests(unittest.TestCase):
     def test_record_of_the_draft(self):

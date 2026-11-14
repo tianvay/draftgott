@@ -5,7 +5,8 @@ Holt ein Deck die hoechste Zahl an Siegen seines Formats (Gegnerdeck gespeichert
 (celebrate) und meldet die Aufnahme in die "Hall of Fame" der Gegnerdecks.
 
 Der Knopf oben rechts (oder ein Doppelklick ins Fenster) minimiert es zu einem kleinen Kasten (mini_rows): im Spiel
-nur die Chancen auf Removal, Land und Kreatur, im Draft Pick, Archetyp und beste Karte.
+nur die Chancen auf Removal, Land und Kreatur, im Draft Pick, Archetyp und beste Karte, nach dem Draft Bilanz,
+Kreaturen, Removal und die Bomben.
 
 Top-Pick (hint_rows): Karten ab MustPlay, deren bester Archetyp unserer ist oder nahe dran (snap["hints"]), stehen
 lila und blinkend oben; im Pack steht vor ihnen ◆. Noch einmal klicken klappt es
@@ -420,7 +421,8 @@ def mini_rows(snap, slim=False):
     if snap.get("complete") and snap.get("deckinfo"):
         info = snap["deckinfo"]
         return [(_record(info) or t("Dein Deck"), "head"),
-                (t("Kreaturen {c} · Removal {r}", c=info['creatures'], r=info['removal']), "arch")]
+                (t("Kreaturen {c} · Removal {r}", c=info['creatures'], r=info['removal']), "arch")] + \
+            [(f"{RATING_ABBR['matchwinner']} {name}", "hint") for name in info.get("top") or []]
     if snap.get("status") in ("pack", "waiting"):
         main = (snap.get("detect") or {}).get("main")
         head = f"Pick {snap.get('pick', 1)} · " + (_arch_name(snap, main) if main else t("offen"))
