@@ -106,7 +106,8 @@ a message describing what the file must look like.
 - **Category per card** (selection below the image, applies to all copies, at most one): **♛ Matchwinner** (the bomb:
   decides a match on its own, always makes the deck, as a splash if necessary), **★ Splashworthy**
   (decides games on its own, should definitely make the deck, even if we do not play the color),
-  **MustPlay** (is played if we play this color), **Filler** (fills up if we play the color and do not
+  **MustPlay** (is played if we play this color), **Playable** (solid, usually played if we play the color,
+  but not a must; between MustPlay and Filler in the draft, not a strong card), **Filler** (fills up if we play the color and do not
   splash) and **NeverPlay** (too bad or too situational). The category is independent of
   Core/Splash/NoSplash/Off and does not affect the simulation. The header bar counts per category and has a
   “Show cards” filter. The categories are stored per card name in `kartenbewertung.json` in the project folder (not in
@@ -121,18 +122,18 @@ a message describing what the file must look like.
   all lands count), the **colors** (W U B R G, preset to the colors of the core) and the button
   **Create deck proposal**. The proposal builds its own deck from the categories and leaves your assignment
   unchanged:
-  - MustPlay and Filler only make the deck if all colors of the card are selected (colorless always).
+  - MustPlay, Playable and Filler only make the deck if all colors of the card are selected (colorless always).
   - Splashworthy always makes the deck; if its color is outside the selected ones, the card is a splash.
   - NeverPlay and cards without a category do not make the deck.
   - Lands: non-basic lands count as lands, basic lands are added up to the rule of thumb (40 cards:
     17, 60 cards: 22; range 15 to 17 and 20 to 24 respectively, linear in between) and distributed by color symbols, up to 3 per
     splash color. If the number of lands is outside the range, a note is shown.
-  - Filler: order by the selected sort, then colors already in the deck, then mana value
+  - Filling up: Playable before Filler, then order by the selected sort, then colors already in the deck, then mana value
     ascending.
   With the **simulate too** checkbox, the proposal is compared as a further variant (“Proposal”) alongside Splash
   and NoSplash when simulating, and the deck list export view shows it as a third column.
 - **Assign by category:** The former deck proposal: writes the categories into the assignment
-  (MustPlay → Core, Matchwinner and Splashworthy → Splash, NeverPlay → Off, Filler first fills Core, then NoSplash up to the
+  (MustPlay → Core, Matchwinner and Splashworthy → Splash, NeverPlay → Off, Playable and then Filler first fill Core, then NoSplash up to the
   target size). **↶ Undo** restores the previous state.
 - **Overview on the left:** Cards per color (White, Blue, Black, Red, Green, Multicolor, Colorless, Lands) with pool quantity,
   assignment (Core/Splash/NoSplash) and categories. Copies are counted without basic lands.

@@ -139,7 +139,7 @@ def sidebar_kpis(ctx):
     return h_table([""] + [esc(short.get(l, l)) for l in labels], rows)
 
 
-CAT_LABEL = {"matchwinner": "♛ Matchwinner", "splashworthy": "★ Splashworthy", "mustplay": "MustPlay", "filler": "Filler", "neverplay": "NeverPlay"}
+CAT_LABEL = {"matchwinner": "♛ Matchwinner", "splashworthy": "★ Splashworthy", "mustplay": "MustPlay", "playable": "Playable", "filler": "Filler", "neverplay": "NeverPlay"}
 
 
 def render_great(ctx):

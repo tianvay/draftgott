@@ -6,7 +6,7 @@ kann zu mehreren Archetypen passen. Ist einer davon der beste Archetyp der Karte
 {"arch": [...], "best": "BR"} da (Knoepfe im Drafthelper: neutral -> gruen = gut -> lila = best).
 
 Erkennung (detect): Jede Nichtland-Karte zaehlt mit dem Gewicht ihrer Bewertung (Matchwinner 3, Splashworthy und MustPlay 2,
-unbewertet und Filler 1, NeverPlay 0) je Kopie
+Playable 1,5, unbewertet und Filler 1, NeverPlay 0) je Kopie
   - fuer jeden Archetyp, in dessen Farben alle ihre Farben liegen (farblose Karten zaehlen hier nicht), und
   - noch einmal fuer jeden Archetyp, dem sie zugeordnet ist.
 Erkannt ist der Archetyp mit den meisten Punkten, wenn er mindestens MIN_POINTS hat und allein vorn liegt; sonst ist
@@ -15,7 +15,7 @@ der Archetyp noch offen. Eine eigene Wahl (manual) geht vor.
 Hinweis (hint): Karten ab MustPlay mit bestem Archetyp, wenn wir in ihm sind ("in": erkannt oder selbst gewaehlt) oder
 nahe dran ("near": er hat Punkte und liegt hoechstens NEAR_POINTS hinter dem besten Archetyp).
 
-Pack (rank): Punkte je Karte = Bewertung (Matchwinner 5, Splashworthy 4, MustPlay 3, unbewertet 1,5, Filler 1) + 3, wenn sie dem
+Pack (rank): Punkte je Karte = Bewertung (Matchwinner 5, Splashworthy 4, MustPlay 3, Playable 2, unbewertet 1,5, Filler 1) + 3, wenn sie dem
 erkannten Archetyp zugeordnet ist (+ 4, wenn er ihr bester ist), sonst + 1, wenn ihre Farben in dessen Farben liegen. NeverPlay hat immer 0.
 Mit pool (bisherige Picks) kommt der Synergie-Zuwachs der Karte zum Pool dazu (components/synergy.pick_bonus, bis
 +2); mit erkanntem Archetyp zaehlen nur Picks in dessen Farben (farblose immer), und der Zuwachs zaehlt nur fuer
@@ -29,9 +29,9 @@ from components import synergy
 from components.i18n import t
 from components.archetypes import PAIRS
 
-WEIGHT = {"matchwinner": 3, "splashworthy": 2, "mustplay": 2, "filler": 1, "neverplay": 0}  # unbewertet: 1
-POINTS = {"matchwinner": 5, "splashworthy": 4, "mustplay": 3, "filler": 1, "neverplay": 0}  # unbewertet: 1.5
-RATING_ORDER = {"matchwinner": -1, "splashworthy": 0, "mustplay": 1, "": 2, "filler": 3, "neverplay": 4}
+WEIGHT = {"matchwinner": 3, "splashworthy": 2, "mustplay": 2, "playable": 1.5, "filler": 1, "neverplay": 0}  # unbewertet: 1
+POINTS = {"matchwinner": 5, "splashworthy": 4, "mustplay": 3, "playable": 2, "filler": 1, "neverplay": 0}  # unbewertet: 1.5
+RATING_ORDER = {"matchwinner": -1, "splashworthy": 0, "mustplay": 1, "playable": 1.5, "": 2, "filler": 3, "neverplay": 4}
 LEVEL_POINTS = {"best": 4, "arch": 3, "color": 1, "": 0}
 MIN_POINTS = 3
 NEAR_POINTS = 3

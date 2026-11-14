@@ -139,6 +139,8 @@ PAGE = {
     '"Entscheidet Spiele allein – soll auf jeden Fall rein, auch wenn wir die Farbe nicht spielen"':
         '"Wins games on its own – should definitely be played, even if we are not playing that color"',
     '"Wird auf jeden Fall gespielt, wenn wir diese Farbe spielen"': '"Is definitely played if we play this color"',
+    '"Solide, wird meist gespielt, wenn wir diese Farbe spielen, aber nicht zwingend"':
+        '"Solid, usually played if we play this color, but not a must"',
     '"Füllt das Deck auf, wenn wir die Farbe spielen und nicht splashen"':
         '"Fills up the deck if we play the color and are not splashing"',
     '"Zu schlecht oder zu situativ, wird nicht gespielt"': '"Too weak or too situational, is not played"',

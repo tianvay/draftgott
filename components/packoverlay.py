@@ -31,7 +31,7 @@ from components.i18n import dec, t
 SCRIPT_DIR = pathlib.Path(__file__).resolve().parent.parent
 CAL_FILE = SCRIPT_DIR / "kartenoverlay.json"
 CAL_KEYS = ("x", "y", "w", "h", "dx", "dy", "cols", "size")
-RATING_LABEL = {"matchwinner": "♛ MW", "splashworthy": "★ SW", "mustplay": "MP", "filler": "Fi", "neverplay": "NP"}
+RATING_LABEL = {"matchwinner": "♛ MW", "splashworthy": "★ SW", "mustplay": "MP", "playable": "Pl", "filler": "Fi", "neverplay": "NP"}
 ASPECT_TOLERANCE = 0.03
 RARITY_ORDER = {"mythic": 0, "rare": 1, "uncommon": 2, "common": 3}
 

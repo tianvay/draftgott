@@ -14,7 +14,7 @@ def parse_args(argv=None):
     ap.add_argument("--core", metavar="DATEI", default=None,
                     help="Kern-Deckliste, die zu jeder Variante (deckfile / --deckalt) hinzugefuegt wird")
     ap.add_argument("--bewertung", default="kartenbewertung.json", metavar="DATEI",
-                    help="Drafthelper: Datei mit der Kartenbewertung (Matchwinner, Splashworthy, MustPlay, Filler, NeverPlay) je "
+                    help="Drafthelper: Datei mit der Kartenbewertung (Matchwinner, Splashworthy, MustPlay, Playable, Filler, NeverPlay) je "
                          "Kartenname, gilt fuer jeden Kartenpool (Standard: kartenbewertung.json, nicht im Git)")
     ap.add_argument("--archetypen", default="kartenarchetypen.json", metavar="DATEI",
                     help="Drafthelper: Datei mit der eigenen Archetyp-Zuordnung je Kartenname (Farbpaare wie BR), "

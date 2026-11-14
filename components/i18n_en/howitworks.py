@@ -426,6 +426,8 @@ EN = {
         "<b>★ Splashworthy</b> – decides games on its own, should go in in any case, even if we don't play the color.",
     '<b>MustPlay</b> – wird auf jeden Fall gespielt, wenn wir diese Farbe spielen.':
         '<b>MustPlay</b> – is played in any case if we play this color.',
+    '<b>Playable</b> – solide, wird meist gespielt, wenn wir diese Farbe spielen, aber nicht zwingend. Zählt im Draft zwischen MustPlay und Filler (Pack 2 Punkte, Archetyp-Gewicht 1,5), aber nicht als starke Karte (Top-Pick, Signale).':
+        '<b>Playable</b> – solid, usually played if we play this color, but not a must. Counts between MustPlay and Filler in the draft (pack 2 points, archetype weight 1.5), but not as a strong card (top pick, signals).',
     '<b>Filler</b> – füllt das Deck auf, wenn wir die Farbe spielen und nicht splashen.':
         "<b>Filler</b> – fills up the deck if we play the color and don't splash.",
     '<b>NeverPlay</b> – zu schlecht oder zu situativ.':
@@ -438,6 +440,8 @@ EN = {
         'MustPlay → Core, Matchwinner and Splashworthy → Splash, NeverPlay → Off, cards without a category stay unchanged.',
     'Filler füllt auf die Zielgröße auf (alle Länder zählen mit): zuerst Core, damit beide Varianten gleich groß werden, dann die NoSplash-Gruppe als Ersatz für die Splash-Karten; übrige Filler → Aus.':
         'Filler fills up to the target size (all lands count): first Core so that both variants become equally large, then the NoSplash group as a replacement for the splash cards; remaining Filler → Off.',
+    'Playable füllt wie Filler auf, kommt aber vor allen Fillern dran (im Deckvorschlag ebenso, nur in den gewählten Farben).':
+        'Playable fills up like Filler but comes before all Filler (likewise in the deck suggestion, only in the chosen colors).',
     'Reihenfolge der Filler: nach der gewählten Sortierung, dann Farben, die schon im Deck sind, dann Manawert aufsteigend. „↶ Rückgängig“ stellt den Stand davor wieder her.':
         'Order of the Filler: by the chosen sorting, then colors already in the deck, then mana value ascending. “↶ Undo” restores the previous state.',
     'Länder empfehlen':

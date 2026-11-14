@@ -21,7 +21,7 @@ import urllib.request
 
 from components.i18n import dec, t
 
-RATING_ABBR = {"matchwinner": "♛", "splashworthy": "★", "mustplay": "MP", "filler": "Fi", "neverplay": "NP"}
+RATING_ABBR = {"matchwinner": "♛", "splashworthy": "★", "mustplay": "MP", "playable": "Pl", "filler": "Fi", "neverplay": "NP"}
 MARK = {"best": "◆", "arch": "●", "color": "○", "": "  "}
 COLORS = {"bg": "#161b24", "ink": "#e8ecf3", "muted": "#8d97a8", "arch": "#1f7a45", "color": "#2c3a52",
           "head": "#ffd166", "never": "#6b7280", "best": "#6d28b8", "hint": "#8e2bd6", "hint2": "#5b1d99",

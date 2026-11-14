@@ -593,6 +593,7 @@ def _drafthelper_help():
             t("<b>★ Splashworthy</b> – entscheidet Spiele allein, soll auf jeden Fall rein, auch wenn wir die Farbe nicht "
             "spielen."),
             t("<b>MustPlay</b> – wird auf jeden Fall gespielt, wenn wir diese Farbe spielen."),
+            t("<b>Playable</b> – solide, wird meist gespielt, wenn wir diese Farbe spielen, aber nicht zwingend. Zählt im Draft zwischen MustPlay und Filler (Pack 2 Punkte, Archetyp-Gewicht 1,5), aber nicht als starke Karte (Top-Pick, Signale)."),
             t("<b>Filler</b> – füllt das Deck auf, wenn wir die Farbe spielen und nicht splashen."),
             t("<b>NeverPlay</b> – zu schlecht oder zu situativ."),
             t("Eine Kategorie gilt für alle Kopien einer Karte und beeinflusst die Simulation nicht; ♛ Matchwinner, ★ Splashworthy und "
@@ -601,6 +602,7 @@ def _drafthelper_help():
             t("MustPlay → Core, Matchwinner und Splashworthy → Splash, NeverPlay → Aus, Karten ohne Kategorie bleiben unverändert."),
             t("Filler füllt auf die Zielgröße auf (alle Länder zählen mit): zuerst Core, damit beide Varianten gleich groß "
             "werden, dann die NoSplash-Gruppe als Ersatz für die Splash-Karten; übrige Filler → Aus."),
+            t("Playable füllt wie Filler auf, kommt aber vor allen Fillern dran (im Deckvorschlag ebenso, nur in den gewählten Farben)."),
             t("Reihenfolge der Filler: nach der gewählten Sortierung, dann Farben, die schon im Deck sind, dann Manawert "
             "aufsteigend. „↶ Rückgängig“ stellt den Stand davor wieder her.")]))
         + _panel(t("Länder empfehlen"), _ul([

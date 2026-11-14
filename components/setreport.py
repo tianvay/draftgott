@@ -42,9 +42,9 @@ DUO_ROWS = 20
 GOOD, BAD = 0.55, 0.45  # Siegquote: gruen ab 55 %, rot unter 45 %
 FORMAT_COLOR = {"picktwo": "#7c4dde", "pickone": "#c97700", "trad": "#1a9a8c", "sealed": "#3d6fd1"}
 GOLD = "#d4a72c"
-CAT_LABEL = {"matchwinner": "♛ Matchwinner", "splashworthy": "★ Splashworthy", "mustplay": "MustPlay", "filler": "Filler", "neverplay": "NeverPlay",
+CAT_LABEL = {"matchwinner": "♛ Matchwinner", "splashworthy": "★ Splashworthy", "mustplay": "MustPlay", "playable": "Playable", "filler": "Filler", "neverplay": "NeverPlay",
              "": "ohne Kategorie"}
-CAT_CLASS = {"matchwinner": "c-mw", "splashworthy": "c-sw", "mustplay": "c-mp", "filler": "c-fi", "neverplay": "c-np", "": "c-no"}
+CAT_CLASS = {"matchwinner": "c-mw", "splashworthy": "c-sw", "mustplay": "c-mp", "playable": "c-pl", "filler": "c-fi", "neverplay": "c-np", "": "c-no"}
 RARITY = {"common": "C", "uncommon": "U", "rare": "R", "mythic": "M"}
 CSS = """
 main{padding-bottom:40px}
@@ -193,7 +193,7 @@ table.cards td:nth-child(2){font-weight:600;min-width:130px;max-width:170px}
 .rar.mythic{background:#e2531f}
 .cat{border-radius:99px;padding:1px 7px;font-size:11px;font-weight:700;white-space:nowrap}
 .cat.c-mw{background:#ead7fb;color:#5b1a8f}.cat.c-sw{background:#ffe7a3;color:#5a4100}.cat.c-mp{background:#d9f3e4;color:#146c3d}
-.cat.c-fi{background:#e6ebf3;color:#4a5a73}.cat.c-np{background:#f6dcdc;color:#8b2f2f}
+.cat.c-pl{background:#d8eef1;color:#1f6b78}.cat.c-fi{background:#e6ebf3;color:#4a5a73}.cat.c-np{background:#f6dcdc;color:#8b2f2f}
 td.cost{white-space:nowrap}
 td.cost .m.ms{width:16px;height:16px}
 td.aps{white-space:nowrap}
@@ -726,7 +726,7 @@ def _card_table(stats, cards, assign, ratings, arch_names, view="all"):
 
 def _ratings_vs_results(stats, ratings):
     rows = []
-    for cat in ("matchwinner", "splashworthy", "mustplay", "filler", "neverplay", ""):
+    for cat in ("matchwinner", "splashworthy", "mustplay", "playable", "filler", "neverplay", ""):
         names = [n for n in stats if ratings.get(n, "") == cat]
         played = [n for n in names if stats[n]["games"]]
         games = sum(stats[n]["games"] for n in names)

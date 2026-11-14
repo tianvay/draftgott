@@ -4,12 +4,12 @@ Regeln:
     MustPlay    -> Core
     Splashworthy-> Splash (Matchwinner ebenso)
     NeverPlay   -> Aus
-    Filler      -> fuellt auf die Zielgroesse (alle Laender zaehlen mit):
+    Playable und Filler -> fuellen auf die Zielgroesse (alle Laender zaehlen mit):
                    zuerst Core, damit beide Varianten gleich gross werden, dann die NoSplash-Gruppe als Ersatz
-                   fuer die Splash-Karten; uebrige Filler -> Aus
+                   fuer die Splash-Karten; uebrige -> Aus
     ohne Kategorie bleibt die Zuordnung unveraendert.
 
-Reihenfolge der Filler: nach der gewaehlten Sortierung der Seite, dann Farben, die schon im Deck sind (Farblos zaehlt
+Reihenfolge beim Auffuellen: Playable vor Filler, dann nach der gewaehlten Sortierung der Seite, dann Farben, die schon im Deck sind (Farblos zaehlt
 als vorhanden), dann Manawert aufsteigend.
 """
 
@@ -40,6 +40,7 @@ def _primary(card, prev_mark, sort):
 
 
 SPLASH_CATS = ("matchwinner", "splashworthy")  # kommen immer rein, ausserhalb der Farben als Splash
+FILL_CATS = ("playable", "filler")  # fuellen auf, Playable zuerst
 
 
 def suggest(cards, marks, basics, cats, target=40, sort="mv"):
@@ -58,7 +59,7 @@ def suggest(cards, marks, basics, cats, target=40, sort="mv"):
             new[ci], assigned["splash"] = ["splash"] * qty, assigned["splash"] + qty
         elif cat == "neverplay":
             new[ci], assigned["off"] = ["off"] * qty, assigned["off"] + qty
-        elif cat == "filler":
+        elif cat in FILL_CATS:
             for k in range(qty):
                 fillers.append((ci, k, marks[ci][k]))
                 new[ci][k] = "off"
@@ -84,7 +85,8 @@ def suggest(cards, marks, basics, cats, target=40, sort="mv"):
                 ci, k, prev = f
                 c = cards[ci]
                 missing = 0 if c.get("land") else len(set(c.get("colors") or []) - present)
-                return (_primary(c, prev, sort), missing, c.get("mv") or 0, c["name"].lower(), k)
+                return (FILL_CATS.index(cats[c["name"]]), _primary(c, prev, sort), missing, c.get("mv") or 0,
+                        c["name"].lower(), k)
             best = min(pool, key=key)
             pool.remove(best)
             ci, k, _ = best
@@ -177,7 +179,7 @@ def _distribute(n, weights, chosen, splash_colors):
 
 
 def propose(cards, marks, cats, colors, target=40, sort="mv"):
-    """Baut ein eigenes Deck aus den Kategorien: MustPlay und Filler nur in den gewaehlten Farben, Matchwinner und
+    """Baut ein eigenes Deck aus den Kategorien: MustPlay, Playable und Filler nur in den gewaehlten Farben, Matchwinner und
     Splashworthy auch ausserhalb (dann als Splash), NeverPlay und Karten ohne Kategorie nicht. Standardlaender werden passend zur
     Faustregel ergaenzt und nach Farbsymbolen verteilt, Nicht-Standardlaender zaehlen als Laender.
     Gibt {"deck": {Name: Anzahl}, "summary": {...}} zurueck; die Eingaben werden nicht veraendert."""
@@ -198,7 +200,7 @@ def propose(cards, marks, cats, colors, target=40, sort="mv"):
             deck[name] = deck.get(name, 0) + qty
             if not in_colors(card):
                 splash_cards[name] = splash_cards.get(name, 0) + qty
-        elif cat == "filler" and in_colors(card):
+        elif cat in FILL_CATS and in_colors(card):
             fillers += [(ci, k, marks[ci][k]) for k in range(qty)]
 
     low, high, rec = land_range(target)
@@ -216,7 +218,8 @@ def propose(cards, marks, cats, colors, target=40, sort="mv"):
             ci, k, prev = f
             c = cards[ci]
             missing = 0 if c.get("land") else len(set(c.get("colors") or []) - present)
-            return (_primary(c, prev, sort), missing, c.get("mv") or 0, c["name"].lower(), k)
+            return (FILL_CATS.index(cats[c["name"]]), _primary(c, prev, sort), missing, c.get("mv") or 0,
+                    c["name"].lower(), k)
         best = min(pool, key=key)
         ci = best[0]
         c = cards[ci]

@@ -49,7 +49,7 @@ MARKS = ("core", "splash", "nosplash", "off")
 GROUPS = ("core", "splash", "nosplash")
 BASIC_LANDS = ("Plains", "Island", "Swamp", "Mountain", "Forest")
 MAX_BASICS = 40  # je Land und Gruppe
-CATEGORIES = ("matchwinner", "splashworthy", "mustplay", "filler", "neverplay")  # Kategorie je Karte, hoechstens eine
+CATEGORIES = ("matchwinner", "splashworthy", "mustplay", "playable", "filler", "neverplay")  # Kategorie je Karte, hoechstens eine
 SORTS = ("mv", "name", "color", "mark", "cat")  # Sortierungen der Seite (fuer die Filler-Reihenfolge)
 SIM_OPTIONS = (1000, 5000, 10000)
 SCRIPT_DIR = pathlib.Path(__file__).resolve().parent.parent
@@ -727,7 +727,7 @@ h2 small{color:var(--muted);font-weight:400}
 .tile.c-matchwinner .badge,.cdot.matchwinner{background:#8e2bd6}
 .tile.c-splashworthy .badge,.cdot.splashworthy{background:#e0a800;color:#2d2100}
 .tile.c-mustplay .badge,.cdot.mustplay{background:#2e9e5b}
-.tile.c-filler .badge,.cdot.filler{background:#6b7d99}
+.tile.c-playable .badge,.cdot.playable{background:#3f8f9a}.tile.c-filler .badge,.cdot.filler{background:#6b7d99}
 .tile.c-neverplay .badge,.cdot.neverplay{background:#8b2f2f}
 .tile.c-matchwinner{box-shadow:0 0 0 3px #8e2bd688}
 .tile.c-splashworthy{box-shadow:0 0 0 3px #ffc83d88}
@@ -736,7 +736,7 @@ h2 small{color:var(--muted);font-weight:400}
 .catsel{width:100%;margin-top:5px;padding:4px 6px;font-size:12.5px}
 .chip.cat{color:#fff}
 .chip.cat.matchwinner{background:#8e2bd6}.chip.cat.splashworthy{background:#e0a800;color:#2d2100}.chip.cat.mustplay{background:#2e9e5b}
-.chip.cat.filler{background:#6b7d99}.chip.cat.neverplay{background:#8b2f2f}
+.chip.cat.playable{background:#3f8f9a}.chip.cat.filler{background:#6b7d99}.chip.cat.neverplay{background:#8b2f2f}
 .filter{display:flex;align-items:center;gap:6px;font-size:13px}
 .layout{display:grid;grid-template-columns:400px 1fr;gap:20px;align-items:start;margin-top:14px}
 .side{position:sticky;top:calc(var(--hbar,70px) + 12px);background:#fff;border:1px solid var(--line);border-radius:12px;
@@ -927,7 +927,7 @@ h2 small{color:var(--muted);font-weight:400}
 .mtile .why{font-size:11.5px;color:#146c3d;font-weight:700;margin:0 2px 2px}
 .mtile .why.syn{color:#0f5f86}
 .mtile.c-matchwinner .badge{background:#8e2bd6}.mtile.c-splashworthy .badge{background:#e0a800;color:#2d2100}.mtile.c-mustplay .badge{background:#2e9e5b}
-.mtile.c-filler .badge{background:#6b7d99}.mtile.c-neverplay .badge{background:#8b2f2f}
+.mtile.c-playable .badge{background:#3f8f9a}.mtile.c-filler .badge{background:#6b7d99}.mtile.c-neverplay .badge{background:#8b2f2f}
 #setview{display:none;position:fixed;inset:0;z-index:12;background:var(--bg);flex-direction:column}
 #setview.show{display:flex}
 #setview .sbar{padding:10px 20px;background:#fff;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:8px 12px;
@@ -1068,7 +1068,7 @@ const GROUPS=["core","splash","nosplash"];
 const CATS=[
  {key:"matchwinner",abbr:"♛",label:"Matchwinner",hint:"Bombe: entscheidet ein Match allein – kommt immer rein, notfalls als Splash"},
  {key:"splashworthy",abbr:"★",label:"Splashworthy",hint:"Entscheidet Spiele allein – soll auf jeden Fall rein, auch wenn wir die Farbe nicht spielen"},
- {key:"mustplay",abbr:"MP",label:"MustPlay",hint:"Wird auf jeden Fall gespielt, wenn wir diese Farbe spielen"},
+ {key:"mustplay",abbr:"MP",label:"MustPlay",hint:"Wird auf jeden Fall gespielt, wenn wir diese Farbe spielen"}, {key:"playable",abbr:"Pl",label:"Playable",hint:"Solide, wird meist gespielt, wenn wir diese Farbe spielen, aber nicht zwingend"},
  {key:"filler",abbr:"Fi",label:"Filler",hint:"Füllt das Deck auf, wenn wir die Farbe spielen und nicht splashen"},
  {key:"neverplay",abbr:"NP",label:"NeverPlay",hint:"Zu schlecht oder zu situativ, wird nicht gespielt"}];
 let cats={};  // Kartenname -> Kategorie
@@ -1743,7 +1743,7 @@ function statLine(st){
   if(st.games){d.append(" · ");d.appendChild(el("b",null,Math.round(100*st.wins/st.games)+" %"));d.append(" in "+st.games+" G.")}
   return d}
 let cardarch={},cardbest={},archsets={},poolDetect=null,detectTimer=null,live=null,liveJson="",liveVersion=0,setCards=[];
-const RATING_SHORT={matchwinner:"♛ Matchwinner",splashworthy:"★ Splashworthy",mustplay:"MP MustPlay",filler:"Fi Filler",neverplay:"NP NeverPlay"};
+const RATING_SHORT={matchwinner:"♛ Matchwinner",splashworthy:"★ Splashworthy",mustplay:"MP MustPlay",playable:"Pl Playable",filler:"Fi Filler",neverplay:"NP NeverPlay"};
 // Archetyp, nach dem hervorgehoben wird: im Live-Draft der des Drafts, sonst der aus den Core-Karten erkannte
 function mainArch(){return live&&live.detect?live.detect.main:(poolDetect?poolDetect.main:null)}
 function archName(colors){for(const list of Object.values(archsets)){const a=list.find(x=>x.colors===colors);if(a)return a.name}
