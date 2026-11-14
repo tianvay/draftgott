@@ -30,3 +30,9 @@ draftstatistik*.json.tmp
 
 # Karten-Overlay: Kalibrierung des Rasters im Arena-Fenster (je Nutzer)
 kartenoverlay.json
+
+# Lokale Claude-Einstellungen (Vorschau-Konfiguration je Session)
+.claude/
+
+# Stream-Deck-Profil (nicht Teil des Projekts)
+ex/
