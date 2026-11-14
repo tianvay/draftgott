@@ -4228,6 +4228,7 @@ def tap_target(p, opp, card, stun, e):
     if stun:
         target.stun += 1
     e["events"].append(i18n.t("{p}: {card_name} tappt {target_card_name}", p=i18n.t(p.name), card_name=card.name, target_card_name=target.card.name) + (i18n.t(" (Stun-Marke)") if stun else ""))
+    return target
 
 
 def maco_tokens(victim, e):
@@ -4932,6 +4933,8 @@ def counter_fits(mode, spell):
     if kind == "creature_or_legendary" and not (spell.is_creature or spell.legendary):
         return False
     if kind == "noncreature" and spell.is_creature:
+        return False
+    if kind == "creature" and not spell.is_creature:  # SOS Essence Scatter
         return False
     return not colors or bool(colors_of_alts(spell.alts) & set(colors))
 
@@ -6028,7 +6031,7 @@ def _echo_rank(c):
     """Lwaxana Troi: wie viele modellierte Angriffs- und Kampfschaden-Ausloeser die Kreatur hat."""
     card = c.card
     return sum(bool(x) for x in (card.combat_draw, card.attack_loot, card.attack_drain, card.attack_exile_gy,
-                                 card.discover))
+                                 card.discover, card.attack_life))
 
 
 def lwaxana_holds(p, lw):
@@ -6095,6 +6098,57 @@ def mill_pick(p, milled):
         return max(perms, key=lambda c: (c.mv <= len(p.lands) + 1, c.mv, c.name))
     lands = [c for c in milled if c.is_land]
     return lands[0] if lands and not any(h.is_land for h in p.hand) else None
+
+
+def sos_tap_instants(me, opp, step, e):
+    """SOS Rapier Wit vor dem eigenen Angriff: nur, wenn ein Blocker einen unserer Angreifer aufhalten wuerde (dann
+    mit Stun-Marke); sonst bleibt er fuer das Ende des gegnerischen Zugs auf der Hand (tappt dann einen Blocker fuer
+    unseren naechsten Zug)."""
+    if opp is None:
+        return
+    for card in sorted([c for c in me.hand if c.is_instant and c.tap_spell and not c.removal], key=lambda c: c.mv):
+        attackers = [c for c in me.creatures if not c.dead and can_attack(c, step)]
+        if card not in me.hand or stopping_blocker(me, opp, attackers) is None or not _cast_from_open(me, card):
+            continue
+        e["events"].append(i18n.t("{me}: {card_name} vor dem Angriff", me=i18n.t(me.name), card_name=card.name))
+        _resolve(me, opp, card, step, e)
+
+
+def sos_effects(me, opp, card, step, entry):
+    """SOS Paket A beim Aufloesen bzw. Betreten: Abwerfen als Zusatzkosten (vor dem Ziehen), Rummage beim Betreten,
+    Tappen (mit Stun), Schluesselwort nach Wahl."""
+    for _k in range(card.discard_cost):  # Seize the Spoils: Kosten (601.2f), hier vor dem Ziehen
+        gone = choose_discard(me)
+        if gone is not None:
+            me.hand.remove(gone)
+            me.graveyard.append(gone)
+            discarded(me, entry)
+            entry["events"].append(i18n.t("{me}: {card_name} – wirft {gone_name} ab (Zusatzkosten)", me=i18n.t(me.name), card_name=card.name, gone_name=gone.name))
+    if card.etb_rummage:  # Rubble Rouser: nur ein entbehrliches Land
+        gone = surplus_land(me)
+        if gone is not None:
+            me.hand.remove(gone)
+            me.graveyard.append(gone)
+            discarded(me, entry)
+            _draw(me)
+            entry["events"].append(i18n.t("{me}: {card_name} – wirft {gone_name} ab und zieht", me=i18n.t(me.name), card_name=card.name, gone_name=gone.name))
+    if card.tap_spell and not card.removal and opp is not None:  # Removal mit Tappen: _use_removal
+        own_stun, other_stun, per_x = card.tap_spell
+        stun = (own_stun if me.turn_start == me.now else other_stun) + per_x * me.next_x
+        if per_x:
+            me.next_x = 0  # Procrastinate: X verbraucht
+        target = tap_target(me, opp, card, False, entry)
+        if target is not None and stun:
+            target.stun += stun
+            entry["events"].append(i18n.t("{me}: {card_name} – {n} Stun-Marken auf {target_name}", me=i18n.t(me.name), card_name=card.name, n=stun, target_name=target.card.name))
+    if card.kw_choice:  # Practiced Offense: Double Strike fuer den staerksten Angreifer, sonst Lifelink
+        alive = [c for c in me.creatures if not c.dead]
+        ready = [c for c in alive if can_attack(c, step)]
+        pool, kw = (ready, card.kw_choice[0]) if ready else (alive, card.kw_choice[1])
+        if pool:
+            pick = max(pool, key=lambda c: (c.power, c.toughness))
+            pick.extra.add(kw)
+            entry["events"].append(i18n.t("{me}: {card_name} – {target_name} bekommt {kw}", me=i18n.t(me.name), card_name=card.name, target_name=pick.card.name, kw=kw))
 
 
 def trk_effects(me, opp, card, step, entry):
@@ -6654,13 +6708,15 @@ def card_effects(me, opp, card, step, entry, modes=None):
         entry["events"].append(i18n.t("{me}: {card_name} – {card_heartwood} Heartwood-Token", me=i18n.t(me.name), card_name=card.name, card_heartwood=card.heartwood))
     me.life -= card.life_loss  # "You lose N life"
     trk_effects(me, opp, card, step, entry)
-    if card.loot:  # "Draw a card, then discard a card"
-        _draw(me)
-        gone = choose_discard(me)
-        if gone is not None:
-            me.hand.remove(gone)
-            me.graveyard.append(gone)
-            discarded(me, entry)
+    sos_effects(me, opp, card, step, entry)
+    if card.loot:  # "Draw a card, then discard a card" (SOS: "Draw two cards, then discard two cards")
+        _draw(me, card.loot)
+        for _k in range(card.loot):
+            gone = choose_discard(me)
+            if gone is not None:
+                me.hand.remove(gone)
+                me.graveyard.append(gone)
+                discarded(me, entry)
     if card.self_damage:  # "damage to each player" trifft auch uns
         me.life -= card.self_damage
     if card.dahar_sac and not dahar_pay(me, opp, card, entry):  # Dahar Master: ohne Opfer kein Schaden
@@ -6920,6 +6976,7 @@ def main_phase_spells(me, opp):
             and (not c.fed_copy or any(g.is_instant_sorcery for g in me.graveyard))
             and (not c.animate_artifact or animate_target(me) is not None)
             and (not c.rummage_spell or surplus_land(me) is not None)
+            and (not c.discard_cost or len([h for h in me.hand if h is not c]) >= c.discard_cost)
             and (not c.twin or twin_host(me, opp) is not None)
             and (not c.mirror_copy or (opp is not None and any(not x.dead for x in opp.creatures)))
             and sweep_etb_ok(me, opp, c) and kobayashi_ok(me, opp, c) and not c.sunburst_bomb and city_ok(me, opp, c)
@@ -7159,6 +7216,8 @@ def _use_removal(p, card, alts, is_spell, step, e, zone="hand", other=None, fx=N
         if face and other is not None:  # z. B. Extended Absence: "deals 1 damage to each opponent"
             deal_noncombat(p, other, face, e)
         gain_life(p, fx.spell_life)
+        if fx.tap_spell and other is not None:  # SOS Vibrant Outburst: "Tap up to one target creature."
+            tap_target(p, other, fx, False, e)
     else:
         e["events"].append(i18n.t("{p}: wirft {card_name} ab (Fähigkeit)", p=i18n.t(p.name), card_name=card.name))
         discarded(p, e)
@@ -9318,6 +9377,11 @@ def take_turn(me, opp, step, rnd, skip_draw):
             for _ in range(x):
                 me.open.pop()
             me.next_x = x
+        if c.tap_spell and c.tap_spell[2]:  # SOS Procrastinate: X = alles freie Mana (Stun-Marken = 2X)
+            x = free_units(me)
+            for _ in range(x):
+                me.open.pop()
+            me.next_x = x
     early = [c for c in chosen if c.is_creature and not c.haste and combat_etb(me, opp, c, step, chosen)]
     main1 = [c for c in chosen if not (c.is_creature and not c.haste) or c in early]
     main2 = [c for c in chosen if c.is_creature and not c.haste and c not in early]
@@ -9346,6 +9410,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
             me.cast_count += 1 if is_spell else 0
             if _use_removal(me, card, alts, is_spell, step, e, zone, opp, rc, target=max(eaters, key=danger)):
                 cast_removal(rc, me, opp, e, step, target=max(eaters, key=danger))
+    sos_tap_instants(me, opp, step, e)
     # Jace surveilt schon vor dem Kampf, wenn das in diesem Kampf etwas bringt (Prudent Fateseer, Futurescribe)
     alive = [c for c in me.creatures if not c.dead]
     if 0 < me.jace.loyalty < 3 and not me.surveilled and not walker_engine(me) and any(
@@ -9472,6 +9537,11 @@ def take_turn(me, opp, step, rnd, skip_draw):
                 deal_noncombat(me, opp, dmg, e)
                 gain_life(me, life)
                 e["events"].append(i18n.t("{me}: {a_card_name} – {dmg} Schaden, {life} Leben", me=i18n.t(me.name), a_card_name=a.card.name, dmg=dmg, life=life))
+            if a.card.attack_life:  # SOS: Lebensverlust (kein Schaden) und Leben (Shopkeeper's Bane, Postmortem Professor)
+                loss, life = a.card.attack_life
+                opp.life -= loss
+                gain_life(me, life)
+                e["events"].append(i18n.t("{me}: {a_card_name} – Gegner verliert {loss}, {life} Leben", me=i18n.t(me.name), a_card_name=a.card.name, loss=loss, life=life))
             if a.card.attack_exile_gy:  # Afterthought Sentry
                 pick = gy_exile_target(opp)
                 if pick is not None:
@@ -9528,6 +9598,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
         if (a.card.combat_draw or a.tdraw) and res["to_player"].get(id(a)):
             n = (a.card.combat_draw + a.tdraw) * echo_times(me, a)  # Lwaxana Troi: doppelt
             _draw(me, n)
+            me.life -= a.card.combat_draw_loss * echo_times(me, a)  # SOS Snooping Page: "and lose 1 life"
             e["events"].append(i18n.t("{me}: {a_card_name} zieht {n}", me=i18n.t(me.name), a_card_name=a.card.name, n=n))
         if a.light == step and res["to_player"].get(id(a)):  # The Inner Light II: so viele, wie Schaden
             _draw(me, res["to_player"][id(a)])

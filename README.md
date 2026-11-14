@@ -119,7 +119,7 @@ einer Meldung ab, die beschreibt, wie die Datei aussehen muss.
   Browser-Speicherständen werden beim ersten Start einmal übernommen. Zuordnung, Standardländer, Zielgröße und
   Farben merkt sich weiter der Browser je Pool.
 - **Archetypen des Sets:** Sind für das Set des Pools (häufigstes Set der Nicht-Länder) Archetypen in
-  `components/archetypes.py` hinterlegt (derzeit TRK und FRA), zeigt die Seite sie über den Karten mit Hinweisen zum
+  `components/archetypes.py` hinterlegt (derzeit TRK, FRA und SOS), zeigt die Seite sie über den Karten mit Hinweisen zum
   Deckbau; der Archetyp der Core-Farben (die zwei Farben mit den meisten Core-Karten) ist hervorgehoben. Der
   Bericht zeigt im Abschnitt „Deck“ den Archetyp der Hauptfarben des Decks.
 - **Deckvorschlag (eigenes drittes Deck):** Über den Karten stehen **Zielgröße** (Standard 40, wählbar 10 bis 200,
@@ -441,7 +441,7 @@ Aktivierung pro Runde sind fest im Skript (siehe „Feste Annahmen“).
 | `--statistik DATEI` | `draftstatistik.json` | Draft-Statistik des Live-Drafts (nicht im Git). |
 | `--statistik-neu` | | Draft-Statistik aus `Player-prev.log` und `Player.log` neu aufbauen (alte Datei als `draftstatistik.backup.json`). |
 | `--setauswertung [SET]` | | Setauswertung als HTML-Seite `setauswertung_<set>.html` (ohne SET: Set mit den meisten Drafts). |
-| `--set-bewerten [SET]` | | Set bewerten: Seite, auf der man je Karte eines fertig umgesetzten Sets (TRK, FRA) Kategorie und Archetypen festlegt (ohne SET: Auswahl auf der Seite). |
+| `--set-bewerten [SET]` | | Set bewerten: Seite, auf der man je Karte eines fertig umgesetzten Sets (TRK, FRA, SOS) Kategorie und Archetypen festlegt (ohne SET: Auswahl auf der Seite). |
 | `--neu-laden` | aus | Kartendaten werden in `scryfall_cache.json` neben dem Script gespeichert, bei späteren Läufen werden nur unbekannte Karten nachgeladen. Mit `--neu-laden` wird alles frisch von Scryfall geholt. |
 | `--ausgabe DATEI` (auch `--html DATEI`) | `mtg_bericht.html` | Name und Ort des HTML-Berichts. Eine vorhandene Datei wird überschrieben. |
 | `--nicht-oeffnen` | aus (Bericht wird geöffnet) | Der Bericht wird nur gespeichert, der Browser öffnet sich nicht. |
@@ -667,6 +667,11 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
   Kampfbeginn, Angriffs-Auslöser mit Schlüsselwörtern und allgemeine Auslöser „Whenever you cast …“ (Repartee, Opus,
   Nichtkreatur-, Typ- und Farbzauber), Fahrzeuge mit Crew (Angriff und Block) und „tap target creature defending
   player controls“ beim Angriff.
+- Secrets of Strixhaven (SOS), Paket A: Archetypen der fünf Colleges; Lebensentzug beim Betreten und Angriff
+  (Lebensverlust, kein Schaden), Loot mit zwei Karten, Rummage beim Betreten, Tappen mit Stun-Marken (Rapier Wit,
+  Procrastinate, Fractal Mascot), Kontern von Kreaturzaubern, Schlüsselwort nach Wahl (Practiced Offense), Abwerfen
+  als Zusatzkosten. Weitere SOS-Pakete folgen; bis dahin wirken offene Karten nur mit den schon modellierten
+  Effekten.
 - Alchemy: Reality Fracture (YFRA), Paket A: Perpetual, Conjure benannter Karten, Seek (Killian), Avoided
   Stairwurm, Zimone, Dina, Asymmetry Sage, Sparks Ablaze, Paradox Kraken, Boisterous Clique, Searing Soloist
   (Karten zum Beschwören in `components/conjure.py`).

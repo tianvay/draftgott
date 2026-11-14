@@ -566,6 +566,16 @@ RULES = [
     "exiliert wie beim Abwerfen-Lassen gewählt, der Gegner bekommt Mind Stone; Searing Soloist: rote Quellen 1 Schaden "
     "mehr (Kampf, Removal, Aria), Aria trifft immer den Gegner; Killian: Seek nach Schaden ausserhalb des Kampfs, "
     "abgeworfen im nächsten Endsegment, wenn nicht gewirkt.",
+    "SOS-Paket A: Lebensverlust ist kein Schaden (120.3 gegen 119.3) – „each opponent loses N life and you gain N "
+    "life“ beim Betreten und Angriff, „you gain N life“ beim Angriff; „Each player loses N life“ trifft beide. Loot "
+    "mit zwei Karten (erst ziehen, dann abwerfen), Rummage beim Betreten nur mit einem entbehrlichen Land, „enters or "
+    "attacks, you may draw … discard“ immer. Snooping Page zieht nach Kampfschaden und verliert 1 Leben. Rapier Wit "
+    "vor dem eigenen Angriff nur gegen einen Blocker, der einen Angreifer aufhalten würde (mit Stun-Marke), sonst am "
+    "Ende des gegnerischen Zugs (tappt einen Blocker für unseren Zug, ohne Stun); Rejoinder tappt nur (nie Enttappen); "
+    "Procrastinate mit X = allem freien Mana, 2X Stun-Marken; Vibrant Outburst tappt nach dem Schaden die "
+    "gefährlichste andere Kreatur. Essence Scatter kontert nur Kreaturzauber. Practiced Offense: Double Strike für den "
+    "stärksten Angreifer, ohne Angreifer Lifelink. Seize the Spoils: Abwerfen als Zusatzkosten (601.2f), nur mit "
+    "einer weiteren Handkarte.",
     "Noch nicht im Kampf: weitere Auslöser und Fähigkeiten (siehe Modell-Abdeckung). Solche Karten werden gewirkt, "
     "wirken aber nur mit den schon modellierten Effekten.",
 ]

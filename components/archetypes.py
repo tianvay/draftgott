@@ -87,6 +87,28 @@ _RAW = {
            "Aufs späte Spiel auslegen.",
            "Defensive Karten bevorzugen."),
     ],
+    # SOS: nur die fuenf Colleges (Gegnerfarben) haben eigene Archetypen
+    "sos": [
+        _a("WB", "Silverquill Repartee",
+           "Zauber, die eine Kreatur als Ziel haben, lösen Repartee aus.",
+           "Billige Tricks und Removal bevorzugen.",
+           "Kreaturen mit Flying oder Menace halten den Druck aufrecht."),
+        _a("UR", "Prismari Opus",
+           "Viele Instants und Sorceries spielen (Opus).",
+           "Zauber ab 5 Mana lösen die starken Opus-Effekte aus.",
+           "Darauf achten, genug Kreaturen zu spielen."),
+        _a("BG", "Witherbloom Infusion",
+           "Leben gewinnen schaltet Infusion frei.",
+           "Pest-Token und kleine Lifegain-Quellen sind viel wert.",
+           "Zäh und aufs späte Spiel ausgelegt."),
+        _a("RW", "Lorehold Graveyard",
+           "Karten, die den Friedhof verlassen, lösen Synergien aus.",
+           "Aggressiv spielen und mit Value aus dem Friedhof nachlegen."),
+        _a("UG", "Quandrix Increment",
+           "Increment: Zauber mit mehr Mana als Stärke oder Widerstand lassen Kreaturen wachsen.",
+           "Fractal-Token und +1/+1 counters.",
+           "X-Zauber skalieren ins späte Spiel."),
+    ],
 }
 
 

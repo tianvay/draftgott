@@ -556,7 +556,7 @@ def _live_help():
         + _panel(t("Set bewerten"), _ul([
             t("Menüpunkt <b>5</b> in <code>draftgott.bat</code> oder <code>python mtg_sim.py --set-bewerten "
               "[SET]</code>: eigene Seite im Browser. Zuerst ein fertig umgesetztes Set wählen (alle Sets mit "
-              "Archetypen, derzeit TRK und FRA), dann je Karte Kategorie und Archetypen festlegen."),
+              "Archetypen, derzeit TRK, FRA und SOS), dann je Karte Kategorie und Archetypen festlegen."),
             t("Kategorie per Knopf (♛ Matchwinner bis NP NeverPlay) oder mit der Tastatur: Maus auf die Karte, Taste "
               "1 bis 6, 0 entfernt. Archetypen per Klick: neutral → grün (passt gut) → lila (bester Archetyp) → "
               "neutral."),
@@ -581,7 +581,7 @@ def _drafthelper_help():
             "werden wie andere Karten je Kopie zugeordnet."),
             t("Der Stand wird im Browser gemerkt, und zwar je Inhalt der Pool-Datei: ein anderer Pool startet neu.")]))
         + _panel(t("Archetypen des Sets"), _ul([
-            t("Sind für das Set des Pools Archetypen hinterlegt (derzeit TRK und FRA), stehen sie über den Karten: je Farbpaar "
+            t("Sind für das Set des Pools Archetypen hinterlegt (derzeit TRK, FRA und SOS), stehen sie über den Karten: je Farbpaar "
             "der englische Titel und Hinweise zum Deckbau. Das Set ist das häufigste Set der Nicht-Länder "
             "im Pool."),
             t("Hervorgehoben ist der Archetyp der Core-Farben: die zwei Farben mit den meisten Core-Karten (Kopien, ohne "

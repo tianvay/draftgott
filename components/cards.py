@@ -503,6 +503,13 @@ class Card(NamedTuple):
     sisko_dig: tuple = ()  # Captain Benjamin Sisko: Kosten von "Top 5 exilieren, Zauber bis MV = Officers gratis"
     gwyndala_copy: tuple = ()  # Gwyndala: Kosten von "Equipment-Token werden Kopie einer Ausruestung"
     lwaxana_echo: tuple = ()  # Lwaxana Troi: Kosten von "Ausloeser einer anderen Kreatur doppelt, solange getappt"
+    # SOS Paket A (Nutzer 2026-11-14), siehe cards_sos.py
+    attack_life: tuple = ()  # greift sie an: (Lebensverlust jedes Gegners, eigener Lebensgewinn) (Shopkeeper's Bane)
+    etb_rummage: bool = False  # Betreten: "you may discard a card. If you do, draw a card." (Rubble Rouser)
+    combat_draw_loss: int = 0  # combat_draw: dazu N Leben verlieren (Snooping Page)
+    tap_spell: tuple = ()  # Zauber tappt eine gegnerische Kreatur: (Stun im eigenen Zug, Stun sonst, Stun je X)
+    kw_choice: tuple = ()  # "gains your choice of A or B until end of turn": (A, B) (Practiced Offense)
+    discard_cost: int = 0  # Zusatzkosten: N Karten abwerfen (Seize the Spoils)
 
 
 LANDCYCLE_RE = re.compile(
@@ -2857,7 +2864,7 @@ NEW_PLANET = Card(True, 0, (), ANY_COLOR, False, False, 0, 0, name="New Planet",
                   is_token=True)  # TRK: getappt, "{T}: Add one mana of any color."
 _PLANET = r"create a tapped planet land token named new planet with \"\{t\}: add one mana of any color\.\""
 _BASIC_SEARCH = (r"search your library for an? basic (land|plains|island|swamp|mountain|forest) card( or planet card)?, "
-                 r"put it onto the battlefield tapped, then shuffle\.?$")
+                 r"put (?:it|that card) onto the battlefield tapped, then shuffle\.?$")
 _FED_WHERE = r", where x is the number of creature types among non-borg creatures you control"
 _TRK_RES = {
     "etb_life_land": re.compile(r"^when this land enters, you gain (\d+) life\.?$"),
@@ -3915,8 +3922,14 @@ def card_info(card):
 def _card_info(card):
     out, shown = _card_info_base(card)
     front = (card.get("card_faces") or [card])[0]
-    trk = trk_land_token_traits(card, (front.get("type_line") or card.get("type_line", "")).split(" // ")[0])
-    return (out._replace(**trk) if trk else out), shown
+    type_line = (front.get("type_line") or card.get("type_line", "")).split(" // ")[0]
+    trk = trk_land_token_traits(card, type_line)
+    out = out._replace(**trk) if trk else out
+    if not out.is_land:
+        from components.cards_sos import sos_traits  # spaet importiert: cards_sos nutzt Helfer aus cards
+        sos = sos_traits(card, type_line, out)
+        out = out._replace(**sos) if sos else out
+    return out, shown
 
 
 def _card_info_base(card):

@@ -121,6 +121,8 @@ COVERED_BY_CARD = (
                 r"turn"), lambda c: bool(c.etb_grant)),  # Teyo; Loyalty-Marke nie auf einen Planeswalker (Nutzer)
     (re.compile(r"^it gains [a-z ,]+ until end of turn\.?$"),  # Rest nach Marken/Pump eines Modus
      lambda c: bool(c.grant_kw) or any(s.grant_kw for s in (c.choices[1] if c.choices else ()))),
+    (re.compile(r"^each player loses \d+ life\.?$"),  # Rest nach dem Ziehen (SOS Conciliator's Duelist)
+     lambda c: bool(c.opp_loss and c.life_loss)),
 )
 # Bewusst nicht modelliert (Nutzer-Entscheidung): Kartenname -> Muster der Zeile
 ON_PURPOSE = {
@@ -275,7 +277,10 @@ def analyze_card(card):
             if modelled_face and not is_land and not raw.strip().startswith("•"):  # Modi bleiben offen
                 n, rest = draw_line(line, "Instant" in type_line or "Sorcery" in type_line, card.get("name", ""))
                 if n:  # Ziehen mit fester Zahl ist modelliert; der Rest der Zeile wird weiter geprueft
-                    if re.sub(r"[^a-z]", "", rest) and not (modelled_face and line_modelled(card, face, rest)):
+                    covered = full is not None and any(rx.search(rest.strip().lower()) and ok(full)
+                                                       for rx, ok in COVERED_BY_CARD)
+                    if re.sub(r"[^a-z]", "", rest) and not covered and not (
+                            modelled_face and line_modelled(card, face, rest)):
                         face_items += [(c, m, line) for c, m in (_classify(rest, False) or [(C_UNKNOWN, M_UNKNOWN)])]
                     continue
             if EMPOWER_RE.search(line):

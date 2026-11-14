@@ -1,7 +1,7 @@
 """Set bewerten (--set-bewerten [SET], Menuepunkt 5 in draftgott.bat): lokaler Webserver mit einer eigenen Seite.
 
-Erst waehlt man eines der fertig umgesetzten Sets (alle Sets mit Archetypen in components/archetypes.py, derzeit TRK
-und FRA), dann legt man je Karte die Kategorie (Matchwinner bis NeverPlay) und die Archetypen fest (neutral -> gruen
+Erst waehlt man eines der fertig umgesetzten Sets (alle Sets mit Archetypen in components/archetypes.py, derzeit TRK,
+FRA und SOS), dann legt man je Karte die Kategorie (Matchwinner bis NeverPlay) und die Archetypen fest (neutral -> gruen
 = passt gut -> lila = bester Archetyp). Gespeichert wird sofort in dieselben Dateien wie im Drafthelper und im
 Live-Draft (kartenbewertung.json, kartenarchetypen.json): die Bewertung gilt je Kartenname fuer jeden Pool und jeden
 Draft, man macht sie also einmal je Set und nicht nach jedem Draft.

@@ -82,6 +82,7 @@ GIVES = {
     "creature_enter_life": (("lifegain", 2),), "ally_death_life": (("lifegain", 1),), "food": (("lifegain", 1),),
     "equip_attack_life": (("lifegain", 2),), "gy_bottom_life": (("lifegain", 1),), "discard_life": (("lifegain", 1),),
     "tell_me": (("lifegain", 1), ("surveil", 1)), "georgiou": (("lifegain", 1),), "tea_ability": (("lifegain", 1),),
+    "attack_life": (("lifegain", 2),),  # SOS Paket A
     # Surveil
     "surveil": (("surveil", 1), ("graveyard", 0.5)), "upkeep_surveil": (("surveil", 2), ("graveyard", 1)),
     "enter_surveil": (("surveil", 2),), "sac_surveil": (("surveil", 1),), "equip_attack_surveil": (("surveil", 2),),
@@ -111,6 +112,7 @@ GIVES = {
     "hand_removal": (("graveyard", 1), ("discard", 1)), "etb_discard_enchant": (("discard", 1),),
     "etb_tutor_any": (("discard", 1),), "flashback_discard": (("discard", 1),),
     "legend_discard_draw": (("discard", 1),),
+    "etb_rummage": (("graveyard", 1), ("discard", 1)), "discard_cost": (("graveyard", 1), ("discard", 1)),
     # Artefakte
     "is_artifact": (("artifacts", 1),), "treasure": (("artifacts", 1),), "heartwood": (("artifacts", 1),),
     "etb_clue": (("artifacts", 1),), "planet_tokens": (("artifacts", 1),), "attack_planet": (("artifacts", 2),),
@@ -233,6 +235,7 @@ NEUTRAL = (
     "mv", "alts", "land_colors", "haste", "tap_mode", "tap_arg", "land_types", "name", "is_basic", "cycle_alts",
     "cycle_target", "cycle_mv", "empower_text", "draws", "prepared", "is_copy", "mana_src", "landfall",
     "self_damage", "is_instant", "flash", "removal", "discard", "abilities", "combat_draw", "gy_ability_sorcery",
+    "combat_draw_loss", "tap_spell", "kw_choice",  # SOS Paket A
     "is_token", "sac_mana", "opp_spell_tax", "extra_cost", "hexproof_until_damage", "alt_draws",
     "finality", "combat_land_return", "domain_power", "x_search_basics", "choices", "is_mode", "removal_exile",
     "removal_points", "hand_pick", "attack_exile_gy", "own_turn_kw", "debuff", "impulse",

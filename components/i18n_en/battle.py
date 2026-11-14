@@ -350,6 +350,12 @@ EN = {
     "{src}: {c_card_name} – Seek {pick_name}": "{src}: {c_card_name} – Seek {pick_name}",
     # Marke fuer cast_effects (Standardwert des Parameters label, wird erst beim Ausgeben uebersetzt)
     "Auslöser beim Wirken": "Cast trigger",
+    # SOS Paket A
+    "{me}: {card_name} vor dem Angriff": "{me}: {card_name} before the attack",
+    "{me}: {card_name} – wirft {gone_name} ab (Zusatzkosten)": "{me}: {card_name} – discards {gone_name} (additional cost)",
+    "{me}: {card_name} – {n} Stun-Marken auf {target_name}": "{me}: {card_name} – {n} stun counters on {target_name}",
+    "{me}: {card_name} – {target_name} bekommt {kw}": "{me}: {card_name} – {target_name} gains {kw}",
+    "{me}: {a_card_name} – Gegner verliert {loss}, {life} Leben": "{me}: {a_card_name} – opponent loses {loss}, {life} life",
     # Namen der Spieler im Protokoll
     "Wir": "We",
     "Gegner": "Opponent",

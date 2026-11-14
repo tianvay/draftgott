@@ -294,9 +294,14 @@ def render_archetype_panel(ctx):
     pair = arch.main_pair(counts)
     main = [a for a in found["list"] if a["colors"] == pair]
     others = [a for a in found["list"] if a["colors"] != pair]
-    body = (_archetype_html(main[0]) if main else
-            '<div class="note" style="margin-top:4px">' + t("Das Deck hat kein Farbpaar als Hauptfarben (weniger als "
-                                                            "zwei Farben).") + '</div>')
+    if main:
+        body = _archetype_html(main[0])
+    elif pair:  # SOS: nur die fuenf Colleges haben eigene Archetypen
+        body = ('<div class="note" style="margin-top:4px">' + t("Für die Hauptfarben {pair} hat das Set keinen eigenen "
+                                                                "Archetyp.", pair=arch.pair_label(pair)) + '</div>')
+    else:
+        body = ('<div class="note" style="margin-top:4px">' + t("Das Deck hat kein Farbpaar als Hauptfarben (weniger "
+                                                                "als zwei Farben).") + '</div>')
     rest = "".join(f'<div style="margin:3px 0">{_archetype_html(a, tips=False)}</div>' for a in others)
     return ('<div class="panel"><b>' + t("Archetyp ({set})", set=esc(found["set"])) + '</b>'
             f'<div style="margin-top:8px">{body}</div>' + _assignment_html(ctx, found["list"]) +

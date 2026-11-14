@@ -123,6 +123,7 @@ EN = {
     'Erfüllung = 1 − (1 − p)<sup>k</sup> mit k Geber-Einheiten im Deck (ohne die eigene Kopie): der dritte Geber bringt weniger als der erste. Punkte = Gewicht × Erfüllung × Anzahl. Länder zählen nicht.': "Fulfillment = 1 − (1 − p)<sup>k</sup> with k giver units in the deck (not counting the card's own copy): the third giver adds less than the first. Points = weight × fulfillment × quantity. Lands do not count.",
     'Erkannt aus Zuordnung, Farben und Kategorien: {detected}': 'Recognized from assignment, colors and categories: {detected}',
     'Das Deck hat kein Farbpaar als Hauptfarben (weniger als zwei Farben).': 'The deck has no color pair as main colors (fewer than two colors).',
+    'Für die Hauptfarben {pair} hat das Set keinen eigenen Archetyp.': 'The set has no archetype of its own for the main colors {pair}.',
     'keine': 'none',
     'Mehrfarbige gesondert': 'Multicolor shown separately',
     'Je Farbe': 'Per color',
@@ -295,6 +296,20 @@ LOCAL = {
     'Kämpfe mit Removal und Tricks gewinnen.': 'Win fights with removal and tricks.',
     'Aufs späte Spiel auslegen.': 'Build for the late game.',
     'Defensive Karten bevorzugen.': 'Prefer defensive cards.',
+    # SOS Paket A
+    "Zauber, die eine Kreatur als Ziel haben, lösen Repartee aus.": "Spells that target a creature trigger Repartee.",
+    "Billige Tricks und Removal bevorzugen.": "Prefer cheap tricks and removal.",
+    "Kreaturen mit Flying oder Menace halten den Druck aufrecht.": "Creatures with Flying or Menace keep up the pressure.",
+    "Viele Instants und Sorceries spielen (Opus).": "Play lots of instants and sorceries (Opus).",
+    "Zauber ab 5 Mana lösen die starken Opus-Effekte aus.": "Spells with 5 or more mana trigger the strong Opus effects.",
+    "Leben gewinnen schaltet Infusion frei.": "Gaining life turns on Infusion.",
+    "Pest-Token und kleine Lifegain-Quellen sind viel wert.": "Pest tokens and small lifegain sources are worth a lot.",
+    "Zäh und aufs späte Spiel ausgelegt.": "Resilient and built for the late game.",
+    "Karten, die den Friedhof verlassen, lösen Synergien aus.": "Cards leaving the graveyard trigger synergies.",
+    "Aggressiv spielen und mit Value aus dem Friedhof nachlegen.": "Play aggressively and follow up with value from the graveyard.",
+    "Increment: Zauber mit mehr Mana als Stärke oder Widerstand lassen Kreaturen wachsen.": "Increment: spells with more mana than a creature's power or toughness make it grow.",
+    "Fractal-Token und +1/+1 counters.": "Fractal tokens and +1/+1 counters.",
+    "X-Zauber skalieren ins späte Spiel.": "X spells scale into the late game.",
 }
 
 

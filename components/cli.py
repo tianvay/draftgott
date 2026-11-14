@@ -40,7 +40,7 @@ def parse_args(argv=None):
                     help="Setauswertung: die Draft-Statistik eines Sets als HTML-Seite setauswertung_<set>.html "
                          "(ohne SET: das Set mit den meisten Drafts)")
     ap.add_argument("--set-bewerten", nargs="?", const="", default=None, metavar="SET",
-                    help="Set bewerten: Seite im Browser, auf der man je Karte eines fertig umgesetzten Sets (TRK, FRA) "
+                    help="Set bewerten: Seite im Browser, auf der man je Karte eines fertig umgesetzten Sets (TRK, FRA, SOS) "
                          "Kategorie und Archetypen einmal festlegt (ohne SET: Auswahl auf der Seite)")
     ap.add_argument("--neu-laden", action="store_true",
                     help="Kartendaten neu von Scryfall laden und den lokalen Cache (scryfall_cache.json) ueberschreiben")

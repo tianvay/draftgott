@@ -402,8 +402,8 @@ EN = {
         'The state is remembered in the browser, per content of the pool file: a different pool starts fresh.',
     'Archetypen des Sets':
         'Archetypes of the set',
-    'Sind für das Set des Pools Archetypen hinterlegt (derzeit TRK und FRA), stehen sie über den Karten: je Farbpaar der englische Titel und Hinweise zum Deckbau. Das Set ist das häufigste Set der Nicht-Länder im Pool.':
-        "If archetypes are stored for the pool's set (currently TRK and FRA), they are shown above the cards: per color pair the English title and deck-building hints. The set is the most common set of the nonlands in the pool.",
+    'Sind für das Set des Pools Archetypen hinterlegt (derzeit TRK, FRA und SOS), stehen sie über den Karten: je Farbpaar der englische Titel und Hinweise zum Deckbau. Das Set ist das häufigste Set der Nicht-Länder im Pool.':
+        "If archetypes are stored for the pool's set (currently TRK, FRA and SOS), they are shown above the cards: per color pair the English title and deck-building hints. The set is the most common set of the nonlands in the pool.",
     'Hervorgehoben ist der Archetyp der Core-Farben: die zwei Farben mit den meisten Core-Karten (Kopien, ohne Länder, mehrfarbige zählen für jede ihrer Farben). Der Bericht zeigt im Abschnitt „Deck“ denselben Archetyp, dort nach den Nicht-Länder-Karten des Decks.':
         'Highlighted is the archetype of the Core colors: the two colors with the most Core cards (copies, without lands, multicolor cards count for each of their colors). In the “Deck” section the report shows the same archetype, there by the nonland cards of the deck.',
     'Der Kasten lässt sich zuklappen; der Browser merkt sich das. Neue Sets werden in <code>components/archetypes.py</code> ergänzt.':

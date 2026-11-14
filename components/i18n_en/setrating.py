@@ -67,11 +67,11 @@ EN = {
     "Set {code} konnte nicht geladen werden (Scryfall)": "Set {code} could not be loaded (Scryfall)",
     # Hilfe (components/howitworks.py)
     "Menüpunkt <b>5</b> in <code>draftgott.bat</code> oder <code>python mtg_sim.py --set-bewerten [SET]</code>: "
-    "eigene Seite im Browser. Zuerst ein fertig umgesetztes Set wählen (alle Sets mit Archetypen, derzeit TRK und "
-    "FRA), dann je Karte Kategorie und Archetypen festlegen.":
+    "eigene Seite im Browser. Zuerst ein fertig umgesetztes Set wählen (alle Sets mit Archetypen, derzeit TRK, FRA "
+    "und SOS), dann je Karte Kategorie und Archetypen festlegen.":
         "Menu item <b>5</b> in <code>draftgott.bat</code> or <code>python mtg_sim.py --set-bewerten [SET]</code>: a "
         "page of its own in the browser. First choose a fully supported set (all sets with archetypes, currently "
-        "TRK and FRA), then set the category and archetypes of each card.",
+        "TRK, FRA and SOS), then set the category and archetypes of each card.",
     "Kategorie per Knopf (♛ Matchwinner bis NP NeverPlay) oder mit der Tastatur: Maus auf die Karte, Taste 1 bis 6, "
     "0 entfernt. Archetypen per Klick: neutral → grün (passt gut) → lila (bester Archetyp) → neutral.":
         "Category by button (♛ Matchwinner to NP NeverPlay) or by keyboard: hover over the card, key 1 to 6, 0 "

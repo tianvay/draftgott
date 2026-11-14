@@ -117,7 +117,7 @@ a message describing what the file must look like.
   edited by hand. With `--bewertung FILE` a different file is used (e.g. one per user). Categories from older
   browser storage are imported once on the first start. Assignment, basic lands, target size and
   colors are still remembered by the browser per pool.
-- **Archetypes of the set:** If archetypes are stored in `components/archetypes.py` for the set of the pool (most common set of the non-lands; currently TRK and FRA), the page shows them above the cards with deck-building hints; the archetype of the core colors (the two colors with the most Core cards) is
+- **Archetypes of the set:** If archetypes are stored in `components/archetypes.py` for the set of the pool (most common set of the non-lands; currently TRK, FRA and SOS), the page shows them above the cards with deck-building hints; the archetype of the core colors (the two colors with the most Core cards) is
   highlighted. In the “Deck” section the report shows the archetype of the deck's main colors.
 - **Deck proposal (a separate third deck):** Above the cards are the **target size** (default 40, selectable 10 to 200,
   all lands count), the **colors** (W U B R G, preset to the colors of the core) and the button
@@ -436,7 +436,7 @@ activation per turn are fixed in the script (see “Fixed assumptions”).
 | `--statistik FILE` | `draftstatistik.json` | Draft statistics of the live draft (not in Git). |
 | `--statistik-neu` | | Rebuild the draft statistics from `Player-prev.log` and `Player.log` (old file saved as `draftstatistik.backup.json`). |
 | `--setauswertung [SET]` | | Set report as an HTML page `setauswertung_<set>.html` (without SET: the set with the most drafts). |
-| `--set-bewerten [SET]` | | Rate a set: page to set the category and archetypes of every card of a fully supported set (TRK, FRA) (without SET: choose on the page). |
+| `--set-bewerten [SET]` | | Rate a set: page to set the category and archetypes of every card of a fully supported set (TRK, FRA, SOS) (without SET: choose on the page). |
 | `--neu-laden` | off | Card data is stored in `scryfall_cache.json` next to the script, and on later runs only unknown cards are fetched. With `--neu-laden`, everything is fetched fresh from Scryfall. |
 | `--ausgabe FILE` (also `--html FILE`) | `mtg_bericht.html` | Name and location of the HTML report. An existing file is overwritten. |
 | `--nicht-oeffnen` | off (report is opened) | The report is only saved; the browser does not open. |
@@ -660,6 +660,10 @@ full log. The rules of the battle model are described in detail at the end of th
   beginning of combat, attack triggers with keywords, and general “Whenever you cast …” triggers (repartee, opus,
   noncreature, type, and color spells), Vehicles with crew (attacking and blocking), and “tap target creature defending
   player controls” on attack.
+- Secrets of Strixhaven (SOS), package A: archetypes of the five colleges; drain on entering and attacking (life
+  loss, not damage), loot with two cards, rummage on entering, tapping with stun counters (Rapier Wit, Procrastinate,
+  Fractal Mascot), countering creature spells, a keyword of your choice (Practiced Offense), discarding as an
+  additional cost. More SOS packages will follow; until then, open cards only have their already modelled effects.
 - Alchemy: Reality Fracture (YFRA), package A: perpetual, conjuring named cards, seek (Killian), Avoided
   Stairwurm, Zimone, Dina, Asymmetry Sage, Sparks Ablaze, Paradox Kraken, Boisterous Clique, Searing Soloist
   (cards to conjure are in `components/conjure.py`).
