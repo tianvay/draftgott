@@ -443,6 +443,11 @@ def _live_help():
             "Removal-Punkten. Aktivierbare Fähigkeiten auf dem Feld zählen nicht, ebenso wenig Mana aus Kreaturen "
             "oder Treasure."),
             t("Die Liste ändert sich mit jedem Land, das er spielt oder tappt."),
+            t("Es stehen nur Tricks da, die zählen: Tricks ohne Kampfwirkung (nur Karten ziehen, abwerfen, Surveil, "
+            "Scry, Mill, Lebenspunkte oder Friedhof) fallen weg. Hat der Gegner keine Kreatur auf dem Feld, fallen "
+            "auch Tricks weg, die eine eigene Kreatur brauchen (Pump, Schutz, Auren, Blinken, Opfern als "
+            "Zusatzkosten). Flash-Kreaturen bleiben immer (überraschender Blocker), ebenso Removal, Tappen und "
+            "Konter. Bei mehreren Modi zählt der stärkste. Eine Zeile „Ausgeblendet: …“ sagt, wie viele fehlen."),
             t("Die Kopfzeile nennt die Zahl seiner Handkarten. Hat der Gegner keine Handkarten, kann er keine Tricks "
             "wirken: Dann steht dort nur „Gegner hat keine Handkarten: keine Tricks“, minimiert „Gegner ohne "
             "Handkarten“."),

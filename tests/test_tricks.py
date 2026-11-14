@@ -172,7 +172,9 @@ class LiveTests(unittest.TestCase):
             t = live.snapshot({"Bolt R": "mustplay"}, {}, None)["game"]["tricks"]
             self.assertEqual(asked, ["tst"])
             self.assertEqual(t["open"], 2)
-            self.assertIn("Trick W", [c["name"] for c in t["now"]])
+            # Nutzer 14.11.2026: ohne Kreatur des Gegners keine Pump-Tricks mehr (Trick W), Trick 1W bleibt
+            self.assertNotIn("Trick W", [c["name"] for c in t["now"]])
+            self.assertIn("Trick 1W", [c["name"] for c in t["now"]])
             self.assertEqual(next(c for c in t["next"] if c["name"] == "Bolt R")["rating"], "mustplay")
             live.step()
             live.snapshot({}, {}, None)

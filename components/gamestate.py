@@ -82,6 +82,7 @@ class GameState:
                     "grp": o.get("grpId"), "owner": o.get("ownerSeatId"),
                     "controller": o.get("controllerSeatId", o.get("ownerSeatId")),
                     "land": "CardType_Land" in (o.get("cardTypes") or []), "tapped": bool(o.get("isTapped")),
+                    "creature": "CardType_Creature" in (o.get("cardTypes") or []),
                     "subtypes": [s for s in o.get("subtypes") or [] if isinstance(s, str)],
                     "colors": [COLOR_CODES[c] for c in o.get("color") or [] if c in COLOR_CODES]}
         for iid in g.get("diffDeletedInstanceIds") or []:
@@ -164,6 +165,11 @@ class GameState:
 
     def _opponent(self, o):
         return o is not None and self.seat is not None and o["controller"] is not None and o["controller"] != self.seat
+
+    def opponent_creatures(self):
+        """Zahl der Kreaturen, die der Gegner auf dem Spielfeld kontrolliert."""
+        return sum(1 for z in self.zones.values() if z["type"] == "ZoneType_Battlefield" for iid in z["ids"]
+                   if self._opponent(self.objects.get(iid)) and self.objects[iid].get("creature"))
 
     def opponent_lands(self):
         """Laender des Gegners auf dem Spielfeld: [{"grp", "tapped", "subtypes"}]."""

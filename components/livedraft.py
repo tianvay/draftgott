@@ -436,7 +436,7 @@ class LiveDraft:
         code = self._game_set()
         if code not in self.tricks:
             return None
-        view = tricks.tricks_view(self.game, self._card, self.tricks[code])
+        view = tricks.tricks_view(self.game, self._card, self.tricks[code], relevant_only=True)
         for part in ("now", "next"):
             view[part] = [dict(t, rating=(ratings or {}).get(t["name"], "")) for t in view[part]]
         return view

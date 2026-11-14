@@ -1948,6 +1948,10 @@ function renderTricks(box,t){
   else if(!t.open)d.appendChild(el("div","lmsg","Kein Mana offen: jetzt keine Tricks."));
   else if(!t.now.length)d.appendChild(el("div","lmsg","Keine Instants oder Flash-Karten mit diesem Mana."));
   else d.appendChild(list(t.now));
+  const hd=t.hidden||{},hp=[];  // tricks.tricks_view(relevant_only): ausgeblendete Tricks
+  if(hd.none)hp.push(hd.none+" ohne Kampfwirkung");
+  if(hd.own)hp.push(hd.own+(hd.own===1?" braucht":" brauchen")+" eigene Kreatur (Gegner hat keine)");
+  if(hp.length&&t.hand!==0)d.appendChild(el("div","lmsg","Ausgeblendet: "+hp.join(" · ")));
   box.appendChild(d)}
 $("ldeck").onclick=async()=>{let r=null;try{r=await api("/api/live/deck",{})}catch(e){}
   if(!r||!r.ok){showErr("Deck nicht übernommen: "+((r&&r.error)||"Fehler"));return}

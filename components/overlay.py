@@ -196,6 +196,15 @@ def trick_rows(tr):
     for label, cards in _trick_groups(tr["now"]):
         rows.append((t(label, n=len(cards)), "group"))
         rows += [("• " + _trick_text(c), "arch" if c.get("removal") else "color") for c in cards]
+    hidden = tr.get("hidden") or {}
+    parts = []
+    if hidden.get("none"):
+        parts.append(t("{n} ohne Kampfwirkung", n=hidden["none"]))
+    if hidden.get("own"):
+        parts.append(t("1 braucht eigene Kreatur (Gegner hat keine)") if hidden["own"] == 1 else
+                     t("{n} brauchen eigene Kreatur (Gegner hat keine)", n=hidden["own"]))
+    if parts and tr.get("hand") != 0:  # Nutzer 14.11.2026: nur Tricks, die zaehlen
+        rows.append((t("Ausgeblendet: ") + " · ".join(parts), "sub"))
     return rows
 
 

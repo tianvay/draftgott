@@ -95,4 +95,8 @@ EN = {
     "Hand {n}": "hand {n}",
     "Gegner hat keine Handkarten: keine Tricks": "Opponent has no cards in hand: no tricks",
     "Gegner ohne Handkarten": "Opponent: no cards in hand",
+    "{n} ohne Kampfwirkung": "{n} without combat effect",
+    "1 braucht eigene Kreatur (Gegner hat keine)": "1 needs own creature (opponent has none)",
+    "{n} brauchen eigene Kreatur (Gegner hat keine)": "{n} need own creature (opponent has none)",
+    "Ausgeblendet: ": "Hidden: ",
 }
