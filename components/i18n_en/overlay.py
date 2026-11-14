@@ -48,6 +48,7 @@ EN = {
     "Farben": "Colors",
     "Bomben: ": "Bombs: ",
     "Kreatur": "Creature",
+    "Spielbare Bombe": "Castable bomb",
     "Tricks {n} · offen {open}": "Tricks {n} · open {open}",
     "Kreaturen {c} · Removal {r}": "Creatures {c} · Removal {r}",
     "offen": "open",

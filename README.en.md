@@ -245,7 +245,7 @@ In Arena, “Detailed Logs (Plugin Support)” must be enabled under Options →
   pack (wheel, +2), lies late in the pack (at least 3 other players, +1) or was taken by others
   (contested, −1). Pick Two is detected by two cards per pick; the wheel by an earlier pack coming back.
 - **Minimize overlay:** Button at the top right or double-click: small box with the odds for removal, land
-  and creature (in the draft pick, archetype, best card). In game the “Use deck + sideboard” button is hidden.
+  and creature, with a bomb in the deck also for a castable bomb (in the draft pick, archetype, best card). In game the “Use deck + sideboard” button is hidden.
 - **Deck overview after the draft:** After the draft and between games the overlay shows, instead of “Pick 43”,
   archetype and record, cards/lands/spells with avg mana value, mana curve, creatures, removal, card flow, spells per
   color and the bombs (Matchwinner only) of the main deck submitted in Arena (before that: of all picks).

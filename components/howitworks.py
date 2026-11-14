@@ -473,7 +473,8 @@ def _live_help():
             "tragen einen Haken."),
             t("Im Spiel ist der Knopf „Deck + Sideboard übernehmen“ ausgeblendet."),
             t("Das Seitenfenster lässt sich mit dem Knopf oben rechts (oder einem Doppelklick) zu einem kleinen Kasten "
-            "minimieren: im Spiel nur die Chancen auf Removal, Land und Kreatur für die nächste Karte, im Draft Pick, "
+            "minimieren: im Spiel nur die Chancen auf Removal, Land und Kreatur für die nächste Karte (hat das Deck eine "
+            "Bombe, auch auf eine spielbare: ♛ Matchwinner, mit den Ländern auf dem Feld bezahlbar), im Draft Pick, "
             "Archetyp und beste Karte. Noch einmal klicken klappt es in der alten Größe wieder auf."),
             t("Nach dem Draft und zwischen den Spielen zeigt das Seitenfenster statt „Pick 43“ eine kurze "
             "<b>Deck-Übersicht</b>: Archetyp und Bilanz (Siege–Niederlagen), Karten, Länder und Zauber mit Ø Manawert, "

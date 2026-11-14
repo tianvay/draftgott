@@ -248,7 +248,7 @@ In Arena muss unter Optionen → Konto „Detailed Logs (Plugin Support)“ eing
   Pack zurückkommt (Wheel, +2), spät im Pack liegt (mindestens 3 andere Spieler, +1) oder von anderen genommen wurde
   (umkämpft, −1). Pick Two wird an zwei Karten je Pick erkannt; das Wheel daran, dass ein früheres Pack wiederkommt.
 - **Seitenfenster minimieren:** Knopf oben rechts oder Doppelklick: kleiner Kasten mit den Chancen auf Removal, Land
-  und Kreatur (im Draft Pick, Archetyp, beste Karte). Im Spiel ist der Knopf „Deck übernehmen“ ausgeblendet.
+  und Kreatur, mit Bombe im Deck auch auf eine spielbare Bombe (im Draft Pick, Archetyp, beste Karte). Im Spiel ist der Knopf „Deck übernehmen“ ausgeblendet.
 - **Deck-Übersicht nach dem Draft:** Nach dem Draft und zwischen den Spielen zeigt das Seitenfenster statt „Pick 43“
   Archetyp und Bilanz, Karten/Länder/Zauber mit Ø Manawert, Mana-Kurve, Kreaturen, Removal, Kartenfluss, Zauber je
   Farbe und die Bomben (nur Matchwinner) des in Arena abgegebenen Hauptdecks (vorher: aller Picks).

@@ -470,7 +470,7 @@ class LiveDraft:
         Draft-Statistik, sie kommen als "stats" an die Pack-Karten; best: bester Archetyp je Karte (Hinweis "hints"
         auf Karten ab MustPlay, wenn wir in ihrem besten Archetyp oder nahe dran sind)."""
         with self.lock:
-            game = gamestate.game_view(self.game, {g: self._card(g) for g in self.game.deck if self._card(g)})
+            game = gamestate.game_view(self.game, {g: self._card(g) for g in self.game.deck if self._card(g)}, ratings)
             if game.get("active"):
                 game["tricks"] = self._tricks_view(ratings)
             if not self.log_path.exists():

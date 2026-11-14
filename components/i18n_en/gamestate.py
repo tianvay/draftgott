@@ -6,4 +6,5 @@ EN = {
     "Kreatur": "Creature",
     "Removal": "Removal",
     "{color}-Quelle": "{color} source",
+    "Spielbare Bombe": "Castable bomb",
 }

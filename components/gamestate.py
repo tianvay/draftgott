@@ -201,9 +201,14 @@ def _group(key, label, n, library):
             "in3": at_least_one(n, library, LOOK_AHEAD)}
 
 
-def game_view(game, info):
-    """Anzeige fuer Seite und Seitenfenster; info: {Arena-Nummer: Kartendaten (livedraft.card_summary)}.
-    Gruppen: Land, Kreatur, Removal und je Farbe die Quellen (Laender, die die Farbe erzeugen)."""
+BOMB_RATINGS = ("matchwinner",)  # Bomben wie in der Deck-Uebersicht (livedraft.TOP_RATINGS)
+
+
+def game_view(game, info, ratings=None):
+    """Anzeige fuer Seite und Seitenfenster; info: {Arena-Nummer: Kartendaten (livedraft.card_summary)}; ratings:
+    eigene Bewertung je Kartenname. Gruppen: Spielbar, Land, Kreatur, Removal, Spielbare Bombe (nur wenn das Deck eine
+    Bombe hat: Bomben, die mit den Laendern auf dem Spielfeld bezahlbar sind) und je Farbe die Quellen (Laender, die
+    die Farbe erzeugen)."""
     if not game.active:
         return {"active": False}
     library, remaining = game.library()
@@ -227,6 +232,14 @@ def game_view(game, info):
     groups = [_group("castable", t("Spielbar"), castable, library),
               _group("land", t("Land"), lands, library), _group("creature", t("Kreatur"), creatures, library),
               _group("removal", t("Removal"), removal, library)]
+    ratings = ratings or {}
+
+    def bomb(grp):
+        return ratings.get(card(grp)["name"]) in BOMB_RATINGS
+
+    if any(bomb(g) for g in game.deck):
+        groups.append(_group("bomb", t("Spielbare Bombe"),
+                             sum(remaining[g] for g in castable_grps if bomb(g)), library))
     deck_colors = set()
     for g in game.deck:
         c = card(g)

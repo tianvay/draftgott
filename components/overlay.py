@@ -5,7 +5,7 @@ Holt ein Deck die hoechste Zahl an Siegen seines Formats (Gegnerdeck gespeichert
 (celebrate) und meldet die Aufnahme in die "Hall of Fame" der Gegnerdecks.
 
 Der Knopf oben rechts (oder ein Doppelklick ins Fenster) minimiert es zu einem kleinen Kasten (mini_rows): im Spiel
-nur die Chancen auf Removal, Land und Kreatur, im Draft Pick, Archetyp und beste Karte, nach dem Draft Bilanz,
+nur die Chancen auf Removal, Land, Kreatur und spielbare Bombe, im Draft Pick, Archetyp und beste Karte, nach dem Draft Bilanz,
 Kreaturen, Removal und die Bomben.
 
 Top-Pick (hint_rows): Karten ab MustPlay, deren bester Archetyp unserer ist oder nahe dran (snap["hints"]), stehen
@@ -327,7 +327,7 @@ def game_rows(g):
                  t(" · Spielbar = mit diesen Ländern bezahlbar"), "sub"))
     rows.append((t("Chance nächste Karte · in den nächsten 3 Karten"), "sub"))
     for grp in g.get("groups") or []:
-        tag = {"land": "color", "removal": "arch", "castable": "head2"}.get(grp["key"], "plain")
+        tag = {"land": "color", "removal": "arch", "castable": "head2", "bomb": "hint"}.get(grp["key"], "plain")
         rows.append((t("{label}: {n} übrig  ·  {next}  ·  {in3}", label=grp['label'], n=grp['n'],
                        next=_pct(grp['next']), in3=_pct(grp['in3'])), tag))
     rem = g.get("removal") or {}
@@ -397,12 +397,12 @@ def summary_rows(s):
     return rows
 
 
-MINI_KEYS = (("removal", "Removal"), ("land", "Land"), ("creature", "Kreatur"))
+MINI_KEYS = (("removal", "Removal"), ("land", "Land"), ("creature", "Kreatur"), ("bomb", "Spielbare Bombe"))
 MINI_TAGS = ("arch", "color", "best", "hint", "plain", "head", "warn")  # Stile mit eigener Kasten-Form (mini_*)
 
 
 def mini_rows(snap, slim=False):
-    """Kleiner Kasten (minimiert): im Spiel die Chancen auf Removal, Land und Kreatur fuer die naechste Karte, im Draft
+    """Kleiner Kasten (minimiert): im Spiel die Chancen auf Removal, Land, Kreatur und spielbare Bombe fuer die naechste Karte, im Draft
     Pick, Archetyp und die beste Karte des Packs (slim: Karten-Overlay zeigt das Pack, dann ohne Top-Pick und beste
     Karte)."""
     if not snap:
@@ -410,7 +410,7 @@ def mini_rows(snap, slim=False):
     g = snap.get("game") or {}
     if g.get("active"):
         by = {r["key"]: r for r in g.get("groups") or []}
-        rows = [(f"{t(label)} {_pct(by[key]['next'])}", {"land": "color", "removal": "arch"}.get(key, "plain"))
+        rows = [(f"{t(label)} {_pct(by[key]['next'])}", {"land": "color", "removal": "arch", "bomb": "hint"}.get(key, "plain"))
                 for key, label in MINI_KEYS if key in by]
         tr = g.get("tricks")
         if tr and tr.get("hand") == 0:
