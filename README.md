@@ -673,8 +673,10 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
   als Zusatzkosten. Paket B (Prepared): Kreaturen werden auch durch Auslöser prepared (Angriff, Landfall,
   Kreaturzauber, Token, erstes Leben im Zug, dritter Zauber, Friedhof verlassen, Main Phase, Endsegment, Upkeep,
   Tap-Fähigkeit), Instant-Hälften werden als Kopie gewirkt (Removal, Ziehen am Ende des gegnerischen Zugs, Jump vor
-  dem Angriff), dazu Brainstorm, Demonic Tutor, Regrowth, Reanimate und Biblioplex Tomekeeper. Weitere SOS-Pakete
-  folgen; bis dahin wirken offene Karten nur mit den schon modellierten
+  dem Angriff), dazu Brainstorm, Demonic Tutor, Regrowth, Reanimate und Biblioplex Tomekeeper. Paket C (Leben,
+  Infusion): Pest-Token mit Lebensgewinn beim Angriff, Lebensgewinn-Auslöser (Comforting Counsel, Blech),
+  Lebensentzug beim Tod eigener Kreaturen, Infusion (Foolish Fate, Poisoner's Apprentice, Old-Growth Educator,
+  Efflorescence, Moseo, Tragedy Feaster, Follow the Lumarets) und Stream of Life. Weitere SOS-Pakete folgen; bis dahin wirken offene Karten nur mit den schon modellierten
   Effekten.
 - Alchemy: Reality Fracture (YFRA), Paket A: Perpetual, Conjure benannter Karten, Seek (Killian), Avoided
   Stairwurm, Zimone, Dina, Asymmetry Sage, Sparks Ablaze, Paradox Kraken, Boisterous Clique, Searing Soloist

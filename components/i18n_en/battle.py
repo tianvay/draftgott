@@ -360,6 +360,10 @@ EN = {
     "{me}: {card_name} – {target_name} nicht mehr prepared": "{me}: {card_name} – {target_name} no longer prepared",
     "{me}: {card_name} exiliert {pick_name} aus dem Friedhof": "{me}: {card_name} exiles {pick_name} from the graveyard",
     "{me}: {card_name} holt {pick_name} (verliert {n} Leben)": "{me}: {card_name} brings back {pick_name} (loses {n} life)",
+    # SOS Paket C
+    "{me}: {c_card_name} zieht {n}": "{me}: {c_card_name} draws {n}",
+    "{me}: {c_card_name} – opfert {land_name}": "{me}: {c_card_name} – sacrifices {land_name}",
+    "{me}: {card_name} – {target_name} -{n}/-{n}": "{me}: {card_name} – {target_name} -{n}/-{n}",
     "{me}: {a_card_name} – Gegner verliert {loss}, {life} Leben": "{me}: {a_card_name} – opponent loses {loss}, {life} life",
     # Namen der Spieler im Protokoll
     "Wir": "We",

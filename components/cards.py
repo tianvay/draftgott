@@ -516,6 +516,19 @@ class Card(NamedTuple):
     reanimate_any: bool = False  # Kreaturenkarte aus irgendeinem Friedhof aufs Feld, Leben = Manawert (Reanimate)
     tomekeeper: bool = False  # Betreten: eine Kreatur prepared oder unprepared machen (Biblioplex Tomekeeper)
     opp_draws: int = 0  # der Gegner zieht N Karten ("you and target opponent each draw", Secret Rendezvous)
+    # SOS Paket C (Leben, Infusion)
+    growth_counter: bool = False  # Lebensgewinn: Wachstumsmarke (Comforting Counsel; Statik ueber cond_static "growth")
+    lifegain_counter_types: tuple = ()  # Lebensgewinn: (N Marken, Kreaturtypen) auf jede eigene Kreatur dieser Typen
+    death_drain: tuple = ()  # eigene Kreatur stirbt: (Lebensverlust Gegner, Leben, nur Power/Toughness <= 1)
+    end_death_draw: int = 0  # eigenes Endsegment: N ziehen, wenn in diesem Zug eine eigene Kreatur starb
+    infusion_loss: int = 0  # Removal: mit Lebensgewinn verliert der Kontrolleur N Leben (Foolish Fate)
+    infusion_debuff: int = 0  # Betreten mit Lebensgewinn: gegnerische Kreatur -N/-N (Poisoner's Apprentice)
+    infusion_counters: int = 0  # Betreten mit Lebensgewinn: N Marken auf sich (Old-Growth Educator)
+    infusion_kw: tuple = ()  # Kampftrick mit Lebensgewinn: dazu diese Schluesselwoerter (Efflorescence)
+    infusion_sacrifice: bool = False  # eigenes Endsegment ohne Lebensgewinn: ein Permanent opfern (Tragedy Feaster)
+    infusion_reanimate: bool = False  # eigenes Endsegment mit Lebensgewinn: Kreatur bis MW = Leben zurueck (Moseo)
+    dig_infusion: bool = False  # top_dig: mit Lebensgewinn zwei statt einer Karte (Follow the Lumarets)
+    x_life: bool = False  # "Target player gains X life": wir, X = freies Mana (Stream of Life)
 
 
 LANDCYCLE_RE = re.compile(

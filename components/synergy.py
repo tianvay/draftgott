@@ -83,6 +83,7 @@ GIVES = {
     "equip_attack_life": (("lifegain", 2),), "gy_bottom_life": (("lifegain", 1),), "discard_life": (("lifegain", 1),),
     "tell_me": (("lifegain", 1), ("surveil", 1)), "georgiou": (("lifegain", 1),), "tea_ability": (("lifegain", 1),),
     "attack_life": (("lifegain", 2),),  # SOS Paket A
+    "x_life": (("lifegain", 1),), "death_drain": (("lifegain", 2),),  # SOS Paket C
     # Surveil
     "surveil": (("surveil", 1), ("graveyard", 0.5)), "upkeep_surveil": (("surveil", 2), ("graveyard", 1)),
     "enter_surveil": (("surveil", 2),), "sac_surveil": (("surveil", 1),), "equip_attack_surveil": (("surveil", 2),),
@@ -159,6 +160,11 @@ WANTS = {
     "lifegain_loyalty": (("lifegain", 1),), "confidant": (("lifegain", 1.5),), "lifegain_lotus": (("lifegain", 1),),
     "lifegain_perpetual": (("lifegain", 1),), "double_life_draw": (("lifegain", 1),), "life_tokens": (("lifegain", 1),),
     "lifegain_double": (("lifegain", 1.5),),
+    # SOS Paket C: Lebensgewinn-Ausloeser und Infusion wollen Lebensgewinn
+    "growth_counter": (("lifegain", 1.5),), "lifegain_counter_types": (("lifegain", 1.5),),
+    "infusion_loss": (("lifegain", 1),), "infusion_debuff": (("lifegain", 1),), "infusion_counters": (("lifegain", 1),),
+    "infusion_kw": (("lifegain", 1),), "infusion_sacrifice": (("lifegain", 1.5),),
+    "infusion_reanimate": (("lifegain", 1),), "dig_infusion": (("lifegain", 1),),
     # Nichtkreatur-Zauber
     "prowess": (("spells", 1),), "cast_counter": (("spells", 1.5),), "cast_token": (("spells", 1.5),),
     "spell_discount": (("spells", 1),), "data_counter": (("spells", 1),), "cast_untap": (("spells", 0.5),),
@@ -237,6 +243,7 @@ NEUTRAL = (
     "self_damage", "is_instant", "flash", "removal", "discard", "abilities", "combat_draw", "gy_ability_sorcery",
     "combat_draw_loss", "tap_spell", "kw_choice",  # SOS Paket A
     "prepare_on", "brainstorm", "reanimate_any", "tomekeeper", "opp_draws",  # SOS Paket B
+    "end_death_draw",  # SOS Paket C
     "is_token", "sac_mana", "opp_spell_tax", "extra_cost", "hexproof_until_damage", "alt_draws",
     "finality", "combat_land_return", "domain_power", "x_search_basics", "choices", "is_mode", "removal_exile",
     "removal_points", "hand_pick", "attack_exile_gy", "own_turn_kw", "debuff", "impulse",

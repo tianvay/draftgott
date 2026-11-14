@@ -8,7 +8,7 @@ gelesene Card, damit Ziehen und Leben dazugezaehlt statt ersetzt werden).
 """
 import re
 
-from components.cards import GRANTABLE, _clean_lines, _count
+from components.cards import GRANTABLE, _clean_lines, _count, grant_list, token_card
 
 _ETB = r"^when (?:~|this [a-z]+) enters, "
 _SELF = r"(?:~|this creature)"
@@ -88,6 +88,100 @@ _TOMEKEEPER_HEAD = re.compile(r"^when (?:~|this creature) enters, choose up to o
 _TOMEKEEPER_BULLETS = ("target creature becomes prepared.", "target creature becomes unprepared.")
 
 
+PEST = token_card("Pest", creature=True, power=1, toughness=1, artifact=False, types=("pest",))._replace(
+    attack_life=(0, 1))
+_PEST = (r"create (a|two|three) 1/1 black and green pest creature tokens? with \"whenever this token attacks, you gain "
+         r"1 life\.\"")
+_INF = r"^infusion — "
+# Paket C: Leben und Infusion
+_LIFE_RES = {
+    "pest_etb": re.compile(_ETB + _PEST + "$"),
+    "pest_dies": re.compile(r"^when (?:~|this creature) dies, " + _PEST + "$"),
+    "pest_spell": re.compile("^" + _PEST + "$"),
+    "self_or_ally_life": re.compile(rf"^whenever {_SELF} or another creature you control enters, you gain (\d+) "
+                                    r"life\.$"),
+    "growth_counter": re.compile(r"^whenever you gain life, put a growth counter on this enchantment\.$"),
+    "growth_anthem": re.compile(r"^as long as there are (two|three|four|five|six|seven|\d+) or more growth counters on "
+                                r"this enchantment, creatures you control get \+(\d+)/\+(\d+)\.$"),
+    "lifegain_types": re.compile(r"^whenever you gain life, put (a|one|two) \+1/\+1 counters? on each ([a-z, ]+) you "
+                                 r"control\.$"),
+    "death_drain": re.compile(r"^whenever a creature you control (with power or toughness 1 or less )?dies, "
+                              r"(?:target|each) opponent loses (\d+) life and you gain (\d+) life\.$"),
+    "end_death_draw": re.compile(r"^at the beginning of your end step, if a creature died under your control this "
+                                 r"turn, draw (a|one|two) cards?\.$"),
+    "infusion_loss": re.compile(_INF + r"if you gained life this turn, that creature's controller loses (\d+) life\.$"),
+    "infusion_debuff": re.compile(_INF + r"when (?:~|this creature) enters, target creature an opponent controls gets "
+                                  r"-(\d+)/-\1 until end of turn if you gained life this turn\.$"),
+    "infusion_counters": re.compile(_INF + r"when (?:~|this creature) enters, put (a|one|two|three) \+1/\+1 counters? "
+                                    r"on it if you gained life this turn\.$"),
+    "infusion_kw": re.compile(_INF + r"if you gained life this turn, that creature also gains ([a-z ,]+?) until end of "
+                              r"turn\.$"),
+    "infusion_sacrifice": re.compile(_INF + r"at the beginning of your end step, sacrifice a permanent unless you "
+                                     r"gained life this turn\.$"),
+    "infusion_reanimate": re.compile(_INF + r"at the beginning of your end step, if you gained life this turn, return "
+                                     r"up to one target creature card with mana value x or less from your graveyard to "
+                                     r"the battlefield, where x is the amount of life you gained this turn\.$"),
+    "dig_infusion": re.compile(_INF + r"look at the top four cards of your library\. you may reveal a creature or land "
+                               r"card from among them and put it into your hand\. if you gained life this turn, you "
+                               r"may instead reveal two creature and/or land cards from among them and put them into "
+                               r"your hand\. put the rest on the bottom of your library in a random order\.$"),
+    "x_life": re.compile(r"^target player gains x life\.$"),
+}
+_PLURAL = {"pests": "pest", "bats": "bat", "insects": "insect", "snakes": "snake", "spiders": "spider"}
+
+
+def _life_traits(card, low, spell):
+    """Paket C: Leben und Infusion (eine Zeile)."""
+    res, out = _LIFE_RES, {}
+    m = res["pest_spell" if spell else "pest_etb"].match(low)
+    if m:
+        out["creates_tokens"] = ((_count(m.group(1)), PEST),)
+    m = res["pest_dies"].match(low)
+    if m and not spell:
+        out["death_tokens"] = ((_count(m.group(1)), PEST),)
+    m = res["self_or_ally_life"].match(low)
+    if m and not spell:  # Bogwater Lumaret: sie selbst und jede andere eigene Kreatur
+        out["etb_life"] = out["ally_enter_life"] = int(m.group(1))
+    if res["growth_counter"].match(low):
+        out["growth_counter"] = True
+    m = res["growth_anthem"].match(low)
+    if m:
+        n = {"two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7}.get(m.group(1)) or int(m.group(1))
+        out["cond_static"] = ((("growth", n, card.get("name", "")), "team", int(m.group(2)), int(m.group(3)), ()),)
+    m = res["lifegain_types"].match(low)
+    if m and "," in m.group(2):  # nur Listen (Blech); ein Typ allein ist lifegain_counter (Lyra)
+        words = [w.strip() for w in re.split(r",|\band\b", m.group(2)) if w.strip()]
+        types = tuple(_PLURAL.get(w, w.rstrip("s")) for w in words)
+        out["lifegain_counter_types"] = (_count(m.group(1)), types)
+    m = res["death_drain"].match(low)
+    if m:
+        out["death_drain"] = (int(m.group(2)), int(m.group(3)), bool(m.group(1)))
+    m = res["end_death_draw"].match(low)
+    if m:
+        out["end_death_draw"] = _count(m.group(1))
+    m = res["infusion_loss"].match(low)
+    if m:
+        out["infusion_loss"] = int(m.group(1))
+    m = res["infusion_debuff"].match(low)
+    if m:
+        out["infusion_debuff"] = int(m.group(1))
+    m = res["infusion_counters"].match(low)
+    if m:
+        out["infusion_counters"] = _count(m.group(1))
+    m = res["infusion_kw"].match(low)
+    if m and grant_list(m.group(1)) and not grant_list(m.group(1))[1]:
+        out["infusion_kw"] = grant_list(m.group(1))[0]
+    if res["infusion_sacrifice"].match(low):
+        out["infusion_sacrifice"] = True
+    if res["infusion_reanimate"].match(low):
+        out["infusion_reanimate"] = True
+    if res["dig_infusion"].match(low) and spell:
+        out["top_dig"], out["dig_infusion"] = (4, "creature_land", False), True
+    if res["x_life"].match(low) and spell:
+        out["x_life"] = True
+    return out
+
+
 def prepare_triggers(card):
     """Paket B: Arten der Ausloeser, die die Vorderseite prepared machen (Reihenfolge wie im Text)."""
     if card.get("layout") != "prepare":
@@ -147,6 +241,7 @@ def sos_traits(card, type_line, base):
         if all(b in _TOMEKEEPER_BULLETS for b in bullets):
             out["tomekeeper"] = True
     for _raw, low in lines:
+        out.update(_life_traits(card, low, spell))
         trigger = bool(re.match(r"^(when|whenever|at the beginning)\b", low))
         if not spell:
             m = res["etb_drain"].match(low)

@@ -409,6 +409,8 @@ def _cond_met(p, cond, src):
         return any(c is not src and not c.dead and cond[1] in c.card.creature_types for c in p.creatures)
     if kind == "gy_creatures":
         return sum(1 for c in p.graveyard if c.is_creature) >= cond[1]
+    if kind == "growth":  # SOS Comforting Counsel: ("growth", N, Name) - Wachstumsmarken der Verzauberung
+        return getattr(p, "sos_growth", {}).get(cond[2], 0) >= cond[1]
     return False
 
 
@@ -3061,12 +3063,21 @@ def gain_life(p, n, events=1):
                 for x in p.creatures:
                     if not x.dead and typ in x.card.creature_types:
                         x.bonus += k
+            if c.card.lifegain_counter_types:  # SOS Blech: jede eigene Kreatur eines der Typen
+                k, types = c.card.lifegain_counter_types
+                for x in p.creatures:
+                    if not x.dead and set(types) & set(x.card.creature_types):
+                        x.bonus += k
             if c.card.lifegain_lotus and not c.dead and c.once.get("lotus") != p.now:  # Kwia: einmal pro Zug
                 c.once["lotus"] = p.now
                 artifact_tokens(p, LOTUS, 1, p.now, {"events": []})
             if c.card.lifegain_draw and c.once.get("lifegain") != p.now:  # Bloombrute: einmal pro Zug
                 c.once["lifegain"] = p.now
                 _draw(p, c.card.lifegain_draw)
+        for x in p.perms:  # SOS Comforting Counsel: eine Wachstumsmarke je Lebensgewinn
+            if isinstance(x, Card) and x.growth_counter:
+                p.sos_growth = getattr(p, "sos_growth", {})
+                p.sos_growth[x.name] = p.sos_growth.get(x.name, 0) + 1
         loyalty = sum(c.lifegain_loyalty for c in p.perms) + sum(c.card.lifegain_loyalty for c in p.creatures)
         if loyalty and jace_present(p):  # Way of the Mentor: nur auf einen vorhandenen Jace
             _jace_add(p, loyalty)
@@ -4041,6 +4052,10 @@ def bury(players, e):
                  if is_dying(c)]
         triggers += [(p, w.card.ally_death_ping or (0, 0), w.card.ally_death_life) for w in watchers for d in dying
                      if d is not w]
+        drains = [c.card.death_drain for c in p.creatures if c.card.death_drain]  # SOS Arnyn, Cauldron of Essence
+        drains += [x.death_drain for x in p.perms if isinstance(x, Card) and x.death_drain]
+        triggers += [(p, "drain", (loss, life)) for loss, life, small in drains for d in dying
+                     if not small or d.power <= 1 or d.toughness <= 1]
         loyalty = sum(c.death_loyalty for c in p.perms) + sum(c.card.death_loyalty for c in p.creatures)
         if loyalty:  # Way of the Necromancer: je gestorbene eigene Kreatur Loyalty auf einen vorhandenen Jace
             triggers += [(p, "loyalty", loyalty)] * len(dying)
@@ -4118,6 +4133,11 @@ def bury(players, e):
     if bolts:
         bury(players, e)
     for p, ping, extra in triggers:  # Massacre Girl, Edgar, Way of the Necromancer
+        if ping == "drain":  # Lebensverlust (kein Schaden) und Leben
+            if p.opponent is not None:
+                p.opponent.life -= extra[0]
+            gain_life(p, extra[1])
+            continue
         if ping == "loyalty":
             if jace_present(p):
                 _jace_add(p, extra, e)
@@ -6276,6 +6296,57 @@ def sos_reanimate(me, opp, card, step, e):
     e["events"].append(i18n.t("{me}: {card_name} holt {pick_name} (verliert {n} Leben)", me=i18n.t(me.name), card_name=card.name, pick_name=pick.name, n=pick.mv))
 
 
+def sos_debuff(me, opp, card, n, e):
+    """-N/-N bis Rundenende auf die gefaehrlichste gegnerische Kreatur, die daran stirbt, sonst die gefaehrlichste
+    (kein Hexproof, Ward nur, wenn wir zahlen koennen)."""
+    cands = [c for c in opp.creatures if not c.dead and not hexproof(c) and ward_ok(me, c)]
+    if not cands:
+        return
+    dies = [c for c in cands if c.toughness - c.damage <= n]
+    target = max(dies or cands, key=danger)
+    if not pay_ward(me, target, e):
+        return
+    target.pump -= n
+    target.tpump -= n
+    e["events"].append(i18n.t("{me}: {card_name} – {target_name} -{n}/-{n}", me=i18n.t(me.name), card_name=card.name, target_name=target.card.name, n=n))
+    bury((me, opp), e)
+
+
+def sos_end_own(me, opp, step, e):
+    """Eigenes Endsegment (SOS Paket C): Essenceknit Scholar zieht, wenn in diesem Zug eine eigene Kreatur starb;
+    Moseo holt mit Lebensgewinn die teuerste Kreatur bis Manawert = gewonnenes Leben zurueck; Tragedy Feaster opfert
+    ohne Lebensgewinn das schwaechste Permanent (Token, dann ein entbehrliches Land ab 5 Laendern, sonst die
+    schwaechste Kreatur)."""
+    alive = [c for c in me.creatures if not c.dead]
+    died = me.deaths - me.deaths_mark > 0
+    for c in alive:
+        if c.card.end_death_draw and died:
+            _draw(me, c.card.end_death_draw)
+            e["events"].append(i18n.t("{me}: {c_card_name} zieht {n}", me=i18n.t(me.name), c_card_name=c.card.name, n=c.card.end_death_draw))
+    for c in alive:
+        if c.card.infusion_reanimate and me.gained > 0:
+            cands = [g for g in me.graveyard if g.is_creature and g.mv <= me.gained]
+            if cands:
+                pick = _best_from_gy(me, cands)
+                me.graveyard.remove(pick)
+                put_back(me, pick, "battlefield", step, e, opp)
+    for c in alive:
+        if c.card.infusion_sacrifice and me.gained == 0 and not c.dead:
+            tokens = [x for x in me.creatures if not x.dead and x.card.is_token]
+            if tokens:
+                victim = min(tokens, key=_value)
+            elif len(me.lands) >= 5:
+                land = _redundant_land(me)
+                _lose_land(me, land)
+                e["events"].append(i18n.t("{me}: {c_card_name} – opfert {land_name}", me=i18n.t(me.name), c_card_name=c.card.name, land_name=land.name))
+                continue
+            else:
+                victim = min([x for x in me.creatures if not x.dead], key=_value)
+            victim.dead = True
+            e["events"].append(i18n.t("{me}: {c_card_name} – opfert {land_name}", me=i18n.t(me.name), c_card_name=c.card.name, land_name=victim.card.name))
+    bury((me, opp), e)
+
+
 def sos_effects(me, opp, card, step, entry):
     """SOS Paket A beim Aufloesen bzw. Betreten: Abwerfen als Zusatzkosten (vor dem Ziehen), Rummage beim Betreten,
     Tappen (mit Stun), Schluesselwort nach Wahl."""
@@ -6320,6 +6391,15 @@ def sos_effects(me, opp, card, step, entry):
             entry["events"].append(i18n.t("{me}: {card_name} – {target_name} nicht mehr prepared", me=i18n.t(me.name), card_name=card.name, target_name=pick.card.name))
     if card.reanimate_any and opp is not None:  # Reanimate: aus beiden Friedhoefen, Leben = Manawert
         sos_reanimate(me, opp, card, step, entry)
+    if card.x_life:  # Stream of Life: wir gewinnen X Leben
+        gain_life(me, me.next_x)
+        me.next_x = 0
+    if card.infusion_counters and me.gained > 0:  # Old-Growth Educator
+        src = next((c for c in reversed(me.creatures) if c.card is card and not c.dead), None)
+        if src is not None:
+            src.bonus += card.infusion_counters
+    if card.infusion_debuff and me.gained > 0 and opp is not None:  # Poisoner's Apprentice
+        sos_debuff(me, opp, card, card.infusion_debuff, entry)
     if card.kw_choice:  # Practiced Offense: Double Strike fuer den staerksten Angreifer, sonst Lifelink
         alive = [c for c in me.creatures if not c.dead]
         ready = [c for c in alive if can_attack(c, step)]
@@ -6402,6 +6482,7 @@ _DIG_OK = {
     "noncreature_nonland": lambda c: not c.is_creature and not c.is_land,
     "plains_perm3": lambda c: "plains" in c.land_types or (not c.is_land and not c.is_instant_sorcery and c.mv <= 3),
     "any": lambda c: True,
+    "creature_land": lambda c: c.is_creature or c.is_land,  # SOS Follow the Lumarets
 }
 _TUTOR_OK = {"aura": lambda c: c.is_aura, "equipment": lambda c: bool(c.equip), "spacecraft": lambda c: bool(c.station),
              "whale": lambda c: "whale" in c.creature_types,
@@ -6414,11 +6495,12 @@ def flow_effects(me, opp, card, step, entry):
     if card.top_dig:  # Rutherford, Coffee, Spock, Pattern Buffer: Wahl wie bei Hoshi Sato (dig_pick)
         n, filt, to_gy = card.top_dig
         top, me.library[:n] = me.library[:n], []
-        pick = dig_pick(me, [c for c in top if _DIG_OK[filt](c)])
-        if pick is not None:
-            top.remove(pick)
-            me.hand.append(pick)
-            entry["events"].append(i18n.t("{me}: {card_name} – {pick_name} auf die Hand", me=i18n.t(me.name), card_name=card.name, pick_name=pick.name))
+        for _k in range(2 if card.dig_infusion and me.gained > 0 else 1):  # SOS Follow the Lumarets: Infusion
+            pick = dig_pick(me, [c for c in top if _DIG_OK[filt](c)])
+            if pick is not None:
+                top.remove(pick)
+                me.hand.append(pick)
+                entry["events"].append(i18n.t("{me}: {card_name} – {pick_name} auf die Hand", me=i18n.t(me.name), card_name=card.name, pick_name=pick.name))
         if to_gy:
             for c in top:
                 me.graveyard.append(c)
@@ -7272,6 +7354,8 @@ def combat_tricks(p, pairs, opp, e, step, attacking):
         base = _score(pairs, attacking, opp.life)
         best = None
         for mode, tough, grants in _trick_modes(card):
+            if card.infusion_kw and p.gained > 0:  # SOS Efflorescence: Infusion
+                grants = tuple(grants) + card.infusion_kw
             for i, target in enumerate(own):
                 saved = [(c.pump, c.bonus, c.tpump, set(c.extra)) for c in own]
                 _apply_trick(mode, target, own, tough, grants)
@@ -7418,6 +7502,8 @@ def _use_removal(p, card, alts, is_spell, step, e, zone="hand", other=None, fx=N
         gain_life(p, fx.spell_life)
         if fx.tap_spell and other is not None:  # SOS Vibrant Outburst: "Tap up to one target creature."
             tap_target(p, other, fx, False, e)
+        if fx.infusion_loss and p.gained > 0 and other is not None:  # SOS Foolish Fate
+            other.life -= fx.infusion_loss
     else:
         e["events"].append(i18n.t("{p}: wirft {card_name} ab (Fähigkeit)", p=i18n.t(p.name), card_name=card.name))
         discarded(p, e)
@@ -9580,7 +9666,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
             for _ in range(x):
                 me.open.pop()
             me.next_x = x
-        if c.tap_spell and c.tap_spell[2]:  # SOS Procrastinate: X = alles freie Mana (Stun-Marken = 2X)
+        if c.x_life or (c.tap_spell and c.tap_spell[2]):  # SOS Procrastinate (2X Stun), Stream of Life: X = alles Mana
             x = free_units(me)
             for _ in range(x):
                 me.open.pop()
@@ -9883,6 +9969,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
                 e["events"].append(i18n.t("{p_}: Kopie von {c_card_name} exiliert", p_=i18n.t(p_.name), c_card_name=c.card.name))
     end_step_discards((me, opp), e)
     end_step_triggers(me, opp, e)
+    sos_end_own(me, opp, step, e)
     lrell_surveil(me, e)
     for p_ in (me, opp):  # "At the beginning of the end step, sacrifice this creature"
         for c in p_.creatures:

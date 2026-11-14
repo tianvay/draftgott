@@ -589,6 +589,17 @@ RULES = [
     "draws“: wir ziehen (auch im Goldfish); Secret Rendezvous nur mit weniger als drei anderen Handkarten (auch der Gegner zieht). Biblioplex Tomekeeper macht die eigene "
     "Kreatur mit der teuersten Zauberhälfte prepared, sonst eine gegnerische unprepared. Reanimate holt die teuerste "
     "Kreatur aus beiden Friedhöfen, die uns nicht tötet.",
+    "SOS-Paket C (Leben, Infusion): Pest-Token (1/1) gewinnen beim Angriff 1 Leben. Bogwater Lumaret: 1 Leben für "
+    "sich und jede weitere eigene Kreatur. Comforting Counsel zählt jeden Lebensgewinn als Wachstumsmarke, ab fünf "
+    "+3/+3 für das Team; Blech legt je Lebensgewinn eine Marke auf jeden eigenen Pest, Bat, Insect, Snake und "
+    "Spider. Arnyn (nur Kreaturen mit Power oder Toughness 1 oder weniger) und Cauldron of Essence: Lebensverlust "
+    "beim Gegner und Leben, wenn eine eigene Kreatur stirbt. Essenceknit Scholar zieht im eigenen Endsegment, wenn in "
+    "diesem Zug eine eigene Kreatur starb. Infusion (in diesem Zug Leben gewonnen): Foolish Fate 3 Lebensverlust, "
+    "Poisoner's Apprentice −4/−4 auf die gefährlichste Kreatur, die daran stirbt, Old-Growth Educator zwei Marken, "
+    "Efflorescence dazu Trample und Indestructible, Moseo holt im Endsegment die teuerste Kreatur bis Manawert = "
+    "gewonnenes Leben, Follow the Lumarets nimmt zwei Kreaturen/Länder statt einer. Tragedy Feaster opfert ohne "
+    "Lebensgewinn im Endsegment ein Token, sonst ab fünf Ländern ein entbehrliches Land, sonst die schwächste "
+    "Kreatur. Stream of Life: X = alles freie Mana, wir gewinnen das Leben.",
     "Noch nicht im Kampf: weitere Auslöser und Fähigkeiten (siehe Modell-Abdeckung). Solche Karten werden gewirkt, "
     "wirken aber nur mit den schon modellierten Effekten.",
 ]

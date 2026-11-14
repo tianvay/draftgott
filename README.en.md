@@ -666,8 +666,10 @@ full log. The rules of the battle model are described in detail at the end of th
   additional cost. Package B (prepared): creatures also become prepared through triggers (attacking, landfall,
   creature spells, tokens, the first life gain each turn, the third spell, leaving the graveyard, main phase, end
   step, upkeep, tap ability), instant halves are cast as copies (removal, card draw at the end of the opponent's
-  turn, Jump before the attack), plus Brainstorm, Demonic Tutor, Regrowth, Reanimate, and Biblioplex Tomekeeper. More
-  SOS packages will follow; until then, open cards only have their already modelled effects.
+  turn, Jump before the attack), plus Brainstorm, Demonic Tutor, Regrowth, Reanimate, and Biblioplex Tomekeeper.
+  Package C (life, infusion): Pest tokens that gain life when attacking, life gain triggers (Comforting Counsel,
+  Blech), drain when our creatures die, infusion (Foolish Fate, Poisoner's Apprentice, Old-Growth Educator,
+  Efflorescence, Moseo, Tragedy Feaster, Follow the Lumarets), and Stream of Life. More SOS packages will follow; until then, open cards only have their already modelled effects.
 - Alchemy: Reality Fracture (YFRA), package A: perpetual, conjuring named cards, seek (Killian), Avoided
   Stairwurm, Zimone, Dina, Asymmetry Sage, Sparks Ablaze, Paradox Kraken, Boisterous Clique, Searing Soloist
   (cards to conjure are in `components/conjure.py`).
