@@ -669,7 +669,11 @@ full log. The rules of the battle model are described in detail at the end of th
   turn, Jump before the attack), plus Brainstorm, Demonic Tutor, Regrowth, Reanimate, and Biblioplex Tomekeeper.
   Package C (life, infusion): Pest tokens that gain life when attacking, life gain triggers (Comforting Counsel,
   Blech), drain when our creatures die, infusion (Foolish Fate, Poisoner's Apprentice, Old-Growth Educator,
-  Efflorescence, Moseo, Tragedy Feaster, Follow the Lumarets), and Stream of Life. More SOS packages will follow; until then, open cards only have their already modelled effects.
+  Efflorescence, Moseo, Tragedy Feaster, Follow the Lumarets), and Stream of Life. Package D (graveyard): triggers
+  when cards leave the graveyard (also artifacts), “if a card left your graveyard this turn”, abilities from the
+  graveyard (only as a sorcery where required), exile from the graveyard (Rubble Rouser, beginning of combat),
+  returning instants/sorceries and creatures, Practiced Scrollsmith, and Ancestral Anger. More SOS packages will
+  follow; until then, open cards only have their already modelled effects.
 - Alchemy: Reality Fracture (YFRA), package A: perpetual, conjuring named cards, seek (Killian), Avoided
   Stairwurm, Zimone, Dina, Asymmetry Sage, Sparks Ablaze, Paradox Kraken, Boisterous Clique, Searing Soloist
   (cards to conjure are in `components/conjure.py`).

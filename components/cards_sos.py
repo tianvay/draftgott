@@ -8,7 +8,7 @@ gelesene Card, damit Ziehen und Leben dazugezaehlt statt ersetzt werden).
 """
 import re
 
-from components.cards import GRANTABLE, _clean_lines, _count, grant_list, token_card
+from components.cards import GRANTABLE, _clean_lines, _count, cost_alternatives, grant_list, token_card
 
 _ETB = r"^when (?:~|this [a-z]+) enters, "
 _SELF = r"(?:~|this creature)"
@@ -182,6 +182,111 @@ def _life_traits(card, low, spell):
     return out
 
 
+_COST = r"((?:\{[^}]+\})+)"
+_LEAVE = r"^whenever one or more cards leave your graveyard, "
+# Paket D: Friedhof
+_GY_RES = {
+    "leave_pump": re.compile(_LEAVE + rf"{_SELF} gets \+(\d+)/\+(\d+) until end of turn\.$"),
+    "leave_counter": re.compile(_LEAVE + rf"put (a|one|two) \+1/\+1 counters? on {_SELF}\.$"),
+    "leave_ping": re.compile(_LEAVE + r"(?:~|this artifact|this creature|this enchantment) deals (\d+) damage to each "
+                             r"opponent and you gain (\d+) life\.$"),
+    "end_gy_draw": re.compile(r"^at the beginning of your end step, if a card left your graveyard this turn, draw "
+                              r"(a|one|two) cards?\.$"),
+    "attack_gy_pump": re.compile(r"^whenever you attack, if a card left your graveyard this turn, target attacking "
+                                 r"creature gets \+(\d+)/\+(\d+) until end of turn\.$"),
+    "gy_left_discount": re.compile(r"^this spell costs \{(\d+)\} less to cast if one or more cards left your graveyard "
+                                   r"this turn\.$"),
+    "gy_life_surveil": re.compile("^" + _COST + r", exile this card from your graveyard: you gain (\d+) life\. surveil "
+                                  r"(\d+)\. activate only as a sorcery\.$"),
+    "gy_hand_sorcery": re.compile("^" + _COST + r": return this card from your graveyard to your hand\. activate only "
+                                  r"as a sorcery\.$"),
+    "gy_return_exile_instsorc": re.compile("^" + _COST + r", exile an instant or sorcery card from your graveyard: "
+                                           r"return this card from your graveyard to the battlefield\.$"),
+    "gy_combat_return": re.compile(r"^whenever one or more creatures you control deal combat damage to a player, you may "
+                                   r"pay " + _COST + r"\. if you do, return this card from your graveyard to your "
+                                   r"hand\.$"),
+    "rubble_ping": re.compile(r"^\{t\}, exile a card from your graveyard: add \{r\}\. when you do, (?:~|this creature) "
+                              r"deals 1 damage to each opponent\.$"),
+    "cauldron": re.compile("^" + _COST + r", \{t\}, sacrifice a creature: return target creature card from your "
+                           r"graveyard to the battlefield\. activate only as a sorcery\.$"),
+    "combat_exile_gy": re.compile(r"^at the beginning of combat on your turn, exile up to one target card from a "
+                                  r"graveyard\.$"),
+    "etb_instsorc": re.compile(_ETB + r"return target instant or sorcery card from your graveyard to your hand\.$"),
+    "x_regrowth": re.compile(r"^return up to x target instant and/or sorcery cards from your graveyard to your hand\.$"),
+    "all_instsorc": re.compile(r"^return all instant and sorcery cards from your graveyard to your hand\. you have no "
+                               r"maximum hand size for the rest of the game\.$"),
+    "self_exile": re.compile(r"^exile ~\.$"),
+    "repartee_reanimate": re.compile(r"^repartee — whenever you cast an instant or sorcery spell that targets a "
+                                     r"creature, return target creature card from your graveyard to the "
+                                     r"battlefield\.$"),
+    "scrollsmith": re.compile(_ETB + r"exile target noncreature, nonland card from your graveyard\. until the end of "
+                              r"your next turn, you may cast that card\.$"),
+    "named_gy_pump": re.compile(r"^target creature gains trample and gets \+x/\+0 until end of turn, where x is 1 plus "
+                                r"the number of cards named ~ in your graveyard\.$"),
+}
+
+
+def _gy_traits(low, spell):
+    """Paket D: Friedhof (eine Zeile)."""
+    res, out = _GY_RES, {}
+
+    def alts(m):
+        return cost_alternatives(m.group(1).upper())
+    m = res["leave_pump"].match(low)
+    if m:
+        out["gy_leave"] = ("pump_self", (int(m.group(1)), int(m.group(2))), False)
+    m = res["leave_counter"].match(low)
+    if m:
+        out["gy_leave"] = ("counter_self", _count(m.group(1)), False)
+    m = res["leave_ping"].match(low)
+    if m:
+        out["gy_leave"] = ("ping_life", (int(m.group(1)), int(m.group(2))), False)
+    m = res["end_gy_draw"].match(low)
+    if m:
+        out["end_gy_draw"] = _count(m.group(1))
+    m = res["attack_gy_pump"].match(low)
+    if m:
+        out["attack_gy_pump"] = (int(m.group(1)), int(m.group(2)))
+    m = res["gy_left_discount"].match(low)
+    if m and spell:
+        out["self_discount"] = ("gy_left", int(m.group(1)))
+    m = res["gy_life_surveil"].match(low)
+    if m:  # Stone Docent
+        out["gy_ability"] = (alts(m), (("life", int(m.group(2))), ("surveil", int(m.group(3)))))
+        out["gy_ability_sorcery"] = True
+    m = res["gy_hand_sorcery"].match(low)
+    if m:  # Summoned Dromedary
+        out["gy_return"] = (alts(m), "hand", False, 0, "", "sorcery")
+    m = res["gy_return_exile_instsorc"].match(low)
+    if m:  # Postmortem Professor
+        out["gy_return"] = (alts(m), "battlefield", False, 0, "exile_instsorc", "")
+    m = res["gy_combat_return"].match(low)
+    if m:
+        out["gy_combat_return"] = alts(m)
+    if res["rubble_ping"].match(low):
+        out["rubble_ping"] = True
+    m = res["cauldron"].match(low)
+    if m:
+        out["cauldron_reanimate"] = alts(m)
+    if res["combat_exile_gy"].match(low):
+        out["combat_exile_gy"] = True
+    if res["etb_instsorc"].match(low) and not spell:
+        out["reanimate"] = ("target", "instsorc", 99, "hand", 0)
+    if spell and res["x_regrowth"].match(low):
+        out["x_regrowth"] = True
+    if spell and res["all_instsorc"].match(low):  # das Modell kennt kein Handkartenlimit
+        out["reanimate"] = ("all", "instsorc", 99, "hand", 0)
+    if spell and res["self_exile"].match(low):
+        out["self_exile"] = True
+    if res["repartee_reanimate"].match(low):
+        out["cast_trig"] = (("instsorc_creature", (("reanimate_creature",),), (), ""),)
+    if res["scrollsmith"].match(low):
+        out["scrollsmith"] = True
+    if spell and res["named_gy_pump"].match(low):
+        out["named_gy_pump"] = True
+    return out
+
+
 def prepare_triggers(card):
     """Paket B: Arten der Ausloeser, die die Vorderseite prepared machen (Reihenfolge wie im Text)."""
     if card.get("layout") != "prepare":
@@ -242,6 +347,7 @@ def sos_traits(card, type_line, base):
             out["tomekeeper"] = True
     for _raw, low in lines:
         out.update(_life_traits(card, low, spell))
+        out.update(_gy_traits(low, spell))
         trigger = bool(re.match(r"^(when|whenever|at the beginning)\b", low))
         if not spell:
             m = res["etb_drain"].match(low)

@@ -129,6 +129,8 @@ ON_PURPOSE = {
     "Theorist's Proxy": re.compile(r"sacrifice this creature: the next spell you cast this turn can't be countered"),
     "Marwyn, the Preserver": re.compile(r"^lands you control have hexproof"),  # nichts im Modell zielt auf Laender
     "Paradox Shaper": re.compile(r"^\{2\}: put target card from your graveyard on the bottom of your library"),
+    "Sundering Archaic": re.compile(r"^\{2\}: put target card from a graveyard on the bottom of its owner's "
+                                   r"library"),  # wie Paradox Shaper (SOS Paket D)
     "Sphinx's Approach": re.compile(r"exile this spell and four cards named sphinx's approach"),  # Ziehen modelliert
     "Winter, Team Player": re.compile(r"^convoke$"),  # FRA abgeschlossen: nicht vollstaendig modelliert
     "Tam, the Possibility": re.compile(r"proliferate x times"),

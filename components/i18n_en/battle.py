@@ -364,6 +364,10 @@ EN = {
     "{me}: {c_card_name} zieht {n}": "{me}: {c_card_name} draws {n}",
     "{me}: {c_card_name} – opfert {land_name}": "{me}: {c_card_name} – sacrifices {land_name}",
     "{me}: {card_name} – {target_name} -{n}/-{n}": "{me}: {card_name} – {target_name} -{n}/-{n}",
+    # SOS Paket D
+    "{me}: {c_card_name} exiliert {pick_name} aus dem Friedhof": "{me}: {c_card_name} exiles {pick_name} from the graveyard",
+    "{me}: {card_name} – {target_name} +{p}/+{t}": "{me}: {card_name} – {target_name} +{p}/+{t}",
+    "{me}: {card_name} – {n} Karten aus dem Friedhof": "{me}: {card_name} – {n} cards from the graveyard",
     "{me}: {a_card_name} – Gegner verliert {loss}, {life} Leben": "{me}: {a_card_name} – opponent loses {loss}, {life} life",
     # Namen der Spieler im Protokoll
     "Wir": "We",

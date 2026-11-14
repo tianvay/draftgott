@@ -676,7 +676,10 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
   dem Angriff), dazu Brainstorm, Demonic Tutor, Regrowth, Reanimate und Biblioplex Tomekeeper. Paket C (Leben,
   Infusion): Pest-Token mit Lebensgewinn beim Angriff, Lebensgewinn-Auslöser (Comforting Counsel, Blech),
   Lebensentzug beim Tod eigener Kreaturen, Infusion (Foolish Fate, Poisoner's Apprentice, Old-Growth Educator,
-  Efflorescence, Moseo, Tragedy Feaster, Follow the Lumarets) und Stream of Life. Weitere SOS-Pakete folgen; bis dahin wirken offene Karten nur mit den schon modellierten
+  Efflorescence, Moseo, Tragedy Feaster, Follow the Lumarets) und Stream of Life. Paket D (Friedhof): Auslöser,
+  wenn Karten den Friedhof verlassen (auch Artefakte), „if a card left your graveyard this turn“, Fähigkeiten aus
+  dem Friedhof (nur als Hexerei, wo verlangt), Exil aus dem Friedhof (Rubble Rouser, Kampfbeginn), Rückholen von
+  Instants/Sorceries und Kreaturen, Practiced Scrollsmith und Ancestral Anger. Weitere SOS-Pakete folgen; bis dahin wirken offene Karten nur mit den schon modellierten
   Effekten.
 - Alchemy: Reality Fracture (YFRA), Paket A: Perpetual, Conjure benannter Karten, Seek (Killian), Avoided
   Stairwurm, Zimone, Dina, Asymmetry Sage, Sparks Ablaze, Paradox Kraken, Boisterous Clique, Searing Soloist

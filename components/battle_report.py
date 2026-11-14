@@ -600,6 +600,22 @@ RULES = [
     "gewonnenes Leben, Follow the Lumarets nimmt zwei Kreaturen/Länder statt einer. Tragedy Feaster opfert ohne "
     "Lebensgewinn im Endsegment ein Token, sonst ab fünf Ländern ein entbehrliches Land, sonst die schwächste "
     "Kreatur. Stream of Life: X = alles freie Mana, wir gewinnen das Leben.",
+    "SOS-Paket D (Friedhof): verlassen Karten den eigenen Friedhof, bekommt Owlin Historian +1/+1, Spirit Mascot eine "
+    "Marke, Ark of Hunger (Artefakt) macht 1 Schaden und gibt 1 Leben. „If a card left your graveyard this turn“ "
+    "(gezählt ab Zugbeginn): Primary Research zieht im eigenen Endsegment, Living History gibt dem stärksten "
+    "Angreifer +2/+0, Wilt in the Heat kostet {2} weniger. Aus dem Friedhof: Stone Docent (Leben und Surveil 1), "
+    "Summoned Dromedary (auf die Hand) nur in der eigenen Main Phase – „activate only as a sorcery“ gilt jetzt für "
+    "alle Friedhofs-Fähigkeiten; Postmortem Professor exiliert den billigsten Instant/Sorcery; Killian's Confidence "
+    "kommt nach Kampfschaden am Spieler mit offenem Mana auf die Hand. Rubble Rouser tappt am Ende des gegnerischen "
+    "Zugs, exiliert eine Karte (Länder und billige zuerst) und macht 1 Schaden (das Mana verfällt). Zu Beginn des "
+    "Kampfs exilieren Ascendant Dustspeaker/Startled Relic Sloth eine eigene Karte, wenn wir davon etwas haben, sonst "
+    "die nützlichste des Gegners. Cauldron of Essence opfert die schwächste Kreatur (Token zuerst) für eine "
+    "Kreaturenkarte mit mindestens 2 Manawert mehr. Zealous Lorecaster, Wisdom of Ages (das Modell kennt kein "
+    "Handkartenlimit) und Divergent Equation (X so groß, wie Mana und Karten reichen) holen Instants/Sorceries; "
+    "„Exile <Name>“ schickt den Zauber ins Exil, ohne dass er den Friedhof verlässt. Forum Necroscribe (Repartee) holt "
+    "die stärkste Kreaturenkarte; Practiced Scrollsmith exiliert die teuerste Nichtkreatur-Nichtland-Karte (bis Ende "
+    "des nächsten eigenen Zugs wirkbar); Ancestral Anger zählt die Exemplare, die schon im Friedhof liegen. Sundering "
+    "Archaic: wie bei Paradox Shaper ist „Karte aus einem Friedhof unter die Bibliothek“ bewusst nicht modelliert.",
     "Noch nicht im Kampf: weitere Auslöser und Fähigkeiten (siehe Modell-Abdeckung). Solche Karten werden gewirkt, "
     "wirken aber nur mit den schon modellierten Effekten.",
 ]

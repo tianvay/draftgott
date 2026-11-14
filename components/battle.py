@@ -977,6 +977,8 @@ def own_reduction(p, card):
         return sum(1 for c in p.creatures if c.card.is_artifact and not c.dead)
     if card.self_discount[0] == "attacked":  # Red Alert!, Guidance Failure (Ziel ist dann ein Angreifer)
         return card.self_discount[1] if p.under_attack else 0
+    if card.self_discount[0] == "gy_left":  # SOS Wilt in the Heat
+        return card.self_discount[1] if gy_left_turn(p) else 0
     alive = [c for c in p.creatures if not c.dead]
     return cost_reduction(card, [c.power for c in alive], [c.toughness for c in alive],
                           any(c.card.legendary for c in alive), p.noncreature_cast)
@@ -3400,6 +3402,12 @@ def cast_effects(p, src, source, atoms, step, e, label="Auslöser beim Wirken"):
             make_tokens(p, [(atom[1], atom[2])], step, e, opp, source.name)
         elif kind == "surveil":
             surveil_cards(p, [atom[1]], e, source.name)
+        elif kind == "reanimate_creature":  # SOS Forum Necroscribe: die staerkste Kreaturenkarte
+            cands = gy_candidates(p, "creature")
+            if cands:
+                pick = _best_from_gy(p, cands)
+                p.graveyard.remove(pick)
+                put_back(p, pick, "battlefield", step, e, opp)
         elif kind == "base_power":  # Asymmetry Sage: die eigene Kreatur, die am meisten gewinnt (Angreifer zuerst)
             gain = [c for c in alive if c.card.power < atom[1]]
             ready = lambda c: not c.tapped and not c.card.defender and (c.entered < step or c.has("haste"))
@@ -4342,7 +4350,26 @@ def gy_leave_check(players, e):
                 if kind == "tapped_token":
                     for c in p.creatures[before:]:
                         c.tapped = True
+            elif kind == "pump_self":  # SOS Owlin Historian
+                src.pump += value[0]
+                src.tpump += value[1]
+            elif kind == "counter_self":  # SOS Spirit Mascot
+                src.bonus += value
+            elif kind == "ping_life" and p.opponent is not None:
+                deal_noncombat(p, p.opponent, value[0], e)
+                gain_life(p, value[1])
             e["events"].append(i18n.t("{p}: {src_card_name} – Karte verlässt den Friedhof", p=i18n.t(p.name), src_card_name=src.card.name))
+        for x in [x for x in p.perms if isinstance(x, Card) and x.gy_leave]:  # SOS Ark of Hunger (Artefakt)
+            kind, value, _once = x.gy_leave
+            if kind == "ping_life" and p.opponent is not None:
+                deal_noncombat(p, p.opponent, value[0], e)
+                gain_life(p, value[1])
+            elif kind == "drain" and p.opponent is not None:
+                p.opponent.life -= value
+                gain_life(p, value)
+            elif kind == "draw":
+                _draw(p, value)
+            e["events"].append(i18n.t("{p}: {src_card_name} – Karte verlässt den Friedhof", p=i18n.t(p.name), src_card_name=x.name))
         p.gy_seen = max(p.gy_seen, p.gy_left)
 
 
@@ -6201,6 +6228,12 @@ def sos_end_step(dfn, act, step, e):
         for c in [trio] + sorted(helpers, key=lambda c: (c.power, c.card.name))[:2]:
             c.tapped = True
         prepare_by(dfn, "tap3", e, only=trio)
+    for c in [c for c in dfn.creatures if c.card.rubble_ping and dfn.graveyard and tap_ready(dfn, c)]:
+        c.tapped = True  # Rubble Rouser: enttappt in unserem Zug; das Mana verfaellt
+        pick = min(dfn.graveyard, key=lambda g: (not g.is_land, g.mv, g.name))
+        dfn.graveyard.remove(pick)
+        deal_noncombat(dfn, act, 1, e)
+        e["events"].append(i18n.t("{me}: {c_card_name} exiliert {pick_name} aus dem Friedhof", me=i18n.t(dfn.name), c_card_name=c.card.name, pick_name=pick.name))
     for card in sorted(copies(dfn), key=lambda c: -c.mv):
         if not card.is_instant or card.removal or _trick_atoms(card) or card.choices or card.counter or card.grant_kw:
             continue
@@ -6312,6 +6345,74 @@ def sos_debuff(me, opp, card, n, e):
     bury((me, opp), e)
 
 
+def gy_left_turn(p):
+    """SOS: hat in diesem Zug eine Karte den Friedhof von p verlassen?"""
+    return p.gy_left > getattr(p, "gy_left_mark", 0)
+
+
+def gy_payoff(p):
+    """Hat p etwas davon, wenn eine Karte den eigenen Friedhof verlaesst (Spirit Mascot, Kirol, Wilt in the Heat ...)?"""
+    cards = [c.card for c in p.creatures if not c.dead] + [x for x in p.perms if isinstance(x, Card)]
+    return any(c.gy_leave or c.end_gy_draw or c.attack_gy_pump or "gy_leave" in c.prepare_on for c in cards) or any(
+        h.self_discount and h.self_discount[0] == "gy_left" for h in p.hand)
+
+
+def sos_attack(me, attackers, e):
+    """"Whenever you attack" (SOS Living History): hat in diesem Zug eine Karte den Friedhof verlassen, bekommt der
+    staerkste Angreifer +P/+T bis Rundenende."""
+    if not attackers or not gy_left_turn(me):
+        return
+    for x in [x for x in me.perms if isinstance(x, Card) and x.attack_gy_pump]:
+        pick = max(attackers, key=lambda a: (a.power, a.card.name))
+        pick.pump += x.attack_gy_pump[0]
+        pick.tpump += x.attack_gy_pump[1]
+        e["events"].append(i18n.t("{me}: {card_name} – {target_name} +{p}/+{t}", me=i18n.t(me.name), card_name=x.name, target_name=pick.card.name, p=x.attack_gy_pump[0], t=x.attack_gy_pump[1]))
+
+
+def sos_combat_exile(me, opp, e):
+    """Kampfbeginn (Ascendant Dustspeaker, Startled Relic Sloth): bis zu eine Karte aus einem Friedhof exilieren -
+    eine eigene (Laender und billige zuerst), wenn wir davon etwas haben, sonst die nuetzlichste des Gegners."""
+    for c in [c for c in me.creatures if c.card.combat_exile_gy and not c.dead]:
+        if me.graveyard and gy_payoff(me):
+            pick = min(me.graveyard, key=lambda g: (not g.is_land, g.mv, g.name))
+            me.graveyard.remove(pick)
+        else:
+            pick = gy_exile_target(opp) if opp is not None else None
+            if pick is None:
+                continue
+            opp.graveyard.remove(pick)
+        e["events"].append(i18n.t("{me}: {c_card_name} exiliert {pick_name} aus dem Friedhof", me=i18n.t(me.name), c_card_name=c.card.name, pick_name=pick.name))
+
+
+def sos_main_abilities(me, opp, step, e):
+    """Eigene Main Phase vor dem Angriff, freies Mana: Cauldron of Essence opfert die schwaechste Kreatur (Token zuerst)
+    fuer die teuerste Kreaturenkarte im Friedhof, wenn diese mindestens 2 Manawert mehr hat."""
+    for x in [x for x in me.perms if isinstance(x, Card) and x.cauldron_reanimate]:
+        alive = [c for c in me.creatures if not c.dead]
+        cands = gy_candidates(me, "creature")
+        if not alive or not cands:
+            continue
+        victim = min(alive, key=lambda c: (not c.card.is_token, c.card.mv, _value(c)))
+        pick = _best_from_gy(me, cands)
+        if pick.mv < (0 if victim.card.is_token else victim.card.mv) + 2 or not _pay_open(me, x.cauldron_reanimate):
+            continue
+        victim.dead = True
+        e["events"].append(i18n.t("{me}: {c_card_name} – opfert {land_name}", me=i18n.t(me.name), c_card_name=x.name, land_name=victim.card.name))
+        bury((me, opp), e)
+        if pick in me.graveyard:
+            me.graveyard.remove(pick)
+            put_back(me, pick, "battlefield", step, e, opp)
+
+
+def sos_combat_return(me, e):
+    """Kampfschaden am Spieler: Killian's Confidence kommt mit offenem Mana aus dem Friedhof auf die Hand."""
+    for card in [g for g in dict.fromkeys(me.graveyard) if g.gy_combat_return]:
+        if card in me.graveyard and _pay_open(me, card.gy_combat_return):
+            me.graveyard.remove(card)
+            me.hand.append(card)
+            e["events"].append(i18n.t("{p}: {card_name} aus dem Friedhof auf die Hand", p=i18n.t(me.name), card_name=card.name))
+
+
 def sos_end_own(me, opp, step, e):
     """Eigenes Endsegment (SOS Paket C): Essenceknit Scholar zieht, wenn in diesem Zug eine eigene Kreatur starb;
     Moseo holt mit Lebensgewinn die teuerste Kreatur bis Manawert = gewonnenes Leben zurueck; Tragedy Feaster opfert
@@ -6319,6 +6420,11 @@ def sos_end_own(me, opp, step, e):
     schwaechste Kreatur)."""
     alive = [c for c in me.creatures if not c.dead]
     died = me.deaths - me.deaths_mark > 0
+    if gy_left_turn(me):  # SOS Primary Research
+        for x in [c.card for c in alive] + [x for x in me.perms if isinstance(x, Card)]:
+            if x.end_gy_draw:
+                _draw(me, x.end_gy_draw)
+                e["events"].append(i18n.t("{me}: {c_card_name} zieht {n}", me=i18n.t(me.name), c_card_name=x.name, n=x.end_gy_draw))
     for c in alive:
         if c.card.end_death_draw and died:
             _draw(me, c.card.end_death_draw)
@@ -6374,6 +6480,32 @@ def sos_effects(me, opp, card, step, entry):
         if target is not None and stun:
             target.stun += stun
             entry["events"].append(i18n.t("{me}: {card_name} – {n} Stun-Marken auf {target_name}", me=i18n.t(me.name), card_name=card.name, n=stun, target_name=target.card.name))
+    if card.self_exile and card in me.graveyard:  # "Exile <Name>.": vom Stapel ins Exil, verlaesst keinen Friedhof
+        list.remove(me.graveyard, card)
+    if card.x_regrowth:  # Divergent Equation: X = so viele, wie Mana ({X}{X}) und Karten reichen
+        cands = gy_candidates(me, "instsorc")
+        x = min(len(cands), len(me.open) // 2)
+        for _k in range(2 * x):
+            me.open.pop()
+        for pick in sorted(cands, key=lambda g: (-g.mv, g.name))[:x]:
+            me.graveyard.remove(pick)
+            me.hand.append(pick)
+        entry["events"].append(i18n.t("{me}: {card_name} – {n} Karten aus dem Friedhof", me=i18n.t(me.name), card_name=card.name, n=x))
+    if card.scrollsmith:  # Practiced Scrollsmith: die teuerste Nichtkreatur-Nichtland-Karte, bis Ende des naechsten Zugs
+        cands = [g for g in me.graveyard if not g.is_creature and not g.is_land]
+        if cands:
+            pick = max(cands, key=lambda g: (g.mv, g.name))
+            me.graveyard.remove(pick)
+            me.impulse.append((pick, me.own_turns + 1))
+            entry["events"].append(i18n.t("{me}: {card_name} exiliert {pick_name} aus dem Friedhof", me=i18n.t(me.name), card_name=card.name, pick_name=pick.name))
+    if card.named_gy_pump:  # Ancestral Anger: X = 1 + gleichnamige Karten im Friedhof (die Karte selbst nicht)
+        x = 1 + sum(1 for g in me.graveyard if g.name == card.name) - (1 if card in me.graveyard else 0)
+        alive = [c for c in me.creatures if not c.dead]
+        if alive:
+            pick = max(alive, key=lambda c: (can_attack(c, step), c.power, c.card.name))
+            pick.pump += x
+            pick.extra.add("trample")
+            entry["events"].append(i18n.t("{me}: {card_name} – {target_name} bekommt {kw}", me=i18n.t(me.name), card_name=card.name, target_name=pick.card.name, kw=f"+{x}/+0, trample"))
     if card.opp_draws and opp is not None:  # Secret Rendezvous
         _draw(opp, card.opp_draws)
     if "etb_inkling" in card.prepare_on and opp is not None:
@@ -7144,6 +7276,8 @@ def _gy_matches(card, filt, mv_max):
         ok = card.is_land
     elif filt == "card":  # SOS Regrowth: jede Karte
         ok = True
+    elif filt == "instsorc":  # SOS Zealous Lorecaster, Wisdom of Ages
+        return card.is_instant_sorcery
     else:
         ok = not card.is_instant_sorcery
     return ok and card.mv <= mv_max
@@ -7645,6 +7779,8 @@ def end_step_instants(dfn, act, e, step):
             continue
         if card.life_tokens is not None and dfn.gained < 2:  # Germinate Recruits erst ab X = 2
             continue
+        if card.x_regrowth and not (gy_candidates(dfn, "instsorc") and len(dfn.open) >= 3):
+            continue  # Divergent Equation erst mit X >= 1
         if card in dfn.hand and reanimate_ok(dfn, card) and _cast_from_open(dfn, card):
             e["events"].append(i18n.t("{dfn}: {card_name} am Ende des Zugs", dfn=i18n.t(dfn.name), card_name=card.name))
             _resolve(dfn, act, card, step, e)
@@ -7903,8 +8039,8 @@ def apply_ability(p, src, ab, target, e=None, gy=None):
             continue
         if kind == "return_self":  # die Karte selbst aus dem Friedhof (Blessed Ghoul, Gallia, Grim Repriser)
             if e is not None and gy is not None:
-                if atom[4] == "exile_creature":
-                    others = gy_candidates(p, "creature")
+                if atom[4] in ("exile_creature", "exile_instsorc"):  # SOS Postmortem Professor: Instant/Sorcery
+                    others = gy_candidates(p, "creature" if atom[4] == "exile_creature" else "instsorc")
                     p.graveyard.remove(min(others, key=lambda c: (c.mv, c.power, c.name)))
                 put_back(p, gy, atom[1], p.now, e, p.opponent, tapped=atom[2], counters=atom[3],
                          finality=gy.finality)
@@ -7920,6 +8056,11 @@ def apply_ability(p, src, ab, target, e=None, gy=None):
         if kind == "surveil":
             if e is not None:
                 surveil_cards(p, [atom[1]], e, i18n.t("Fähigkeit"))
+            did = True
+            continue
+        if kind == "life":  # SOS Stone Docent
+            if e is not None:
+                gain_life(p, atom[1])
             did = True
             continue
         if kind == "token":
@@ -8048,7 +8189,7 @@ def _attack_value(me, opp, step):
 def lasting_abilities(p, opp, step, e, own_turn, mode):
     """Marken, Empower und Surveil (nur am Ende des gegnerischen Zugs): Marken zuerst (auf die gefaehrlichste passende
     Kreatur), dann Empower, dann Surveil. Dazu Faehigkeiten aus dem Friedhof (Campus Crier)."""
-    rank = {"counter": 0, "return_self": 1, "return": 1, "token": 1, "empower": 2, "surveil": 3}
+    rank = {"counter": 0, "return_self": 1, "return": 1, "token": 1, "empower": 2, "surveil": 3, "life": 3}
     for _round in range(10):
         sources = [(src, ab, None) for src, ab in ability_sources(p, step, own_turn, main=own_turn)]
         sources += [(None, (card.gy_ability[0], 0, False, "sorcery" if card.gy_ability_sorcery else "instant",
@@ -8057,7 +8198,8 @@ def lasting_abilities(p, opp, step, e, own_turn, mode):
         for card in dict.fromkeys(p.graveyard):
             if card.gy_return and _gy_return_ok(p, card):
                 ret = card.gy_return
-                sources.append((None, (ret[0], 0, False, "instant", (("return_self",) + ret[1:],)), card))
+                sources.append((None, (ret[0], 0, False, "sorcery" if ret[5] == "sorcery" else "instant",
+                                       (("return_self",) + ret[1:],)), card))
         options = []
         for src, ab, gy in sources:
             kinds = _kinds(ab)
@@ -8065,7 +8207,9 @@ def lasting_abilities(p, opp, step, e, own_turn, mode):
                 kinds = kinds - {"grant"}
             if not kinds or not kinds <= set(rank):
                 continue
-            if "surveil" in kinds and (own_turn or not p.library):
+            if gy is not None and ab[3] == "sorcery" and not own_turn:
+                continue  # "Activate only as a sorcery" (Friedhof): nur in der eigenen Main Phase
+            if "surveil" in kinds and ((own_turn and ab[3] != "sorcery") or not p.library):  # Hexerei: eigener Zug
                 continue
             if "return" in kinds and not apply_ability(p, src, ab, None, None, gy):
                 continue  # nichts Passendes im Friedhof
@@ -8100,6 +8244,8 @@ def _gy_return_ok(p, card):
     if cond == "gy_gt_lib" and not len(p.graveyard) > len(p.library):  # Paradox Kraken
         return False
     if extra == "exile_creature" and not gy_candidates(p, "creature", exclude=card):
+        return False
+    if extra == "exile_instsorc" and not gy_candidates(p, "instsorc", exclude=card):
         return False
     return legend_ok(p, card) if _dest == "battlefield" else True
 
@@ -9266,6 +9412,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     me.drawn_mark, opp.drawn_mark = me.drawn, opp.drawn
     for p_ in (me, opp):
         p_.direct_mark, p_.deaths_mark = p_.dealt_direct, p_.deaths
+        p_.gy_left_mark = p_.gy_left  # SOS: "if a card left your graveyard this turn"
     me.opponent, opp.opponent = opp, me
     me.now = opp.now = step
     me.life_mark, opp.life_mark = me.life, opp.life
@@ -9701,6 +9848,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
                 cast_removal(rc, me, opp, e, step, target=max(eaters, key=danger))
     sos_tap_instants(me, opp, step, e)
     sos_pre_attack_grants(me, opp, step, e)
+    sos_main_abilities(me, opp, step, e)
     # Jace surveilt schon vor dem Kampf, wenn das in diesem Kampf etwas bringt (Prudent Fateseer, Futurescribe)
     alive = [c for c in me.creatures if not c.dead]
     if 0 < me.jace.loyalty < 3 and not me.surveilled and not walker_engine(me) and any(
@@ -9724,6 +9872,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     phoenix_check(me, opp, step, e)
     hydra_spread(me, e)
     combat_buffs(me, step, e)
+    sos_combat_exile(me, opp, e)
     combat_counters(me, step, e)
     combat_tokens(me, opp, step, e)
     combat_exile_counters(me, step, e)
@@ -9803,6 +9952,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     for a in [a for a in attackers if a.card.discover]:  # U.S.S. Discovery
         for _rep in range(echo_times(me, a)):
             discover(me, opp, a.card.discover, step, e)
+    sos_attack(me, attackers, e)
     for a in attackers:  # Angriffs-Ausloeser der Kreatur selbst
         a.attacked = step
         if a.card.prepare_on:
@@ -9886,6 +10036,8 @@ def take_turn(me, opp, step, rnd, skip_draw):
     e["damage"] = res["player"]
     artifact_hit_triggers(me, [a for a, _bs in blocks if res["to_player"].get(id(a))], step, e)
     counter_hit_draws(me, [a for a, _bs in blocks if res["to_player"].get(id(a))], e)
+    if any(res["to_player"].get(id(a)) for a, _bs in blocks):
+        sos_combat_return(me, e)
     for a, _bs in blocks:  # "deals combat damage to a player, draw ..." (Frostbite Pyromental)
         if (a.card.combat_draw or a.tdraw) and res["to_player"].get(id(a)):
             n = (a.card.combat_draw + a.tdraw) * echo_times(me, a)  # Lwaxana Troi: doppelt

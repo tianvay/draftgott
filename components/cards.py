@@ -529,6 +529,18 @@ class Card(NamedTuple):
     infusion_reanimate: bool = False  # eigenes Endsegment mit Lebensgewinn: Kreatur bis MW = Leben zurueck (Moseo)
     dig_infusion: bool = False  # top_dig: mit Lebensgewinn zwei statt einer Karte (Follow the Lumarets)
     x_life: bool = False  # "Target player gains X life": wir, X = freies Mana (Stream of Life)
+    # SOS Paket D (Friedhof)
+    end_gy_draw: int = 0  # eigenes Endsegment: N ziehen, wenn in diesem Zug eine Karte den Friedhof verliess
+    attack_gy_pump: tuple = ()  # "Whenever you attack", Karte verliess den Friedhof: ein Angreifer +P/+T (Living History)
+    gy_combat_return: tuple = ()  # im Friedhof: nach Kampfschaden am Spieler Kosten zahlen, auf die Hand (Killian's Conf.)
+    rubble_ping: bool = False  # "{T}, Exile a card from your graveyard: Add {R}. ... 1 damage to each opponent"
+    cauldron_reanimate: tuple = ()  # Kosten von "{T}, Sacrifice a creature: Return target creature card ..." (Hexerei)
+    combat_exile_gy: bool = False  # Kampfbeginn: bis zu eine Karte aus einem Friedhof exilieren
+    x_regrowth: bool = False  # "Return up to X target instant and/or sorcery cards" (Divergent Equation)
+    self_exile: bool = False  # "Exile <Name>.": der Zauber geht ins Exil statt in den Friedhof
+    scrollsmith: bool = False  # Betreten: Nichtkreatur-Nichtland-Karte aus dem Friedhof exilieren, bis Ende des
+    #                            naechsten eigenen Zugs wirkbar (Practiced Scrollsmith)
+    named_gy_pump: bool = False  # +X/+0 und Trample, X = 1 + gleichnamige Karten im Friedhof (Ancestral Anger)
 
 
 LANDCYCLE_RE = re.compile(
