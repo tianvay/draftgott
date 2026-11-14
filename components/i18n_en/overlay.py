@@ -81,4 +81,15 @@ EN = {
     'Schaden am Gegner {d} (größter Treffer {b}) · erlitten {x}': 'damage to opponent {d} (biggest hit {b}) · taken {x}',
     'Kreaturen besiegt {k} · Schaden an Kreaturen {c}': 'creatures defeated {k} · damage to creatures {c}',
     'Ø je Spiel: {d} Schaden · {c} Karten gezogen': 'avg per game: {d} damage · {c} cards drawn',
+    "Mana-Kurve zu hoch": "Mana curve too high",
+    "{n} Zauber in {arch}": "{n} spells in {arch}",
+    "{n} Zauber": "{n} spells",
+    "Ø Manawert {mv} (gut: bis {max})": "avg mana value {mv} (good: up to {max})",
+    "{n} Karten mit 5+ Mana, auf 23 Zauber {x} (gut: höchstens {max})":
+        "{n} cards with 5+ mana, {x} per 23 spells (good: at most {max})",
+    "Nur 1 Karte bis 2 Mana": "Only 1 card up to 2 mana",
+    "Nur {n} Karten bis 2 Mana": "Only {n} cards up to 2 mana",
+    ", auf 23 Zauber {x} (gut: mindestens {min})": ", {x} per 23 spells (good: at least {min})",
+    "Tipp: jetzt günstige Karten (bis 2–3 Mana) bevorzugen": "Tip: prefer cheap cards (up to 2–3 mana) now",
+    "Kurve zu hoch": "Curve too high",
 }

@@ -274,6 +274,10 @@ EN = {
         'The live area and the overlay show, for your picks so far: creatures, removal (cards and removal points as in the report) and card flow (cards that draw, search, surveil, scry or explore). If an archetype is recognized, the same numbers once more for only the cards in its colors (colorless ones count too).',
     'Pack-Karten mit Removal tragen ihre Removal-Punkte (im Seitenfenster „R1,5“).':
         'Pack cards with removal carry their removal points (“R1.5” in the overlay).',
+    '<b>Mana-Kurve zu hoch</b>: Ab 8 Zaubern in den Farben des Archetyps (farblose zählen mit, ohne Archetyp alle) warnen Live-Bereich und Seitenfenster rot, wenn der Ø Manawert über 3,3 liegt, auf 23 Zauber hochgerechnet mehr als 6 Karten 5+ Mana kosten oder weniger als 5 Karten höchstens 2 Mana. Der minimierte Kasten zeigt „⚠ Kurve zu hoch“. Dann lieber günstige Karten nehmen.':
+        '<b>Mana curve too high</b>: From 8 spells in the archetype colors (colorless ones count too, without an archetype all of them), the live area and the overlay show a red warning when the average mana value is above 3.3, more than 6 cards cost 5+ mana per 23 spells, or fewer than 5 cards cost at most 2 mana. The minimized box shows “⚠ Curve too high”. Then prefer cheap cards.',
+    'Die Fenster des Overlays passen ihre Höhe selbst an den Inhalt an, damit keine Zeilen abgeschnitten werden; die Breite bleibt, wie du sie ziehst. Reicht der Platz nach unten nicht, rutscht das Fenster nach oben.':
+        'The overlay windows adjust their height to their content so no lines are cut off; the width stays as you drag it. If there is not enough room below, the window moves up.',
     'Archetypen im Draft':
         'Archetypes in the draft',
     'Eine Tabelle zeigt je Archetyp, welche deiner Picks und welche Karten des aktuellen Packs ihm zugeordnet sind (Picks mit Anzahl). Grün: der erkannte Archetyp. Das Seitenfenster zeigt dasselbe kurz („Sacrifice: 3 Picks · im Pack: …“).':

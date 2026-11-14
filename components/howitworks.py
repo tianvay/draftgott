@@ -400,7 +400,14 @@ def _live_help():
             "Removal-Punkte wie im Bericht) und Kartenfluss (Karten, die ziehen, suchen, surveilen, scrien oder "
             "explorieren). Ist ein Archetyp erkannt, dieselben Zahlen noch einmal nur für Karten in seinen Farben "
             "(farblose zählen mit)."),
-            t("Pack-Karten mit Removal tragen ihre Removal-Punkte (im Seitenfenster „R1,5“).")]))
+            t("Pack-Karten mit Removal tragen ihre Removal-Punkte (im Seitenfenster „R1,5“)."),
+            t("<b>Mana-Kurve zu hoch</b>: Ab 8 Zaubern in den Farben des Archetyps (farblose zählen mit, ohne "
+            "Archetyp alle) warnen Live-Bereich und Seitenfenster rot, wenn der Ø Manawert über 3,3 liegt, auf 23 "
+            "Zauber hochgerechnet mehr als 6 Karten 5+ Mana kosten oder weniger als 5 Karten höchstens 2 Mana. Der "
+            "minimierte Kasten zeigt „⚠ Kurve zu hoch“. Dann lieber günstige Karten nehmen."),
+            t("Die Fenster des Overlays passen ihre Höhe selbst an den Inhalt an, damit keine Zeilen abgeschnitten "
+            "werden; die Breite bleibt, wie du sie ziehst. Reicht der Platz nach unten nicht, rutscht das Fenster "
+            "nach oben.")]))
         + _panel(t("Archetypen im Draft"), _ul([
             t("Eine Tabelle zeigt je Archetyp, welche deiner Picks und welche Karten des aktuellen Packs ihm "
             "zugeordnet sind (Picks mit Anzahl). Grün: der erkannte Archetyp. Das Seitenfenster zeigt dasselbe "

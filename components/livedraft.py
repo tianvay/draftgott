@@ -80,6 +80,37 @@ def pool_info(cards, main):
     return out
 
 
+CURVE_MIN_SPELLS = 8  # vorher ist eine Warnung zur Kurve zu frueh
+CURVE_SPELLS = 23  # Zauber eines Limited-Decks (40 Karten, 17 Laender): darauf wird hochgerechnet
+CURVE_AVG_MAX = 3.3  # hoechster guter Durchschnitt der Manawerte
+CURVE_HEAVY_MAX = 6  # hoechstens so viele Zauber mit 5+ Mana auf 23
+CURVE_CHEAP_MIN = 5  # mindestens so viele Zauber bis 2 Mana auf 23
+
+
+def curve_warning(cards, main):
+    """Warnung, wenn die Mana-Kurve der Picks zu hoch ist (Nutzer 14.11.2026), sonst None. Zaehlt Zauber (keine
+    Laender) in den Farben des Archetyps main (farblose zaehlen mit; ohne Archetyp alle), erst ab CURVE_MIN_SPELLS.
+    Gruende ("reasons"): "avg" Durchschnitt ueber CURVE_AVG_MAX, "heavy" mehr als CURVE_HEAVY_MAX Zauber mit 5+ Mana
+    auf 23 hochgerechnet, "cheap" weniger als CURVE_CHEAP_MIN Zauber bis 2 Mana auf 23. curve wie deck_summary."""
+    spells = [c for c in cards if not c.get("land") and (not main or set(c.get("colors") or []) <= set(main))]
+    n = len(spells)
+    if n < CURVE_MIN_SPELLS:
+        return None
+    mvs = [int(c.get("mv") or 0) for c in spells]
+    curve = [0] * 6
+    for mv in mvs:
+        curve[min(5, max(0, mv - 1))] += 1
+    avg = round(sum(mvs) / n, 2)
+    heavy, cheap = sum(1 for mv in mvs if mv >= 5), sum(1 for mv in mvs if mv <= 2)
+    heavy23, cheap23 = round(heavy * CURVE_SPELLS / n), round(cheap * CURVE_SPELLS / n)
+    reasons = [r for r, bad in (("avg", avg > CURVE_AVG_MAX), ("heavy", heavy23 > CURVE_HEAVY_MAX),
+                                ("cheap", cheap23 < CURVE_CHEAP_MIN)) if bad]
+    if not reasons:
+        return None
+    return {"cards": n, "avg_mv": avg, "heavy": heavy, "cheap": cheap, "curve": curve, "reasons": reasons,
+            "heavy23": heavy23, "cheap23": cheap23}
+
+
 TOP_RATINGS = ("matchwinner",)  # Bomben: nur Matchwinner
 
 
@@ -491,7 +522,7 @@ class LiveDraft:
                 "picks": [c["name"] for c in picks], "unknown": unknown, "detect": detect,
                 "deck": deck, "complete": complete, "deckinfo": deckinfo, "game": game,
                 "draftinfo": draftinfo, "archmap": archmap, "enemy_saved": saved, "summary": summary,
-                "signals": sig,
+                "signals": sig, "curve_warning": None if complete else curve_warning(picks, detect["main"]),
                 "archetypes": found,
                 "cardarch": {n: v for n, v in (assign or {}).items() if n in names},
                 "cardbest": {n: v for n, v in (best or {}).items() if n in names}, "hints": hints,

@@ -71,6 +71,10 @@ PAGE = {
     'Removal-Punkte wie im Bericht; Ampel dort: grün ab 4 Punkten je 40 Karten':
         'Removal points as in the report; traffic light there: green from 4 points per 40 cards',
     'add("Kartenfluss",': 'add("Card flow",',
+    '"⚠ Mana-Kurve zu hoch: Ø "': '"⚠ Mana curve too high: avg "',
+    '" · bis 2 Mana "': '" · up to 2 mana "',
+    '" (von "+w.cards+" Zaubern)"': '" (of "+w.cards+" spells)"',
+    '"Tipp: jetzt günstige Karten (bis 2–3 Mana) bevorzugen"': '"Tip: prefer cheap cards (up to 2–3 mana) now"',
     '||"keine"': '||"none"',
     'i.arch.cards+" Karten"': 'i.arch.cards+" cards"',
     '{open:"offen",maybe:"evtl. offen",contested:"umkämpft"}': '{open:"open",maybe:"maybe open",contested:"contested"}',

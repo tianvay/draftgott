@@ -867,7 +867,7 @@ h2 small{color:var(--muted);font-weight:400}
 #ldeck:disabled{background:#e9edf3;border-color:var(--line);color:var(--muted);opacity:1}
 #linfo{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;font-size:12.5px}
 #linfo span{background:#f3f6fb;border:1px solid var(--line);border-radius:8px;padding:2px 9px}
-#linfo span b{color:var(--ink)} #lsummary{display:none;margin-top:10px;border:1px solid var(--line);border-radius:10px;padding:8px 12px;background:#fbfcfe} #lsummary.show{display:block} #lsummary h4{margin:0 0 6px;font-size:13.5px} #lsummary .sv{display:flex;flex-wrap:wrap;gap:6px;font-size:12.5px} #lsummary .sv span{background:#f3f6fb;border:1px solid var(--line);border-radius:8px;padding:2px 9px} #lsummary .sv span b{color:var(--ink)}
+#linfo span b{color:var(--ink)} #linfo span.cwarn{background:#fde0e0;border-color:#e8a598;color:#a82a2a;font-weight:600} #lsummary{display:none;margin-top:10px;border:1px solid var(--line);border-radius:10px;padding:8px 12px;background:#fbfcfe} #lsummary.show{display:block} #lsummary h4{margin:0 0 6px;font-size:13.5px} #lsummary .sv{display:flex;flex-wrap:wrap;gap:6px;font-size:12.5px} #lsummary .sv span{background:#f3f6fb;border:1px solid var(--line);border-radius:8px;padding:2px 9px} #lsummary .sv span b{color:var(--ink)}
 #lmap{margin-top:10px;display:none}
 #lmap.show{display:block}
 #lmap table{border-collapse:collapse;font-size:13px;width:100%}
@@ -1864,7 +1864,11 @@ function renderInfo(){
   add("Kartenfluss",String(i.flow),kinds||"keine");
   const m=live.detect&&live.detect.main;
   if(i.arch&&m){add("In "+archName(m),i.arch.cards+" Karten");add("Kreaturen",String(i.arch.creatures));
-    add("Removal",i.arch.removal+" ("+num(i.arch.removal_points)+" P.)");add("Kartenfluss",String(i.arch.flow))}}
+    add("Removal",i.arch.removal+" ("+num(i.arch.removal_points)+" P.)");add("Kartenfluss",String(i.arch.flow))}
+  const w=live.curve_warning;  // livedraft.curve_warning: Kurve der Picks zu hoch
+  if(w){const s=el("span","cwarn");s.append("⚠ Mana-Kurve zu hoch: Ø "+num(w.avg_mv)+" · 5+ Mana "+w.heavy+
+    " · bis 2 Mana "+w.cheap+" (von "+w.cards+" Zaubern)");s.title="Tipp: jetzt günstige Karten (bis 2–3 Mana) bevorzugen";
+    box.prepend(s)}}
 // Draft-Bilanz (components/gamestats.py): nur zum fertigen Draft, ein neuer Draft beginnt ohne Reste
 function renderSummary(){
   const box=$("lsummary"),s=live.summary;box.textContent="";

@@ -24,7 +24,8 @@ from components.i18n import dec, t
 RATING_ABBR = {"matchwinner": "♛", "splashworthy": "★", "mustplay": "MP", "filler": "Fi", "neverplay": "NP"}
 MARK = {"best": "◆", "arch": "●", "color": "○", "": "  "}
 COLORS = {"bg": "#161b24", "ink": "#e8ecf3", "muted": "#8d97a8", "arch": "#1f7a45", "color": "#2c3a52",
-          "head": "#ffd166", "never": "#6b7280", "best": "#6d28b8", "hint": "#8e2bd6", "hint2": "#5b1d99"}
+          "head": "#ffd166", "never": "#6b7280", "best": "#6d28b8", "hint": "#8e2bd6", "hint2": "#5b1d99",
+          "warn": "#b4462a", "warnsub": "#ffb59e"}
 HINT_STATE = {"in": "dein Archetyp", "near": "nahe dran"}
 
 
@@ -383,6 +384,7 @@ def summary_rows(s):
 
 
 MINI_KEYS = (("removal", "Removal"), ("land", "Land"), ("creature", "Kreatur"))
+MINI_TAGS = ("arch", "color", "best", "hint", "plain", "head", "warn")  # Stile mit eigener Kasten-Form (mini_*)
 
 
 def mini_rows(snap):
@@ -407,6 +409,8 @@ def mini_rows(snap):
         main = (snap.get("detect") or {}).get("main")
         head = f"Pick {snap.get('pick', 1)} · " + (_arch_name(snap, main) if main else t("offen"))
         rows = [(head, "head")] + [(f"{MARK['best']} {h['name']}", "hint") for h in snap.get("hints") or []][:1]
+        if snap.get("curve_warning"):
+            rows.append(("⚠ " + t("Kurve zu hoch"), "warn"))
         if snap.get("pack"):
             best = snap["pack"][0]
             rows.append((f"1. {best['name']}", best.get("level") or "plain"))
@@ -450,10 +454,10 @@ def rows_for(snap):
         t("Archetyp: {name} ({main})", name=_arch_name(snap, main), main=main) +
         (t(" – eigene Wahl") if detect.get("manual") else "")
         if main else t("Archetyp: noch offen"))
-    rows = [(head, "head")]
+    rows = [(head, "head")] + curve_rows(snap.get("curve_warning"), _arch_name(snap, main) if main else None)
     if status != "waiting":
         rows += hint_rows(snap)
-    scores = [s for s in detect.get("scores") or [] if s["score"]][:3]
+    scores =[s for s in detect.get("scores") or [] if s["score"]][:3]
     if scores:
         rows.append((" · ".join(f"{s['name']} {s['score']:g}" for s in scores), "sub"))
     rows += signal_rows(snap.get("signals"))
@@ -483,6 +487,30 @@ def rows_for(snap):
             parts.append(t("{p} % ({g} G.)", p=round(100 * stats['wins'] / stats['games']), g=stats['games']))
         rows.append(("  ".join(parts), tag))
     return rows + tip_rows(snap, main)
+
+
+def curve_rows(w, arch_name):
+    """Warnung "Mana-Kurve zu hoch" (livedraft.curve_warning) mit den Gruenden und einem Tipp; leer ohne Warnung."""
+    if not w:
+        return []
+    from components import livedraft as ld
+    head = ("⚠ " + t("Mana-Kurve zu hoch") + " · " +
+            (t("{n} Zauber in {arch}", n=w["cards"], arch=arch_name) if arch_name else
+             t("{n} Zauber", n=w["cards"])))
+    rows = [(head, "warn")]
+    if "avg" in w["reasons"]:
+        rows.append((t("Ø Manawert {mv} (gut: bis {max})", mv=dec(f"{w['avg_mv']:g}"),
+                       max=dec(f"{ld.CURVE_AVG_MAX:g}")), "warnsub"))
+    if "heavy" in w["reasons"]:
+        rows.append((t("{n} Karten mit 5+ Mana, auf 23 Zauber {x} (gut: höchstens {max})", n=w["heavy"],
+                       x=w["heavy23"], max=ld.CURVE_HEAVY_MAX), "warnsub"))
+    if "cheap" in w["reasons"]:
+        rows.append(((t("Nur 1 Karte bis 2 Mana") if w["cheap"] == 1 else
+                      t("Nur {n} Karten bis 2 Mana", n=w["cheap"])) +
+                     t(", auf 23 Zauber {x} (gut: mindestens {min})", x=w["cheap23"], min=ld.CURVE_CHEAP_MIN),
+                     "warnsub"))
+    rows.append((t("Tipp: jetzt günstige Karten (bis 2–3 Mana) bevorzugen"), "warnsub"))
+    return rows
 
 
 SIGNAL_LABEL = {"open": "offen", "maybe": "evtl. offen", "contested": "umkämpft"}
@@ -583,6 +611,52 @@ def trick_geometry():
 def main_geometry(screen_width):
     """Seitenfenster am rechten Bildschirmrand."""
     return f"360x560+{max(0, screen_width - 380)}+{TOP}"
+
+
+FIT_MIN_HEIGHT = 120  # kleinste Hoehe eines angepassten Fensters
+FIT_MARGIN = 48  # Platz unten fuer die Taskleiste
+
+
+def fit_geometry(need, y, screen_height, min_height=FIT_MIN_HEIGHT, margin=FIT_MARGIN):
+    """(Hoehe, y) eines Fensters, das need Pixel Inhalt braucht (Nutzer 14.11.2026: keine Zeilen abschneiden): so hoch
+    wie noetig, mindestens min_height; reicht der Platz bis zum unteren Rand nicht, rutscht es nach oben, hoechstens
+    bis Bildschirmhoehe ohne margin."""
+    usable = max(min_height, screen_height - margin)
+    h = min(max(need, min_height), usable)
+    return h, max(0, min(y, usable - h))
+
+
+def _content_height(text):
+    """Pixel, die der Inhalt des Textfelds bei seiner jetzigen Breite braucht (mit Rand und eingebetteten Grafiken)."""
+    text.update_idletasks()
+    try:
+        n = text.count("1.0", "end", "update", "ypixels")
+    except Exception:  # noqa: BLE001 - aeltere Tk-Versionen ohne "update"
+        n = text.count("1.0", "end", "ypixels")
+    if isinstance(n, (tuple, list)):
+        n = n[-1]
+    return int(n or 0) + 2 * int(text.cget("pady")) + 2 * int(text.cget("bd")) + 4
+
+
+def fit_window(win, text):
+    """Passt die Hoehe des Fensters an den Inhalt seines Textfelds an (Breite bleibt, wie der Nutzer sie gezogen hat);
+    unsichtbare oder noch nicht gezeichnete Fenster bleiben, wie sie sind."""
+    if win.state() == "withdrawn":
+        return
+    win.update_idletasks()
+    if text.winfo_width() < 50:
+        return
+    cur_y = win.winfo_y()
+    if getattr(win, "_fit_last", None) != cur_y:  # vom Nutzer verschoben (oder neu): das ist die Wunschlage
+        win._fit_home = cur_y
+    extra = max(0, win.winfo_height() - text.winfo_height())  # Knopfleiste und Deck-Knopf
+    deco = max(0, win.winfo_rooty() - cur_y)  # Titelleiste
+    h, y = fit_geometry(_content_height(text) + extra, win._fit_home, win.winfo_screenheight() - deco)
+    if (h, y) != (win.winfo_height(), cur_y):
+        win.geometry(f"{win.winfo_width()}x{h}+{win.winfo_x()}+{y}")
+        win.update_idletasks()
+    win._fit_last = win.winfo_y()
+    text.yview_moveto(0)
 
 
 def _float_window(win):
@@ -704,10 +778,15 @@ def _styles(text):
     text.tag_configure("tip", foreground=COLORS["ink"], font=("Segoe UI", 10), lmargin1=6, lmargin2=18,
                        spacing3=2)
     text.tag_configure("group", foreground=COLORS["muted"], font=("Segoe UI", 10, "bold"), spacing1=6, spacing3=1)
-    for tag in ("arch", "color", "best", "hint", "plain", "head", "msg"):  # Kasten: groessere Schrift
+    text.tag_configure("warn", background=COLORS["warn"], foreground="#ffffff", font=("Segoe UI", 11, "bold"),
+                       spacing1=3, spacing3=2)
+    text.tag_configure("warnsub", foreground=COLORS["warnsub"], font=("Segoe UI", 9), lmargin1=6, lmargin2=6,
+                       spacing3=1)
+    for tag in ("arch", "color", "best", "hint", "plain", "head", "msg", "warn"):  # Kasten: groessere Schrift
         text.tag_configure("mini_" + tag, font=("Segoe UI", 13, "bold"), spacing1=3, spacing3=3,
-                           background=COLORS[tag] if tag in ("arch", "color", "best", "hint") else COLORS["bg"],
-                           foreground=COLORS["head"] if tag == "head" else COLORS["ink"])
+                           background=COLORS[tag] if tag in ("arch", "color", "best", "hint", "warn") else COLORS["bg"],
+                           foreground=COLORS["head"] if tag == "head" else (
+                               "#ffffff" if tag == "warn" else COLORS["ink"]))
 
 
 def run(url, interval_ms=1000):
@@ -839,7 +918,7 @@ def run(url, interval_ms=1000):
     def render():
         snap = state["snap"]
         if state["mini"]:
-            rows = [(line, "mini_" + (tag if tag in ("arch", "color", "best", "hint", "plain", "head") else "msg"))
+            rows = [(line, "mini_" + (tag if tag in MINI_TAGS else "msg"))
                     for line, tag in mini_rows(snap)]
         else:
             rows = rows_for(snap)
@@ -853,12 +932,27 @@ def run(url, interval_ms=1000):
         if rows != state["last"]:
             state["last"] = rows
             _fill(text, rows)
+            state["fit_main"] = True
         trows = trick_window_rows(snap)
         if trows != state["tricks"]:
             state["tricks"] = trows
             trick_tip_win.hide()
             _fill(trick_text, trows)
+            state["fit_tricks"] = True
         show_windows()
+        fit_all()
+
+    def fit_all():
+        """Fenster an den Inhalt anpassen, wenn er sich geaendert hat oder ein Fenster breiter/schmaler wurde."""
+        for key, win, tw in (("main", root, text), ("tricks", tricks, trick_text)):
+            width = tw.winfo_width()
+            if state.get("fit_" + key) or state.get("width_" + key) != width:
+                try:
+                    fit_window(win, tw)
+                except tk.TclError:
+                    continue
+                if win.state() != "withdrawn" and width >= 50:
+                    state["fit_" + key], state["width_" + key] = False, width
 
     def tick():
         snap = fetch(url)
