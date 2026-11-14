@@ -37,6 +37,7 @@ from components import archetypes as set_archetypes
 from components import cardarchetypes
 from components import draftstats
 from components import ratings as card_ratings
+from components import streamdata
 from components import synergy
 from components.arenalog import default_log_path
 from components.i18n import get_lang, html_lang, t, tr_block
@@ -296,12 +297,14 @@ def make_handler(app):
         def log_message(self, *a):  # keine Zugriffsprotokolle im Terminal
             pass
 
-        def _send(self, body, ctype="text/html; charset=utf-8", code=200):
+        def _send(self, body, ctype="text/html; charset=utf-8", code=200, cors=False):
             data = body if isinstance(body, bytes) else body.encode("utf-8")
             self.send_response(code)
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(data)))
             self.send_header("Cache-Control", "no-store")
+            if cors:  # Stream-Overlay als Browserquelle in OBS (andere Herkunft als dieser Server)
+                self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
             self.wfile.write(data)
 
@@ -326,6 +329,9 @@ def make_handler(app):
                             "live": bool(app.get("live")), "pool_version": app.get("pool_version", 0)})
             elif path == "/api/live":
                 self._json(self._live_snapshot())
+            elif path == "/api/stream":
+                self._send(json.dumps(streamdata.payload(self._live_snapshot())),
+                           "application/json; charset=utf-8", cors=True)
             elif path == "/api/setcards":
                 self._set_cards(self.path.partition("?")[2])
             elif path == "/howitworks.html":
@@ -614,6 +620,7 @@ def serve(args, simulate, save, battle=None, save_battle=None):
         print(t("Live-Draft: lese {log}, Draft-Statistik in {stats}", log=log, stats=app['stats']), file=sys.stderr)
         live.read_previous(log.with_name("Player-prev.log"))
         live.step()  # bisheriger Stand des Protokolls (laufender Draft), danach im Hintergrund weiter
+        live.restore_previous(log.with_name("Player-prev.log"))  # Draft vor einem Arena-Neustart
         app["live"], app["pool_version"] = live, live.version
         app["reload_pool"] = lambda: load_pool(args.drafthelper, allow_empty=True)
         if live.version:

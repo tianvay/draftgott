@@ -188,9 +188,27 @@ def trick_rows(tr):
         rows.append((t("Kein Mana offen: jetzt keine Tricks"), "sub"))
     elif not tr["now"]:
         rows.append((t("Keine Instants/Flash-Karten mit diesem Mana"), "sub"))
-    for c in tr["now"]:
-        rows.append(("• " + _trick_text(c), "arch" if c.get("removal") else "color"))
+    for label, cards in _trick_groups(tr["now"]):
+        rows.append((t(label, n=len(cards)), "group"))
+        rows += [("• " + _trick_text(c), "arch" if c.get("removal") else "color") for c in cards]
     return rows
+
+
+TRICK_GROUPS = ("Instants ({n})", "Flash-Kreaturen ({n})", "Andere mit Flash ({n})")
+
+
+def _trick_groups(cards):
+    """Tricks in Instants, Flash-Kreaturen und andere Karten mit Flash (Nutzer 14.11.2026); leere Gruppen fehlen.
+    Aeltere Daten ohne "flash" zaehlen als Instant."""
+    groups = ([], [], [])
+    for c in cards:
+        if not c.get("flash"):
+            groups[0].append(c)
+        elif "Creature" in (c.get("type") or ""):
+            groups[1].append(c)
+        else:
+            groups[2].append(c)
+    return [(label, g) for label, g in zip(TRICK_GROUPS, groups) if g]
 
 
 def trick_tip(c):
@@ -685,6 +703,7 @@ def _styles(text):
     text.tag_configure("head2", foreground=COLORS["head"], font=("Segoe UI", 11, "bold"), spacing1=2, spacing3=4)
     text.tag_configure("tip", foreground=COLORS["ink"], font=("Segoe UI", 10), lmargin1=6, lmargin2=18,
                        spacing3=2)
+    text.tag_configure("group", foreground=COLORS["muted"], font=("Segoe UI", 10, "bold"), spacing1=6, spacing3=1)
     for tag in ("arch", "color", "best", "hint", "plain", "head", "msg"):  # Kasten: groessere Schrift
         text.tag_configure("mini_" + tag, font=("Segoe UI", 13, "bold"), spacing1=3, spacing3=3,
                            background=COLORS[tag] if tag in ("arch", "color", "best", "hint") else COLORS["bg"],

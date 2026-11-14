@@ -207,6 +207,36 @@ class LiveDraft:
             self.tracker.feed_line(line)
         self.tracker.state = own_state
 
+    def restore_previous(self, path):
+        """Nach dem ersten step(): steht im aktuellen Protokoll kein Draft (Arena wurde seit dem Draft neu gestartet,
+        Player.log hat nur noch Deck und Matches), den letzten Draft aus der vorherigen Protokolldatei uebernehmen,
+        damit Deck und Draft-Bilanz erscheinen (Nutzer 14.11.2026). Die Pool-Datei bleibt unberuehrt; ein Deck aus dem
+        aktuellen Protokoll geht vor. True, wenn ein Draft uebernommen wurde."""
+        with self.lock:
+            if self.state.draft or self.state.event:
+                return False
+        try:
+            text = pathlib.Path(path).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return False
+        state, deck = arenalog.DraftState(), None
+        for line in text.split("\n"):
+            for ev in arenalog.scan_line(line):
+                state.feed(ev)
+            for ev in arenalog.scan_match_line(line):
+                if ev["kind"] == "deck" and draftstats.is_limited(ev["event"]):
+                    deck = {"main": ev["main"], "side": ev["side"]}
+        if not (state.draft or state.event):
+            return False
+        state.pack, state.waiting = [], True  # das letzte Pack der alten Sitzung liegt nicht mehr an
+        with self.lock:
+            self.state = state
+            self.deck = self.deck or deck
+            self._written = list(state.picks)  # Pool-Datei nicht mit der Pick-Liste ueberschreiben
+            current = self.deck
+        self._load_cards(state.picks + list((current or {}).get("main", {})) + list((current or {}).get("side", {})))
+        return True
+
     def names(self):
         if self._names is None:
             self._names = default_names(self.log_path)

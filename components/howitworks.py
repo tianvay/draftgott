@@ -384,7 +384,8 @@ def _live_help():
             "Archetyps liegen (hellgrün). NeverPlay hat immer 0 Punkte."),
             t("<b>Synergie</b>: Dazu kommt, wie viel die Karte den Synergiewert deiner Picks erhöht (bis + 2, „Synergie "
             "+ … mit …“ unter der Karte, im Seitenfenster „Syn+“). Mit erkanntem Archetyp zählen nur Picks in seinen "
-            "Farben. Synergie heißt: Eine Karte profitiert von anderen (Lebensgewinn-Auslöser und Lebensgewinn, Prowess "
+            "Farben, und nur bei Karten, die in ihn passen (seine Farben, ihm zugeordnet oder farblos); bei "
+            "anderen steht die Synergie nur da. Synergie heißt: Eine Karte profitiert von anderen (Lebensgewinn-Auslöser und Lebensgewinn, Prowess "
             "und Nichtkreatur-Zauber, Marken-Belohnungen und Marken, Auren und Ausrüstung mit fliegenden oder "
             "geschützten Trägern, Marken und Buffs verteilen mit genug Kreaturen, Kreaturtypen …). Der Bericht hat "
             "dazu den Abschnitt „Synergie“."),

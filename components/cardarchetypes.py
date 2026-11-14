@@ -18,7 +18,8 @@ nahe dran ("near": er hat Punkte und liegt hoechstens NEAR_POINTS hinter dem bes
 Pack (rank): Punkte je Karte = Bewertung (Matchwinner 5, Splashworthy 4, MustPlay 3, unbewertet 1,5, Filler 1) + 3, wenn sie dem
 erkannten Archetyp zugeordnet ist (+ 4, wenn er ihr bester ist), sonst + 1, wenn ihre Farben in dessen Farben liegen. NeverPlay hat immer 0.
 Mit pool (bisherige Picks) kommt der Synergie-Zuwachs der Karte zum Pool dazu (components/synergy.pick_bonus, bis
-+2); mit erkanntem Archetyp zaehlen nur Picks in dessen Farben (farblose immer).
++2); mit erkanntem Archetyp zaehlen nur Picks in dessen Farben (farblose immer), und der Zuwachs zaehlt nur fuer
+Karten, die in den Archetyp passen (Farben, Zuordnung oder farblos); er steht trotzdem an der Karte.
 """
 import json
 import os
@@ -209,7 +210,9 @@ def rank(pack, ratings, assign, main, best=None, detect=None, pool=None):
         if pool is not None:
             bonus, partners = synergy.pick_bonus(mine, c) if c.get("syn") else (0, [])
             extra = {"synergy": bonus, "syn_with": partners}
-            if r != "neverplay":
+            # Nutzer 14.11.2026: Synergie zaehlt nur, wenn die Karte in den Archetyp passt (sonst nicht spielbar)
+            playable = not main or lv or not c.get("colors")
+            if r != "neverplay" and playable:
                 points = round(points + bonus, 1)
         out.append(dict(c, rating=r, arch=list((assign or {}).get(c["name"], [])), best=top, level=lv, points=points,
                         hint=near(detect, top) if r in HINT_RATINGS else "", **extra))
