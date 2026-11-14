@@ -181,6 +181,17 @@ class FormatReportTests(unittest.TestCase):
         self.assertIn('class="scatter"', html)
         self.assertEqual(html.count("<circle"), 4)  # nur Alle: A-D; in den Formaten zu wenige mit Pick und 6 Games
 
+    def test_scatter_hover_image(self):
+        data = two_formats()
+        for m in data["drafts"][3]["matches"]:
+            m["deck"] = {"A": 1, "B": 1, "C": 1, "D": 1}
+        cards = {n: dict(c) for n, c in CARDS.items()}
+        cards["A"]["image_uris"] = {"normal": "https://img/a.jpg", "small": "https://img/a-small.jpg"}
+        html = render(data, cards)
+        self.assertIn('data-img="https://img/a-small.jpg"', html)  # Minibild beim Hovern
+        self.assertIn('class="sctip"', html)
+        self.assertEqual(html.count('data-img=""'), 3)  # B-D ohne Bild: nur der Text
+
     def test_english(self):
         with english():
             html = render()

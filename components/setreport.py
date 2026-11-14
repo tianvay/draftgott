@@ -164,6 +164,11 @@ h3.sub{font-size:15px;margin:14px 0 2px}
 .scatter text.lb{fill:#1d2430;font-weight:600}
 .scatter circle{fill:var(--fc,#2f6fd6);fill-opacity:.75;stroke:#fff;stroke-width:2}
 .scatter circle:hover{fill-opacity:1;stroke:#1d2430}
+.scbox{position:relative}
+.sctip{position:absolute;z-index:5;pointer-events:none;background:#fff;border:1px solid var(--line);border-radius:10px;
+  box-shadow:0 6px 20px rgba(16,24,40,.18);padding:6px;width:158px;font-size:12px;line-height:1.35;color:#1d2430}
+.sctip img{display:block;width:146px;border-radius:7px;margin-bottom:5px}
+.sctip img[hidden]{display:none}
 .filters{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin:4px 0 10px}
 .filters input[type=search]{flex:1;min-width:200px;font:inherit;padding:7px 10px;border:1px solid var(--line);
   border-radius:8px}
@@ -257,6 +262,16 @@ if(tbls.length){const q=document.getElementById("cq"),only=document.getElementBy
 const setView=v=>{document.querySelectorAll(".vw").forEach(e=>e.hidden=e.dataset.view!==v);
  document.querySelectorAll(".fswitch button").forEach(b=>b.classList.toggle("on",b.dataset.v===v));
  try{localStorage.setItem("setauswertung-view",v)}catch(e){}apply()};
+document.querySelectorAll(".scbox").forEach(box=>{const tip=box.querySelector(".sctip"),pic=tip.querySelector("img"),
+ tx=tip.querySelector("span");
+ box.querySelectorAll("circle").forEach(c=>{const ti=c.querySelector("title");c.dataset.tip=ti?ti.textContent:"";
+  if(ti)ti.remove();c.setAttribute("aria-label",c.dataset.tip);
+  c.onmouseenter=()=>{tx.textContent=c.dataset.tip;pic.hidden=!c.dataset.img;if(c.dataset.img)pic.src=c.dataset.img;
+   tip.hidden=false};
+  c.onmousemove=e=>{const b=box.getBoundingClientRect(),px=e.clientX-b.left,py=e.clientY-b.top;
+   const l=px+tip.offsetWidth+18>b.width?px-tip.offsetWidth-14:px+14;
+   tip.style.left=Math.max(0,l)+"px";tip.style.top=Math.max(0,Math.min(py-40,b.height-tip.offsetHeight))+"px"};
+  c.onmouseleave=()=>{tip.hidden=true}})});
 document.querySelectorAll(".fswitch button").forEach(b=>b.onclick=()=>setView(b.dataset.v));
 try{const v=localStorage.getItem("setauswertung-view");if(v&&document.querySelector('.fswitch button[data-v="'+v+'"]'))setView(v)}catch(e){}
 </script>"""
@@ -649,8 +664,10 @@ def _scatter(stats, cards, key):
         rad = 4 + 7 * math.sqrt(s["games"] / gmax)
         tip = t("{name}: {p} in {g} Games, Ø Pick {pick}", name=n, p=_pct(s["wins"], s["games"]), g=s["games"],
                 pick=dec(f'{s["avg_pick"]:.1f}'))
-        dots.append(f'<circle cx="{x(s["avg_pick"]):.1f}" cy="{y(r):.1f}" r="{rad:.1f}"><title>{esc(tip)}</title>'
-                    f'</circle>')
+        sc = cards.get(n) or {}
+        img = _image(sc, "small") or _image(sc, "normal")
+        dots.append(f'<circle cx="{x(s["avg_pick"]):.1f}" cy="{y(r):.1f}" r="{rad:.1f}" data-img="{esc(img)}">'
+                    f'<title>{esc(tip)}</title></circle>')
     placed = []
     for n, s in pearls:
         r = s["wins"] / s["games"]
@@ -665,8 +682,9 @@ def _scatter(stats, cards, key):
         labels.append(f'<text class="lb" x="{cx + (-12 if anchor == "end" else 12):.1f}" y="{y(r) + 4:.1f}" '
                       f'text-anchor="{anchor}">{esc(n)}</text>')
     cls = f' f-{key}' if key != "all" else ""
-    return (f'<div class="cardbox{cls}"><svg class="scatter" viewBox="0 0 {w} {h}" role="img" '
+    return (f'<div class="cardbox scbox{cls}"><svg class="scatter" viewBox="0 0 {w} {h}" role="img" '
             f'aria-label="{t("Pick-Wert")}">{grid}{"".join(dots)}{"".join(labels)}</svg>'
+            '<div class="sctip" hidden><img alt=""><span></span></div>'
             f'<div class="hint2">' + t("Gestrichelt: Ø Siegquote dieser Karten ({p}). Kreisgröße = Games; mit der Maus "
                                        "auf einen Punkt zeigen für Name und Zahlen.", p=f"{round(avg * 100)} %")
             + '</div></div>')
