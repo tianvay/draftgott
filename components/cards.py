@@ -609,6 +609,22 @@ class Card(NamedTuple):
     nita: bool = False  # Nita: Zauber des Gegners aus seinem Friedhof wirken, dann Marken auf jede eigene Kreatur
     applied_geometry: bool = False  # Token-Kopie einer eigenen Kreatur als 0/0-Fractal mit sechs Marken
     token_copy_creature: bool = False  # Token-Kopie einer eigenen Kreatur (Echocasting Symposium)
+    # SOS Paket J (schwerste Einzelkarten)
+    pay_x_life: bool = False  # Zusatzkosten "pay X life" (Vicious Rivalry, Fix What's Broken; X waehlt der Effekt)
+    paradigm: bool = False  # Lesson mit Paradigm: nach dem ersten Aufloesen ins Exil, jede erste Main Phase gratis
+    capstone: bool = False  # Improvisation Capstone: oberste Karten bis Manawert 4 exilieren, Zauber davon gratis
+    fractalize: bool = False  # Kreatur bekommt Grund-P/T X+1 bis Rundenende (Kampftrick)
+    pox: bool = False  # Pox Plague: jeder verliert die Haelfte von Leben, Hand und Permanents
+    fix_broken: bool = False  # Fix What's Broken: Artefakte und Kreaturen mit Manawert X aus dem Friedhof
+    reckoning: bool = False  # Moment of Reckoning: bis zu vier Modi (zerstoeren / zurueckholen)
+    storm_grant: bool = False  # eigene Instants/Sorceries haben Storm (Prismari)
+    cascade: bool = False  # Cascade (Quandrix selbst)
+    cascade_grant: bool = False  # eigene Instants/Sorceries aus der Hand haben Cascade (Quandrix)
+    casualty_grant: bool = False  # eigene Instants/Sorceries haben Casualty 1 (Silverquill)
+    affinity_grant: bool = False  # eigene Instants/Sorceries haben Affinity fuer Kreaturen (Witherbloom)
+    zaffai: bool = False  # einmal je eigenem Zug einen Instant/Sorcery aus der Hand gratis
+    grandeur: bool = False  # Page, Loose Leaf: zweite Page abwerfen, bis zu einem Instant/Sorcery aufdecken
+    untap_option: bool = False  # "You may tap or untap target creature": eigene Mana-Kreatur enttappen (Rejoinder)
 
 
 LANDCYCLE_RE = re.compile(

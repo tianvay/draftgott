@@ -380,6 +380,9 @@ EN = {
     # SOS Paket I
     "{me}: {card_name} – {n} Kopien": "{me}: {card_name} – {n} copies",
     "{me}: {card_name} aus dem Friedhof gewirkt": "{me}: {card_name} cast from the graveyard",
+    # SOS Paket J
+    "{me}: {card_name} – Grandeur": "{me}: {card_name} – grandeur",
+    "{me}: {card_name} – {target_name} enttappt": "{me}: {card_name} – {target_name} untapped",
     "{me}: {a_card_name} – Gegner verliert {loss}, {life} Leben": "{me}: {a_card_name} – opponent loses {loss}, {life} life",
     # Namen der Spieler im Protokoll
     "Wir": "We",

@@ -692,7 +692,9 @@ full log. The rules of the battle model are described in detail at the end of th
   and Ral Zarek (including skipped turns), Rabid Attack, Slumbering Trudge, Molten Note, Steal the Show, and Rocket
   Volley. Package I (copying): spell copies (Lumaret's Favor, Social Snub, Striking Palette, Mica, Aziza,
   Choreographed Sparks), casting from the graveyard (Flashback, The Dawning Archaic, Group Project, Nita), and token
-  copies (Applied Geometry, Echocasting Symposium). More SOS packages will follow; until then, open cards only have their already modelled effects.
+  copies (Applied Geometry, Echocasting Symposium). Package J (hardest single cards): paradigm, the Elder Dragons
+  (storm, cascade, casualty, affinity), Zaffai, Improvisation Capstone, Fix What's Broken, Moment of Reckoning, Pox
+  Plague, Page, Loose Leaf, and Fractalize. SOS is now modelled except for Seething Song (ritual) and the {2} ability of Sundering Archaic (both still open).
 - Alchemy: Reality Fracture (YFRA), package A: perpetual, conjuring named cards, seek (Killian), Avoided
   Stairwurm, Zimone, Dina, Asymmetry Sage, Sparks Ablaze, Paradox Kraken, Boisterous Clique, Searing Soloist
   (cards to conjure are in `components/conjure.py`).

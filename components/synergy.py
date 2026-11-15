@@ -220,6 +220,9 @@ WANTS = {
     "sparks": (("spells", 1),), "mica_copy": (("spells", 1), ("artifacts", 1)), "copy_next_spell": (("spells", 1),),
     "aziza_copy": (("spells", 1), ("creature", 1)), "flashback_grant": (("graveyard", 1),),
     "dawning_attack": (("graveyard", 1),),
+    # SOS Paket J: Elder Dragons und Zaffai wollen Instants/Sorceries, Casualty Opferbares, Fix What's Broken Friedhof
+    "storm_grant": (("spells", 1.5),), "cascade_grant": (("spells", 1),), "affinity_grant": (("spells", 1), ("creature", 1)),
+    "casualty_grant": (("spells", 1), ("fodder", 1)), "zaffai": (("spells", 1.5),), "fix_broken": (("graveyard", 1),),
     # SOS Paket D: brauchen Karten im Friedhof
     "end_gy_draw": (("graveyard", 1),), "attack_gy_pump": (("graveyard", 1),), "gy_combat_return": (("discard", 0.5),),
     "rubble_ping": (("graveyard", 1),), "cauldron_reanimate": (("graveyard", 0.5),), "x_regrowth": (("graveyard", 1),),
@@ -281,6 +284,8 @@ NEUTRAL = (
     "rivalry", "ennis_blink", "exile_counter", "trick_death_draw", "trudge", "molten_note", "land_destroy",
     # SOS Paket H
     "uncopyable", "self_copy_infusion", "self_copy_creature", "each_sacrifice", "flashback_tap3",  # SOS Paket I
+    "pay_x_life", "paradigm", "capstone", "fractalize", "pox", "reckoning", "cascade", "grandeur", "untap_option",
+    # SOS Paket J
     "is_token", "sac_mana", "opp_spell_tax", "extra_cost", "hexproof_until_damage", "alt_draws",
     "finality", "combat_land_return", "domain_power", "x_search_basics", "choices", "is_mode", "removal_exile",
     "removal_points", "hand_pick", "attack_exile_gy", "own_turn_kw", "debuff", "impulse",

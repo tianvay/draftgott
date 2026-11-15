@@ -571,10 +571,9 @@ RULES = [
     "mit zwei Karten (erst ziehen, dann abwerfen), Rummage beim Betreten nur mit einem entbehrlichen Land, „enters or "
     "attacks, you may draw … discard“ immer. Snooping Page zieht nach Kampfschaden und verliert 1 Leben. Rapier Wit "
     "vor dem eigenen Angriff nur gegen einen Blocker, der einen Angreifer aufhalten würde (mit Stun-Marke), sonst am "
-    "Ende des gegnerischen Zugs (tappt einen Blocker für unseren Zug, ohne Stun); Rejoinder tappt nur (nie Enttappen); "
+    "Ende des gegnerischen Zugs (tappt einen Blocker für unseren Zug, ohne Stun); Rejoinder enttappt im eigenen Zug eine eigene Mana-Kreatur, wenn damit eine weitere Handkarte wirkbar wird, sonst tappt er; "
     "Procrastinate mit X = allem freien Mana, 2X Stun-Marken; Vibrant Outburst tappt nach dem Schaden die "
-    "gefährlichste andere Kreatur. Essence Scatter kontert nur Kreaturzauber. Practiced Offense: Double Strike für den "
-    "stärksten Angreifer, ohne Angreifer Lifelink. Seize the Spoils: Abwerfen als Zusatzkosten (601.2f), nur mit "
+    "gefährlichste andere Kreatur. Essence Scatter kontert nur Kreaturzauber. Practiced Offense: nur mit Angreifer gewirkt, Double Strike für den stärksten. Seize the Spoils: Abwerfen als Zusatzkosten (601.2f), nur mit "
     "einer weiteren Handkarte.",
     "SOS-Paket B (Prepared): Kreaturen werden auch durch Auslöser prepared – Angriff (Encouraging Aviator; Emeritus "
     "of Abundance mit 8+ Ländern; Emeritus of Ideation exiliert acht Friedhofskarten, Länder und billige zuerst), "
@@ -606,8 +605,7 @@ RULES = [
     "Angreifer +2/+0, Wilt in the Heat kostet {2} weniger. Aus dem Friedhof: Stone Docent (Leben und Surveil 1), "
     "Summoned Dromedary (auf die Hand) nur in der eigenen Main Phase – „activate only as a sorcery“ gilt jetzt für "
     "alle Friedhofs-Fähigkeiten; Postmortem Professor exiliert den billigsten Instant/Sorcery; Killian's Confidence "
-    "kommt nach Kampfschaden am Spieler mit offenem Mana auf die Hand. Rubble Rouser tappt am Ende des gegnerischen "
-    "Zugs, exiliert eine Karte (Länder und billige zuerst) und macht 1 Schaden (das Mana verfällt). Zu Beginn des "
+    "kommt nach Kampfschaden am Spieler mit offenem Mana auf die Hand. Rubble Rouser tappt am Ende des gegnerischen Zugs, exiliert eine Karte (Länder und billige zuerst) und macht 1 Schaden (das Mana verfällt), im eigenen Zug (Main 2) nur für Lethal. Zu Beginn des "
     "Kampfs exilieren Ascendant Dustspeaker/Startled Relic Sloth eine eigene Karte, wenn wir davon etwas haben, sonst "
     "die nützlichste des Gegners. Cauldron of Essence opfert die schwächste Kreatur (Token zuerst) für eine "
     "Kreaturenkarte mit mindestens 2 Manawert mehr. Zealous Lorecaster, Wisdom of Ages (das Modell kennt kein "
@@ -615,7 +613,7 @@ RULES = [
     "„Exile <Name>“ schickt den Zauber ins Exil, ohne dass er den Friedhof verlässt. Forum Necroscribe (Repartee) holt "
     "die stärkste Kreaturenkarte; Practiced Scrollsmith exiliert die teuerste Nichtkreatur-Nichtland-Karte (bis Ende "
     "des nächsten eigenen Zugs wirkbar); Ancestral Anger zählt die Exemplare, die schon im Friedhof liegen. Sundering "
-    "Archaic: wie bei Paradox Shaper ist „Karte aus einem Friedhof unter die Bibliothek“ bewusst nicht modelliert.",
+    "Archaic: „Karte aus einem Friedhof unter die Bibliothek“ ist noch offen.",
     "SOS-Paket E (Increment, Fractals): Increment – wirken wir einen Zauber und ist das ausgegebene Mana (bei {X} mit "
     "X) größer als Power oder Toughness der Kreatur, bekommt sie eine +1/+1-Marke (nicht durch sich selbst). Pensive "
     "Professor zieht, Berta gibt ein Mana jeder Farbe, wenn Marken auf sie kommen (nur Marken aus Increment und "
@@ -671,6 +669,18 @@ RULES = [
     "kommt in Main 2 per Flashback durch drei ungetappte Kreaturen. Nita opfert ein Token für einen lohnenden Zauber "
     "aus dem Friedhof des Gegners, danach eine Marke auf jede eigene Kreatur. Applied Geometry und Echocasting "
     "Symposium kopieren die stärkste eigene Kreatur (Applied Geometry als 0/0 mit sechs Marken).",
+    "SOS-Paket J (schwerste Einzelkarten): Paradigm – die Lesson geht nach dem ersten Auflösen ins Exil, danach wird "
+    "in jeder ersten Main Phase eine Kopie kostenlos gewirkt, wenn sie etwas bringt (Ziel im Friedhof, eigene Kreatur, "
+    "genug Leben, Bibliothek). Improvisation Capstone wirkt die Zauber der exilierten Karten kostenlos. Prismari: "
+    "Storm (eine Kopie je vorher in diesem Zug gewirktem Zauber); Quandrix: Cascade für sich und für Instants/Sorceries "
+    "(keine Kaskade aus einer Kaskade); Silverquill: Casualty 1 mit einem Token oder einer Kreatur bis Manawert 2 bei "
+    "lohnenden Zaubern; Witherbloom: Affinity für Kreaturen, auch für Instants/Sorceries. Zaffai wirkt einmal je "
+    "eigenem Zug in Main 1 den teuersten lohnenden Instant/Sorcery gratis. Fix What's Broken wählt das X mit den "
+    "meisten zurückgeholten Karten (mindestens 4 wert); Moment of Reckoning zerstört zuerst die gefährlichsten "
+    "Kreaturen, die übrigen Modi holen Permanents zurück; Pox Plague nur mit mindestens zwei Kreaturen Rückstand (geopfert "
+    "werden zuerst überzählige Länder ab fünf, dann die schwächsten Kreaturen). Page, Loose Leaf wirft am Ende des "
+    "gegnerischen Zugs eine zweite Page ab. Fractalize als Kampftrick: gegnerische Kreatur mit X = 0 zu 1/1 oder eigene "
+    "mit allem freien Mana zu (X+1)/(X+1). Seething Song (Ritual) ist noch offen.",
     "Noch nicht im Kampf: weitere Auslöser und Fähigkeiten (siehe Modell-Abdeckung). Solche Karten werden gewirkt, "
     "wirken aber nur mit den schon modellierten Effekten.",
 ]

@@ -173,7 +173,7 @@ class ParseTests(unittest.TestCase):
 
 
 class CoverageTests(unittest.TestCase):
-    PARTIAL = {"ark": "{T}: Mill a card", "rouser": None, "professor": None, "cauldron": None, "sundering": "Converge"}
+    PARTIAL = {"ark": "{T}: Mill a card", "rouser": None, "professor": None, "cauldron": None, "sundering": ("Converge", "{2}")}  # {2}-Faehigkeit: Todo (Nutzer 2026-11-15)
 
     def test_cards_fully_modelled(self):
         for key in RAW:

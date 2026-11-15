@@ -699,8 +699,9 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
   Ral Zarek (auch Züge aussetzen), Rabid Attack, Slumbering Trudge, Molten Note, Steal the Show und Rocket Volley.
   Paket I (Kopieren): Zauber-Kopien (Lumaret's Favor, Social Snub, Striking Palette, Mica, Aziza, Choreographed
   Sparks), aus dem Friedhof wirken (Flashback, The Dawning Archaic, Group Project, Nita) und Token-Kopien (Applied
-  Geometry, Echocasting Symposium). Weitere SOS-Pakete folgen; bis dahin wirken offene Karten nur mit den schon modellierten
-  Effekten.
+  Geometry, Echocasting Symposium). Paket J (schwerste Einzelkarten): Paradigm, die Elder Dragons (Storm, Cascade,
+  Casualty, Affinity), Zaffai, Improvisation Capstone, Fix What's Broken, Moment of Reckoning, Pox Plague, Page,
+  Loose Leaf und Fractalize. Damit ist SOS bis auf Seething Song (Ritual) und die {2}-Fähigkeit von Sundering Archaic modelliert (beide noch offen).
 - Alchemy: Reality Fracture (YFRA), Paket A: Perpetual, Conjure benannter Karten, Seek (Killian), Avoided
   Stairwurm, Zimone, Dina, Asymmetry Sage, Sparks Ablaze, Paradox Kraken, Boisterous Clique, Searing Soloist
   (Karten zum Beschwören in `components/conjure.py`).

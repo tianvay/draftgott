@@ -554,7 +554,7 @@ _H_LINES = (
      lambda m: {"removal": ("sweep_damage", int(m.group(1)), (), False, "spell", False)}),
     (re.compile(r"^infusion — if you gained life this turn, destroy all creatures instead\.$"), True,
      lambda m: {"infusion_wrath": True}),
-    (re.compile(r"^as an additional cost to cast this spell, pay x life\.$"), True, lambda m: {"rivalry": True}),
+    (re.compile(r"^as an additional cost to cast this spell, pay x life\.$"), True, lambda m: {"pay_x_life": True}),
     (re.compile(r"^destroy all artifacts and creatures with mana value x or less\.$"), True,
      lambda m: {"rivalry": True, "removal": ()}),
     (re.compile(r"^when (?:~|this creature) enters, exile up to one other target creature you control\. return that "
@@ -646,6 +646,49 @@ def _i_traits(low, spell):
     return out
 
 
+# Paket J: schwerste Einzelkarten (ganze Zeilen)
+_J_LINES = (
+    (re.compile(r"^paradigm$"), True, lambda m: {"paradigm": True}),
+    (re.compile(r"^exile cards from the top of your library until you exile cards with total mana value 4 or greater\. "
+                r"you may cast any number of spells from among them without paying their mana costs\.$"), True,
+     lambda m: {"capstone": True}),
+    (re.compile(r"^until end of turn, target creature becomes a green and blue fractal with base power and toughness "
+                r"each equal to x plus 1\.$"), True, lambda m: {"fractalize": True}),
+    (re.compile(r"^each player loses half their life, then discards half the cards in their hand, then sacrifices half "
+                r"the permanents they control of their choice\. round down each time\.$"), True,
+     lambda m: {"pox": True}),
+    (re.compile(r"^return each artifact and creature card with mana value x from your graveyard to the battlefield\.$"),
+     True, lambda m: {"fix_broken": True, "reanimate": ()}),
+    (re.compile(r"^instant and sorcery spells you cast have storm\.$"), False, lambda m: {"storm_grant": True}),
+    (re.compile(r"^cascade$"), False, lambda m: {"cascade": True}),
+    (re.compile(r"^instant and sorcery spells you cast from your hand have cascade\.$"), False,
+     lambda m: {"cascade_grant": True}),
+    (re.compile(r"^each instant and sorcery spell you cast has casualty 1\.$"), False,
+     lambda m: {"casualty_grant": True}),
+    (re.compile(r"^affinity for creatures$"), None, lambda m: {"self_discount": ("creatures",)}),
+    (re.compile(r"^instant and sorcery spells you cast have affinity for creatures\.$"), False,
+     lambda m: {"affinity_grant": True}),
+    (re.compile(r"^once during each of your turns, you may cast an instant or sorcery spell from your hand without "
+                r"paying its mana cost\.$"), False, lambda m: {"zaffai": True}),
+    (re.compile(r"^grandeur — discard another card named ~: reveal cards from the top of your library until you reveal "
+                r"an instant or sorcery card\. put that card into your hand and the rest on the bottom of your library "
+                r"in a random order\.$"), False, lambda m: {"grandeur": True}),
+)
+_RECKONING_HEAD = re.compile(r"^choose up to four\. you may choose the same mode more than once\.$")
+_RECKONING_BULLETS = ("destroy target nonland permanent.",
+                      "return target nonland permanent card from your graveyard to the battlefield.")
+
+
+def _j_traits(low, spell):
+    """Paket J: schwerste Einzelkarten (eine Zeile)."""
+    out = {}
+    for rx, kind, build in _J_LINES:
+        m = rx.match(low)
+        if m and (kind is None or kind == spell):
+            out.update(build(m))
+    return out
+
+
 def _h_traits(low, spell):
     """Paket H: Interaktion (eine Zeile)."""
     out = {}
@@ -728,6 +771,10 @@ def sos_traits(card, type_line, base):
             if "upkeep_gy3" in kinds:
                 out["upkeep_surveil"] = 1  # Grave Researcher: Surveil vor der Pruefung
     lines = list(_clean_lines(card))
+    if spell and any(_RECKONING_HEAD.match(low) for _r, low in lines):  # Moment of Reckoning: Kopf und Modi
+        bullets = [low.lstrip("•").strip() for r, low in lines if r.strip().startswith("•")]
+        if all(b in _RECKONING_BULLETS for b in bullets):
+            out.update(reckoning=True, removal=(), choices=())
     if "Planeswalker" in type_line:
         walker = _walker_abilities(lines)
         if walker:
@@ -747,6 +794,7 @@ def sos_traits(card, type_line, base):
         out.update(_g_traits(low, spell))
         out.update(_h_traits(low.lstrip("•").strip() if low.startswith("•") else low, spell))
         out.update(_i_traits(low.lstrip("•").strip() if low.startswith("•") else low, spell))
+        out.update(_j_traits(low, spell))
         trigger = bool(re.match(r"^(when|whenever|at the beginning)\b", low))
         if not spell:
             m = res["etb_drain"].match(low)
@@ -784,6 +832,8 @@ def sos_traits(card, type_line, base):
             out["tap_spell"] = (0, 0, 2)
         elif res["tap_or_untap"].match(low) or res["tap_up_to"].search(low):
             out["tap_spell"] = (0, 0, 0)
+            if res["tap_or_untap"].match(low):
+                out["untap_option"] = True
         if res["counter_creature"].match(low):
             out["counter"] = ("creature", (), 0)
         m = res["kw_choice"].search(low)
