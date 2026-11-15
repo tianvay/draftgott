@@ -219,6 +219,8 @@ In Arena, “Detailed Logs (Plugin Support)” must be enabled under Options →
   it on its own, `--arena-log FILE` takes a different log.
 - **Control window:** at the left screen edge, uses checkboxes to switch the overlay (Draft / Library) and the
   Trick Warner on and off; closing it (✕) closes all windows and quits draftgott (the console closes too).
+  The control bar, the side window and the Trick Warner remember their last position (and width) for the next start
+  (`fensterlage.json`, not in Git; if it lies off all screens, the default position is used again).
 - **Card overlay:** while picking, puts rank, rating, points, archetype fit, removal, card flow, synergy and your own
   win rate directly onto the cards in the Arena window (frame purple = top pick, green = fits, grey = other). Once,
   with a full pack, press "Calibrate" in the control window and click five card corners (saved in

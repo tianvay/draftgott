@@ -15,6 +15,7 @@ Nur Standardbibliothek (tkinter). Das Fenster schliesst sich, wenn der Drafthelp
 """
 import json
 import math
+import pathlib
 import re
 import random
 import urllib.error
@@ -740,6 +741,68 @@ def main_geometry(screen_width):
     return f"360x560+{max(0, screen_width - 380)}+{TOP}"
 
 
+POS_FILE = pathlib.Path(__file__).resolve().parent.parent / "fensterlage.json"  # letzte Lage der Fenster, nicht im Git
+POS_VISIBLE = 60  # so viele Pixel des Fensters muessen auf einem Bildschirm liegen, sonst gilt die Standardlage
+
+
+def _valid_position(saved):
+    return isinstance(saved, list) and len(saved) in (2, 3) and         all(isinstance(v, int) and not isinstance(v, bool) for v in saved)
+
+
+def load_positions(path=None):
+    """Gemerkte Lage der Fenster {Fenster: [x, y] oder [x, y, Breite]} (Nutzer 15.11.2026); fehlt die Datei oder ist
+    sie kaputt: {}."""
+    try:
+        data = json.loads(pathlib.Path(path or POS_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {k: v for k, v in data.items() if isinstance(k, str) and _valid_position(v)}
+
+
+def save_positions(path, positions):
+    path = pathlib.Path(path)
+    tmp = path.with_name(path.name + ".tmp")
+    try:
+        tmp.write_text(json.dumps(positions, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(path)
+    except OSError:
+        pass
+
+
+def placed_geometry(default, saved, bounds):
+    """Geometrie aus der Standardlage default ("BxH+X+Y" oder "+X+Y") und der gemerkten Lage saved ([x, y] oder
+    [x, y, Breite]); bounds: (x, y, Breite, Hoehe) aller Bildschirme. Liegt das Fenster dort nicht wenigstens
+    POS_VISIBLE Pixel auf dem Bildschirm (oben nicht darueber hinaus, damit man es greifen kann), bleibt default."""
+    if not _valid_position(saved):
+        return default
+    m = re.fullmatch(r"(?:(\d+)x(\d+))?\+(-?\d+)\+(-?\d+)", default)
+    if not m:
+        return default
+    w = saved[2] if len(saved) == 3 else int(m.group(1) or POS_VISIBLE)
+    x, y = saved[0], saved[1]
+    bx, by, bw, bh = bounds
+    if x + w < bx + POS_VISIBLE or x > bx + bw - POS_VISIBLE or y < by or y > by + bh - POS_VISIBLE // 2:
+        return default
+    if m.group(1) is None:
+        return f"+{x}+{y}"
+    return f"{w}x{m.group(2)}+{x}+{y}"
+
+
+def screen_bounds(win):
+    """(x, y, Breite, Hoehe) aller Bildschirme zusammen (Windows: virtueller Bildschirm), sonst der eine Bildschirm."""
+    try:
+        import ctypes
+        gm = ctypes.windll.user32.GetSystemMetrics
+        b = (gm(76), gm(77), gm(78), gm(79))
+        if b[2] > 0 and b[3] > 0:
+            return b
+    except (AttributeError, OSError):
+        pass
+    return 0, 0, win.winfo_screenwidth(), win.winfo_screenheight()
+
+
 FIT_MIN_HEIGHT = 120  # kleinste Hoehe eines angepassten Fensters
 FIT_MARGIN = 48  # Platz unten fuer die Taskleiste
 
@@ -990,11 +1053,12 @@ class _ControlBar:
         self.win.geometry(f"+{e.x_root - self._off[0]}+{e.y_root - self._off[1]}")
 
     def _place(self):
-        """Mittig oben, solange der Nutzer die Leiste nicht verschoben hat."""
+        """Mittig oben, solange der Nutzer die Leiste nicht verschoben hat (sonst bleibt sie, wo sie ist)."""
         self.win.update_idletasks()
-        if self.moved:
-            return
         w, h = self.win.winfo_reqwidth(), self.win.winfo_reqheight()
+        if self.moved:
+            self.win.geometry(f"{w}x{h}+{self.win.winfo_x()}+{self.win.winfo_y()}")
+            return
         size = control_geometry(self.win.winfo_screenwidth(), w).split("+", 1)
         self.win.geometry(f"{w}x{h}+" + size[1])
 
@@ -1043,11 +1107,13 @@ def run(url, interval_ms=1000):
     root = tk.Toplevel(control)  # Seitenfenster: Draft, Deck und im Spiel die Bibliothek
     root.title("draftgott Live")
     _float_window(root)
-    root.geometry(main_geometry(root.winfo_screenwidth()))
+    positions = load_positions()  # letzte Lage der Fenster (Nutzer 15.11.2026)
+    bounds = screen_bounds(control)
+    root.geometry(placed_geometry(main_geometry(root.winfo_screenwidth()), positions.get("main"), bounds))
     tricks = tk.Toplevel(control)
     tricks.title(t("draftgott Tricks"))
     _float_window(tricks)
-    tricks.geometry(trick_geometry())
+    tricks.geometry(placed_geometry(trick_geometry(), positions.get("tricks"), bounds))
     trick_text = tk.Text(tricks, bg=COLORS["bg"], fg=COLORS["ink"], bd=0, highlightthickness=0, wrap="word",
                          font=("Segoe UI", 11), padx=10, pady=4, cursor="arrow")
     trick_text.pack(fill="both", expand=True)
@@ -1063,9 +1129,18 @@ def run(url, interval_ms=1000):
                                          "cols": lambda: start_column_calibration()},
                            on_close=lambda: quit_all())
     cards_hint, cols_hint = ctrl_bar.hints["cards"], ctrl_bar.hints["cols"]
+    bar_place = placed_geometry("+0+0", positions.get("control"), bounds)
+    if positions.get("control") and bar_place != "+0+0":
+        ctrl_bar.moved = True
+        control.geometry(bar_place)
+        ctrl_bar._place()
 
     def quit_all():
         """✕: Fenster zu und den Drafthelper beenden, damit auch die draftgott-Konsole zugeht (Nutzer 15.11.2026)."""
+        try:
+            remember()
+        except tk.TclError:
+            pass
         control.withdraw()
         send_quit(url)
         control.destroy()
@@ -1259,7 +1334,29 @@ def run(url, interval_ms=1000):
                 if win.state() != "withdrawn" and width >= 50:
                     state["fit_" + key], state["width_" + key] = False, width
 
+    def remember():
+        """Lage der Fenster merken, wenn sie sich geaendert hat (versteckte Fenster behalten ihre letzte Lage)."""
+        pos = dict(positions)
+        if ctrl_bar.moved and control.winfo_ismapped():
+            pos["control"] = [control.winfo_x(), control.winfo_y()]
+        for key, win in (("main", root), ("tricks", tricks)):
+            if win.state() == "withdrawn" or not win.winfo_ismapped():
+                continue
+            x, w = win.winfo_x(), win.winfo_width()
+            if key == "main" and state["mini"]:  # klein: die grosse Lage merken (rechter Rand bleibt)
+                big_w = int((state["big"] or "360x560").split("x")[0])
+                x, w = x + w - big_w, big_w
+            pos[key] = [x, win.winfo_y(), w]
+        if pos != positions:
+            positions.clear()
+            positions.update(pos)
+            save_positions(POS_FILE, positions)
+
     def tick():
+        try:
+            remember()
+        except tk.TclError:
+            pass
         snap = fetch(url)
         if snap is None:
             state["misses"] += 1

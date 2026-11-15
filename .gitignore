@@ -41,3 +41,7 @@ saeulen.json
 
 # Stream-Deck-Profil (nicht Teil des Projekts)
 ex/
+
+# Fenster des Live-Drafts: letzte Lage (je Nutzer)
+fensterlage.json
+fensterlage.json.tmp
