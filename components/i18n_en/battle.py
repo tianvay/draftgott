@@ -377,6 +377,9 @@ EN = {
     "{me}: {card_name} – X = {n}": "{me}: {card_name} – X = {n}",
     "setzt diesen Zug aus": "skips this turn",
     "{p}: {w_card_name} – Gegner setzt {n} Züge aus": "{p}: {w_card_name} – opponent skips {n} turns",
+    # SOS Paket I
+    "{me}: {card_name} – {n} Kopien": "{me}: {card_name} – {n} copies",
+    "{me}: {card_name} aus dem Friedhof gewirkt": "{me}: {card_name} cast from the graveyard",
     "{me}: {a_card_name} – Gegner verliert {loss}, {life} Leben": "{me}: {a_card_name} – opponent loses {loss}, {life} life",
     # Namen der Spieler im Protokoll
     "Wir": "We",

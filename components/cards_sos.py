@@ -596,6 +596,56 @@ _PW_BODIES = (
 _PW_LINE = re.compile(r"^([+−-]?)(\d+): (.+)$")
 
 
+_YOU_MAY_NEW = r"you may choose new targets for the copy\.$"
+# Paket I: Kopieren und aus dem Friedhof wirken (ganze Zeilen)
+_I_LINES = (
+    (re.compile(r"^this spell can't be copied\.$"), True, lambda m: {"uncopyable": True}),
+    (re.compile(r"^copy target instant or sorcery spell you control\. " + _YOU_MAY_NEW), True,
+     lambda m: {"sparks": True}),
+    (re.compile(r"^copy target creature spell you control\. the copy gains haste and \"at the beginning of the end step, "
+                r"sacrifice this token\.\"$"), True, lambda m: {"sparks": True}),
+    (re.compile(r"^whenever you cast an instant or sorcery spell, you may sacrifice an artifact\. if you do, copy that "
+                r"spell and " + _YOU_MAY_NEW), False, lambda m: {"mica_copy": True}),
+    (re.compile(r"^when you next cast an instant or sorcery spell this turn, copy that spell\. " + _YOU_MAY_NEW), True,
+     lambda m: {"copy_next_spell": True}),
+    (re.compile(r"^infusion — when you cast this spell, copy it if you gained life this turn\. " + _YOU_MAY_NEW), True,
+     lambda m: {"self_copy_infusion": True}),
+    (re.compile(r"^whenever you cast an instant or sorcery spell, you may tap three untapped creatures you control\. if "
+                r"you do, copy that spell\. " + _YOU_MAY_NEW), False, lambda m: {"aziza_copy": True}),
+    (re.compile(r"^when you cast this spell while you control a creature, you may copy this spell\.$"), True,
+     lambda m: {"self_copy_creature": True}),
+    (re.compile(r"^each player sacrifices a creature of their choice\. each opponent loses (\d+) life and you gain (\d+) "
+                r"life\.$"), True, lambda m: {"each_sacrifice": True}),
+    (re.compile(r"^target instant or sorcery card in your graveyard gains (?:flashback|~) until end of turn\. the "
+                r"(?:flashback|~) cost is equal to its mana cost\.$"), True, lambda m: {"flashback_grant": True}),
+    (re.compile(r"^whenever ~ attacks, you may cast target instant or sorcery card from your graveyard without paying "
+                r"its mana cost\. if that spell would be put into your graveyard, exile it instead\.$"), False,
+     lambda m: {"dawning_attack": True}),
+    (re.compile(r"^flashback—tap three untapped creatures you control\.$"), True, lambda m: {"flashback_tap3": True}),
+    (re.compile(r"^whenever you cast a spell you don't own, put a \+1/\+1 counter on each creature you control\.$"),
+     False, lambda m: {"nita": True}),
+    (re.compile(r"^\{2\}, sacrifice another creature: exile target instant or sorcery card from an opponent's graveyard\. "
+                r"you may cast it this turn, and mana of any type can be spent to cast that spell\. if that spell would "
+                r"be put into a graveyard, exile it instead\. activate only as a sorcery\.$"), False,
+     lambda m: {"nita": True}),
+    (re.compile(r"^create a token that's a copy of target non-aura permanent you control, except it's a 0/0 fractal "
+                r"creature in addition to its other types\. put six \+1/\+1 counters on it\.$"), True,
+     lambda m: {"applied_geometry": True}),
+    (re.compile(r"^target player creates a token that's a copy of target creature you control\.$"), True,
+     lambda m: {"token_copy_creature": True}),
+)
+
+
+def _i_traits(low, spell):
+    """Paket I: Kopieren und aus dem Friedhof wirken (eine Zeile)."""
+    out = {}
+    for rx, kind, build in _I_LINES:
+        m = rx.match(low)
+        if m and (kind is None or kind == spell):
+            out.update(build(m))
+    return out
+
+
 def _h_traits(low, spell):
     """Paket H: Interaktion (eine Zeile)."""
     out = {}
@@ -696,6 +746,7 @@ def sos_traits(card, type_line, base):
         out.update(_f_traits(card, low, spell))
         out.update(_g_traits(low, spell))
         out.update(_h_traits(low.lstrip("•").strip() if low.startswith("•") else low, spell))
+        out.update(_i_traits(low.lstrip("•").strip() if low.startswith("•") else low, spell))
         trigger = bool(re.match(r"^(when|whenever|at the beginning)\b", low))
         if not spell:
             m = res["etb_drain"].match(low)

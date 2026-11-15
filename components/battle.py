@@ -3197,6 +3197,7 @@ def on_cast(p, card, step, e):
     if p.sos_casts[1] == 3:
         prepare_by(p, "third_spell", e)
     sos_on_cast(p, card, step, e)
+    sos_copy_on_cast(p, card, step, e)
     if card.is_creature:  # SOS Abigale: nicht durch sich selbst (sie ist beim Wirken noch nicht im Spiel)
         prepare_by(p, "creature_cast", e,
                    skip=next((c for c in reversed(p.creatures) if c.card is card and c.entered == step), None))
@@ -5252,6 +5253,8 @@ def _resolve(me, opp, card, step, entry, owner=None, to_exile=False, modes=None)
         if copy:
             _resolve_copy(me, opp, card, step, entry, modes)
         codie_copies(me, opp, card, step, entry, modes)
+        for _k in range(take_copies(me, card)):  # SOS: Mica, Aziza, Choreographed Sparks, Striking Palette ...
+            _resolve_copy(me, opp, card, step, entry, modes)
         card_effects(me, opp, card, step, entry, modes)
     else:
         permanent_enters(me, opp, card, step, entry)
@@ -6284,6 +6287,7 @@ def sos_main2(me, e):
     """Beginn der zweiten Main Phase: Scheming Silvertongue mit 2+ Leben in diesem Zug."""
     if me.gained >= 2:
         prepare_by(me, "main2_life2", e)
+    sos_flashback_tap3(me, me.opponent, me.now, e)
     drawn = me.drawn - me.drawn_mark
     for card in [c for c in me.hand if c.fractal_drawn]:  # Fractal Anomaly: nach den gezogenen Karten des Zugs
         if drawn >= 1 and card in me.hand and _cast_from_open(me, card):
@@ -6629,6 +6633,144 @@ def sos_flow(me, opp, card, step, e):
             put_onto_battlefield(me, lands[0], step, e, opp, tapped=True)
 
 
+def copy_worth(card):
+    """Lohnt eine Kopie (SOS Mica, Aziza, Choreographed Sparks)? Removal, Ziehen, Token, Schaden, Rueckholen, Suchen."""
+    return bool(card.removal or card.draws or card.creates_tokens or card.reanimate or card.tutor or card.each_sacrifice
+                or any(a[0] == "face" for m in card.modes for a in m))
+
+
+def snub_ok(me, opp):
+    """Social Snub: jeder opfert eine Kreatur - nur, wenn der Gegner eine hat und unsere schwaechste nicht mehr wert ist
+    als seine schwaechste (oder wir keine haben)."""
+    theirs = [c for c in (opp.creatures if opp is not None else ()) if not c.dead]
+    ours = [c for c in me.creatures if not c.dead]
+    return bool(theirs) and (not ours or _value(min(ours, key=_value)) <= _value(min(theirs, key=_value)))
+
+
+def pending_copies(p, card):
+    pend = getattr(p, "sos_copy_pending", None)
+    return pend[1] if pend is not None and pend[0] is card else 0
+
+
+def take_copies(p, card):
+    n = pending_copies(p, card)
+    if n:
+        p.sos_copy_pending = None
+    return n
+
+
+def sos_copy_on_cast(p, card, step, e):
+    """SOS Paket I beim Wirken: wie viele Kopien der Instant/Sorcery bekommt (Lumaret's Favor mit Lebensgewinn, Social
+    Snub, Striking Palette; bei lohnenden Zaubern Mica mit einem Treasure, Aziza ausserhalb des eigenen Zugs mit drei
+    Kreaturen, Choreographed Sparks aus der Hand); Choreographed Sparks kopiert im eigenen Zug auch eine Kreatur ab Power
+    3 (Token mit Haste, im Endsegment geopfert)."""
+    opp = p.opponent
+    sparks = next((h for h in p.hand if h.sparks and h is not card), None)
+    if card.is_creature and not card.is_token and sparks is not None and p.turn_start == p.now and card.power >= 3:
+        if _pay_open(p, _alts(p, sparks)):
+            p.hand.remove(sparks)
+            p.graveyard.append(sparks)
+            make_tokens(p, [(1, card._replace(is_token=True, haste=True, end_sacrifice=True))], step, e, opp, sparks.name)
+        return
+    if not card.is_instant_sorcery or card.uncopyable:
+        return
+    k = 0
+    if card.self_copy_infusion and p.gained > 0:
+        k += 1
+    if card.self_copy_creature and any(not c.dead for c in p.creatures) and opp is not None:
+        theirs = sum(1 for c in opp.creatures if not c.dead)
+        if theirs >= 2 and theirs >= sum(1 for c in p.creatures if not c.dead):
+            k += 1
+    if getattr(p, "sos_copy_next", None) == step:  # Striking Palette
+        p.sos_copy_next = None
+        k += 1
+    if copy_worth(card):
+        for _m in [c for c in p.creatures if c.card.mica_copy and not c.dead]:
+            if p.treasures > 0:
+                p.treasures -= 1
+                k += 1
+        for _a in [c for c in p.creatures if c.card.aziza_copy and not c.dead]:
+            free = [c for c in p.creatures if not c.dead and not c.tapped]
+            if p.turn_start != p.now and len(free) >= 3:
+                for c in sorted(free, key=_value)[:3]:
+                    c.tapped = True
+                k += 1
+        if sparks is not None and _pay_open(p, _alts(p, sparks)):
+            p.hand.remove(sparks)
+            p.graveyard.append(sparks)
+            k += 1
+    if k:
+        e["events"].append(i18n.t("{me}: {card_name} – {n} Kopien", me=i18n.t(p.name), card_name=card.name, n=k))
+    p.sos_copy_pending = (card, k)
+
+
+def flashback_pick(p, opp, source, instant_only=False, paid=False):
+    """Flashback (die Karte): der lohnendste Instant/Sorcery im Friedhof, den das offene Mana nach Flashback selbst noch
+    bezahlt (Removal mit Ziel zuerst); ausserhalb der eigenen Main Phase nur Instants."""
+    rest = list(p.open) if paid else pay(p.open, _alts(p, source))
+    if rest is None:
+        return None
+    cands = [g for g in p.graveyard if g.is_instant_sorcery and g is not source and not g.flashback_grant
+             and (g.is_instant or not instant_only) and pay(rest, _alts(p, g)) is not None
+             and (not g.removal or has_target(g, p, opp))]
+    cands = [g for g in cands if copy_worth(g)]
+    return max(cands, key=lambda g: (bool(g.removal), g.mv, g.name)) if cands else None
+
+
+def cast_from_graveyard(p, opp, card, step, e, free=False):
+    """SOS: Instant/Sorcery aus dem Friedhof wirken (bezahlt, ausser free) und danach ins Exil."""
+    if not free and not _pay_open(p, _alts(p, card)):
+        return False
+    p.graveyard.remove(card)
+    e["events"].append(i18n.t("{me}: {card_name} aus dem Friedhof gewirkt", me=i18n.t(p.name), card_name=card.name))
+    _resolve(p, opp, card, step, e, to_exile=True)
+    return True
+
+
+def sos_copy_effects(me, opp, card, step, e):
+    """SOS Paket I beim Aufloesen: Striking Palette (naechster Instant/Sorcery wird kopiert), Social Snub (jeder opfert
+    seine schwaechste Kreatur), Flashback (die Karte), Applied Geometry und Echocasting Symposium (Token-Kopie der
+    staerksten eigenen Kreatur)."""
+    if card.copy_next_spell:
+        me.sos_copy_next = step
+    if card.each_sacrifice:
+        for side in (opp, me):
+            alive = [c for c in (side.creatures if side is not None else ()) if not c.dead]
+            if alive:
+                victim = min(alive, key=_value)
+                victim.dead = True
+                e["events"].append(i18n.t("{p}: opfert {card_name}", p=i18n.t(side.name), card_name=victim.card.name))
+        bury((me, opp), e)
+    if card.flashback_grant:
+        pick = flashback_pick(me, opp, card, instant_only=me.turn_start != me.now, paid=True)
+        if pick is not None:
+            cast_from_graveyard(me, opp, pick, step, e)
+    if card.applied_geometry or card.token_copy_creature:
+        alive = [c for c in me.creatures if not c.dead]
+        if alive:
+            best = max(alive, key=lambda c: (c.power + c.toughness, c.card.mv, c.card.name))
+            tok = best.base_card or best.card
+            if card.applied_geometry:  # 0/0-Fractal mit sechs Marken
+                tok = tok._replace(power=0, toughness=0, creature_types=tuple(tok.creature_types) + ("fractal",))
+            before = len(me.creatures)
+            make_tokens(me, [(1, tok._replace(is_token=True))], step, e, opp, card.name)
+            for c in me.creatures[before:]:
+                c.bonus += 6 if card.applied_geometry else 0
+        elif card.applied_geometry:
+            fractal_token(me, 6, step, e, card.name)
+
+
+def sos_flashback_tap3(me, opp, step, e):
+    """Eigene Main Phase 2: Group Project per Flashback durch Tappen von drei ungetappten Kreaturen."""
+    for card in [g for g in dict.fromkeys(me.graveyard) if g.flashback_tap3]:
+        free = [c for c in me.creatures if not c.dead and not c.tapped]
+        if len(free) < 3 or card not in me.graveyard:
+            continue
+        for c in sorted(free, key=_value)[:3]:
+            c.tapped = True
+        cast_from_graveyard(me, opp, card, me.now, e, free=True)
+
+
 def flicker(owner, c, step, e, source):
     """SOS: Kreatur bis zum naechsten Endsegment exilieren (Ennis, Conciliator's Duelist); Token verschwinden (111.7)."""
     owner.creatures.remove(c)
@@ -6810,7 +6952,30 @@ def sos_combat_exile(me, opp, e):
 
 def sos_main_abilities(me, opp, step, e):
     """Eigene Main Phase vor dem Angriff, freies Mana: Cauldron of Essence opfert die schwaechste Kreatur (Token zuerst)
-    fuer die teuerste Kreaturenkarte im Friedhof, wenn diese mindestens 2 Manawert mehr hat."""
+    fuer die teuerste Kreaturenkarte im Friedhof, wenn diese mindestens 2 Manawert mehr hat. Flashback (die Karte) mit
+    einem lohnenden Instant/Sorcery im Friedhof. Nita opfert ein Token fuer einen lohnenden Zauber aus dem Friedhof des
+    Gegners."""
+    for card in [h for h in me.hand if h.flashback_grant]:
+        if card in me.hand and flashback_pick(me, opp, card) is not None and _cast_from_open(me, card):
+            e["events"].append(i18n.t("{me}: {card_name} vor dem Angriff", me=i18n.t(me.name), card_name=card.name))
+            _resolve(me, opp, card, step, e)
+    for nita in [c for c in me.creatures if c.card.nita and not c.dead]:
+        tokens = [c for c in me.creatures if c is not nita and not c.dead and c.card.is_token]
+        units = free_units(me)
+        cands = [g for g in (opp.graveyard if opp is not None else ()) if g.is_instant_sorcery and copy_worth(g)
+                 and g.mv + 2 <= units and (not g.removal or has_target(g, me, opp))]
+        if not tokens or not cands:
+            continue
+        pick = max(cands, key=lambda g: (bool(g.removal), g.mv, g.name))
+        for _k in range(pick.mv + 2):  # {2} und "mana of any type" fuer den Zauber
+            me.open.pop()
+        min(tokens, key=_value).dead = True
+        bury((me, opp), e)
+        opp.graveyard.remove(pick)
+        e["events"].append(i18n.t("{me}: {card_name} aus dem Friedhof gewirkt", me=i18n.t(me.name), card_name=pick.name))
+        _resolve(me, opp, pick, step, e, owner=opp, to_exile=True)
+        for c in [c for c in me.creatures if not c.dead]:  # "Whenever you cast a spell you don't own"
+            add_counters(me, c, 1, step, e)
     for x in [x for x in me.perms if isinstance(x, Card) and x.cauldron_reanimate]:
         alive = [c for c in me.creatures if not c.dead]
         cands = gy_candidates(me, "creature")
@@ -6947,6 +7112,8 @@ def sos_effects(me, opp, card, step, entry):
         sos_flow(me, opp, card, step, entry)
     if card.rivalry or card.ennis_blink or card.trudge or card.molten_note or card.steal_show or card.land_destroy:
         sos_interaction(me, opp, card, step, entry)
+    if card.copy_next_spell or card.each_sacrifice or card.flashback_grant or card.applied_geometry             or card.token_copy_creature:
+        sos_copy_effects(me, opp, card, step, entry)
     if card.fractal_drawn:  # Fractal Anomaly: X = in diesem Zug gezogene Karten
         fractal_token(me, me.drawn - me.drawn_mark, step, entry, card.name)
     if card.fractal_gift:  # Oracle's Gift: X Fractals, dann X Marken auf jeden eigenen Fractal
@@ -7856,6 +8023,7 @@ def main_phase_spells(me, opp):
             and (not c.opp_draws or len([h for h in me.hand if h is not c]) < 3)  # Secret Rendezvous (Nutzer)
             and (not c.planar or (len(me.lands) >= 2 and sum(1 for x in me.library if x.is_basic) >= 4))
             and (not c.rivalry or rivalry_x(me, opp) is not None)
+            and (not c.each_sacrifice or snub_ok(me, opp))
             and (not c.molten_note or (opp is not None and any(not x.dead for x in opp.creatures)))
             and (not c.land_destroy or (opp is not None and any(not x.is_basic for x in opp.lands)))
             and (not c.twin or twin_host(me, opp) is not None)
@@ -8105,6 +8273,9 @@ def _use_removal(p, card, alts, is_spell, step, e, zone="hand", other=None, fx=N
     if is_spell:
         on_cast(p, card, step, e)
         fx = fx or card  # Effekte: bei modalen Karten der gewaehlte Modus
+        for _k in range(take_copies(p, card)):  # SOS: die Kopie waehlt ihr eigenes Ziel
+            if other is not None:
+                cast_removal(fx, p, other, e, step)
         face = sum(a[1] for a in fx.modes[0] if a[0] == "face") if fx.modes and not fx.removal[3] else 0
         if face and other is not None:  # z. B. Extended Absence: "deals 1 damage to each opponent"
             deal_noncombat(p, other, face, e)
@@ -8258,6 +8429,8 @@ def end_step_instants(dfn, act, e, step):
             continue  # Divergent Equation erst mit X >= 1
         if card.fractal_drawn and dfn.drawn - dfn.drawn_mark < 1:
             continue  # Fractal Anomaly: ohne gezogene Karte stirbt das 0/0-Token
+        if card.flashback_grant and flashback_pick(dfn, act, card, instant_only=True) is None:
+            continue  # Flashback: ausserhalb der eigenen Main Phase nur Instants
         if card in dfn.hand and reanimate_ok(dfn, card) and _cast_from_open(dfn, card):
             e["events"].append(i18n.t("{dfn}: {card_name} am Ende des Zugs", dfn=i18n.t(dfn.name), card_name=card.name))
             _resolve(dfn, act, card, step, e)
@@ -10446,6 +10619,13 @@ def take_turn(me, opp, step, rnd, skip_draw):
         a.attacked = step
         if a.card.prepare_on:
             sos_attack_prepare(me, a, e)
+        if a.card.dawning_attack:  # The Dawning Archaic: kostenlos aus dem Friedhof, danach Exil
+            pick = flashback_pick(me, opp, a.card, paid=True) if me.graveyard else None
+            if pick is None:
+                cands = [g for g in me.graveyard if g.is_instant_sorcery and (not g.removal or has_target(g, me, opp))]
+                pick = max(cands, key=lambda g: (g.mv, g.name)) if cands else None
+            if pick is not None:
+                cast_from_graveyard(me, opp, pick, step, e, free=True)
         for g in a.gear:  # Medic's Kitesail
             gain_life(me, g.equip_attack_life)
             if g.equip_attack_choice:  # Hunter's Axe: Deathtouch, wenn ein Blocker sonst ueberlebt, sonst Trample

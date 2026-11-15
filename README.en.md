@@ -690,7 +690,9 @@ full log. The rules of the battle model are described in detail at the end of th
   (Tablet of Discovery, Ark of Hunger), Bind to Life, and Mind Roots. Package H (interaction): bounce, Run Behind,
   Withering Curse, Vicious Rivalry, flickering (Ennis, Conciliator's Duelist), the planeswalkers Professor Dellian Fel
   and Ral Zarek (including skipped turns), Rabid Attack, Slumbering Trudge, Molten Note, Steal the Show, and Rocket
-  Volley. More SOS packages will follow; until then, open cards only have their already modelled effects.
+  Volley. Package I (copying): spell copies (Lumaret's Favor, Social Snub, Striking Palette, Mica, Aziza,
+  Choreographed Sparks), casting from the graveyard (Flashback, The Dawning Archaic, Group Project, Nita), and token
+  copies (Applied Geometry, Echocasting Symposium). More SOS packages will follow; until then, open cards only have their already modelled effects.
 - Alchemy: Reality Fracture (YFRA), package A: perpetual, conjuring named cards, seek (Killian), Avoided
   Stairwurm, Zimone, Dina, Asymmetry Sage, Sparks Ablaze, Paradox Kraken, Boisterous Clique, Searing Soloist
   (cards to conjure are in `components/conjure.py`).

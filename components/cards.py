@@ -594,6 +594,21 @@ class Card(NamedTuple):
     molten_note: bool = False  # Schaden = ausgegebenes Mana (X + 2) an eine Kreatur, eigene Kreaturen enttappen
     steal_show: bool = False  # ueberzaehlige Laender abwerfen und neu ziehen, Schaden = Instants/Sorceries im Friedhof
     land_destroy: bool = False  # "Destroy target nonbasic land" (Rocket Volley)
+    # SOS Paket I (Kopieren, aus dem Friedhof wirken)
+    sparks: bool = False  # Choreographed Sparks: eigenen Instant/Sorcery oder Kreaturzauber kopieren (Haste-Token)
+    uncopyable: bool = False  # "This spell can't be copied."
+    mica_copy: bool = False  # Instant/Sorcery gewirkt: Artefakt (Treasure) opfern, kopieren (Mica)
+    copy_next_spell: bool = False  # der naechste Instant/Sorcery in diesem Zug wird kopiert (Striking Palette)
+    self_copy_infusion: bool = False  # beim Wirken mit Lebensgewinn kopiert (Lumaret's Favor)
+    aziza_copy: bool = False  # Instant/Sorcery gewirkt: drei Kreaturen tappen, kopieren (Aziza)
+    self_copy_creature: bool = False  # beim Wirken mit eigener Kreatur kopierbar (Social Snub)
+    each_sacrifice: bool = False  # jeder Spieler opfert eine Kreatur (Social Snub)
+    flashback_grant: bool = False  # Instant/Sorcery im Friedhof bekommt Flashback zu den Manakosten (Flashback)
+    dawning_attack: bool = False  # greift sie an: Instant/Sorcery aus dem Friedhof kostenlos, danach Exil
+    flashback_tap3: bool = False  # Flashback durch Tappen von drei eigenen Kreaturen (Group Project)
+    nita: bool = False  # Nita: Zauber des Gegners aus seinem Friedhof wirken, dann Marken auf jede eigene Kreatur
+    applied_geometry: bool = False  # Token-Kopie einer eigenen Kreatur als 0/0-Fractal mit sechs Marken
+    token_copy_creature: bool = False  # Token-Kopie einer eigenen Kreatur (Echocasting Symposium)
 
 
 LANDCYCLE_RE = re.compile(

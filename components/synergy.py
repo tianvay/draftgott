@@ -94,6 +94,9 @@ GIVES = {
     # SOS Paket G: Friedhof fuellen bzw. abwerfen
     "dig_creatures": (("graveyard", 2),), "hand_dig": (("graveyard", 1), ("discard", 1)),
     "colossus_death": (("graveyard", 1), ("discard", 1)), "bind_life": (("graveyard", 3),),
+    # SOS Paket I
+    "nita": (("sac_outlet", 1),), "applied_geometry": (("tokens", 1), ("counters", 2)),
+    "token_copy_creature": (("tokens", 1),),
     # Surveil
     "surveil": (("surveil", 1), ("graveyard", 0.5)), "upkeep_surveil": (("surveil", 2), ("graveyard", 1)),
     "enter_surveil": (("surveil", 2),), "sac_surveil": (("surveil", 1),), "equip_attack_surveil": (("surveil", 2),),
@@ -213,6 +216,10 @@ WANTS = {
     "instsorc_treasure": (("spells", 1),),
     "dig_two_gy": (("spells", 0.5),), "x_dig": (("spells", 0.5),),  # SOS Paket G
     "infusion_wrath": (("lifegain", 1),), "steal_show": (("spells", 0.5),),  # SOS Paket H
+    # SOS Paket I: Kopieren will Instants/Sorceries, Flashback und Dawning Archaic einen gefuellten Friedhof
+    "sparks": (("spells", 1),), "mica_copy": (("spells", 1), ("artifacts", 1)), "copy_next_spell": (("spells", 1),),
+    "aziza_copy": (("spells", 1), ("creature", 1)), "flashback_grant": (("graveyard", 1),),
+    "dawning_attack": (("graveyard", 1),),
     # SOS Paket D: brauchen Karten im Friedhof
     "end_gy_draw": (("graveyard", 1),), "attack_gy_pump": (("graveyard", 1),), "gy_combat_return": (("discard", 0.5),),
     "rubble_ping": (("graveyard", 1),), "cauldron_reanimate": (("graveyard", 0.5),), "x_regrowth": (("graveyard", 1),),
@@ -273,6 +280,7 @@ NEUTRAL = (
     "mind_roots",  # SOS Paket G
     "rivalry", "ennis_blink", "exile_counter", "trick_death_draw", "trudge", "molten_note", "land_destroy",
     # SOS Paket H
+    "uncopyable", "self_copy_infusion", "self_copy_creature", "each_sacrifice", "flashback_tap3",  # SOS Paket I
     "is_token", "sac_mana", "opp_spell_tax", "extra_cost", "hexproof_until_damage", "alt_draws",
     "finality", "combat_land_return", "domain_power", "x_search_basics", "choices", "is_mode", "removal_exile",
     "removal_points", "hand_pick", "attack_exile_gy", "own_turn_kw", "debuff", "impulse",

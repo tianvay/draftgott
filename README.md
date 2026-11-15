@@ -697,7 +697,9 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
   (Tablet of Discovery, Ark of Hunger), Bind to Life und Mind Roots. Paket H (Interaktion): Bounce, Run Behind,
   Withering Curse, Vicious Rivalry, Blinken (Ennis, Conciliator's Duelist), die Planeswalker Professor Dellian Fel und
   Ral Zarek (auch Züge aussetzen), Rabid Attack, Slumbering Trudge, Molten Note, Steal the Show und Rocket Volley.
-  Weitere SOS-Pakete folgen; bis dahin wirken offene Karten nur mit den schon modellierten
+  Paket I (Kopieren): Zauber-Kopien (Lumaret's Favor, Social Snub, Striking Palette, Mica, Aziza, Choreographed
+  Sparks), aus dem Friedhof wirken (Flashback, The Dawning Archaic, Group Project, Nita) und Token-Kopien (Applied
+  Geometry, Echocasting Symposium). Weitere SOS-Pakete folgen; bis dahin wirken offene Karten nur mit den schon modellierten
   Effekten.
 - Alchemy: Reality Fracture (YFRA), Paket A: Perpetual, Conjure benannter Karten, Seek (Killian), Avoided
   Stairwurm, Zimone, Dina, Asymmetry Sage, Sparks Ablaze, Paradox Kraken, Boisterous Clique, Searing Soloist

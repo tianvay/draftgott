@@ -660,6 +660,17 @@ RULES = [
     "stirbt eine der Kreaturen, ziehen. Slumbering Trudge mit X bis 3. Molten Note: Schaden X+2 an die gefährlichste "
     "Kreatur, die daran stirbt. Steal the Show: überzählige Länder neu ziehen und Schaden in Höhe der Instants/"
     "Sorceries im Friedhof. Rocket Volley zerstört ein Nichtstandardland des Gegners (nur dann gewirkt).",
+    "SOS-Paket I (Kopieren): Kopien lösen vor dem Original auf und wählen eigene Ziele. Lumaret's Favor kopiert sich "
+    "mit Lebensgewinn, Social Snub (jeder opfert seine schwächste Kreatur; nur, wenn unsere nicht mehr wert ist) kopiert "
+    "sich, wenn der Gegner mindestens zwei und nicht weniger Kreaturen hat als wir; Striking Palette kopiert den "
+    "nächsten Instant/Sorcery des Zugs. Bei lohnenden Zaubern (Removal, Ziehen, Token, Schaden, Rückholen, Suchen) "
+    "opfert Mica einen Treasure, Aziza tappt außerhalb des eigenen Zugs drei Kreaturen, Choreographed Sparks kommt mit "
+    "offenem Mana aus der Hand; im eigenen Zug kopiert Sparks auch eine Kreatur ab Power 3 (Token mit Haste, im "
+    "Endsegment geopfert). Flashback (die Karte) wirkt den lohnendsten Instant/Sorcery aus dem Friedhof (Sorceries "
+    "nur in der eigenen Main Phase, danach Exil); The Dawning Archaic wirkt beim Angriff einen kostenlos; Group Project "
+    "kommt in Main 2 per Flashback durch drei ungetappte Kreaturen. Nita opfert ein Token für einen lohnenden Zauber "
+    "aus dem Friedhof des Gegners, danach eine Marke auf jede eigene Kreatur. Applied Geometry und Echocasting "
+    "Symposium kopieren die stärkste eigene Kreatur (Applied Geometry als 0/0 mit sechs Marken).",
     "Noch nicht im Kampf: weitere Auslöser und Fähigkeiten (siehe Modell-Abdeckung). Solche Karten werden gewirkt, "
     "wirken aber nur mit den schon modellierten Effekten.",
 ]
