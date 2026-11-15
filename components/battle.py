@@ -4122,6 +4122,16 @@ def bury(players, e):
                     returns.append((c.owner or p, c.card))  # Ferocity of the Hunt
                 if c.card.death_draw:  # Simulacrum Shaper
                     _draw(p, c.card.death_draw)
+                if c.card.colossus_death:  # SOS Colossus of the Blood Age
+                    n = 0
+                    while surplus_land(p) is not None:
+                        gone = surplus_land(p)
+                        p.hand.remove(gone)
+                        p.graveyard.append(gone)
+                        n += 1
+                    if n:
+                        discarded(p, e)
+                    _draw(p, n + 1)
                 if c.once.get("death_draw") == p.now:  # A Good Day to Die
                     _draw(p)
                 if any(x.charge_on_death for x in p.perms):  # Gardenize
@@ -6217,6 +6227,12 @@ def sos_main1(me, opp, step, e):
     """Beginn der ersten Main Phase: Scathing Shadelock wird prepared; Lluwen exiliert (als Hexerei) die schwaechste
     Kreaturenkarte aus dem Friedhof, wenn sie nicht prepared ist."""
     prepare_by(me, "main1", e)
+    for x in [x for x in me.perms if isinstance(x, Card) and x.mill_play_ability]:  # Ark of Hunger: einmal je Zug
+        p_once = getattr(me, "sos_once", {})
+        if p_once.get(x.name) != step:
+            p_once[x.name] = step
+            me.sos_once = p_once
+            mill_to_play(me, 1, step, e, x.name)
     for c in [c for c in me.creatures if "gy_creature" in c.card.prepare_on and not c.prepared and not c.dead]:
         cands = [g for g in me.graveyard if g.is_creature]
         if not cands:
@@ -6263,6 +6279,18 @@ def sos_end_step(dfn, act, step, e):
             c.tapped = True
         prepare_by(dfn, "tap3", e, only=trio)
     sos_fractal_end(dfn, step, e)
+    for card in [c for c in dfn.hand if c.hand_dig]:  # Visionary's Dance: weit weg vom Wirken
+        if card in dfn.hand and len(dfn.lands) < card.mv - 2 and _pay_open(dfn, card.hand_dig):
+            dfn.hand.remove(card)
+            dfn.graveyard.append(card)
+            discarded(dfn, e, [card])
+            top, dfn.library[:2] = dfn.library[:2], []
+            pick = dig_pick(dfn, top)
+            if pick is not None:
+                top.remove(pick)
+                dfn.hand.append(pick)
+            dfn.graveyard.extend(top)
+            e["events"].append(i18n.t("{me}: {card_name} (aus der Hand) – oberste zwei Karten", me=i18n.t(dfn.name), card_name=card.name))
     for x in [x for x in dfn.perms if isinstance(x, Card)]:
         if x.hand7_draw and len(dfn.hand) >= 7:  # Resonating Lute
             _draw(dfn)
@@ -6465,6 +6493,103 @@ def sos_on_cast(p, card, step, e):
                 add_counters(p, c, 1, step, e)
         if c.card.x_cast_unblockable and card.x_cost:
             c.extra.add("unblockable")
+        if c.card.x_dig and card.x_cost and p.next_x > 0:  # Geometer's Arthropod: oberste X, eine auf die Hand
+            top, p.library[:p.next_x] = p.library[:p.next_x], []
+            pick = dig_pick(p, top)
+            if pick is not None:
+                top.remove(pick)
+                p.hand.append(pick)
+            random.shuffle(top)
+            p.library.extend(top)
+
+
+def put_onto_battlefield(p, card, step, e, opp=None, tapped=False):
+    """SOS: eine Karte (schon aus Hand oder Bibliothek genommen) direkt aufs Feld, ohne sie zu wirken."""
+    if card.is_land:
+        p.lands.append(card)
+        if opp is not None:
+            on_land(p, opp, card, step, e, with_mana=False)
+    elif card.is_creature:
+        c = Creature(card, step)
+        c.tapped = tapped
+        p.creatures.append(c)
+        creature_enters(p, c, step, e, opp, cast=False)
+    else:
+        p.perms.append(card)
+        permanent_enters(p, opp, card, step, e)
+    e["events"].append(i18n.t("{me}: {card_name} – {target_name} ins Spiel", me=i18n.t(p.name), card_name=card.name, target_name=card.name))
+
+
+def mill_to_play(p, n, step, e, source):
+    """SOS Tablet of Discovery, Ark of Hunger: n oberste Karten, in diesem Zug spielbar (wie Impulse)."""
+    for _k in range(n):
+        if p.library:
+            top = p.library.pop(0)
+            p.impulse.append((top, p.own_turns))
+            e["events"].append(i18n.t("{me}: {card_name} – {top_name} ins Exil (spielbar)", me=i18n.t(p.name), card_name=source, top_name=top.name))
+
+
+def sos_after_draw(me, opp, card, step, e):
+    """Nach dem Ziehen (SOS Paket G): Embrace the Paradox legt ein Land aus der Hand getappt; Mind into Matter zieht X
+    und legt das teuerste Permanent bis Manawert X getappt; Mathemagics zieht 2^X."""
+    if card.mind_matter:
+        x, me.next_x = me.next_x, 0
+        _draw(me, x)
+        perms = [h for h in me.hand if not h.is_land and not h.is_instant_sorcery and h.mv <= x]
+        if perms:
+            pick = max(perms, key=lambda h: (h.mv, h.name))
+            me.hand.remove(pick)
+            put_onto_battlefield(me, pick, step, e, opp, tapped=True)
+    if card.mathemagics:
+        x, me.next_x = me.next_x, 0
+        _draw(me, 2 ** x)
+    if card.land_from_hand:
+        lands = [h for h in me.hand if h.is_land]
+        if lands:
+            pick = lands[0]
+            me.hand.remove(pick)
+            put_onto_battlefield(me, pick, step, e, opp, tapped=True)
+
+
+def sos_flow(me, opp, card, step, e):
+    """SOS Paket G beim Aufloesen bzw. Betreten: Zimone's Experiment, Planar Engineering, Mill zum Spielen, Bind to
+    Life, Mind Roots."""
+    if card.zimone:  # oberste 5: bis zu zwei, Laender zuerst solange welche fehlen, dann Kreaturen
+        top, me.library[:5] = me.library[:5], []
+        need_land = len(me.lands) + sum(1 for h in me.hand if h.is_land) < 6
+        cands = sorted([c for c in top if c.is_land or c.is_creature],
+                       key=lambda c: (not (c.is_land and need_land), -c.mv, c.name))[:2]
+        for pick in cands:
+            top.remove(pick)
+            if pick.is_land:
+                put_onto_battlefield(me, pick, step, e, opp, tapped=True)
+            else:
+                me.hand.append(pick)
+        random.shuffle(top)
+        me.library.extend(top)
+    if card.planar:  # zwei Laender opfern (die entbehrlichsten), vier Basic Lands getappt
+        for _k in range(2):
+            if me.lands:
+                _lose_land(me, _redundant_land(me))
+        for _k in range(4):
+            fetch_land_tapped(me, opp, card, step, e)
+    if card.mill_play:
+        mill_to_play(me, card.mill_play, step, e, card.name)
+    if card.bind_life:  # sieben millen, die teuerste Kreatur davon aufs Feld
+        milled, me.library[:7] = me.library[:7], []
+        me.graveyard.extend(milled)
+        creatures = [c for c in milled if c.is_creature]
+        if creatures:
+            pick = max(creatures, key=lambda c: (c.mv, c.power, c.name))
+            me.graveyard.remove(pick)
+            put_onto_battlefield(me, pick, step, e, opp)
+    if card.mind_roots and opp is not None:  # der Gegner wirft zwei ab, ein Land davon zu uns (getappt)
+        before = len(opp.graveyard)
+        discard(opp, 2, e)
+        lands = [c for c in list(opp.graveyard)[before:] if c.is_land]
+        if lands:
+            opp.graveyard.remove(lands[0])
+            put_onto_battlefield(me, lands[0], step, e, opp, tapped=True)
 
 
 def sos_converge(me, opp, card, step, e):
@@ -6689,6 +6814,8 @@ def sos_effects(me, opp, card, step, entry):
             entry["events"].append(i18n.t("{me}: {card_name} – {target_name} bekommt {kw}", me=i18n.t(me.name), card_name=card.name, target_name=pick.card.name, kw=f"+{x}/+0, trample"))
     if card.converge_counters or card.converge_draw or card.converge_exile or card.converge_discard:
         sos_converge(me, opp, card, step, entry)
+    if card.zimone or card.planar or card.mill_play or card.bind_life or card.mind_roots:
+        sos_flow(me, opp, card, step, entry)
     if card.fractal_drawn:  # Fractal Anomaly: X = in diesem Zug gezogene Karten
         fractal_token(me, me.drawn - me.drawn_mark, step, entry, card.name)
     if card.fractal_gift:  # Oracle's Gift: X Fractals, dann X Marken auf jeden eigenen Fractal
@@ -6808,10 +6935,12 @@ _DIG_OK = {
     "plains_perm3": lambda c: "plains" in c.land_types or (not c.is_land and not c.is_instant_sorcery and c.mv <= 3),
     "any": lambda c: True,
     "creature_land": lambda c: c.is_creature or c.is_land,  # SOS Follow the Lumarets
+    "land_x": lambda c: c.is_land or c.x_cost,  # SOS Paradox Surveyor
 }
 _TUTOR_OK = {"aura": lambda c: c.is_aura, "equipment": lambda c: bool(c.equip), "spacecraft": lambda c: bool(c.station),
              "whale": lambda c: "whale" in c.creature_types,
-             "any": lambda c: True, "instant_sorcery": lambda c: c.is_instant_sorcery}  # SOS Demonic Tutor, Wild Idea
+             "any": lambda c: True, "instant_sorcery": lambda c: c.is_instant_sorcery,  # SOS Demonic Tutor, Wild Idea
+             "creature": lambda c: c.is_creature}  # SOS Dina's Guidance
 
 
 def flow_effects(me, opp, card, step, entry):
@@ -6819,8 +6948,13 @@ def flow_effects(me, opp, card, step, entry):
     aufs Feld, Suchen nach Kartentyp, Opfern und ziehen (Khan), Live Long and Prosper."""
     if card.top_dig:  # Rutherford, Coffee, Spock, Pattern Buffer: Wahl wie bei Hoshi Sato (dig_pick)
         n, filt, to_gy = card.top_dig
+        if card.dig_creatures:  # SOS Stirring Honormancer: X = eigene Kreaturen
+            n = sum(1 for c in me.creatures if not c.dead)
         top, me.library[:n] = me.library[:n], []
-        for _k in range(2 if card.dig_infusion and me.gained > 0 else 1):  # SOS Follow the Lumarets: Infusion
+        two = (card.dig_infusion and me.gained > 0) or (card.dig_two_gy and any(g.is_instant for g in me.graveyard)
+                                                         and any(g.is_instant_sorcery and not g.is_instant
+                                                                 for g in me.graveyard))  # SOS Flow State
+        for _k in range(2 if two else 1):  # SOS Follow the Lumarets: Infusion
             pick = dig_pick(me, [c for c in top if _DIG_OK[filt](c)])
             if pick is not None:
                 top.remove(pick)
@@ -7405,6 +7539,7 @@ def card_effects(me, opp, card, step, entry, modes=None):
             me.predrawn[card] -= 1
         else:
             _draw(me, card.draws)
+    sos_after_draw(me, opp, card, step, entry)
     for _k in range(card.discard_after):  # SOS Rapturous Moment: nach dem Ziehen abwerfen
         gone = choose_discard(me)
         if gone is not None:
@@ -7586,6 +7721,7 @@ def main_phase_spells(me, opp):
             and (not c.discard_cost or len([h for h in me.hand if h is not c]) >= c.discard_cost)
             and (not c.reanimate_any or bool(sos_reanimate_cands(me, opp)))
             and (not c.opp_draws or len([h for h in me.hand if h is not c]) < 3)  # Secret Rendezvous (Nutzer)
+            and (not c.planar or (len(me.lands) >= 2 and sum(1 for x in me.library if x.is_basic) >= 4))
             and (not c.twin or twin_host(me, opp) is not None)
             and (not c.mirror_copy or (opp is not None and any(not x.dead for x in opp.creatures)))
             and sweep_etb_ok(me, opp, c) and kobayashi_ok(me, opp, c) and not c.sunburst_bomb and city_ok(me, opp, c)
@@ -10015,9 +10151,13 @@ def take_turn(me, opp, step, rnd, skip_draw):
             for _ in range(x):
                 me.open.pop()
             me.next_x = x
-        if c.x_life or c.fractal_gift or (c.tap_spell and c.tap_spell[2]):  # SOS Procrastinate (2X Stun), Stream of
-            x = free_units(me) // (2 if c.fractal_gift else 1)  # Life, Oracle's Gift ({X}{X}): X = alles freie Mana
-            for _ in range(x * (2 if c.fractal_gift else 1)):
+        if c.x_life or c.fractal_gift or c.mind_matter or c.mathemagics or (c.tap_spell and c.tap_spell[2]):
+            per = 2 if c.fractal_gift or c.mathemagics else 1  # SOS: X = alles freie Mana ({X}{X}: die Haelfte)
+            x = free_units(me) // per
+            if c.mathemagics:  # nicht mehr ziehen, als die Bibliothek hat
+                while x > 0 and 2 ** x >= len(me.library):
+                    x -= 1
+            for _ in range(x * per):
                 me.open.pop()
             me.next_x = x
     early = [c for c in chosen if c.is_creature and not c.haste and combat_etb(me, opp, c, step, chosen)]

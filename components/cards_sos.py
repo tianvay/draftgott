@@ -481,6 +481,64 @@ def _f_traits(card, low, spell):
     return out
 
 
+_REST_BOTTOM = r"put the rest on the bottom of your library in (?:any|a random) order\.$"
+# Paket G: Kartenfluss und Suche (ganze Zeilen)
+_G_LINES = (
+    (re.compile(r"^look at the top three cards of your library\. put one of them into your hand and the rest on the "
+                r"bottom of your library in any order\. if there is an instant card and a sorcery card in your "
+                r"graveyard, instead put two of them into your hand and " + _REST_BOTTOM[4:]),
+     True, lambda m: {"top_dig": (3, "any", False), "dig_two_gy": True}),
+    (re.compile(r"^look at the top five cards of your library\. you may reveal up to two creature and/or land cards from "
+                r"among them, then put the rest on the bottom of your library in a random order\. put all land cards "
+                r"revealed this way onto the battlefield tapped and put all creature cards revealed this way into your "
+                r"hand\.$"), True, lambda m: {"zimone": True}),
+    (re.compile(_ETB + r"look at the top five cards of your library\. you may reveal a land card or a card with \{x\} in "
+                r"its mana cost from among them and put it into your hand\. " + _REST_BOTTOM),
+     False, lambda m: {"top_dig": (5, "land_x", False)}),
+    (re.compile(_ETB + r"look at the top x cards of your library, where x is the number of creatures you control\. put "
+                r"one of those cards into your hand and the rest into your graveyard\.$"),
+     False, lambda m: {"top_dig": (0, "any", True), "dig_creatures": True}),
+    (re.compile("^" + _COST + r", discard this card: look at the top two cards of your library\. put one of them into "
+                r"your hand and the other into your graveyard\.$"),
+     None, lambda m: {"hand_dig": cost_alternatives(m.group(1).upper())}),
+    (re.compile(r"^search your library for a creature card, reveal it, put it into your hand or graveyard, then "
+                r"shuffle\.$"), True, lambda m: {"tutor": ("creature",)}),
+    (re.compile(r"^draw (three|two) cards\. you may put a land card from your hand onto the battlefield tapped\.$"),
+     True, lambda m: {"draws": _NUMW[m.group(1)], "land_from_hand": True}),
+    (re.compile(r"^you may put a land card from your hand onto the battlefield tapped\.$"), True,  # Rest nach dem Ziehen
+     lambda m: {"land_from_hand": True}),
+    (re.compile(r"^draw x cards\. then you may put a permanent card with mana value x or less from your hand onto the "
+                r"battlefield tapped\.$"), True, lambda m: {"mind_matter": True}),
+    (re.compile(r"^sacrifice two lands\. search your library for four basic land cards, put them onto the battlefield "
+                r"tapped, then shuffle\.$"), True, lambda m: {"planar": True}),
+    (re.compile(r"^when (?:~|this creature) dies, discard any number of cards, then draw that many cards plus one\.$"),
+     False, lambda m: {"colossus_death": True}),
+    (re.compile(r"^whenever (?:~|this creature) becomes the target of a spell or ability an opponent controls, you may "
+                r"draw a card\.$"), False, lambda m: {"targeted_draw": 1}),
+    (re.compile(r"^when this artifact enters, mill (a|one|two) cards?\. you may play (?:that card|those cards) this "
+                r"turn\.$"), False, lambda m: {"mill_play": _NUMW.get(m.group(1), 1)}),
+    (re.compile(r"^\{t\}: mill a card\. you may play that card this turn\.$"), False,
+     lambda m: {"mill_play_ability": True}),
+    (re.compile(r"^whenever you cast a spell with \{x\} in its mana cost, look at the top x cards of your library\. put "
+                r"one of them into your hand and " + _REST_BOTTOM[4:]), False, lambda m: {"x_dig": True}),
+    (re.compile(r"^target player draws 2ˣ cards\.$"), True, lambda m: {"mathemagics": True}),
+    (re.compile(r"^mill seven cards\. then put a creature card from among them onto the battlefield\.$"), True,
+     lambda m: {"bind_life": True}),
+    (re.compile(r"^target player discards two cards\. put up to one land card discarded this way onto the battlefield "
+                r"tapped under your control\.$"), True, lambda m: {"mind_roots": True, "discard": 0}),
+)
+
+
+def _g_traits(low, spell):
+    """Paket G: Kartenfluss und Suche (eine Zeile); spell None: Zauber und bleibende Karten."""
+    out = {}
+    for rx, kind, build in _G_LINES:
+        m = rx.match(low)
+        if m and (kind is None or kind == spell):
+            out.update(build(m))
+    return out
+
+
 def prepare_triggers(card):
     """Paket B: Arten der Ausloeser, die die Vorderseite prepared machen (Reihenfolge wie im Text)."""
     if card.get("layout") != "prepare":
@@ -547,6 +605,7 @@ def sos_traits(card, type_line, base):
         out.update(_gy_traits(low, spell))
         out.update(_e_traits(low, spell))
         out.update(_f_traits(card, low, spell))
+        out.update(_g_traits(low, spell))
         trigger = bool(re.match(r"^(when|whenever|at the beginning)\b", low))
         if not spell:
             m = res["etb_drain"].match(low)

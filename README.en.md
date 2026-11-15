@@ -683,8 +683,11 @@ full log. The rules of the battle model are described in detail at the end of th
   Oracle's Gift, Emil, Berta, Fractal Tender, Ambitious Augmenter), passing on counters (Scolding Administrator, Tester
   of the Tangential), Matterbending Mage, and Homesickness. Package F (Prismari): opus from 5 mana, converge, mana
   only for instants/sorceries (as a cost reduction), Topiary Lecturer, conditional cost reductions (Ajani's Response,
-  Brush Off, Orysa, The Dawning Archaic), Diary of Dreams, Potioner's Trove, Sanar, and Rapturous Moment. More SOS
-  packages will follow; until then, open cards only have their already modelled effects.
+  Brush Off, Orysa, The Dawning Archaic), Diary of Dreams, Potioner's Trove, Sanar, and Rapturous Moment. Package G
+  (card flow): looking at the top cards (Flow State, Zimone's Experiment, Paradox Surveyor, Stirring Honormancer,
+  Visionary's Dance from the hand, Geometer's Arthropod), searching (Dina's Guidance, Planar Engineering), drawing
+  (Embrace the Paradox, Mind into Matter, Mathemagics, Colossus of the Blood Age), milling and playing this turn
+  (Tablet of Discovery, Ark of Hunger), Bind to Life, and Mind Roots. More SOS packages will follow; until then, open cards only have their already modelled effects.
 - Alchemy: Reality Fracture (YFRA), package A: perpetual, conjuring named cards, seek (Killian), Avoided
   Stairwurm, Zimone, Dina, Asymmetry Sage, Sparks Ablaze, Paradox Kraken, Boisterous Clique, Searing Soloist
   (cards to conjure are in `components/conjure.py`).

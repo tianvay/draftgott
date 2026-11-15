@@ -91,6 +91,9 @@ GIVES = {
     # SOS Paket F
     "converge_counters": (("counters", 1),), "converge_creature_counters": (("counters", 2),),
     "discard_after": (("graveyard", 1), ("discard", 1)),
+    # SOS Paket G: Friedhof fuellen bzw. abwerfen
+    "dig_creatures": (("graveyard", 2),), "hand_dig": (("graveyard", 1), ("discard", 1)),
+    "colossus_death": (("graveyard", 1), ("discard", 1)), "bind_life": (("graveyard", 3),),
     # Surveil
     "surveil": (("surveil", 1), ("graveyard", 0.5)), "upkeep_surveil": (("surveil", 2), ("graveyard", 1)),
     "enter_surveil": (("surveil", 2),), "sac_surveil": (("surveil", 1),), "equip_attack_surveil": (("surveil", 2),),
@@ -208,6 +211,7 @@ WANTS = {
     # SOS Paket F: Mana und Ausloeser fuer Instants/Sorceries wollen Nichtkreatur-Zauber
     "instsorc_mana": (("spells", 1),), "diary": (("spells", 1.5),), "instsorc_life": (("spells", 1),),
     "instsorc_treasure": (("spells", 1),),
+    "dig_two_gy": (("spells", 0.5),), "x_dig": (("spells", 0.5),),  # SOS Paket G
     # SOS Paket D: brauchen Karten im Friedhof
     "end_gy_draw": (("graveyard", 1),), "attack_gy_pump": (("graveyard", 1),), "gy_combat_return": (("discard", 0.5),),
     "rubble_ping": (("graveyard", 1),), "cauldron_reanimate": (("graveyard", 0.5),), "x_regrowth": (("graveyard", 1),),
@@ -264,6 +268,8 @@ NEUTRAL = (
     "x_cost", "x_cast_unblockable", "tap_targets",  # SOS Paket E
     "converge_draw", "converge_exile", "converge_discard", "hand7_draw", "power_mana", "counter_alts_instsorc",
     "add_mana",  # SOS Paket F
+    "zimone", "land_from_hand", "mind_matter", "planar", "mathemagics", "mill_play", "mill_play_ability",
+    "mind_roots",  # SOS Paket G
     "is_token", "sac_mana", "opp_spell_tax", "extra_cost", "hexproof_until_damage", "alt_draws",
     "finality", "combat_land_return", "domain_power", "x_search_basics", "choices", "is_mode", "removal_exile",
     "removal_points", "hand_pick", "attack_exile_gy", "own_turn_kw", "debuff", "impulse",

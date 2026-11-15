@@ -636,6 +636,17 @@ RULES = [
     "Instant/Sorcery im Friedhof. Diary of Dreams zählt Seitenmarken und zieht am Ende des gegnerischen Zugs; "
     "Resonating Lute zieht mit 7+ Handkarten; Potioner's Trove (2 Leben) und Sanar (Treasure) im eigenen Endsegment "
     "nach einem Instant/Sorcery; Rapturous Moment: 3 ziehen, 2 abwerfen, das Mana bleibt für Instants.",
+    "SOS-Paket G (Kartenfluss): Flow State nimmt zwei Karten, wenn ein Instant und eine Sorcery im Friedhof liegen; "
+    "Zimone's Experiment legt bis zu zwei Kreaturen/Länder (Länder zuerst, solange weniger als sechs da sind; Länder "
+    "getappt aufs Feld); Paradox Surveyor nimmt ein Land oder eine Karte mit {X}; Stirring Honormancer sieht so viele "
+    "Karten an, wie wir Kreaturen haben. Visionary's Dance wird aus der Hand abgeworfen (oberste zwei), solange uns "
+    "noch mehr als zwei Länder zum Wirken fehlen. Geometer's Arthropod sieht nach einem X-Zauber die obersten X an. "
+    "Dina's Guidance sucht eine Kreatur auf die Hand; Planar Engineering opfert die zwei entbehrlichsten Länder für "
+    "vier Basic Lands (nur mit zwei Ländern und vier Basic Lands in der Bibliothek). Embrace the Paradox legt danach "
+    "ein Land aus der Hand; Mind into Matter (X = alles freie Mana) legt das teuerste Permanent bis Manawert X; "
+    "Mathemagics zieht 2^X (nie die ganze Bibliothek); Colossus of the Blood Age wirft beim Tod überzählige Länder ab. "
+    "Tablet of Discovery und Ark of Hunger (einmal je Zug in Main 1): die oberste Karte ist in diesem Zug spielbar. "
+    "Bind to Life holt die teuerste Kreatur der sieben gemillten Karten; Mind Roots nimmt ein abgeworfenes Land.",
     "Noch nicht im Kampf: weitere Auslöser und Fähigkeiten (siehe Modell-Abdeckung). Solche Karten werden gewirkt, "
     "wirken aber nur mit den schon modellierten Effekten.",
 ]

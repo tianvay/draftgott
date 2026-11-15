@@ -569,6 +569,21 @@ class Card(NamedTuple):
     instsorc_treasure: bool = False  # "{T}: Create a Treasure token", nur nach einem Instant/Sorcery (Sanar)
     discard_after: int = 0  # nach dem Ziehen N abwerfen (Rapturous Moment)
     add_mana: tuple = ()  # Mana beim Aufloesen (Mana-Einheiten), fuer Instants danach (Rapturous Moment)
+    # SOS Paket G (Kartenfluss, Suche)
+    dig_two_gy: bool = False  # top_dig: zwei statt einer, wenn ein Instant und eine Sorcery im Friedhof liegen
+    dig_creatures: bool = False  # top_dig: N = Zahl der eigenen Kreaturen (Stirring Honormancer)
+    zimone: bool = False  # oberste 5: bis zu zwei Kreaturen/Laender, Laender getappt aufs Feld, Kreaturen auf die Hand
+    hand_dig: tuple = ()  # Kosten von "Discard this card: oberste 2, eine auf die Hand, eine in den Friedhof"
+    x_dig: bool = False  # Zauber mit {X} gewirkt: oberste X ansehen, eine auf die Hand (Geometer's Arthropod)
+    land_from_hand: bool = False  # nach dem Ziehen ein Land aus der Hand getappt aufs Feld (Embrace the Paradox)
+    mind_matter: bool = False  # X ziehen, dann ein Permanent bis Manawert X aus der Hand getappt aufs Feld
+    planar: bool = False  # zwei Laender opfern, vier Basic Lands getappt suchen (Planar Engineering)
+    colossus_death: bool = False  # stirbt sie: beliebig viele abwerfen, so viele plus eins ziehen
+    mathemagics: bool = False  # 2^X Karten ziehen
+    mill_play: int = 0  # Betreten: N millen, in diesem Zug spielbar (Tablet of Discovery)
+    mill_play_ability: bool = False  # "{T}: Mill a card. You may play that card this turn." (Ark of Hunger)
+    bind_life: bool = False  # sieben millen, eine Kreatur davon aufs Feld (Bind to Life)
+    mind_roots: bool = False  # der Gegner wirft zwei ab, ein Land davon getappt zu uns (Mind Roots)
 
 
 LANDCYCLE_RE = re.compile(
