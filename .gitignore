@@ -33,6 +33,9 @@ draftstatistik*.json.tmp
 # Karten-Overlay: Kalibrierung des Rasters im Arena-Fenster (je Nutzer)
 kartenoverlay.json
 
+# Saeulen ueber Arena: eigene Lage im Arena-Fenster (je Nutzer)
+saeulen.json
+
 # Lokale Claude-Einstellungen (Vorschau-Konfiguration je Session)
 .claude/
 

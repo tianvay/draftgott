@@ -1,0 +1,35 @@
+"""Englisches Woerterbuch fuer components/arenapanels.py (zwei Saeulen ueber Arena) und den Schalter im Steuerfenster."""
+
+EN = {
+    "KURVE": "CURVE",
+    "FARBEN": "COLORS",
+    "WEITERES": "MORE",
+    "ARCHETYPEN": "ARCHETYPES",
+    "SIGNALE": "SIGNALS",
+    "TIPP": "TIP",
+    "KREATUREN": "CREATURES",
+    "REMOVAL": "REMOVAL",
+    "DEIN DECK": "YOUR DECK",
+    "/ {n}": "/ {n}",
+    "/ {n} P.": "/ {n} pts",
+    "{n} Karten im Plan": "{n} cards in the plan",
+    "{n} Picks": "{n} picks",
+    "1 Karte": "1 card",
+    "{n} Karten": "{n} cards",
+    "Kartenfluss": "Card flow",
+    "{name} · Sideboard {n} Karte(n)": "{name} · sideboard {n} card(s)",
+    "Top-Pick: {name}": "Top pick: {name}",
+    "Säulen über Arena": "Columns over Arena",
+    "Für die Säulen braucht es genau vier Klicks.": "The columns need exactly four clicks.",
+    "Die Säule ist zu klein.": "The column is too small.",
+    "Säulen: Standardlage": "Columns: default position",
+    "Arena-Fenster anders proportioniert: Säulen neu kalibrieren":
+        "Arena window has a different aspect ratio: recalibrate the columns",
+    "Säulen kalibrieren ({n}/4): ": "Calibrate columns ({n}/4): ",
+    "Linke Säule (dein Deck): Ecke oben links anklicken": "Left column (your deck): click the top left corner",
+    "Linke Säule (dein Deck): Ecke unten rechts anklicken": "Left column (your deck): click the bottom right corner",
+    "Rechte Säule (der Pick): Ecke oben links anklicken": "Right column (the pick): click the top left corner",
+    "Rechte Säule (der Pick): Ecke unten rechts anklicken": "Right column (the pick): click the bottom right corner",
+    "Gestrichelt: jetzige Lage. Esc bricht ab, Entf stellt die Standardlage wieder her.":
+        "Dashed: current position. Esc cancels, Del restores the default position.",
+}

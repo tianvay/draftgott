@@ -66,17 +66,22 @@ def _syn_tags(sc):
 
 def pool_info(cards, main):
     """Kennzahlen der Picks: Karten, Kreaturen, Removal (Karten und Punkte wie im Bericht), Kartenfluss (Karten und
-    je Art), Spacecraft. "arch": dieselben Zahlen nur fuer Karten in den Farben des Archetyps main (farblose zaehlen mit)."""
+    je Art), Spacecraft, Kurve (Zauber je Manawert <=1 bis 6+) und Farben (Zauber je Farbe, wie deck_summary). "arch": dieselben Zahlen nur fuer Karten in den Farben des Archetyps main (farblose zaehlen mit)."""
     def count(cs):
-        kinds = {}
+        kinds, curve, colors = {}, [0] * 6, {}
         for c in cs:
             for k in c.get("flow") or []:
                 kinds[k] = kinds.get(k, 0) + 1
+            if not c.get("land"):
+                curve[min(5, max(0, int(c.get("mv") or 0) - 1))] += 1
+                for col in c.get("colors") or []:
+                    colors[col] = colors.get(col, 0) + 1
         return {"cards": len(cs), "creatures": sum(1 for c in cs if c.get("creature")),
                 "removal": sum(1 for c in cs if c.get("removal")),
                 "removal_points": round(sum(c.get("removal") or 0 for c in cs), 2),
                 "flow": sum(1 for c in cs if c.get("flow")), "flow_kinds": kinds,
-                "spacecraft": sum(1 for c in cs if c.get("spacecraft"))}
+                "spacecraft": sum(1 for c in cs if c.get("spacecraft")), "curve": curve,
+                "colors": dict(sorted(colors.items(), key=lambda kv: (-kv[1], "WUBRG".find(kv[0]))))}
     out = count(cards)
     out["arch"] = count([c for c in cards if set(c.get("colors") or []) <= set(main)]) if main else None
     return out

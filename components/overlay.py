@@ -645,7 +645,7 @@ def fetch(url, timeout=0.8):
 
 
 WINDOWS = (("main", "Draft / Bibliothek"), ("tricks", "Trick-Warner"))
-CONTROL_SIZE = (200, 156)  # Platz fuer Seitenfenster, Trick-Warner und Karten-Overlay mit "Kalibrieren"
+CONTROL_SIZE = (200, 205)  # Platz fuer Seitenfenster, Trick-Warner, Karten-Overlay mit "Kalibrieren" und Saeulen
 TOP = 80
 
 
@@ -654,10 +654,11 @@ def default_enabled():
     return {key: True for key, _ in WINDOWS}
 
 
-def visible_windows(enabled, snap):
-    """Fenster, die gerade zu sehen sind: das Seitenfenster, wenn angeschaltet; der Trick-Warner nur im Spiel."""
+def visible_windows(enabled, snap, columns=False):
+    """Fenster, die gerade zu sehen sind: das Seitenfenster, wenn angeschaltet (columns: die Saeulen ueber Arena
+    zeigen beim Draften alles, components/arenapanels.py, dann tritt es zur Seite); der Trick-Warner nur im Spiel."""
     shown = set()
-    if enabled.get("main"):
+    if enabled.get("main") and not columns:
         shown.add("main")
     if enabled.get("tricks") and ((snap or {}).get("game") or {}).get("active"):
         shown.add("tricks")
@@ -864,7 +865,7 @@ def run(url, interval_ms=1000):
     Knopf "Kalibrieren" im Steuerfenster."""
     import os
     import tkinter as tk
-    from components import packoverlay
+    from components import arenapanels, packoverlay
 
     control = tk.Tk()
     control.title("draftgott")
@@ -901,6 +902,37 @@ def run(url, interval_ms=1000):
     tk.Button(cards_row, text=t("Kalibrieren"), font=("Segoe UI", 8), bg="#2c3a52", fg=COLORS["ink"], relief="flat",
               activebackground="#3b4d6b", padx=4, pady=0, cursor="hand2",
               command=lambda: start_calibration()).pack(side="right")
+    cols_on = tk.BooleanVar(value=True)  # zwei Saeulen ueber Arena beim Draften (components/arenapanels.py)
+    cols_row = tk.Frame(control, bg=COLORS["bg"])
+    cols_row.pack(fill="x", padx=6)
+    tk.Checkbutton(cols_row, text=t("Säulen über Arena"), variable=cols_on, bg=COLORS["bg"], fg=COLORS["ink"],
+                   selectcolor="#2c3a52", activebackground=COLORS["bg"], activeforeground=COLORS["ink"],
+                   font=("Segoe UI", 10), anchor="w").pack(side="left")
+    tk.Button(cols_row, text=t("Kalibrieren"), font=("Segoe UI", 8), bg="#2c3a52", fg=COLORS["ink"], relief="flat",
+              activebackground="#3b4d6b", padx=4, pady=0, cursor="hand2",
+              command=lambda: start_column_calibration()).pack(side="right")
+    cols_hint = tk.Label(control, text="", bg=COLORS["bg"], fg=COLORS["muted"], font=("Segoe UI", 8),
+                         anchor="w", justify="left", wraplength=CONTROL_SIZE[0] - 12)
+    cols_hint.pack(fill="x", padx=8)
+    columns = arenapanels.ArenaColumns(control)
+    cols_state = {"cal": arenapanels.load_column_calibration()}
+
+    def start_column_calibration():
+        arena = packoverlay.arena_window(os.getpid())
+        if not arena.get("found") or arena.get("minimized"):
+            cards_hint.configure(text=t("Arena nicht gefunden"))
+            return
+        cards_state["busy"] = True
+        cards.hide()
+        columns.hide()
+
+        def done(colcal):
+            arenapanels.save_column_calibration(arenapanels.COL_FILE, colcal)
+            cols_state["cal"] = colcal
+
+        current = arenapanels.column_rects(arena["size"], cards_state["cal"], cols_state["cal"])
+        cal_win = arenapanels.ColumnCalibrator(control, arena, current, done)
+        cal_win.win.bind("<Destroy>", lambda e: cards_state.update(busy=False), add="+")
     cards_hint = tk.Label(control, text="", bg=COLORS["bg"], fg=COLORS["muted"], font=("Segoe UI", 8),
                           anchor="w", justify="left", wraplength=CONTROL_SIZE[0] - 12)
     cards_hint.pack(fill="x", padx=8)
@@ -929,6 +961,9 @@ def run(url, interval_ms=1000):
         hint = packoverlay.status_text(cal, arena)
         if cards_hint.cget("text") != hint:
             cards_hint.configure(text=hint)
+        col_hint = arenapanels.column_status(cols_state["cal"], arena) if cols_on.get() else ""
+        if cols_hint.cget("text") != col_hint:  # "Arena nicht gefunden" steht schon beim Karten-Overlay
+            cols_hint.configure(text=col_hint)
         snap = state["snap"]
         slim = packoverlay.covers_pack(cards_on.get(), snap, cal, arena)
         if slim != state["slim"]:
@@ -944,10 +979,26 @@ def run(url, interval_ms=1000):
                 pass
         else:
             cards.hide()
+        # ohne Pack auf den Karten bleibt das Seitenfenster mit der Rangliste; zwischen zwei Packs springt es nicht
+        cols = arenapanels.active(cols_on.get(), snap, arena) and (
+            slim or (state["cols"] and (snap or {}).get("status") == "waiting"))
+        if cols != state["cols"]:
+            state["cols"] = cols
+            show_windows()
+        if not cards_state["busy"] and arenapanels.should_draw(cols_on.get(), snap, arena):
+            try:
+                n = len(snap.get("pack") or [])
+                on_card = bool(cal and n and packoverlay.hover_others(cal, n, arena["origin"], arena["size"],
+                                                                      packoverlay.cursor_pos()))
+                columns.show(snap, cal, arena, slim, faded=on_card, colcal=cols_state["cal"])
+            except tk.TclError:
+                pass
+        else:
+            columns.hide()
         control.after(100, cards_tick)  # schnell genug fuer das Hovern ueber Karten
 
     def show_windows():
-        shown = visible_windows({k: v.get() for k, v in enabled.items()}, state["snap"])
+        shown = visible_windows({k: v.get() for k, v in enabled.items()}, state["snap"], state["cols"])
         for key, win in windows.items():
             if key in shown and win.state() == "withdrawn":
                 win.deiconify()
@@ -969,7 +1020,7 @@ def run(url, interval_ms=1000):
     for tw in (text, trick_text):
         _styles(tw)
     state = {"last": None, "tricks": None, "seen": False, "misses": 0, "mini": False, "big": None, "snap": None,
-             "party": None, "first": True, "blink": False, "slim": False}
+             "party": None, "first": True, "blink": False, "slim": False, "cols": False}
     trick_tip_win = _bind_trick_tips(trick_text, lambda: trick_tips(state["snap"]))
 
     def set_mini(mini):

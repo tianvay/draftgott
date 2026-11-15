@@ -229,6 +229,16 @@ In Arena muss unter Optionen → Konto „Detailed Logs (Plugin Support)“ eing
   ihren Namen zur Kontrolle; Klicks gehen durch zu Arena; zeigt die Maus auf eine Karte, verschwinden die
   Zahlen auf allen anderen Karten, damit die große Kartenansicht von Arena frei bleibt. Solange es an und kalibriert ist, lässt das
   Seitenfenster Pack-Liste und Top-Pick weg (Signale, Archetyp-Tracker und Tipps bleiben).
+- **Säulen über Arena:** beim Draften zwei feste Säulen im freien Platz von Arenas Draft-Bildschirm (Schalter
+  „Säulen über Arena“ im Steuerfenster). Links neben dem Pack die Zahlen deines Decks: Kreaturen (Ziel 15) und
+  Removal-Punkte (Ziel 4, gelb ab 2,5 wie im Bericht) groß mit Balken, darunter Kurve, Farben, Kartenfluss und
+  Spacecraft, mit erkanntem Archetyp nur in dessen Farben. Zwischen Pack und Deckliste alles zum Pick: Warnung zur
+  Kurve, Top-Pick (nur ohne Karten-Overlay), Archetyp-Rangliste, Signale, Wechsel mit Sideboard und Tipps. Mit
+  Kalibrierung des Karten-Overlays richten sich die Säulen nach dem Kartenraster. Bei anderer Auflösung oder
+  anderem Seitenverhältnis: im Steuerfenster neben „Säulen über Arena“ auf „Kalibrieren“ und je Säule die Ecke oben
+  links und unten rechts anklicken (gestrichelt die jetzige Lage, Entf = Standardlage; gespeichert in
+  `saeulen.json`, nicht im Git). Klicks gehen durch; zeigt die Maus auf eine Karte,
+  werden sie fast durchsichtig. Solange Säulen und Karten-Overlay das Pack zeigen, tritt das Seitenfenster zur Seite.
 - **Kennzahlen der Picks:** Kreaturen, Removal (Karten und Punkte wie im Bericht) und Kartenfluss der Picks, mit
   erkanntem Archetyp zusätzlich nur in dessen Farben. Pack-Karten zeigen ihre Removal-Punkte.
 - **Spacecraft:** Hat der Pool Spacecraft, zählen Typ-Übersicht (Zeile „Spacecraft (Karten)“), Bericht,
