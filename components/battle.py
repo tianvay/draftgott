@@ -2224,6 +2224,10 @@ def upkeep_triggers(me, opp, step, e):
 def end_step_prepare(players, e):
     """Zu Beginn jedes Endsegments: Bloodline Recollector wird prepared, wenn in diesem Zug 3 oder mehr Kreaturen
     gestorben sind (beide Spieler)."""
+    for p in players:  # SOS Ennis, Conciliator's Duelist: exilierte Karten kommen zurueck
+        back, p.sos_flicker = getattr(p, "sos_flicker", []), []
+        for card in back:
+            put_onto_battlefield(p, card, p.now, e, p.opponent)
     died = sum(p.deaths - p.deaths_mark for p in players)
     for p in players:  # SOS Joined Researchers: jedes Endsegment, wenn ein Gegner mehr Handkarten hat
         if p.opponent is not None and len(p.opponent.hand) > len(p.hand):
@@ -2598,8 +2602,14 @@ def pw_rank(p, opp, w, cost, atoms, step, phase, pool=None, spells=None):
         tok = next(a for a in atoms if a[0] == "token")
         stats = tok[1] * (tok[2].power + tok[2].toughness)
         return (5, stats, None) if stats >= 8 else (3, stats, None)
+    if "reanimate_le" in kinds:  # SOS Ral Zarek
+        n = next(a[1] for a in atoms if a[0] == "reanimate_le")
+        cands = gy_candidates(p, "creature", n)
+        return (5, max(c.mv for c in cands), None) if cands else (0, 0, None)
     if "draw" in kinds:
         return 4, next(a[1] for a in atoms if a[0] == "draw"), None
+    if "discard_opp" in kinds:  # SOS Ral Zarek
+        return (3, 0, None) if opp is not None and opp.hand else (0, 0, None)
     if "opp_discard" in kinds:
         return (4, 0, None) if opp is not None and opp.hand else (0, 0, None)
     if "wheel_creatures" in kinds:
@@ -2757,6 +2767,20 @@ def activate_pw(p, opp, w, ability, step, e, target=None):
                     _draw(p)
         elif kind == "life":
             gain_life(p, a[1])
+        elif kind == "lose":  # SOS Professor Dellian Fel
+            p.life -= a[1]
+        elif kind == "discard_opp" and opp is not None:  # SOS Ral Zarek: nur der Gegner
+            discard(opp, a[1], e)
+        elif kind == "reanimate_le":  # SOS Ral Zarek: Kreaturenkarte bis Manawert N
+            cands = gy_candidates(p, "creature", a[1])
+            if cands:
+                pick = _best_from_gy(p, cands)
+                p.graveyard.remove(pick)
+                put_back(p, pick, "battlefield", step, e, opp)
+        elif kind == "skip_turns" and opp is not None:  # SOS Ral Zarek: fuenf Muenzen
+            heads = sum(random.random() < 0.5 for _k in range(a[1]))
+            opp.skip_turns = getattr(opp, "skip_turns", 0) + heads
+            e["events"].append(i18n.t("{p}: {w_card_name} – Gegner setzt {n} Züge aus", p=i18n.t(p.name), w_card_name=w.card.name, n=heads))
         elif kind == "emblem":
             p.emblems.append(a[1:])
             e["events"].append(i18n.t("{p}: Emblem von {w_card_name}", p=i18n.t(p.name), w_card_name=w.card.name))
@@ -3059,6 +3083,9 @@ def gain_life(p, n, events=1):
     first = p.gained == 0
     p.life += n
     p.gained += n
+    for em in getattr(p, "emblems", ()):  # SOS Professor Dellian Fel
+        if em and em[0] == "lifegain_drain" and p.opponent is not None:
+            p.opponent.life -= n
     if first:  # SOS Leech Collector: "for the first time each turn"
         prepare_by(p, "first_life")
     events *= 1 + sum(1 for c in p.creatures if c.card.lifegain_double and not c.dead)  # Dr. Beverly Crusher
@@ -3417,6 +3444,15 @@ def cast_effects(p, src, source, atoms, step, e, label="Auslöser beim Wirken"):
             make_tokens(p, [(atom[1], atom[2])], step, e, opp, source.name)
         elif kind == "surveil":
             surveil_cards(p, [atom[1]], e, source.name)
+        elif kind == "flicker_opp" and opp is not None and p.turn_start == p.now:  # SOS Conciliator's Duelist
+            cands = [c for c in opp.creatures if not c.dead and not hexproof(c) and ward_ok(p, c)]
+            if cands:
+                attackers = [c for c in p.creatures if not c.dead and can_attack(c, step)]
+                target = stopping_blocker(p, opp, attackers) if attackers else None
+                target = target if target is not None and target in cands else max(cands, key=danger)
+                if pay_ward(p, target, e):
+                    flicker(opp, target, step, e, source.name)
+                    p.sos_exiled_step = step
         elif kind == "mill_opp" and opp is not None:  # SOS Exhibition Tidecaller: der Gegner millt
             _mill(opp, atom[1], e, source.name)
         elif kind == "mana_power" and src is not None:  # SOS Molten-Core Maestro: {R} in Hoehe der Power
@@ -3665,6 +3701,7 @@ def creature_enters(p, new, step, e, opp=None, cast=True):
                 del p.x_values[i]
                 break
     x, p.next_x = p.next_x, 0  # X des gewirkten Zaubers (107.3m); sonst 0
+    p.entered_x = x  # SOS Slumbering Trudge
     if no_enter_triggers(p):  # Karn, Argent Defender: keine Ausloeser beim Betreten (Ersatzeffekte gelten)
         new.lifted = p.surveilled and new.card.surveil_attack
         return
@@ -6592,6 +6629,95 @@ def sos_flow(me, opp, card, step, e):
             put_onto_battlefield(me, lands[0], step, e, opp, tapped=True)
 
 
+def flicker(owner, c, step, e, source):
+    """SOS: Kreatur bis zum naechsten Endsegment exilieren (Ennis, Conciliator's Duelist); Token verschwinden (111.7)."""
+    owner.creatures.remove(c)
+    _leave(owner, c.card)
+    check_auras(owner, e)
+    if not c.card.is_token:
+        owner.sos_flicker = getattr(owner, "sos_flicker", []) + [c.base_card or c.card]
+    e["events"].append(i18n.t("{me}: {card_name} – {target_name} ins Exil", me=i18n.t(owner.name), card_name=source, target_name=c.card.name))
+
+
+def rivalry_x(me, opp):
+    """Vicious Rivalry: das X mit dem groessten Vorteil (Manawert der gegnerischen minus der eigenen zerstoerten
+    Kreaturen, minus X/2 fuer das Leben); nur, wenn der Vorteil groesser als 2 ist und das Leben reicht."""
+    if opp is None:
+        return None
+    best = None
+    for x in range(0, min(me.life - 5, 10) + 1):
+        theirs = sum(c.card.mv for c in opp.creatures if not c.dead and c.card.mv <= x)
+        ours = sum(c.card.mv for c in me.creatures if not c.dead and c.card.mv <= x)
+        score = theirs - ours - x / 2
+        if score > 2 and (best is None or score > best[0]):
+            best = (score, x)
+    return best[1] if best else None
+
+
+def sos_interaction(me, opp, card, step, e):
+    """SOS Paket H beim Aufloesen bzw. Betreten: Vicious Rivalry, Ennis, Slumbering Trudge, Molten Note, Steal the
+    Show, Rocket Volley."""
+    if card.rivalry:
+        x = rivalry_x(me, opp)
+        if x is not None:
+            me.life -= x
+            for side in (me, opp):
+                for c in side.creatures:
+                    if not c.dead and c.card.mv <= x and not c.has("indestructible"):
+                        c.dead = True
+            e["events"].append(i18n.t("{me}: {card_name} – X = {n}", me=i18n.t(me.name), card_name=card.name, n=x))
+            bury((me, opp), e)
+    if card.ennis_blink:  # die eigene Kreatur mit dem wertvollsten Betreten (kein Token)
+        src = next((c for c in reversed(me.creatures) if c.card is card and not c.dead), None)
+        cands = [c for c in me.creatures if c is not src and not c.dead and not c.card.is_token and etb_value(c.card)]
+        if cands:
+            pick = max(cands, key=lambda c: (c.card.mv, c.card.name))
+            flicker(me, pick, step, e, card.name)
+            me.sos_exiled_step = step
+    if card.trudge:
+        src = next((c for c in reversed(me.creatures) if c.card is card and not c.dead), None)
+        x = getattr(me, "entered_x", 0)
+        if src is not None:
+            src.stun = max(0, 3 - x)
+            src.tapped = x <= 2
+    if card.molten_note and opp is not None:  # Schaden = X + {R}{W}
+        x, me.next_x = me.next_x, 0
+        dmg = x + 2
+        cands = [c for c in opp.creatures if not c.dead and not hexproof(c) and ward_ok(me, c)]
+        if cands:
+            dies = [c for c in cands if c.toughness - c.damage <= dmg]
+            target = max(dies or cands, key=danger)
+            if pay_ward(me, target, e):
+                target.damage += dmg
+                e["events"].append(i18n.t("{me}: {card_name} – {target_name} -{n}/-{n}", me=i18n.t(me.name), card_name=card.name, target_name=target.card.name, n=dmg))
+        for c in me.creatures:
+            c.tapped = False
+        bury((me, opp), e)
+    if card.steal_show:  # beide Modi: ueberzaehlige Laender neu ziehen, Schaden an eine Kreatur
+        n = 0
+        while surplus_land(me) is not None:
+            gone = surplus_land(me)
+            me.hand.remove(gone)
+            me.graveyard.append(gone)
+            n += 1
+        if n:
+            discarded(me, e)
+            _draw(me, n)
+        dmg = sum(1 for g in me.graveyard if g.is_instant_sorcery) - (1 if card in me.graveyard else 0)
+        cands = [c for c in (opp.creatures if opp is not None else ()) if not c.dead and not hexproof(c)
+                 and c.toughness - c.damage <= dmg]
+        if cands and dmg > 0:
+            target = max(cands, key=danger)
+            target.damage += dmg
+            bury((me, opp), e)
+    if card.land_destroy and opp is not None:  # Rocket Volley: ein Nichtstandardland des Gegners
+        lands = [x for x in opp.lands if not x.is_basic]
+        if lands:
+            land = max(lands, key=lambda x: (len(x.land_colors), x.name))
+            _lose_land(opp, land)
+            e["events"].append(i18n.t("{me}: {card_name} zerstoert {land_name}", me=i18n.t(me.name), card_name=card.name, land_name=land.name))
+
+
 def sos_converge(me, opp, card, step, e):
     """SOS Converge (X = Farben des ausgegebenen Manas): Marken auf sich, X ziehen und zwei abwerfen, eine gegnerische
     Kreatur mit Manawert <= X exilieren (die gefaehrlichste), der Gegner wirft X Karten ab."""
@@ -6717,6 +6843,9 @@ def sos_end_own(me, opp, step, e):
     ohne Lebensgewinn das schwaechste Permanent (Token, dann ein entbehrliches Land ab 5 Laendern, sonst die
     schwaechste Kreatur)."""
     sos_fractal_end(me, step, e)
+    if getattr(me, "sos_exiled_step", None) == step:  # Ennis: in diesem Zug kam eine Karte ins Exil
+        for c in [c for c in me.creatures if c.card.exile_counter and not c.dead]:
+            add_counters(me, c, 1, step, e)
     if getattr(me, "instsorc_step", None) == step:  # nach einem Instant/Sorcery in diesem Zug
         for x in [x for x in me.perms if isinstance(x, Card) and x.instsorc_life]:  # Potioner's Trove
             gain_life(me, x.instsorc_life)
@@ -6816,6 +6945,8 @@ def sos_effects(me, opp, card, step, entry):
         sos_converge(me, opp, card, step, entry)
     if card.zimone or card.planar or card.mill_play or card.bind_life or card.mind_roots:
         sos_flow(me, opp, card, step, entry)
+    if card.rivalry or card.ennis_blink or card.trudge or card.molten_note or card.steal_show or card.land_destroy:
+        sos_interaction(me, opp, card, step, entry)
     if card.fractal_drawn:  # Fractal Anomaly: X = in diesem Zug gezogene Karten
         fractal_token(me, me.drawn - me.drawn_mark, step, entry, card.name)
     if card.fractal_gift:  # Oracle's Gift: X Fractals, dann X Marken auf jeden eigenen Fractal
@@ -7442,6 +7573,8 @@ def card_effects(me, opp, card, step, entry, modes=None):
         me.life -= card.self_damage
     if card.dahar_sac and not dahar_pay(me, opp, card, entry):  # Dahar Master: ohne Opfer kein Schaden
         card = card._replace(removal=(), modes=())
+    if card.infusion_wrath and me.gained > 0:  # SOS Withering Curse: Infusion
+        card = card._replace(removal=("sweep", 0, (), False, "spell", False))
     effects = card._replace(modes=()) if card.etb_grant else card  # Teyo: Marke mit dem Schluesselwort (creature_enters)
     if card.removal and opp is not None and len(me.lands) >= card.etb_lands_needed \
             and _edict_paid(me, opp, card, entry):
@@ -7722,6 +7855,9 @@ def main_phase_spells(me, opp):
             and (not c.reanimate_any or bool(sos_reanimate_cands(me, opp)))
             and (not c.opp_draws or len([h for h in me.hand if h is not c]) < 3)  # Secret Rendezvous (Nutzer)
             and (not c.planar or (len(me.lands) >= 2 and sum(1 for x in me.library if x.is_basic) >= 4))
+            and (not c.rivalry or rivalry_x(me, opp) is not None)
+            and (not c.molten_note or (opp is not None and any(not x.dead for x in opp.creatures)))
+            and (not c.land_destroy or (opp is not None and any(not x.is_basic for x in opp.lands)))
             and (not c.twin or twin_host(me, opp) is not None)
             and (not c.mirror_copy or (opp is not None and any(not x.dead for x in opp.creatures)))
             and sweep_etb_ok(me, opp, c) and kobayashi_ok(me, opp, c) and not c.sunburst_bomb and city_ok(me, opp, c)
@@ -7850,6 +7986,9 @@ def combat_tricks(p, pairs, opp, e, step, attacking):
             on_cast(p, card, step, e)
             continue
         _apply_trick(best[1], own[best[2]], own, best[3], best[4])
+        if card.trick_death_draw:  # SOS Rabid Attack
+            for c in own:
+                c.once["death_draw"] = p.now
         if card.untap_target:  # Tethermage's Advantage: "Untap it"
             own[best[2]].tapped = False
         if card.pump_death_draw:  # A Good Day to Die: stirbt sie in diesem Zug, ziehen
@@ -9738,6 +9877,10 @@ def take_turn(me, opp, step, rnd, skip_draw):
     """Ein Zug von me. Gibt den Protokolleintrag zurueck."""
     e = {"player": me.name, "round": rnd, "drew": None, "land": None, "main1": [], "main2": [], "attacks": [],
          "damage": 0, "face": 0, "deaths": [], "events": [], "note": ""}
+    if getattr(me, "skip_turns", 0) > 0:  # SOS Ral Zarek: der Zug faellt aus
+        me.skip_turns -= 1
+        e["note"] = i18n.t("setzt diesen Zug aus")
+        return e
     me.cast_count = 0
     me.discards_turn = 0
     me.land_now = None
@@ -10151,9 +10294,12 @@ def take_turn(me, opp, step, rnd, skip_draw):
             for _ in range(x):
                 me.open.pop()
             me.next_x = x
-        if c.x_life or c.fractal_gift or c.mind_matter or c.mathemagics or (c.tap_spell and c.tap_spell[2]):
+        if c.x_life or c.fractal_gift or c.mind_matter or c.mathemagics or c.trudge or c.molten_note or (
+                c.tap_spell and c.tap_spell[2]):
             per = 2 if c.fractal_gift or c.mathemagics else 1  # SOS: X = alles freie Mana ({X}{X}: die Haelfte)
             x = free_units(me) // per
+            if c.trudge:  # Slumbering Trudge: ab X = 3 ohne Stun-Marken
+                x = min(x, 3)
             if c.mathemagics:  # nicht mehr ziehen, als die Bibliothek hat
                 while x > 0 and 2 ** x >= len(me.library):
                     x -= 1

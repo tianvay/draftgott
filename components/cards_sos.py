@@ -539,6 +539,91 @@ def _g_traits(low, spell):
     return out
 
 
+_REMOVAL_ETB_BOUNCE = ("bounce", 0, (), False, "etb", False)
+# Paket H: Interaktion (ganze Zeilen; spell: True Zauber, False bleibende Karte, None beides)
+_H_LINES = (
+    (re.compile(_ETB + r"return up to one other target creature to its owner's hand\.$"), False,
+     lambda m: {"removal": _REMOVAL_ETB_BOUNCE}),
+    (re.compile(r"^target creature's owner puts it on their choice of the top or bottom of their library\.$"), True,
+     lambda m: {"removal": ("tuck", 0, (), False, "spell", False)}),
+    (re.compile(r"^this spell costs \{(\d+)\} less to cast if it targets an attacking creature\.$"), True,
+     lambda m: {"self_discount": ("attacked", int(m.group(1)))}),
+    (re.compile(r"^\{\d+\}, sacrifice (?:~|this creature): destroy target artifact or enchantment\.$"), False,
+     lambda m: {"sac_perm_removal": "artifact_enchantment"}),
+    (re.compile(r"^all creatures get -(\d+)/-\1 until end of turn\.$"), True,
+     lambda m: {"removal": ("sweep_damage", int(m.group(1)), (), False, "spell", False)}),
+    (re.compile(r"^infusion — if you gained life this turn, destroy all creatures instead\.$"), True,
+     lambda m: {"infusion_wrath": True}),
+    (re.compile(r"^as an additional cost to cast this spell, pay x life\.$"), True, lambda m: {"rivalry": True}),
+    (re.compile(r"^destroy all artifacts and creatures with mana value x or less\.$"), True,
+     lambda m: {"rivalry": True, "removal": ()}),
+    (re.compile(r"^when (?:~|this creature) enters, exile up to one other target creature you control\. return that "
+                r"card to the battlefield under its owner's control at the beginning of the next end step\.$"), False,
+     lambda m: {"ennis_blink": True}),
+    (re.compile(r"^at the beginning of your end step, if one or more cards were put into exile this turn, put a \+1/\+1 "
+                r"counter on (?:~|this creature)\.$"), False, lambda m: {"exile_counter": True}),
+    (re.compile(r"^repartee — whenever you cast an instant or sorcery spell that targets a creature, exile up to one "
+                r"target creature\. return that card to the battlefield under its owner's control at the beginning of "
+                r"the next end step\.$"), False,
+     lambda m: {"cast_trig": (("instsorc_creature", (("flicker_opp",),), (), ""),)}),
+    (re.compile(r"^until end of turn, any number of target creatures you control each get \+(\d+)/\+0 and gain \"when "
+                r"this creature dies, draw a card\.\"$"), True,
+     lambda m: {"modes": ((("pump_all", int(m.group(1))),),), "pump_tough": ((0,),), "trick_death_draw": True}),
+    (re.compile(rf"^{_SELF} enters with a number of stun counters on it equal to three minus x\. if x is 2 or less, it "
+                r"enters tapped\.$"), False, lambda m: {"trudge": True}),
+    (re.compile(r"^~ deals damage to target creature equal to the amount of mana spent to cast this spell\. untap all "
+                r"creatures you control\.$"), True, lambda m: {"molten_note": True, "removal": ()}),
+    (re.compile(r"^(?:• )?target player discards any number of cards, then draws that many cards\.$"), True,
+     lambda m: {"steal_show": True, "removal": (), "choices": ()}),
+    (re.compile(r"^(?:• )?~ deals damage equal to the number of instant and sorcery cards in your graveyard to target "
+                r"creature or planeswalker\.$"), True, lambda m: {"steal_show": True, "removal": (), "choices": ()}),
+    (re.compile(r"^destroy target nonbasic land\.$"), True, lambda m: {"land_destroy": True}),
+)
+# Loyalty-Faehigkeiten (Text nach "N: ")
+_PW_BODIES = (
+    (re.compile(r"^you gain (\d+) life\.$"), lambda m: (("life", int(m.group(1))),)),
+    (re.compile(r"^you draw a card and lose (\d+) life\.$"), lambda m: (("draw", 1), ("lose", int(m.group(1))))),
+    (re.compile(r"^destroy target creature\.$"), lambda m: (("bolt_creature", 99),)),
+    (re.compile(r"^you get an emblem with \"whenever you gain life, target opponent loses that much life\.\"$"),
+     lambda m: (("emblem", "lifegain_drain"),)),
+    (re.compile(r"^surveil (\d+)\.$"), lambda m: (("surveil", int(m.group(1))),)),
+    (re.compile(r"^any number of target players each discard a card\.$"), lambda m: (("discard_opp", 1),)),
+    (re.compile(r"^return target creature card with mana value (\d+) or less from your graveyard to the "
+                r"battlefield\.$"), lambda m: (("reanimate_le", int(m.group(1))),)),
+    (re.compile(r"^flip five coins\. target opponent skips their next x turns, where x is the number of coins that came "
+                r"up heads\.$"), lambda m: (("skip_turns", 5),)),
+)
+_PW_LINE = re.compile(r"^([+−-]?)(\d+): (.+)$")
+
+
+def _h_traits(low, spell):
+    """Paket H: Interaktion (eine Zeile)."""
+    out = {}
+    for rx, kind, build in _H_LINES:
+        m = rx.match(low)
+        if m and (kind is None or kind == spell):
+            out.update(build(m))
+    return out
+
+
+def _walker_abilities(lines):
+    """Paket H: alle Loyalty-Faehigkeiten eines Planeswalkers, wenn jede modelliert ist, sonst None."""
+    abilities = []
+    for _raw, low in lines:
+        m = _PW_LINE.match(low)
+        if not m:
+            continue
+        for rx, build in _PW_BODIES:
+            b = rx.match(m.group(3))
+            if b:
+                cost = int(m.group(2)) * (-1 if m.group(1) in ("−", "-") else 1)
+                abilities.append((cost, build(b)))
+                break
+        else:
+            return None
+    return tuple(abilities) or None
+
+
 def prepare_triggers(card):
     """Paket B: Arten der Ausloeser, die die Vorderseite prepared machen (Reihenfolge wie im Text)."""
     if card.get("layout") != "prepare":
@@ -593,6 +678,10 @@ def sos_traits(card, type_line, base):
             if "upkeep_gy3" in kinds:
                 out["upkeep_surveil"] = 1  # Grave Researcher: Surveil vor der Pruefung
     lines = list(_clean_lines(card))
+    if "Planeswalker" in type_line:
+        walker = _walker_abilities(lines)
+        if walker:
+            out["pw_abilities"] = walker
     front = (card.get("card_faces") or [card])[0]
     if "{X}" in (front.get("mana_cost") or card.get("mana_cost") or ""):
         out["x_cost"] = True
@@ -606,6 +695,7 @@ def sos_traits(card, type_line, base):
         out.update(_e_traits(low, spell))
         out.update(_f_traits(card, low, spell))
         out.update(_g_traits(low, spell))
+        out.update(_h_traits(low.lstrip("•").strip() if low.startswith("•") else low, spell))
         trigger = bool(re.match(r"^(when|whenever|at the beginning)\b", low))
         if not spell:
             m = res["etb_drain"].match(low)

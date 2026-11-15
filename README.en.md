@@ -687,7 +687,10 @@ full log. The rules of the battle model are described in detail at the end of th
   (card flow): looking at the top cards (Flow State, Zimone's Experiment, Paradox Surveyor, Stirring Honormancer,
   Visionary's Dance from the hand, Geometer's Arthropod), searching (Dina's Guidance, Planar Engineering), drawing
   (Embrace the Paradox, Mind into Matter, Mathemagics, Colossus of the Blood Age), milling and playing this turn
-  (Tablet of Discovery, Ark of Hunger), Bind to Life, and Mind Roots. More SOS packages will follow; until then, open cards only have their already modelled effects.
+  (Tablet of Discovery, Ark of Hunger), Bind to Life, and Mind Roots. Package H (interaction): bounce, Run Behind,
+  Withering Curse, Vicious Rivalry, flickering (Ennis, Conciliator's Duelist), the planeswalkers Professor Dellian Fel
+  and Ral Zarek (including skipped turns), Rabid Attack, Slumbering Trudge, Molten Note, Steal the Show, and Rocket
+  Volley. More SOS packages will follow; until then, open cards only have their already modelled effects.
 - Alchemy: Reality Fracture (YFRA), package A: perpetual, conjuring named cards, seek (Killian), Avoided
   Stairwurm, Zimone, Dina, Asymmetry Sage, Sparks Ablaze, Paradox Kraken, Boisterous Clique, Searing Soloist
   (cards to conjure are in `components/conjure.py`).

@@ -212,6 +212,7 @@ WANTS = {
     "instsorc_mana": (("spells", 1),), "diary": (("spells", 1.5),), "instsorc_life": (("spells", 1),),
     "instsorc_treasure": (("spells", 1),),
     "dig_two_gy": (("spells", 0.5),), "x_dig": (("spells", 0.5),),  # SOS Paket G
+    "infusion_wrath": (("lifegain", 1),), "steal_show": (("spells", 0.5),),  # SOS Paket H
     # SOS Paket D: brauchen Karten im Friedhof
     "end_gy_draw": (("graveyard", 1),), "attack_gy_pump": (("graveyard", 1),), "gy_combat_return": (("discard", 0.5),),
     "rubble_ping": (("graveyard", 1),), "cauldron_reanimate": (("graveyard", 0.5),), "x_regrowth": (("graveyard", 1),),
@@ -270,6 +271,8 @@ NEUTRAL = (
     "add_mana",  # SOS Paket F
     "zimone", "land_from_hand", "mind_matter", "planar", "mathemagics", "mill_play", "mill_play_ability",
     "mind_roots",  # SOS Paket G
+    "rivalry", "ennis_blink", "exile_counter", "trick_death_draw", "trudge", "molten_note", "land_destroy",
+    # SOS Paket H
     "is_token", "sac_mana", "opp_spell_tax", "extra_cost", "hexproof_until_damage", "alt_draws",
     "finality", "combat_land_return", "domain_power", "x_search_basics", "choices", "is_mode", "removal_exile",
     "removal_points", "hand_pick", "attack_exile_gy", "own_turn_kw", "debuff", "impulse",

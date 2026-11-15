@@ -584,6 +584,16 @@ class Card(NamedTuple):
     mill_play_ability: bool = False  # "{T}: Mill a card. You may play that card this turn." (Ark of Hunger)
     bind_life: bool = False  # sieben millen, eine Kreatur davon aufs Feld (Bind to Life)
     mind_roots: bool = False  # der Gegner wirft zwei ab, ein Land davon getappt zu uns (Mind Roots)
+    # SOS Paket H (Interaktion)
+    infusion_wrath: bool = False  # mit Lebensgewinn: alle Kreaturen zerstoeren statt des Removals (Withering Curse)
+    rivalry: bool = False  # X Leben zahlen, alle Artefakte und Kreaturen mit Manawert <= X zerstoeren
+    ennis_blink: bool = False  # Betreten: eigene Kreatur bis zum naechsten Endsegment exilieren (Ennis)
+    exile_counter: bool = False  # eigenes Endsegment: Marke, wenn in diesem Zug Karten ins Exil kamen (Ennis)
+    trick_death_draw: bool = False  # Kampftrick: stirbt eine der Kreaturen in diesem Zug, ziehen (Rabid Attack)
+    trudge: bool = False  # kommt mit 3 - X Stun-Marken, bei X <= 2 getappt (Slumbering Trudge)
+    molten_note: bool = False  # Schaden = ausgegebenes Mana (X + 2) an eine Kreatur, eigene Kreaturen enttappen
+    steal_show: bool = False  # ueberzaehlige Laender abwerfen und neu ziehen, Schaden = Instants/Sorceries im Friedhof
+    land_destroy: bool = False  # "Destroy target nonbasic land" (Rocket Volley)
 
 
 LANDCYCLE_RE = re.compile(

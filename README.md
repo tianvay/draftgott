@@ -694,7 +694,10 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
   (Kartenfluss): oberste Karten ansehen (Flow State, Zimone's Experiment, Paradox Surveyor, Stirring Honormancer,
   Visionary's Dance aus der Hand, Geometer's Arthropod), Suchen (Dina's Guidance, Planar Engineering), Ziehen
   (Embrace the Paradox, Mind into Matter, Mathemagics, Colossus of the Blood Age), Mill und in diesem Zug spielen
-  (Tablet of Discovery, Ark of Hunger), Bind to Life und Mind Roots. Weitere SOS-Pakete folgen; bis dahin wirken offene Karten nur mit den schon modellierten
+  (Tablet of Discovery, Ark of Hunger), Bind to Life und Mind Roots. Paket H (Interaktion): Bounce, Run Behind,
+  Withering Curse, Vicious Rivalry, Blinken (Ennis, Conciliator's Duelist), die Planeswalker Professor Dellian Fel und
+  Ral Zarek (auch Züge aussetzen), Rabid Attack, Slumbering Trudge, Molten Note, Steal the Show und Rocket Volley.
+  Weitere SOS-Pakete folgen; bis dahin wirken offene Karten nur mit den schon modellierten
   Effekten.
 - Alchemy: Reality Fracture (YFRA), Paket A: Perpetual, Conjure benannter Karten, Seek (Killian), Avoided
   Stairwurm, Zimone, Dina, Asymmetry Sage, Sparks Ablaze, Paradox Kraken, Boisterous Clique, Searing Soloist

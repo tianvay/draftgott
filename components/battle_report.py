@@ -647,6 +647,19 @@ RULES = [
     "Mathemagics zieht 2^X (nie die ganze Bibliothek); Colossus of the Blood Age wirft beim Tod überzählige Länder ab. "
     "Tablet of Discovery und Ark of Hunger (einmal je Zug in Main 1): die oberste Karte ist in diesem Zug spielbar. "
     "Bind to Life holt die teuerste Kreatur der sieben gemillten Karten; Mind Roots nimmt ein abgeworfenes Land.",
+    "SOS-Paket H (Interaktion): Matterbending Mage schickt beim Betreten die gefährlichste gegnerische Kreatur auf die "
+    "Hand, Run Behind legt sie in die Bibliothek (oben, wenn der Besitzer sie bald wieder wirken kann), Shattered "
+    "Acolyte opfert sich gegen ein Artefakt oder eine Verzauberung ({1} nicht gerechnet). Withering Curse gibt allen "
+    "Kreaturen −2/−2, mit Lebensgewinn zerstört es alle. Vicious Rivalry wählt das X mit dem größten Vorteil "
+    "(Manawert gegnerischer minus eigener Kreaturen minus X/2) und nur, wenn er größer als 2 ist. Ennis exiliert beim "
+    "Betreten die eigene Kreatur mit dem wertvollsten Betreten bis zum nächsten Endsegment und bekommt dann eine "
+    "Marke; Conciliator's Duelist (Repartee) exiliert im eigenen Zug den Blocker, der einen Angreifer aufhalten würde. "
+    "Professor Dellian Fel: 0 zieht und verliert 1 Leben, −3 zerstört die gefährlichste Kreatur, −6 Emblem "
+    "(Lebensgewinn → der Gegner verliert so viel). Ral Zarek: −1 nur der Gegner wirft ab, −2 holt die teuerste "
+    "Kreatur bis Manawert 3, −7 fünf Münzen, der Gegner setzt so viele Züge aus. Rabid Attack: +1/+0 als Kampftrick, "
+    "stirbt eine der Kreaturen, ziehen. Slumbering Trudge mit X bis 3. Molten Note: Schaden X+2 an die gefährlichste "
+    "Kreatur, die daran stirbt. Steal the Show: überzählige Länder neu ziehen und Schaden in Höhe der Instants/"
+    "Sorceries im Friedhof. Rocket Volley zerstört ein Nichtstandardland des Gegners (nur dann gewirkt).",
     "Noch nicht im Kampf: weitere Auslöser und Fähigkeiten (siehe Modell-Abdeckung). Solche Karten werden gewirkt, "
     "wirken aber nur mit den schon modellierten Effekten.",
 ]

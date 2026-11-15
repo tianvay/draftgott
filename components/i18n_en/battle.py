@@ -373,6 +373,10 @@ EN = {
     # SOS Paket G
     "{me}: {card_name} (aus der Hand) – oberste zwei Karten": "{me}: {card_name} (from the hand) – top two cards",
     "{me}: {card_name} – {target_name} ins Spiel": "{me}: {card_name} – {target_name} onto the battlefield",
+    # SOS Paket H
+    "{me}: {card_name} – X = {n}": "{me}: {card_name} – X = {n}",
+    "setzt diesen Zug aus": "skips this turn",
+    "{p}: {w_card_name} – Gegner setzt {n} Züge aus": "{p}: {w_card_name} – opponent skips {n} turns",
     "{me}: {a_card_name} – Gegner verliert {loss}, {life} Leben": "{me}: {a_card_name} – opponent loses {loss}, {life} life",
     # Namen der Spieler im Protokoll
     "Wir": "We",
