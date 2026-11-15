@@ -636,6 +636,18 @@ def send_deck(url, timeout=3):
         return None
 
 
+def send_quit(url, timeout=2):
+    """Drafthelper beenden (wie der Knopf "Beenden" auf der Seite); damit schliesst sich auch die draftgott-Konsole."""
+    req = urllib.request.Request(url.rstrip("/") + "/api/quit", data=b"{}",
+                                 headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            r.read()
+        return True
+    except (urllib.error.URLError, OSError, ValueError):
+        return False
+
+
 def fetch(url, timeout=0.8):
     try:
         with urllib.request.urlopen(url.rstrip("/") + "/api/live", timeout=timeout) as r:
@@ -921,15 +933,16 @@ class _Hint:
             self.changed()
 
 
+CLOSE_TIP = "Steuerleiste schließen: alle draftgott-Fenster zu, draftgott wird beendet"
 BAR_STYLE = {"on": ("#2c5a8a", "#ffffff"), "waiting": ("#1f2a3a", "#c8d3e0"), "off": ("#161b24", "#5b6475")}
 
 
 class _ControlBar:
     """Steuerleiste oben in der Bildschirmmitte (Nutzer 15.11.2026): Griff zum Verschieben, je Fenster ein Schalter
     mit Symbol (hell = an und zu sehen, gedaempft = an, wird gerade nicht gebraucht, dunkel = aus), ⊕ zum Kalibrieren,
-    ⚠ bei einem Hinweis (Mausfenster nennt ihn), ✕ schliesst alle Fenster."""
+    ⚠ bei einem Hinweis (Mausfenster nennt ihn), ✕ schliesst alle Fenster und beendet den Drafthelper (on_close)."""
 
-    def __init__(self, win, variables, on_toggle, on_calibrate):
+    def __init__(self, win, variables, on_toggle, on_calibrate, on_close=None):
         import tkinter as tk
         self.win, self.vars, self.on_toggle = win, variables, on_toggle
         self.hints = {key: _Hint(self._changed) for key in variables}
@@ -960,8 +973,8 @@ class _ControlBar:
                 self._tip_for(c, lambda it=item: t("Kalibrieren") + ": " + t(it["label"]))
         close = tk.Label(win, text="✕", bg=bg, fg=COLORS["muted"], font=("Segoe UI", 11), padx=8, cursor="hand2")
         close.pack(side="left", padx=(6, 0))
-        close.bind("<Button-1>", lambda e: win.destroy())
-        self._tip_for(close, lambda: t("Steuerleiste schließen: alle draftgott-Fenster zu"))
+        close.bind("<Button-1>", lambda e: (on_close or win.destroy)())
+        self._tip_for(close, lambda: t(CLOSE_TIP))
         self.paint(self.shown)
         self._place()
 
@@ -1047,8 +1060,15 @@ def run(url, interval_ms=1000):
                                      "cols": cols_on},
                            on_toggle=lambda: show_windows(),
                            on_calibrate={"cards": lambda: start_calibration(),
-                                         "cols": lambda: start_column_calibration()})
+                                         "cols": lambda: start_column_calibration()},
+                           on_close=lambda: quit_all())
     cards_hint, cols_hint = ctrl_bar.hints["cards"], ctrl_bar.hints["cols"]
+
+    def quit_all():
+        """✕: Fenster zu und den Drafthelper beenden, damit auch die draftgott-Konsole zugeht (Nutzer 15.11.2026)."""
+        control.withdraw()
+        send_quit(url)
+        control.destroy()
     columns = arenapanels.ArenaColumns(control, on_picks=lambda: toggle_picks())
     cols_state = {"cal": arenapanels.load_column_calibration()}
 

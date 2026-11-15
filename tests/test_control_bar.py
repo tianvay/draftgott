@@ -94,3 +94,41 @@ class PackInColumnTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CloseQuitsTests(unittest.TestCase):
+    """✕ an der Steuerleiste beendet auch den Drafthelper und damit die draftgott-Konsole (Nutzer 15.11.2026)."""
+
+    def test_send_quit_posts_to_the_drafthelper(self):
+        import threading
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+        seen = []
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                seen.append(self.path)
+                body = b'{"ok": true}'
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *args):
+                pass
+
+        server = HTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=server.handle_request, daemon=True).start()
+        try:
+            self.assertTrue(overlay.send_quit(f"http://127.0.0.1:{server.server_port}/"))
+        finally:
+            server.server_close()
+        self.assertEqual(seen, ["/api/quit"])
+
+    def test_send_quit_without_drafthelper(self):
+        self.assertFalse(overlay.send_quit("http://127.0.0.1:9/", timeout=0.5))
+
+    def test_close_tip_says_it_quits(self):
+        self.assertIn("beendet", overlay.CLOSE_TIP)
+        with english():
+            self.assertEqual(german_leftovers(overlay.t(overlay.CLOSE_TIP)), [])

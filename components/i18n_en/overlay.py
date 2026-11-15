@@ -129,6 +129,7 @@ EN = {
     "Ist aus. Klick schaltet an.": "Off. Click to turn on.",
     "Ist an. ": "On. ",
     "Ist an und zu sehen. Klick schaltet aus.": "On and visible. Click to turn off.",
-    "Steuerleiste schließen: alle draftgott-Fenster zu": "Close the control bar: all draftgott windows close",
+    "Steuerleiste schließen: alle draftgott-Fenster zu, draftgott wird beendet":
+        "Close the control bar: all draftgott windows close and draftgott quits",
     "Ziehen zum Verschieben": "Drag to move",
 }

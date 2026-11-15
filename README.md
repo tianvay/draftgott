@@ -224,7 +224,7 @@ In Arena muss unter Optionen → Konto „Detailed Logs (Plugin Support)“ eing
   ⚡ Trick-Warner, ▦ Karten-Overlay, ◫ Säulen über Arena, ⊕ kalibriert. Hell = an und zu sehen, gedämpft = an, aber
   gerade nicht gebraucht, dunkel = aus; ⚠ = Hinweis im Mausfenster. Fenster erscheinen nur bei Bedarf: Trick-Warner
   im Spiel, Seitenfenster nach dem Draft und im Spiel (beim Draften übernehmen die Säulen, ohne Karten-Overlay mit der
-  Rangliste des Packs; ohne Draft und Spiel bleibt es zu). Am Griff ⠿ verschieben, ✕ schließt alle Fenster.
+  Rangliste des Packs; ohne Draft und Spiel bleibt es zu). Am Griff ⠿ verschieben, ✕ schließt alle Fenster und beendet draftgott (die Konsole geht mit zu).
 - **Karten-Overlay:** legt beim Picken Rang, Bewertung, Punkte, Archetyp-Passung, Removal, Kartenfluss, Synergie und
   die eigene Siegquote direkt auf die Karten im Arena-Fenster (Rahmen lila = Top-Pick, grün = passt, grau = fremd).
   Einmal bei vollem Pack im Steuerfenster „Kalibrieren“ und fünf Kartenecken anklicken (gespeichert in
