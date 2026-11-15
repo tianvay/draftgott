@@ -672,8 +672,10 @@ full log. The rules of the battle model are described in detail at the end of th
   Efflorescence, Moseo, Tragedy Feaster, Follow the Lumarets), and Stream of Life. Package D (graveyard): triggers
   when cards leave the graveyard (also artifacts), “if a card left your graveyard this turn”, abilities from the
   graveyard (only as a sorcery where required), exile from the graveyard (Rubble Rouser, beginning of combat),
-  returning instants/sorceries and creatures, Practiced Scrollsmith, and Ancestral Anger. More SOS packages will
-  follow; until then, open cards only have their already modelled effects.
+  returning instants/sorceries and creatures, Practiced Scrollsmith, and Ancestral Anger. Package E (increment,
+  Fractals): increment, counter triggers (Pensive Professor, Berta), Fractal tokens with X counters (Fractal Anomaly,
+  Oracle's Gift, Emil, Berta, Fractal Tender, Ambitious Augmenter), passing on counters (Scolding Administrator, Tester
+  of the Tangential), Matterbending Mage, and Homesickness. More SOS packages will follow; until then, open cards only have their already modelled effects.
 - Alchemy: Reality Fracture (YFRA), package A: perpetual, conjuring named cards, seek (Killian), Avoided
   Stairwurm, Zimone, Dina, Asymmetry Sage, Sparks Ablaze, Paradox Kraken, Boisterous Clique, Searing Soloist
   (cards to conjure are in `components/conjure.py`).

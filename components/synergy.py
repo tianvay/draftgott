@@ -84,6 +84,10 @@ GIVES = {
     "tell_me": (("lifegain", 1), ("surveil", 1)), "georgiou": (("lifegain", 1),), "tea_ability": (("lifegain", 1),),
     "attack_life": (("lifegain", 2),),  # SOS Paket A
     "x_life": (("lifegain", 1),), "death_drain": (("lifegain", 2),),  # SOS Paket C
+    # SOS Paket E: Fractal-Token mit Marken
+    "fractal_tender": (("tokens", 1), ("counters", 1)), "death_fractal": (("tokens", 1), ("fodder", 0.5)),
+    "fractal_drawn": (("tokens", 1), ("counters", 1)), "fractal_gift": (("tokens", 2), ("counters", 2)),
+    "fractal_ability": (("tokens", 2), ("counters", 2)), "tester_move": (("counters", 1),),
     # Surveil
     "surveil": (("surveil", 1), ("graveyard", 0.5)), "upkeep_surveil": (("surveil", 2), ("graveyard", 1)),
     "enter_surveil": (("surveil", 2),), "sac_surveil": (("surveil", 1),), "equip_attack_surveil": (("surveil", 2),),
@@ -196,6 +200,8 @@ WANTS = {
     "threshold_sac_minus": (("graveyard", 0.5),), "exhaust_reanimate": (("graveyard", 1),),
     "holodeck": (("graveyard", 1),), "gy_cast": (("discard", 0.5),), "beam": (("graveyard", 0.5),),
     "scotty": (("graveyard", 1),), "combat_exile_counter": (("graveyard", 1),), "null_summoner": (("graveyard", 1),),
+    # SOS Paket E: Increment will teure Zauber (Nichtkreatur-Zauber), Marken-Ausloeser wollen Marken
+    "increment": (("spells", 1),), "counter_draw": (("counters", 1.5),), "counter_mana": (("counters", 1),),
     # SOS Paket D: brauchen Karten im Friedhof
     "end_gy_draw": (("graveyard", 1),), "attack_gy_pump": (("graveyard", 1),), "gy_combat_return": (("discard", 0.5),),
     "rubble_ping": (("graveyard", 1),), "cauldron_reanimate": (("graveyard", 0.5),), "x_regrowth": (("graveyard", 1),),
@@ -249,6 +255,7 @@ NEUTRAL = (
     "prepare_on", "brainstorm", "reanimate_any", "tomekeeper", "opp_draws",  # SOS Paket B
     "end_death_draw",  # SOS Paket C
     "combat_exile_gy", "self_exile",  # SOS Paket D
+    "x_cost", "x_cast_unblockable", "tap_targets",  # SOS Paket E
     "is_token", "sac_mana", "opp_spell_tax", "extra_cost", "hexproof_until_damage", "alt_draws",
     "finality", "combat_land_return", "domain_power", "x_search_basics", "choices", "is_mode", "removal_exile",
     "removal_points", "hand_pick", "attack_exile_gy", "own_turn_kw", "debuff", "impulse",

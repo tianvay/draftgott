@@ -616,6 +616,15 @@ RULES = [
     "die stärkste Kreaturenkarte; Practiced Scrollsmith exiliert die teuerste Nichtkreatur-Nichtland-Karte (bis Ende "
     "des nächsten eigenen Zugs wirkbar); Ancestral Anger zählt die Exemplare, die schon im Friedhof liegen. Sundering "
     "Archaic: wie bei Paradox Shaper ist „Karte aus einem Friedhof unter die Bibliothek“ bewusst nicht modelliert.",
+    "SOS-Paket E (Increment, Fractals): Increment – wirken wir einen Zauber und ist das ausgegebene Mana (bei {X} mit "
+    "X) größer als Power oder Toughness der Kreatur, bekommt sie eine +1/+1-Marke (nicht durch sich selbst). Pensive "
+    "Professor zieht, Berta gibt ein Mana jeder Farbe, wenn Marken auf sie kommen (nur Marken aus Increment und "
+    "SOS-Effekten). Fractals sind 0/0-Token mit Marken: Fractal Anomaly (X = in diesem Zug gezogene Karten, in Main 2), "
+    "Oracle's Gift (X = alles freie Mana halbiert, X Marken auch auf vorhandene Fractals), Emil und Berta am Ende des "
+    "gegnerischen Zugs, Fractal Tender in jedem Endsegment nach einer Marke, Ambitious Augmenter beim Tod mit seinen "
+    "Marken. Scolding Administrator gibt seine Marken beim Tod weiter. Tester of the Tangential verschiebt zu "
+    "Kampfbeginn seine Marken mit freiem Mana auf den stärksten Angreifer, wenn er selbst nicht angreifen kann. "
+    "Matterbending Mage ist nach einem Zauber mit {X} unblockbar. Homesickness tappt zwei Kreaturen mit Stun-Marke.",
     "Noch nicht im Kampf: weitere Auslöser und Fähigkeiten (siehe Modell-Abdeckung). Solche Karten werden gewirkt, "
     "wirken aber nur mit den schon modellierten Effekten.",
 ]

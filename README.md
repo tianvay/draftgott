@@ -679,7 +679,10 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
   Efflorescence, Moseo, Tragedy Feaster, Follow the Lumarets) und Stream of Life. Paket D (Friedhof): Auslöser,
   wenn Karten den Friedhof verlassen (auch Artefakte), „if a card left your graveyard this turn“, Fähigkeiten aus
   dem Friedhof (nur als Hexerei, wo verlangt), Exil aus dem Friedhof (Rubble Rouser, Kampfbeginn), Rückholen von
-  Instants/Sorceries und Kreaturen, Practiced Scrollsmith und Ancestral Anger. Weitere SOS-Pakete folgen; bis dahin wirken offene Karten nur mit den schon modellierten
+  Instants/Sorceries und Kreaturen, Practiced Scrollsmith und Ancestral Anger. Paket E (Increment, Fractals):
+  Increment, Auslöser für Marken (Pensive Professor, Berta), Fractal-Token mit X Marken (Fractal Anomaly, Oracle's
+  Gift, Emil, Berta, Fractal Tender, Ambitious Augmenter), Marken weitergeben (Scolding Administrator, Tester of the
+  Tangential), Matterbending Mage und Homesickness. Weitere SOS-Pakete folgen; bis dahin wirken offene Karten nur mit den schon modellierten
   Effekten.
 - Alchemy: Reality Fracture (YFRA), Paket A: Perpetual, Conjure benannter Karten, Seek (Killian), Avoided
   Stairwurm, Zimone, Dina, Asymmetry Sage, Sparks Ablaze, Paradox Kraken, Boisterous Clique, Searing Soloist

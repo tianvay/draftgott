@@ -541,6 +541,19 @@ class Card(NamedTuple):
     scrollsmith: bool = False  # Betreten: Nichtkreatur-Nichtland-Karte aus dem Friedhof exilieren, bis Ende des
     #                            naechsten eigenen Zugs wirkbar (Practiced Scrollsmith)
     named_gy_pump: bool = False  # +X/+0 und Trample, X = 1 + gleichnamige Karten im Friedhof (Ancestral Anger)
+    # SOS Paket E (Increment, Fractals)
+    increment: bool = False  # Increment: ausgegebenes Mana > Power oder Toughness -> +1/+1-Marke
+    x_cost: bool = False  # {X} in den Manakosten
+    counter_draw: int = 0  # Marken kommen auf sie: N ziehen (Pensive Professor)
+    counter_mana: bool = False  # Marken kommen auf sie: ein Mana jeder Farbe (Berta)
+    fractal_tender: int = 0  # jedes Endsegment, wenn in diesem Zug eine Marke auf sie kam: Fractal mit N Marken
+    death_fractal: bool = False  # stirbt sie mit Marken: Fractal-Token mit diesen Marken (Ambitious Augmenter)
+    tester_move: bool = False  # Kampfbeginn: {X} zahlen, X Marken auf eine andere Kreatur (Tester of the Tangential)
+    fractal_drawn: bool = False  # Fractal mit X Marken, X = in diesem Zug gezogene Karten (Fractal Anomaly)
+    fractal_gift: bool = False  # X Fractals, dann X Marken auf jeden eigenen Fractal (Oracle's Gift)
+    fractal_ability: tuple = ()  # (Kosten, "snw"/"x"): {T}-Faehigkeit Fractal mit X Marken (Emil, Berta)
+    x_cast_unblockable: bool = False  # Zauber mit {X} gewirkt: unblockbar bis Rundenende (Matterbending Mage)
+    tap_targets: int = 1  # tap_spell: so viele Kreaturen (Homesickness)
 
 
 LANDCYCLE_RE = re.compile(

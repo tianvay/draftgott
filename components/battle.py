@@ -3158,6 +3158,7 @@ def on_cast(p, card, step, e):
     p.sos_casts = (step, n + 1 if turn == step else 1)
     if p.sos_casts[1] == 3:
         prepare_by(p, "third_spell", e)
+    sos_on_cast(p, card, step, e)
     if card.is_creature:  # SOS Abigale: nicht durch sich selbst (sie ist beim Wirken noch nicht im Spiel)
         prepare_by(p, "creature_cast", e,
                    skip=next((c for c in reversed(p.creatures) if c.card is card and c.entered == step), None))
@@ -4079,6 +4080,8 @@ def bury(players, e):
             if is_dying(c):
                 if c.card.death_counters_move and c.bonus > 0:
                     moves.append((p, c.bonus, c.card.name))
+                if c.card.death_fractal and c.bonus > 0:  # SOS Ambitious Augmenter
+                    moves.append((p, c.bonus, "fractal"))
                 p.deaths += 1
                 p.creatures.remove(c)
                 if c.land_source is not None:  # Hall of Echoes: das Land stirbt
@@ -4162,6 +4165,9 @@ def bury(players, e):
             p.jace.zero_alive = False
             jace_died(p, e)
     for p, n, name in moves:
+        if name == "fractal":  # Fractal-Token mit den Marken der gestorbenen Kreatur
+            fractal_token(p, n, p.now, e, "Ambitious Augmenter")
+            continue
         alive = [c for c in p.creatures if not c.dead]
         if alive:
             pick = max(alive, key=lambda x: (can_attack(x, p.now + 1), danger(x)))
@@ -6202,6 +6208,11 @@ def sos_main2(me, e):
     """Beginn der zweiten Main Phase: Scheming Silvertongue mit 2+ Leben in diesem Zug."""
     if me.gained >= 2:
         prepare_by(me, "main2_life2", e)
+    drawn = me.drawn - me.drawn_mark
+    for card in [c for c in me.hand if c.fractal_drawn]:  # Fractal Anomaly: nach den gezogenen Karten des Zugs
+        if drawn >= 1 and card in me.hand and _cast_from_open(me, card):
+            e["events"].append(i18n.t("{me}: {card_name} vor dem Angriff", me=i18n.t(me.name), card_name=card.name))
+            _resolve(me, me.opponent, card, me.now, e)
 
 
 def sos_attack_prepare(me, a, e):
@@ -6228,6 +6239,20 @@ def sos_end_step(dfn, act, step, e):
         for c in [trio] + sorted(helpers, key=lambda c: (c.power, c.card.name))[:2]:
             c.tapped = True
         prepare_by(dfn, "tap3", e, only=trio)
+    sos_fractal_end(dfn, step, e)
+    for c in [c for c in dfn.creatures if c.card.fractal_ability and tap_ready(dfn, c)]:  # Emil, Berta
+        cost, kind = c.card.fractal_ability
+        if kind == "snw":
+            x = snw_x(dfn)
+            if x < 1 or not _pay_open(dfn, cost):
+                continue
+        else:  # {X}: alles offene Mana
+            x = len(dfn.open)
+            if x < 1:
+                continue
+            dfn.open = []
+        c.tapped = True
+        fractal_token(dfn, x, step, e, c.card.name)
     for c in [c for c in dfn.creatures if c.card.rubble_ping and dfn.graveyard and tap_ready(dfn, c)]:
         c.tapped = True  # Rubble Rouser: enttappt in unserem Zug; das Mana verfaellt
         pick = min(dfn.graveyard, key=lambda g: (not g.is_land, g.mv, g.name))
@@ -6345,6 +6370,69 @@ def sos_debuff(me, opp, card, n, e):
     bury((me, opp), e)
 
 
+FRACTAL = token_card("Fractal", creature=True, power=0, toughness=0, artifact=False, types=("fractal",))
+
+
+def fractal_token(p, n, step, e, source):
+    """SOS: ein 0/0-Fractal-Token mit n +1/+1-Marken (ohne Marken stirbt es sofort, 704.5f)."""
+    before = len(p.creatures)
+    make_tokens(p, [(1, FRACTAL)], step, e, p.opponent, source)
+    for c in p.creatures[before:]:
+        c.bonus += n
+    return p.creatures[before:]
+
+
+def add_counters(p, c, n, step, e):
+    """SOS: n +1/+1-Marken auf c; merkt sich den Schritt (Fractal Tender) und loest "Whenever one or more +1/+1
+    counters are put on ..." aus (Pensive Professor zieht, Berta gibt ein Mana jeder Farbe)."""
+    if n <= 0 or c.dead:
+        return
+    c.bonus += n
+    c.once["counter_step"] = step
+    if c.card.counter_draw:
+        _draw(p, c.card.counter_draw)
+    if c.card.counter_mana:
+        p.open.append(ANY_COLOR)
+
+
+def sos_on_cast(p, card, step, e):
+    """SOS Paket E beim Wirken: Increment (ausgegebenes Mana, bei {X} mit X, groesser als Power oder Toughness: Marke;
+    nicht die gerade gewirkte Kreatur selbst) und Matterbending Mage (Zauber mit {X}: unblockbar)."""
+    spent = None
+    for c in [c for c in p.creatures if not c.dead and not (c.card is card and c.entered == step)]:
+        if c.card.increment:
+            if spent is None:
+                spent = mana_spent(p, card) + (2 if card.fractal_gift else 1) * (p.next_x if card.x_cost else 0)
+            if spent > min(c.power, c.toughness):
+                add_counters(p, c, 1, step, e)
+        if c.card.x_cast_unblockable and card.x_cost:
+            c.extra.add("unblockable")
+
+
+def sos_combat_start(me, opp, step, e):
+    """Kampfbeginn (Tester of the Tangential): kann der Tester nicht angreifen, wandern seine Marken mit freiem Mana
+    ({X}) auf den staerksten anderen Angreifer."""
+    for t in [c for c in me.creatures if c.card.tester_move and not c.dead and c.bonus > 0]:
+        others = [c for c in me.creatures if c is not t and not c.dead and can_attack(c, step)]
+        if can_attack(t, step) or not others:
+            continue
+        x = min(t.bonus, free_units(me))
+        if x <= 0:
+            continue
+        for _ in range(x):
+            me.open.pop()
+        pick = max(others, key=lambda c: (c.power, c.card.name))
+        t.bonus -= x
+        add_counters(me, pick, x, step, e)
+        e["events"].append(i18n.t("{p}: {name} – {n} Marke(n) auf {pick_card_name}", p=i18n.t(me.name), name=t.card.name, n=x, pick_card_name=pick.card.name))
+
+
+def sos_fractal_end(p, step, e):
+    """Endsegment (jedes): Fractal Tender erschafft ein Fractal, wenn in diesem Zug eine Marke auf ihn kam."""
+    for c in [c for c in p.creatures if c.card.fractal_tender and not c.dead and c.once.get("counter_step") == step]:
+        fractal_token(p, c.card.fractal_tender, step, e, c.card.name)
+
+
 def gy_left_turn(p):
     """SOS: hat in diesem Zug eine Karte den Friedhof von p verlassen?"""
     return p.gy_left > getattr(p, "gy_left_mark", 0)
@@ -6418,6 +6506,7 @@ def sos_end_own(me, opp, step, e):
     Moseo holt mit Lebensgewinn die teuerste Kreatur bis Manawert = gewonnenes Leben zurueck; Tragedy Feaster opfert
     ohne Lebensgewinn das schwaechste Permanent (Token, dann ein entbehrliches Land ab 5 Laendern, sonst die
     schwaechste Kreatur)."""
+    sos_fractal_end(me, step, e)
     alive = [c for c in me.creatures if not c.dead]
     died = me.deaths - me.deaths_mark > 0
     if gy_left_turn(me):  # SOS Primary Research
@@ -6476,10 +6565,11 @@ def sos_effects(me, opp, card, step, entry):
         stun = (own_stun if me.turn_start == me.now else other_stun) + per_x * me.next_x
         if per_x:
             me.next_x = 0  # Procrastinate: X verbraucht
-        target = tap_target(me, opp, card, False, entry)
-        if target is not None and stun:
-            target.stun += stun
-            entry["events"].append(i18n.t("{me}: {card_name} – {n} Stun-Marken auf {target_name}", me=i18n.t(me.name), card_name=card.name, n=stun, target_name=target.card.name))
+        for _k in range(card.tap_targets):  # Homesickness: bis zu zwei Kreaturen
+            target = tap_target(me, opp, card, False, entry)
+            if target is not None and stun:
+                target.stun += stun
+                entry["events"].append(i18n.t("{me}: {card_name} – {n} Stun-Marken auf {target_name}", me=i18n.t(me.name), card_name=card.name, n=stun, target_name=target.card.name))
     if card.self_exile and card in me.graveyard:  # "Exile <Name>.": vom Stapel ins Exil, verlaesst keinen Friedhof
         list.remove(me.graveyard, card)
     if card.x_regrowth:  # Divergent Equation: X = so viele, wie Mana ({X}{X}) und Karten reichen
@@ -6506,6 +6596,16 @@ def sos_effects(me, opp, card, step, entry):
             pick.pump += x
             pick.extra.add("trample")
             entry["events"].append(i18n.t("{me}: {card_name} – {target_name} bekommt {kw}", me=i18n.t(me.name), card_name=card.name, target_name=pick.card.name, kw=f"+{x}/+0, trample"))
+    if card.fractal_drawn:  # Fractal Anomaly: X = in diesem Zug gezogene Karten
+        fractal_token(me, me.drawn - me.drawn_mark, step, entry, card.name)
+    if card.fractal_gift:  # Oracle's Gift: X Fractals, dann X Marken auf jeden eigenen Fractal
+        x, me.next_x = me.next_x, 0
+        if x > 0:
+            for _k in range(x):
+                fractal_token(me, 0, step, entry, card.name)
+            for c in [c for c in me.creatures if not c.dead and "fractal" in c.card.creature_types]:
+                add_counters(me, c, x, step, entry)
+            bury((me, opp), entry)
     if card.opp_draws and opp is not None:  # Secret Rendezvous
         _draw(opp, card.opp_draws)
     if "etb_inkling" in card.prepare_on and opp is not None:
@@ -7781,6 +7881,8 @@ def end_step_instants(dfn, act, e, step):
             continue
         if card.x_regrowth and not (gy_candidates(dfn, "instsorc") and len(dfn.open) >= 3):
             continue  # Divergent Equation erst mit X >= 1
+        if card.fractal_drawn and dfn.drawn - dfn.drawn_mark < 1:
+            continue  # Fractal Anomaly: ohne gezogene Karte stirbt das 0/0-Token
         if card in dfn.hand and reanimate_ok(dfn, card) and _cast_from_open(dfn, card):
             e["events"].append(i18n.t("{dfn}: {card_name} am Ende des Zugs", dfn=i18n.t(dfn.name), card_name=card.name))
             _resolve(dfn, act, card, step, e)
@@ -9813,9 +9915,9 @@ def take_turn(me, opp, step, rnd, skip_draw):
             for _ in range(x):
                 me.open.pop()
             me.next_x = x
-        if c.x_life or (c.tap_spell and c.tap_spell[2]):  # SOS Procrastinate (2X Stun), Stream of Life: X = alles Mana
-            x = free_units(me)
-            for _ in range(x):
+        if c.x_life or c.fractal_gift or (c.tap_spell and c.tap_spell[2]):  # SOS Procrastinate (2X Stun), Stream of
+            x = free_units(me) // (2 if c.fractal_gift else 1)  # Life, Oracle's Gift ({X}{X}): X = alles freie Mana
+            for _ in range(x * (2 if c.fractal_gift else 1)):
                 me.open.pop()
             me.next_x = x
     early = [c for c in chosen if c.is_creature and not c.haste and combat_etb(me, opp, c, step, chosen)]
@@ -9873,6 +9975,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     hydra_spread(me, e)
     combat_buffs(me, step, e)
     sos_combat_exile(me, opp, e)
+    sos_combat_start(me, opp, step, e)
     combat_counters(me, step, e)
     combat_tokens(me, opp, step, e)
     combat_exile_counters(me, step, e)

@@ -287,6 +287,72 @@ def _gy_traits(low, spell):
     return out
 
 
+_FRACTAL = r"create a 0/0 green and blue fractal creature token"
+_COUNTERS_ON = r"^whenever one or more \+1/\+1 counters are put on (?:~|this creature), "
+# Paket E: Increment und Fractals
+_E_RES = {
+    "increment": re.compile(r"^increment$"),
+    "counter_draw": re.compile(_COUNTERS_ON + r"draw (a|one|two) cards?\.$"),
+    "counter_mana": re.compile(_COUNTERS_ON + r"add one mana of any color\.$"),
+    "fractal_tender": re.compile(r"^at the beginning of each end step, if you put a counter on (?:~|this creature) this "
+                                 r"turn, " + _FRACTAL + r" and put (a|one|two|three|four) \+1/\+1 counters? on it\.$"),
+    "death_fractal": re.compile(r"^when (?:~|this creature) dies, if it had one or more counters on it, " + _FRACTAL +
+                                r", then put this creature's counters on that token\.$"),
+    "death_counters": re.compile(r"^when (?:~|this creature) dies, if it had counters on it, put those counters on up "
+                                 r"to one target creature\.$"),
+    "tester_move": re.compile(r"^at the beginning of combat on your turn, you may pay \{x\}\. when you do, move x "
+                              r"\+1/\+1 counters from (?:~|this creature) onto another target creature\.$"),
+    "fractal_drawn": re.compile("^" + _FRACTAL + r" and put x \+1/\+1 counters on it, where x is the number of cards "
+                                r"you've drawn this turn\.$"),
+    "fractal_gift": re.compile(r"^create x 0/0 green and blue fractal creature tokens, then put x \+1/\+1 counters on "
+                               r"each fractal you control\.$"),
+    "fractal_snw": re.compile("^" + _COST + r", \{t\}: " + _FRACTAL + r"\. put x \+1/\+1 counters on it, where x is "
+                              r"the number of differently named lands you control\.$"),
+    "fractal_x": re.compile(r"^\{x\}, \{t\}: " + _FRACTAL + r" and put x \+1/\+1 counters on it\.$"),
+    "x_unblockable": re.compile(r"^whenever you cast a spell with \{x\} in its mana cost, (?:~|this creature) can't be "
+                                r"blocked this turn\.$"),
+    "homesickness": re.compile(r"^target player draws (a|one|two|three) cards?\. tap up to (two) target creatures\. put "
+                               r"a stun counter on each of them\.$"),
+}
+_WORD_N = {"a": 1, "one": 1, "two": 2, "three": 3, "four": 4}
+
+
+def _e_traits(low, spell):
+    """Paket E: Increment und Fractals (eine Zeile)."""
+    res, out = _E_RES, {}
+    if res["increment"].match(low) and not spell:
+        out["increment"] = True
+    m = res["counter_draw"].match(low)
+    if m:
+        out["counter_draw"] = _WORD_N[m.group(1)]
+    if res["counter_mana"].match(low):
+        out["counter_mana"] = True
+    m = res["fractal_tender"].match(low)
+    if m:
+        out["fractal_tender"] = _WORD_N[m.group(1)]
+    if res["death_fractal"].match(low):
+        out["death_fractal"] = True
+    if res["death_counters"].match(low):  # Scolding Administrator: wie Graft Surgeon
+        out["death_counters_move"] = True
+    if res["tester_move"].match(low):
+        out["tester_move"] = True
+    if spell and res["fractal_drawn"].match(low):
+        out["fractal_drawn"] = True
+    if spell and res["fractal_gift"].match(low):
+        out["fractal_gift"] = True
+    m = res["fractal_snw"].match(low)
+    if m:
+        out["fractal_ability"] = (cost_alternatives(m.group(1).upper()), "snw")
+    if res["fractal_x"].match(low):
+        out["fractal_ability"] = (((0, ()),), "x")
+    if res["x_unblockable"].match(low):
+        out["x_cast_unblockable"] = True
+    m = res["homesickness"].match(low)
+    if spell and m:
+        out["draws"], out["tap_spell"], out["tap_targets"] = _WORD_N[m.group(1)], (1, 1, 0), _WORD_N[m.group(2)]
+    return out
+
+
 def prepare_triggers(card):
     """Paket B: Arten der Ausloeser, die die Vorderseite prepared machen (Reihenfolge wie im Text)."""
     if card.get("layout") != "prepare":
@@ -341,6 +407,9 @@ def sos_traits(card, type_line, base):
             if "upkeep_gy3" in kinds:
                 out["upkeep_surveil"] = 1  # Grave Researcher: Surveil vor der Pruefung
     lines = list(_clean_lines(card))
+    front = (card.get("card_faces") or [card])[0]
+    if "{X}" in (front.get("mana_cost") or card.get("mana_cost") or ""):
+        out["x_cost"] = True
     if not spell and lines and any(_TOMEKEEPER_HEAD.match(low) for _r, low in lines):
         bullets = [low.lstrip("•").strip() for r, low in lines if r.strip().startswith("•")]
         if all(b in _TOMEKEEPER_BULLETS for b in bullets):
@@ -348,6 +417,7 @@ def sos_traits(card, type_line, base):
     for _raw, low in lines:
         out.update(_life_traits(card, low, spell))
         out.update(_gy_traits(low, spell))
+        out.update(_e_traits(low, spell))
         trigger = bool(re.match(r"^(when|whenever|at the beginning)\b", low))
         if not spell:
             m = res["etb_drain"].match(low)
