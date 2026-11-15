@@ -681,6 +681,10 @@ RULES = [
     "werden zuerst überzählige Länder ab fünf, dann die schwächsten Kreaturen). Page, Loose Leaf wirft am Ende des "
     "gegnerischen Zugs eine zweite Page ab. Fractalize als Kampftrick: gegnerische Kreatur mit X = 0 zu 1/1 oder eigene "
     "mit allem freien Mana zu (X+1)/(X+1). Seething Song (Ritual) ist noch offen.",
+    "Face Yourself (FRA): Token-Kopien aller Kreaturen des Spielers mit den stärkeren Kreaturen (eigene legendäre "
+    "nicht), mit Haste und Betreten-Effekten; gewirkt nur für Lethal oder mit eigenem Planeswalker (auch Jace-Token), "
+    "sonst werden die Kopien zu Beginn des Endsegments geopfert. Hit It! erkennt auch den neuen Wortlaut „look at the "
+    "top five“.",
     "Noch nicht im Kampf: weitere Auslöser und Fähigkeiten (siehe Modell-Abdeckung). Solche Karten werden gewirkt, "
     "wirken aber nur mit den schon modellierten Effekten.",
 ]

@@ -801,6 +801,10 @@ full log. The rules of the battle model are described in detail at the end of th
   turn with one more activation of all Jaces.
 - Chandra, Torch of Defiance +1 (battle model): the exiled card is cast with the free mana if it is not a land,
   otherwise, or when it gives lethal, 2 damage; in the Goldfish always 2 damage.
+- Face Yourself (battle model): token copies of all creatures of the player with the stronger creatures (not our own
+  legendary ones), with haste; cast only for lethal or with our own planeswalker (including the Jace token), otherwise
+  the copies are sacrificed at the beginning of the end step. Hit It! (TRK) also recognises the new wording "look at
+  the top five".
 - Not modeled, among others: convoke (Winter, Team
   Player), proliferate (Tam, the Possibility), cards from outside the game (Extrapolate the Impossible), and sacrificing
   as a cost except for the cards named; such cards are played but only work with their modeled

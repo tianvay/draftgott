@@ -809,6 +809,9 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
   Zugs mit einer weiteren Aktivierung aller Jaces.
 - Chandra, Torch of Defiance +1 (Kampfmodell): die exilierte Karte wird mit dem freien Mana gewirkt, wenn sie kein Land
   ist, sonst bzw. bei Lethal 2 Schaden; im Goldfish immer 2 Schaden.
+- Face Yourself (Kampfmodell): Token-Kopien aller Kreaturen des Spielers mit den stärkeren Kreaturen (eigene
+  legendäre nicht), mit Haste; gewirkt nur für Lethal oder mit eigenem Planeswalker (auch Jace-Token), sonst werden
+  die Kopien zu Beginn des Endsegments geopfert. Hit It! (TRK) erkennt auch den neuen Wortlaut „look at the top five“.
 - Nicht modelliert sind u. a. Convoke (Winter, Team
   Player), Proliferate (Tam, the Possibility), Karten von außerhalb des Spiels (Extrapolate the Impossible) und Opfern
   als Kosten außer bei den genannten Karten; solche Karten werden gespielt, wirken aber nur mit ihren modellierten

@@ -7532,6 +7532,61 @@ def flow_effects(me, opp, card, step, entry):
         entry["events"].append(i18n.t("{me}: {card_name} – {me_life} Leben, {x4} Karten auf der Hand", me=i18n.t(me.name), card_name=card.name, me_life=me.life, x4=len(me.hand)))
     if card.mirror_copy and opp is not None:
         mirror_copies(me, opp, card, step, entry)
+    if card.face_copy and opp is not None:
+        face_copies(me, opp, card, step, entry)
+
+
+def face_tokens(me, opp):
+    """Face Yourself (FRA): Ziel ist der Spieler mit den staerkeren Kreaturen (Summe der Power der Kopien). Kopien
+    (707.2: ohne Marken und Pumps) bekommen Haste und werden zu Beginn jedes Endsegments ohne Planeswalker geopfert.
+    Eigene legendaere Kreaturen werden nicht kopiert (Legendenregel, das Original bleibt). Gibt (Spieler, Karten)."""
+    best = (0, None, [])
+    for side in (opp, me):
+        if side is None:
+            continue
+        toks = [c._replace(is_token=True, haste=True, end_sacrifice_pw=True,
+                           kw=c.kw if "haste" in c.kw else c.kw + ("haste",))
+                for c in ((t.base_card or t.card) for t in side.creatures
+                          if not t.dead and not (side is me and t.card.legendary))]
+        value = sum(max(0, Creature(c, me.now).dmg) for c in toks)
+        if toks and value > best[0]:
+            best = (value, side, toks)
+    return best[1], best[2]
+
+
+def has_planeswalker(p):
+    return jace_present(p) or any(w.loyalty > 0 for w in p.walkers)
+
+
+def face_ok(me, opp):
+    """Face Yourself nur fuer Lethal (Angriff mit den Kopien, die Haste haben) oder mit eigenem Planeswalker, dann
+    bleiben die Kopien liegen (Nutzer 2026-11-15)."""
+    if opp is None:
+        return False
+    _side, toks = face_tokens(me, opp)
+    if not toks:
+        return False
+    if has_planeswalker(me):
+        return True
+    temp = [Creature(c, me.now) for c in toks]
+    for c in temp:
+        c.gy, c.ctl = me.graveyard, me
+    me.creatures.extend(temp)
+    try:
+        return _attack_value(me, opp, me.now) >= opp.life
+    finally:
+        for c in temp:
+            me.creatures.remove(c)
+
+
+def face_copies(me, opp, card, step, e):
+    side, toks = face_tokens(me, opp)
+    for tok in toks:
+        token = Creature(tok, step)
+        me.creatures.append(token)
+        e["events"].append(i18n.t("{me}: {card_name} – Kopie von {t_card_name}", me=i18n.t(me.name),
+                                  card_name=card.name, t_card_name=tok.name))
+        creature_enters(me, token, step, e, opp, cast=False)
 
 
 def mirror_copies(me, opp, card, step, e):
@@ -8280,6 +8335,7 @@ def main_phase_spells(me, opp):
             and (not c.land_destroy or (opp is not None and any(not x.is_basic for x in opp.lands)))
             and (not c.twin or twin_host(me, opp) is not None)
             and (not c.mirror_copy or (opp is not None and any(not x.dead for x in opp.creatures)))
+            and (not c.face_copy or face_ok(me, opp))
             and sweep_etb_ok(me, opp, c) and kobayashi_ok(me, opp, c) and not c.sunburst_bomb and city_ok(me, opp, c)
             and (not c.infiltrate or (opp is not None and any(not x.dead for x in opp.creatures)))
             and (not c.cast_threshold or threshold(me))
@@ -9553,6 +9609,15 @@ def combat_tokens(me, opp, step, e):
                 make_tokens(me, [(1, tok)], step, e, opp, src.card.name)
     for c in [x for x in me.creatures if x.card.combat_token is not None and not x.dead]:
         make_tokens(me, [(1, c.card.combat_token)], step, e, opp, c.card.name)
+
+
+def end_step_sacrifices(players, e):
+    """"At the beginning of the end step, sacrifice this creature"; Face Yourself: nur ohne eigenen Planeswalker."""
+    for p_ in players:
+        for c in p_.creatures:
+            if c.card.end_sacrifice or (c.card.end_sacrifice_pw and not c.dead and not has_planeswalker(p_)):
+                c.dead = True
+                e["events"].append(i18n.t("{p_}: opfert {c_card_name}", p_=i18n.t(p_.name), c_card_name=c.card.name))
 
 
 def lrell_surveil(p, e):
@@ -11045,11 +11110,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     end_step_triggers(me, opp, e)
     sos_end_own(me, opp, step, e)
     lrell_surveil(me, e)
-    for p_ in (me, opp):  # "At the beginning of the end step, sacrifice this creature"
-        for c in p_.creatures:
-            if c.card.end_sacrifice:
-                c.dead = True
-                e["events"].append(i18n.t("{p_}: opfert {c_card_name}", p_=i18n.t(p_.name), c_card_name=c.card.name))
+    end_step_sacrifices((me, opp), e)
     bury((me, opp), e)
     end_step_instants(opp, me, e, step)
     snw_sac_draw(opp, e)  # Warp Speed mit dem Rest des offenen Manas

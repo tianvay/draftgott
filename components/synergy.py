@@ -286,6 +286,7 @@ NEUTRAL = (
     "uncopyable", "self_copy_infusion", "self_copy_creature", "each_sacrifice", "flashback_tap3",  # SOS Paket I
     "pay_x_life", "paradigm", "capstone", "fractalize", "pox", "reckoning", "cascade", "grandeur", "untap_option",
     # SOS Paket J
+    "face_copy", "end_sacrifice_pw",  # FRA Face Yourself
     "is_token", "sac_mana", "opp_spell_tax", "extra_cost", "hexproof_until_damage", "alt_draws",
     "finality", "combat_land_return", "domain_power", "x_search_basics", "choices", "is_mode", "removal_exile",
     "removal_points", "hand_pick", "attack_exile_gy", "own_turn_kw", "debuff", "impulse",

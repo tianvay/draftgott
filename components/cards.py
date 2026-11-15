@@ -56,6 +56,7 @@ class Card(NamedTuple):
     is_artifact: bool = False  # Artifact im Typ
     combat_draw: int = 0       # zieht N Karten, wenn die Kreatur einem Spieler Kampfschaden zufuegt
     end_sacrifice: bool = False  # wird zu Beginn des Endsegments geopfert
+    end_sacrifice_pw: bool = False  # Face Yourself: zu Beginn jedes Endsegments ohne Planeswalker geopfert
     ally_enter_life: int = 0   # Leben, wenn eine andere eigene Kreatur ins Spiel kommt
     enter_counter: int = 0     # Marken auf eine Kreatur, die in diesem Zug kam, wenn sie oder eine andere kommt (Mabel)
     artifact_pump: tuple = ()  # beim Betreten: eigene Kreaturen +X/+0 (X = Artefakte) und diese Schluesselwoerter
@@ -410,6 +411,7 @@ class Card(NamedTuple):
     kicker_sac: bool = False  # Eject the Warp Core: Kicker durch Opfern eines Artefakts oder einer Kreatur
     counter_mv: int = 0  # Highly Illogical: ohne Kicker nur Zauber mit hoechstens diesem Manawert
     mirror_copy: bool = False  # Mirror Universe Intrusion: Kopie mit Menace, mit Kicker von jeder Kreatur
+    face_copy: bool = False  # Face Yourself (FRA): Token-Kopien aller Kreaturen eines Spielers mit Haste
     officer_tutor: tuple = ()  # Picard: (N Officers tappen, Charge-Marken) - Raumschiff aus der Bibliothek
     tap2_counter: bool = False  # Worf: zwei Artefakte/Kreaturen tappen: +1/+1-Marke (nur als Sorcery)
     kira_attack: bool = False  # Kira Nerys: Kreaturen kommen waehrend unseres Angriffs angreifend ins Spiel
@@ -3104,9 +3106,9 @@ _TRK_RES = {
     "reveal_until_lands": re.compile(r"^when (?:~|this [a-z]+) enters, reveal cards from the top of your library until "
                                      r"you reveal two land cards\. put those land cards onto the battlefield tapped and "
                                      r"the rest on the bottom of your library in a random order\.$"),
-    "reveal_top_land": re.compile(r"^when (?:~|this [a-z]+) enters, reveal the top (five|four|three) cards of your "
-                                  r"library\. put a land card from among them onto the battlefield tapped and the rest "
-                                  r"into your graveyard\.$"),
+    "reveal_top_land": re.compile(r"^when (?:~|this [a-z]+) enters, (?:reveal|look at) the top (five|four|three) "
+                                  r"cards of your library\. put a land card from among them onto the battlefield tapped "
+                                  r"and the rest into your graveyard\.$"),
     "tutor": re.compile(r"^(?:when (?:~|this [a-z]+) enters, )?(?:you may )?search your library for an? ([a-z, ]+?) "
                         r"card, reveal it, put it into your hand, then shuffle\.$"),
     "impulse_top": re.compile(r"^(?:when (?:~|this [a-z]+) enters, )?exile the top (card|two cards) of your library\. "
@@ -3346,6 +3348,9 @@ _TRK_RES = {
     "mirror_copy": re.compile(r"^create a token that's a copy of target creature an opponent controls, except it "
                              r"has menace\. if this spell was kicked, instead for each creature target opponent "
                              r"controls, create a token that's a copy of that creature, except it has menace\.$"),
+    "face_copy": re.compile(r"^for each creature target player controls, create a token that's a copy of that "
+                           r"creature, except it has haste and \"at the beginning of the end step, if you don't control "
+                           r"a planeswalker, sacrifice this token\.\"$"),
     "basic_hand": re.compile(r"^when (?:~|this [a-z]+) enters, (?:you may )?search your library for a basic (land|plains|"
                              r"island|swamp|mountain|forest) card, reveal it, put it into your hand, then shuffle\.?$"),
 }
@@ -3748,6 +3753,8 @@ def trk_kicker_fields(low, res):
         out["counter"], out["counter_mv"] = ("any", (), 0), int(m.group(1))
     if res["mirror_copy"].match(low):
         out["mirror_copy"] = True
+    if res["face_copy"].match(low):
+        out["face_copy"] = True
     return out
 
 
