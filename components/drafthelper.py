@@ -1825,8 +1825,18 @@ async function pollLive(once){
   let r=null;try{r=await (await fetch("/api/live")).json()}catch(e){}
   if(r){if(r.version!==undefined&&r.version!==liveVersion){location.reload();return}
     Object.assign(cardarch,r.cardarch||{});Object.assign(cardbest,r.cardbest||{});for(const [n,v] of Object.entries(r.ratings||{}))cats[n]=v;
-    const j=JSON.stringify(r);if(j!==liveJson){liveJson=j;live=r;renderLive();state.forEach(paint)}}
+    const j=JSON.stringify(r);if(j!==liveJson){liveJson=j;live=r;renderLive();syncSide();state.forEach(paint)}}
   if(!once)setTimeout(()=>pollLive(false),1500)}
+// Live-Draft: Sideboard des Servers (auch im Overlay per Picks-Fenster gesetzt) auf die "Aus"-Markierungen uebertragen;
+// von mehreren Kopien liegen die letzten im Sideboard, zurueck ins Deck heisst Core
+function syncSide(){
+  if(!live||live.complete||!(live.status==="pack"||live.status==="waiting"))return;
+  const side=live.side||{},picked=new Set(live.picks||[]),by={};let changed=false;
+  for(const t of state)if(picked.has(t.card.name))(by[t.card.name]=by[t.card.name]||[]).push(t);
+  for(const [n,ts] of Object.entries(by)){const want=side[n]||0,off=ts.filter(t=>t.mark==="off");
+    if(off.length>want)off.slice(0,off.length-want).forEach(t=>{t.mark="core";changed=true});
+    else if(off.length<want)ts.filter(t=>t.mark!=="off").slice(-(want-off.length)).forEach(t=>{t.mark="off";changed=true})}
+  if(changed){summary();save()}}
 // Live-Draft: "Aus" an einem Pick legt ihn ins Sideboard (Arena schreibt das nicht ins Protokoll); der Server
 // rechnet den Plan ohne diese Karten (livedraft.set_side) und schreibt sie in den Abschnitt Sideboard der Pool-Datei
 function liveSide(){

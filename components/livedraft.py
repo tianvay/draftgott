@@ -613,7 +613,11 @@ class LiveDraft:
         return {"status": "waiting" if waiting or not pack else "pack", "version": self.version, "message": "",
                 "event": event or "", "set": code or "", "pick": n_picks + 1, "pack": ranked,
                 "order": [c["name"] for c in pack],
-                "picks": [c["name"] for c in picks], "unknown": unknown, "detect": detect,
+                "picks": [c["name"] for c in picks],
+                "pickcards": [{"name": c["name"], "colors": c.get("colors") or [], "mv": c.get("mv") or 0,
+                               "land": bool(c.get("land")), "creature": bool(c.get("creature")),
+                               "removal": c.get("removal") or 0} for c in picks],  # Picks-Fenster des Overlays
+                "unknown": unknown, "detect": detect,
                 "deck": deck, "complete": complete, "deckinfo": deckinfo, "game": game,
                 "draftinfo": draftinfo, "archmap": archmap, "enemy_saved": saved, "summary": summary,
                 "signals": sig, "curve_warning": None if complete else curve_warning(active, detect["main"]), "side": side,

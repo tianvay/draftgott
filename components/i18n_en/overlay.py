@@ -106,4 +106,29 @@ EN = {
     "Wechsel möglich: {name} ({colors}) mit Sideboard {a} P., ohne {b} P.":
         "Switch possible: {name} ({colors}) with sideboard {a} pts, without {b} pts",
     " (+{n} im Sideboard)": " (+{n} in sideboard)",
+    # Steuerleiste oben mittig
+    "Live": "Live",
+    "Tricks": "Tricks",
+    "Karten": "Cards",
+    "Säulen": "Columns",
+    "Kalibrieren": "Calibrate",
+    "PACK": "PACK",
+    "Seitenfenster: dein Deck nach dem Draft, die Bibliothek im Spiel. Im Draft übernehmen die Säulen.":
+        "Side window: your deck after the draft, the library during a game. While drafting, the columns take over.",
+    "Trick-Warner: Instants und Flash-Karten, die der Gegner mit offenem Mana wirken könnte.":
+        "Trick Warner: instants and flash cards the opponent could cast with open mana.",
+    "Karten-Overlay: Rang, Bewertung und Punkte direkt auf den Karten im Pack.":
+        "Card overlay: rank, rating and points right on the cards in the pack.",
+    "Säulen über Arena: links dein Deck (Kreaturen, Removal, Kurve), rechts alles zum Pick.":
+        "Columns over Arena: your deck on the left (creatures, removal, curve), everything about the pick on the right.",
+    "Erscheint nach dem Draft und im Spiel.": "Appears after the draft and during a game.",
+    "Erscheint im Spiel.": "Appears during a game.",
+    "Erscheint beim Picken (kalibriert, Arena im Vordergrund).":
+        "Appears while picking (calibrated, Arena in front).",
+    "Erscheint beim Draften (Arena im Vordergrund).": "Appears while drafting (Arena in front).",
+    "Ist aus. Klick schaltet an.": "Off. Click to turn on.",
+    "Ist an. ": "On. ",
+    "Ist an und zu sehen. Klick schaltet aus.": "On and visible. Click to turn off.",
+    "Steuerleiste schließen: alle draftgott-Fenster zu": "Close the control bar: all draftgott windows close",
+    "Ziehen zum Verschieben": "Drag to move",
 }

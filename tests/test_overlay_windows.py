@@ -76,11 +76,13 @@ class GeometryTests(unittest.TestCase):
         w, h = size.split("x")
         return int(w), int(h), int(x), int(y)
 
-    def test_control_window_on_the_left_edge(self):
-        w, h, x, y = self.parse(overlay.control_geometry())
-        self.assertEqual(x, 0)
+    def test_control_bar_at_the_top_centre(self):
+        # Nutzer 15.11.2026 (Freigabe): Steuerfenster als Leiste oben mittig, vorher am linken Rand (x = 0)
+        w, h, x, y = self.parse(overlay.control_geometry(1920))
+        self.assertEqual(y, 0)
+        self.assertAlmostEqual(x + w / 2, 960, delta=1)
         self.assertGreater(w, 100)
-        self.assertGreaterEqual(y, 0)
+        self.assertGreater(w, h)
 
     def test_trick_window_left_below_the_control_window(self):
         cw, ch, cx, cy = self.parse(overlay.control_geometry())

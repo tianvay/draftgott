@@ -3,9 +3,12 @@ bleibt unveraendert, die Saeulen nutzen den freien Platz.
 
 - Links neben dem Pack (deck_column): die Zahlen deines Decks - Kreaturen und Removal-Punkte gross mit Ziel-Balken
   (Kreaturen CREATURE_TARGET, Removal die gruene Schwelle des Berichts, 4 Punkte), Kurve, Farben, Kartenfluss und
-  Spacecraft. Mit erkanntem Archetyp nur die Picks in dessen Farben (farblose zaehlen mit), sonst alle Picks.
-- Zwischen Pack und Arenas Deckliste (pick_column): alles zum Pick - Warnung zur Kurve, Top-Pick (nur ohne
-  Karten-Overlay, sonst steht er lila auf den Karten), Archetyp-Rangliste, Signale, Wechsel mit Sideboard und Tipps.
+  Spacecraft; alle Picks ausser Sideboard, ein Splash zaehlt also mit. Unten der Knopf "Picks & Sideboard".
+- Zwischen Pack und Arenas Deckliste (pick_column): alles zum Pick - oben die Signale offener Farben als Manakreise,
+  Warnung zur Kurve, Top-Pick (nur ohne Karten-Overlay, sonst steht er lila auf den Karten), Archetyp-Rangliste,
+  Wechsel mit Sideboard und Tipps.
+- Picks-Fenster (PicksPanel, ueber dem Pack, auf Klick): alle Picks nach Farbe und Manawert; ein Klick legt eine
+  Karte ins Sideboard oder zurueck (POST /api/live/side wie "Aus" auf der Seite; die Seite uebernimmt den Stand).
 
 Lage (column_rects) in Anteilen am Arena-Fenster, gemessen an Arenas Draft-Bildschirm bei 2000x1125; mit
 Kalibrierung des Karten-Overlays richten sich die Saeulen nach dem Kartenraster. Passt das nicht (andere Aufloesung
@@ -34,7 +37,7 @@ SIGNAL_LABEL = {"open": "offen", "maybe": "evtl. offen", "contested": "umkämpft
 def sections():
     """Abschnitts-Ueberschriften der Saeulen in der aktuellen Sprache."""
     return {"curve": t("KURVE"), "colors": t("FARBEN"), "more": t("WEITERES"), "archs": t("ARCHETYPEN"),
-            "signals": t("SIGNALE"), "tips": t("TIPP")}
+            "signals": t("SIGNALE"), "tips": t("TIPP"), "pack": t("PACK")}
 
 
 def _num(x):
@@ -69,13 +72,12 @@ def deck_column(snap):
     if not info.get("cards"):
         return None
     main = (snap.get("detect") or {}).get("main")
-    basis = info["arch"] if main and info.get("arch") else info
+    basis = info  # alle Picks ausser Sideboard: ein Splash zaehlt mit (Nutzer 15.11.2026)
     n_rem = basis.get("removal", 0)
     tiles = [{"key": "creatures", "label": t("KREATUREN"), "value": basis.get("creatures", 0),
               "target": CREATURE_TARGET, "big": str(basis.get("creatures", 0)),
               "unit": t("/ {n}", n=CREATURE_TARGET),
-              "sub": (t("{n} Karten im Plan", n=basis.get("cards", 0)) if main else
-                      t("{n} Picks", n=basis.get("cards", 0))),
+              "sub": t("{n} Karten im Plan", n=basis.get("cards", 0)),
               "level": _level(basis.get("creatures", 0), CREATURE_TARGET)},
              {"key": "removal", "label": t("REMOVAL"), "value": basis.get("removal_points", 0),
               "target": GREEN_PER_40, "big": _num(basis.get("removal_points", 0)),
@@ -92,6 +94,21 @@ def deck_column(snap):
 
 def _signed(n):
     return f"+{_num(n)}" if n > 0 else (f"−{_num(-n)}" if n < 0 else "0")
+
+
+PACK_ROWS = 8  # Rangliste des Packs in der rechten Saeule (nur ohne Karten-Overlay)
+RATING_ABBR = {"matchwinner": "♛", "splashworthy": "★", "mustplay": "MP", "playable": "Pl", "filler": "Fi",
+               "neverplay": "NP"}
+
+
+def _pack_row(i, c):
+    text = f"{i}. {c['name']}"
+    if c.get("rating"):
+        text += "  " + RATING_ABBR.get(c["rating"], c["rating"])
+    if c.get("removal"):
+        text += f"  R{_num(c['removal'])}"
+    level = "never" if c.get("rating") == "neverplay" else (c.get("level") or "plain")
+    return {"name": c["name"], "text": text, "level": level}
 
 
 def pick_column(snap, slim=False):
@@ -112,15 +129,96 @@ def pick_column(snap, slim=False):
     marked = sorted(((c, v) for c, v in sig.items() if v.get("level")),
                     key=lambda cv: (-cv[1]["score"], "WUBRG".find(cv[0])))
     signals = [(f"{c} {t(SIGNAL_LABEL[v['level']])} {_signed(v['score'])}", v["level"]) for c, v in marked]
+    dots = [(c, v["level"], _signed(v["score"])) for c, v in marked]
     sw = detect.get("switch")
     n_side = sum((snap.get("side") or {}).values())
     switch = ("↔ " + t("{name} · Sideboard {n} Karte(n)", name=sw["name"], n=n_side)) if sw else None
     arch = next((a for a in snap.get("archetypes") or [] if main and a["colors"] == main), None)
-    return {"head": f"Pick {snap.get('pick', 1)}", "arch_note": note,
+    pack = [] if waiting or slim else [_pack_row(i, c) for i, c in enumerate(snap["pack"][:PACK_ROWS], 1)]
+    return {"head": f"Pick {snap.get('pick', 1)}", "arch_note": note, "pack": pack,
             "warn": [line for line, _ in overlay.curve_rows(snap.get("curve_warning"), name)],
-            "hints": hints, "archs": archs, "signals": signals, "switch": switch,
+            "hints": hints, "archs": archs, "signals": signals, "dots": dots, "switch": switch,
             "state": t("Warte auf das nächste Pack …") if waiting else None,
             "tips": list((arch or {}).get("tips") or [])}
+
+
+PICK_GROUPS = ("W", "U", "B", "R", "G", "Mehrfarbig", "Farblos", "Länder")
+
+
+def _group(c):
+    if c.get("land"):
+        return "Länder"
+    cols = c.get("colors") or []
+    return "Farblos" if not cols else (cols[0] if len(cols) == 1 else "Mehrfarbig")
+
+
+def picks_groups(snap):
+    """Picks fuer das Picks-Fenster: [(Gruppe, [{"name", "mv", "creature", "removal", "sb"}])] nach Farbe (leere
+    Gruppen fehlen), je Gruppe nach Manawert und Name. Von mehreren Kopien liegen die letzten im Sideboard (wie
+    livedraft._split_picks)."""
+    cards = (snap or {}).get("pickcards") or []
+    side = (snap or {}).get("side") or {}
+    total, seen, groups = {}, {}, {g: [] for g in PICK_GROUPS}
+    for c in cards:
+        total[c["name"]] = total.get(c["name"], 0) + 1
+    for c in cards:
+        i = seen[c["name"]] = seen.get(c["name"], 0) + 1
+        groups[_group(c)].append({"name": c["name"], "mv": int(c.get("mv") or 0), "creature": bool(c.get("creature")),
+                                  "removal": c.get("removal") or 0,
+                                  "sb": i > total[c["name"]] - side.get(c["name"], 0)})
+    out = []
+    for g in PICK_GROUPS:
+        if groups[g]:  # sortiert stabil: Kopien eines Namens behalten ihre Reihenfolge (Sideboard zuletzt)
+            out.append((t(g) if len(g) > 1 else g, sorted(groups[g], key=lambda e: (e["mv"], e["name"]))))
+    return out
+
+
+def toggle_side(side, name, sb):
+    """Neues Sideboard nach einem Klick: Karte aus dem Sideboard zurueck ins Deck (sb) oder ins Sideboard."""
+    out = dict(side or {})
+    out[name] = out.get(name, 0) + (-1 if sb else 1)
+    return {n: v for n, v in out.items() if v > 0}
+
+
+def picks_head(snap):
+    n = len((snap or {}).get("pickcards") or [])
+    s = sum(((snap or {}).get("side") or {}).values())
+    return t("Picks {n} · im Deck {d} · Sideboard {s}", n=n, d=n - s, s=s)
+
+
+def picks_button(snap, is_open):
+    """Text des Knopfs unten in der linken Saeule, None ohne Picks."""
+    n = len((snap or {}).get("pickcards") or [])
+    if not n:
+        return None
+    s = sum(((snap or {}).get("side") or {}).values())
+    return ("▾ " if is_open else "▸ ") + t("Picks & Sideboard") + f" ({n} · " + t("Sideboard {s}", s=s) + ")"
+
+
+def picks_help():
+    return t("Klick auf eine Karte: ins Sideboard oder zurück ins Deck")
+
+
+def picks_rect(size, cal, colcal=None):
+    """Picks-Fenster ueber dem Pack: zwischen linker Saeule und rechter Kante der rechten Saeule, so hoch wie die linke."""
+    r = column_rects(size, cal, colcal)
+    dx, dy, dw, dh = r["deck"]
+    px, _, pw, _ = r["pick"]
+    x = dx + dw + round(GAP * size[0])
+    return x, dy, max(200, px + pw - x), dh
+
+
+def send_side(url, side, timeout=3):
+    """Sideboard an den Drafthelper (wie "Aus" auf der Seite); Antwort oder None."""
+    import urllib.error
+    import urllib.request
+    req = urllib.request.Request(url.rstrip("/") + "/api/live/side", data=json.dumps({"side": side}).encode("utf-8"),
+                                 headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.loads(r.read().decode("utf-8"))
+    except (urllib.error.URLError, OSError, ValueError):
+        return None
 
 
 def active(enabled, snap, arena):
@@ -332,6 +430,52 @@ class _Pen:
         self.cv.create_text(self.x1, self.y, text=value, fill=color, font=self.font(17, me), anchor="ne")
         self.y = self.cv.bbox(lid)[3] + self.px(3)
 
+    def dots(self, dots):
+        """Signale offener Farben als Manakreise mit Zahl: offen gross mit hellem Ring, evtl. offen normal,
+        umkaempft klein und grau."""
+        x = self.x0
+        big = self.px(30)
+        top = self.y + self.px(2)
+        for color, level, score in dots:
+            r = big / 2 if level == "open" else (big * 0.4 if level == "maybe" else big * 0.3)
+            cx, cy = x + big / 2, top + big / 2
+            fill = MANA_FILL.get(color, "#8d97a8") if level != "contested" else "#4a5060"
+            ring = {"open": "#7dffb0", "maybe": "#c8d3e0"}.get(level, "#4a5060")
+            self.cv.create_oval(cx - r, cy - r, cx + r, cy + r, fill=fill, outline=ring,
+                                width=self.px(3) if level == "open" else 1)
+            self.cv.create_text(cx, cy, text=color, fill=MANA_INK.get(color, "#ffffff") if level != "contested"
+                                else "#c8d3e0", font=self.font(15 if level == "open" else 12, True))
+            sid = self.cv.create_text(x + big + self.px(3), cy, text=score, anchor="w",
+                                      fill="#7dffb0" if level == "open" else MUTED,
+                                      font=self.font(16 if level == "open" else 13, True))
+            x = self.cv.bbox(sid)[2] + self.px(10)
+            if x > self.x1 - big:  # Zeile voll
+                x, top = self.x0, top + big + self.px(4)
+        self.y = top + big + self.px(8)
+
+    def pack_row(self, row):
+        """Zeile der Rangliste: Hintergrund nach Passung (lila beste, gruen Archetyp, blau Farben), NeverPlay grau."""
+        fill = {"best": "#6d28b8", "arch": "#1f7a45", "color": "#2c3a52"}.get(row["level"])
+        tid = self.cv.create_text(self.x0 + self.px(6), self.y + self.px(2), text=row["text"], anchor="nw",
+                                  fill="#6b7280" if row["level"] == "never" else INK,
+                                  font=self.font(15, row["level"] in ("best", "arch")),
+                                  width=self.x1 - self.x0 - self.px(10))
+        bottom = self.cv.bbox(tid)[3] + self.px(2)
+        if fill:
+            self.cv.tag_lower(self.cv.create_rectangle(self.x0, self.y, self.x1, bottom, fill=fill, width=0), tid)
+        self.y = bottom + self.px(3)
+
+    def button(self, text, tag):
+        """Klickbarer Knopf ueber die ganze Breite (Canvas-Tag tag)."""
+        pad = self.px(8)
+        tid = self.cv.create_text(self.x0 + pad, self.y + pad, text=text, fill=INK, anchor="nw",
+                                  font=self.font(15, True), width=self.x1 - self.x0 - 2 * pad, tags=(tag,))
+        bottom = self.cv.bbox(tid)[3] + pad
+        rect = self.cv.create_rectangle(self.x0, self.y, self.x1, bottom, fill="#2c3a52", outline="#4f8cc9",
+                                        tags=(tag,))
+        self.cv.tag_lower(rect, tid)
+        self.y = bottom + self.px(4)
+
     def pills(self, items):
         """Schilder nebeneinander, Umbruch, wenn die Zeile voll ist; zu lange brechen selbst um."""
         x, line_h = self.x0, 0
@@ -367,12 +511,17 @@ def draw_deck(pen, col):
     pen.section(sec["more"])
     for label, value in col["more"]:
         pen.row(label, value)
+    if col.get("button"):
+        pen.y += pen.px(10)
+        pen.button(col["button"], "picks")
 
 
 def draw_pick(pen, col):
     sec = sections()
     pen.text(col["head"], 22, HEAD, True, 0)
     pen.text(col["arch_note"], 15, MUTED, gap=6)
+    if col["dots"]:
+        pen.dots(col["dots"])
     if col["warn"]:
         pen.pills([(col["warn"][0], "warn")])
         for line in col["warn"][1:]:
@@ -382,26 +531,45 @@ def draw_pick(pen, col):
         pen.pills([("◆ " + t("Top-Pick: {name}", name=n), "hint") for n in col["hints"]])
     if col["state"]:
         pen.text(col["state"], 15, MUTED, gap=4)
+    if col["pack"]:
+        pen.section(sec["pack"])
+        for row in col["pack"]:
+            pen.pack_row(row)
     if col["archs"]:
         pen.section(sec["archs"])
         for name, score, me in col["archs"]:
             pen.row(name, score, me)
-    if col["signals"] or col["switch"]:
-        pen.section(sec["signals"])
-        pen.pills(col["signals"] + ([(col["switch"], "switch")] if col["switch"] else []))
+    if col["switch"]:
+        pen.y += pen.px(6)
+        pen.pills([(col["switch"], "switch")])
     if col["tips"]:
         pen.section(sec["tips"])
         for tip in col["tips"]:
             pen.text("• " + tip, 15, INK, gap=3)
 
 
-class ArenaColumns:
-    """Die zwei Saeulen als randlose Fenster ueber Arena (Klicks gehen durch)."""
+def _no_activate(win):
+    """Fenster nimmt Klicks an, aber keinen Fokus (Arena bleibt aktiv) und erscheint nicht in der Taskleiste
+    (Windows; sonst ohne Wirkung)."""
+    try:
+        import ctypes
+        user32 = ctypes.windll.user32
+        hwnd = user32.GetParent(win.winfo_id()) or win.winfo_id()
+        style = user32.GetWindowLongW(hwnd, -20)  # GWL_EXSTYLE
+        user32.SetWindowLongW(hwnd, -20, style | 0x8000000 | 0x80)  # WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW
+    except (ImportError, AttributeError, OSError):
+        pass
 
-    def __init__(self, master):
+
+class ArenaColumns:
+    """Die zwei Saeulen als randlose Fenster ueber Arena. Die rechte laesst Klicks durch; die linke liegt auf freiem
+    Platz und nimmt Klicks fuer den Knopf "Picks & Sideboard" an (on_picks)."""
+
+    def __init__(self, master, on_picks=None):
         import tkinter as tk
         from components.packoverlay import _click_through
         self.wins, self.canvases, self.last = {}, {}, {}
+        self.picks_open = False
         for key in ("deck", "pick"):
             win = tk.Toplevel(master)
             win.overrideredirect(True)
@@ -415,7 +583,13 @@ class ArenaColumns:
             cv.pack(fill="both", expand=True)
             win.withdraw()
             win.update_idletasks()
-            _click_through(win)
+            if key == "deck":
+                _no_activate(win)
+                cv.tag_bind("picks", "<Button-1>", lambda e: on_picks and on_picks())
+                cv.tag_bind("picks", "<Enter>", lambda e, c=cv: c.configure(cursor="hand2"))
+                cv.tag_bind("picks", "<Leave>", lambda e, c=cv: c.configure(cursor=""))
+            else:
+                _click_through(win)
             self.wins[key], self.canvases[key] = win, cv
         self.faded = None
 
@@ -430,6 +604,8 @@ class ArenaColumns:
         s = size[0] / BASE_W
         rects = column_rects(size, cal, colcal)
         contents = {"deck": deck_column(snap), "pick": pick_column(snap, slim)}
+        if contents["deck"] is not None:
+            contents["deck"]["button"] = picks_button(snap, self.picks_open)
         for key, win in self.wins.items():
             col = contents[key]
             if col is None:
@@ -459,6 +635,108 @@ class ArenaColumns:
                     win.attributes("-alpha", FADED if faded else ALPHA)
                 except Exception:  # noqa: BLE001 - ohne Durchsichtigkeit bleibt es einfach sichtbar
                     pass
+
+
+class PicksPanel:
+    """Picks-Fenster ueber dem Pack (auf Klick "Picks & Sideboard"): alle Picks nach Farbe in Spalten, je nach
+    Manawert; ein Klick auf eine Karte ruft on_toggle(Name, im Sideboard?) auf. Nimmt Klicks an, aber keinen Fokus."""
+
+    def __init__(self, master, on_toggle, on_close):
+        import tkinter as tk
+        self.on_toggle, self.on_close, self.entries, self.last = on_toggle, on_close, {}, None
+        self.win = tk.Toplevel(master)
+        self.win.overrideredirect(True)
+        self.win.attributes("-topmost", True)
+        try:
+            self.win.attributes("-alpha", 0.97)
+        except tk.TclError:
+            pass
+        self.win.configure(bg=PANEL)
+        self.cv = tk.Canvas(self.win, bg=PANEL, highlightthickness=2, highlightbackground="#4f8cc9", bd=0)
+        self.cv.pack(fill="both", expand=True)
+        self.win.withdraw()
+        self.win.update_idletasks()
+        _no_activate(self.win)
+        self.cv.tag_bind("entry", "<Button-1>", self._click)
+        self.cv.tag_bind("entry", "<Enter>", lambda e: self.cv.configure(cursor="hand2"))
+        self.cv.tag_bind("entry", "<Leave>", lambda e: self.cv.configure(cursor=""))
+        self.cv.tag_bind("close", "<Button-1>", lambda e: on_close())
+
+    def hide(self):
+        if self.win.state() != "withdrawn":
+            self.win.withdraw()
+        self.last = None
+
+    def _click(self, _e):
+        cur = self.cv.find_withtag("current")
+        for tag in self.cv.gettags(cur[0]) if cur else ():
+            if tag in self.entries:
+                self.on_toggle(*self.entries[tag])
+                return
+
+    def show(self, snap, rect, origin, s):
+        (ox, oy), (x, y, w, h) = origin, rect
+        groups = picks_groups(snap)
+        sig = (repr(groups), picks_head(snap), x, y, w, h, ox, oy)
+        if self.win.state() == "withdrawn":
+            self.win.deiconify()
+            self.win.attributes("-topmost", True)
+        if sig == self.last:
+            return
+        self.last = sig
+        for scale in (1.0, 0.85, 0.72, 0.6):  # viele Picks: kleiner, bis es passt
+            need = self._draw(groups, snap, w, s * scale)
+            if need <= h:
+                break
+        self.win.geometry(f"{w}x{min(h, need)}+{ox + x}+{oy + y}")
+
+    def _draw(self, groups, snap, w, s):
+        cv = self.cv
+        cv.delete("all")
+        self.entries = {}
+        pen = _Pen(cv, w, s)
+        cid = cv.create_text(pen.x1, pen.y, text="✕", fill=INK, font=pen.font(22, True), anchor="ne",
+                             tags=("close",))
+        bx = cv.bbox(cid)
+        cv.tag_lower(cv.create_rectangle(bx[0] - pen.px(6), bx[1] - pen.px(2), bx[2] + pen.px(6), bx[3] + pen.px(2),
+                                         fill="#2c3a52", width=0, tags=("close",)), cid)
+        pen.x1 = bx[0] - pen.px(12)
+        pen.text(picks_head(snap), 20, HEAD, True, 2)
+        pen.text(picks_help(), 14, MUTED, gap=10)
+        pen.x1 = w - pen.pad
+        if not groups:
+            return pen.y + pen.pad
+        gap = pen.px(12)
+        n = len(groups)
+        colw = (pen.x1 - pen.x0 - gap * (n - 1)) / n
+        top, bottom, i = pen.y, pen.y, 0
+        for k, (label, entries) in enumerate(groups):
+            x0 = pen.x0 + k * (colw + gap)
+            y = top
+            fill = MANA_FILL.get(label, "#3a4558")
+            lid = cv.create_text(x0 + pen.px(8), y + pen.px(3), text=f"{label} · {len(entries)}", anchor="nw",
+                                 fill=MANA_INK.get(label, "#ffffff"), font=pen.font(15, True))
+            lb = cv.bbox(lid)
+            cv.tag_lower(cv.create_rectangle(x0, y, x0 + colw, lb[3] + pen.px(3), fill=fill, width=0), lid)
+            y = lb[3] + pen.px(8)
+            for e in entries:
+                tag = f"e{i}"
+                i += 1
+                self.entries[tag] = (e["name"], e["sb"])
+                text = f"{e['mv']}  {e['name']}" + ("  ●" if e["creature"] else "")
+                font = pen.font(15)
+                if e["sb"]:
+                    text = "SB  " + text
+                    font = font + ("overstrike",)
+                tid = cv.create_text(x0 + pen.px(6), y + pen.px(2), text=text, anchor="nw", width=colw - pen.px(10),
+                                     fill=MUTED if e["sb"] else INK, font=font, tags=("entry", tag))
+                eb = cv.bbox(tid)
+                cv.tag_lower(cv.create_rectangle(x0, y, x0 + colw, eb[3] + pen.px(2),
+                                                 fill="#161a22" if e["sb"] else TILE, width=0, tags=("entry", tag)),
+                             tid)
+                y = eb[3] + pen.px(5)
+            bottom = max(bottom, y)
+        return bottom + pen.pad
 
 
 class ColumnCalibrator:

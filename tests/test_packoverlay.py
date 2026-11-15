@@ -269,8 +269,11 @@ class StatusTests(unittest.TestCase):
         self.assertEqual(po.status_text(cal, arena), "")
 
     def test_control_window_has_room(self):
+        # Nutzer 15.11.2026 (Freigabe): Steuerleiste statt Fenster mit Haekchen (vorher Hoehe mindestens 150)
         from components import overlay
-        self.assertGreaterEqual(overlay.CONTROL_SIZE[1], 150)
+        self.assertGreater(overlay.CONTROL_SIZE[0], overlay.CONTROL_SIZE[1])
+        cards = next(i for i in overlay.BAR_ITEMS if i["key"] == "cards")
+        self.assertTrue(cards.get("calibrate"))
         self.assertEqual([k for k, _ in overlay.WINDOWS], ["main", "tricks"])
 
 

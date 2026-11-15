@@ -524,9 +524,12 @@ def _live_help():
             t("Arena dafür im Fenster oder im randlosen Vollbild spielen; über exklusivem Vollbild liegt kein Fenster. "
             "Das Fenster lässt sich verschieben und schließt sich, wenn der Drafthelper beendet wird. Einzeln: "
             "<code>python mtg_sim.py --overlay http://127.0.0.1:8765/</code>."),
-            t("Am linken Bildschirmrand steht das <b>Steuerfenster</b>: Häkchen schalten das Seitenfenster (Draft / "
-            "Bibliothek) und den <b>Trick-Warner</b> an und ab. Der Trick-Warner ist ein eigenes Fenster links unter "
-            "dem Steuerfenster und erscheint nur im Spiel. Schließt man das Steuerfenster, sind alle Fenster zu."),
+            t("Oben in der Bildschirmmitte steht das <b>Steuerfenster</b> als Leiste: je Fenster ein Schalter mit "
+            "Symbol (▤ Seitenfenster, ⚡ <b>Trick-Warner</b>, ▦ Karten-Overlay, ◫ Säulen über Arena), ⊕ kalibriert. "
+            "Hell heißt an und zu sehen, gedämpft an, aber gerade nicht gebraucht, dunkel aus; ⚠ zeigt einen Hinweis "
+            "(Mausfenster). Die Fenster erscheinen nur, wenn man sie braucht: der Trick-Warner (links) im Spiel, das "
+            "Seitenfenster nach dem Draft und im Spiel, beim Draften übernehmen die Säulen. Am Griff ⠿ lässt sich "
+            "die Leiste verschieben; ✕ schließt alle Fenster."),
             t('Das <b>Karten-Overlay</b> legt beim Picken die Zahlen direkt auf die Karten im Arena-Fenster: oben links der Rang im Pack, oben rechts die Bewertung, unten Punkte, Farben des besten Archetyps, Passung (✓ dein Archetyp, ≈ nahe dran, ○ Farben passen, – fremde Farben), Removal, Kartenfluss, Synergie, Kreatur und deine Siegquote mit der Karte; Rahmen lila = Top-Pick, grün = passt, grau = fremd. Einmal bei vollem Pack „Kalibrieren“ im Steuerfenster und fünf Ecken anklicken (Karte 1 oben links und unten rechts, Karte 2 oben links, letzte Karte der ersten Reihe oben links, erste Karte der zweiten Reihe oben links); gespeichert in <code>kartenoverlay.json</code> (nicht im Git). Die Zahlen liegen in der Reihenfolge wie in Arena (Seltenheit, Farbe, dann Sammlernummer); jede Karte zeigt unten klein ihren Namen zur Kontrolle. Klicks gehen durch das Overlay zu Arena; zeigt die Maus auf eine Karte, verschwinden die Zahlen auf allen anderen Karten, damit die große Kartenansicht von Arena frei bleibt. Solange das Overlay an und kalibriert ist, lässt das Seitenfenster Pack-Liste und Top-Pick weg; Archetyp, Signale, Archetyp-Tracker und Tipps bleiben.')]))
         + _panel(t("Draft-Statistik"), _ul([
             t("Solange der Live-Draft läuft, sammelt er je Draft die Picks, das abgegebene Deck und die Ergebnisse der "

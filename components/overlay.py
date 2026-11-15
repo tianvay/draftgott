@@ -645,8 +645,20 @@ def fetch(url, timeout=0.8):
 
 
 WINDOWS = (("main", "Draft / Bibliothek"), ("tricks", "Trick-Warner"))
-CONTROL_SIZE = (200, 205)  # Platz fuer Seitenfenster, Trick-Warner, Karten-Overlay mit "Kalibrieren" und Saeulen
+CONTROL_SIZE = (600, 36)  # Steuerleiste oben mittig (Breite ungefaehr, die echte richtet sich nach dem Inhalt)
 TOP = 80
+BAR_ITEMS = (  # Schalter der Steuerleiste: Symbol, kurzer Name, Mausfenster (Nutzer 15.11.2026)
+    {"key": "main", "icon": "▤", "label": "Live",
+     "tip": "Seitenfenster: dein Deck nach dem Draft, die Bibliothek im Spiel. Im Draft übernehmen die Säulen."},
+    {"key": "tricks", "icon": "⚡", "label": "Tricks",
+     "tip": "Trick-Warner: Instants und Flash-Karten, die der Gegner mit offenem Mana wirken könnte."},
+    {"key": "cards", "icon": "▦", "label": "Karten", "calibrate": True,
+     "tip": "Karten-Overlay: Rang, Bewertung und Punkte direkt auf den Karten im Pack."},
+    {"key": "cols", "icon": "◫", "label": "Säulen", "calibrate": True,
+     "tip": "Säulen über Arena: links dein Deck (Kreaturen, Removal, Kurve), rechts alles zum Pick."})
+BAR_WAIT = {"main": "Erscheint nach dem Draft und im Spiel.", "tricks": "Erscheint im Spiel.",
+            "cards": "Erscheint beim Picken (kalibriert, Arena im Vordergrund).",
+            "cols": "Erscheint beim Draften (Arena im Vordergrund)."}
 
 
 def default_enabled():
@@ -654,26 +666,61 @@ def default_enabled():
     return {key: True for key, _ in WINDOWS}
 
 
+def main_needed(snap):
+    """Braucht man das Seitenfenster gerade? Im Spiel (Bibliothek), nach dem Draft (Deck), beim Draften (ohne
+    Saeulen) und wenn der Drafthelper nicht erreichbar ist (Meldung); ohne Draft und Spiel nicht (Nutzer 15.11.2026)."""
+    if not snap:
+        return True
+    if (snap.get("game") or {}).get("active") or snap.get("complete") or snap.get("enemy_saved"):
+        return True
+    return snap.get("status") in ("pack", "waiting")
+
+
 def visible_windows(enabled, snap, columns=False):
-    """Fenster, die gerade zu sehen sind: das Seitenfenster, wenn angeschaltet (columns: die Saeulen ueber Arena
-    zeigen beim Draften alles, components/arenapanels.py, dann tritt es zur Seite); der Trick-Warner nur im Spiel."""
+    """Fenster, die gerade zu sehen sind: das Seitenfenster, wenn angeschaltet und gebraucht (main_needed; columns:
+    die Saeulen ueber Arena zeigen beim Draften alles, components/arenapanels.py, dann bleibt es weg); der
+    Trick-Warner nur im Spiel."""
     shown = set()
-    if enabled.get("main") and not columns:
+    if enabled.get("main") and not columns and main_needed(snap):
         shown.add("main")
     if enabled.get("tricks") and ((snap or {}).get("game") or {}).get("active"):
         shown.add("tricks")
     return shown
 
 
-def control_geometry():
-    """Steuerfenster am linken Bildschirmrand."""
-    w, h = CONTROL_SIZE
-    return f"{w}x{h}+0+{TOP}"
+def bar_state(on, shown):
+    """Zustand eines Schalters: "off" aus, "on" an und zu sehen, "waiting" an, aber gerade nicht gebraucht."""
+    return "off" if not on else ("on" if shown else "waiting")
+
+
+def bar_tip(item, state, hint=""):
+    """Mausfenster eines Schalters: was er zeigt, ob er an ist und wann das Fenster erscheint."""
+    lines = [t(item["tip"])]
+    if state == "off":
+        lines.append(t("Ist aus. Klick schaltet an."))
+    elif state == "waiting":
+        lines.append(t("Ist an. ") + t(BAR_WAIT[item["key"]]))
+    else:
+        lines.append(t("Ist an und zu sehen. Klick schaltet aus."))
+    if hint:
+        lines.append(hint)
+    return "\n".join(lines)
+
+
+def bar_status(hints):
+    """Hinweise (Kalibrierung, Arena) fuer das Ende der Leiste."""
+    return " · ".join(h for h in hints if h)
+
+
+def control_geometry(screen_width=1920, width=None):
+    """Steuerleiste oben in der Bildschirmmitte (ueber Arenas leerer Kopfzeile)."""
+    w = width or CONTROL_SIZE[0]
+    return f"{w}x{CONTROL_SIZE[1]}+{max(0, (screen_width - w) // 2)}+0"
 
 
 def trick_geometry():
-    """Trick-Warner links unter dem Steuerfenster."""
-    return f"340x300+0+{TOP + CONTROL_SIZE[1] + 40}"
+    """Trick-Warner am linken Rand unter der Hoehe der Leiste."""
+    return f"340x300+0+{TOP + 196}"
 
 
 def main_geometry(screen_width):
@@ -859,6 +906,113 @@ def _styles(text):
                                "#ffffff" if tag == "warn" else COLORS["ink"]))
 
 
+class _Hint:
+    """Hinweistext eines Schalters (Kalibrierung, Arena); verhaelt sich wie ein Label mit cget/configure."""
+
+    def __init__(self, changed):
+        self.text, self.changed = "", changed
+
+    def cget(self, _key):
+        return self.text
+
+    def configure(self, text=""):
+        if text != self.text:
+            self.text = text
+            self.changed()
+
+
+BAR_STYLE = {"on": ("#2c5a8a", "#ffffff"), "waiting": ("#1f2a3a", "#c8d3e0"), "off": ("#161b24", "#5b6475")}
+
+
+class _ControlBar:
+    """Steuerleiste oben in der Bildschirmmitte (Nutzer 15.11.2026): Griff zum Verschieben, je Fenster ein Schalter
+    mit Symbol (hell = an und zu sehen, gedaempft = an, wird gerade nicht gebraucht, dunkel = aus), ⊕ zum Kalibrieren,
+    ⚠ bei einem Hinweis (Mausfenster nennt ihn), ✕ schliesst alle Fenster."""
+
+    def __init__(self, win, variables, on_toggle, on_calibrate):
+        import tkinter as tk
+        self.win, self.vars, self.on_toggle = win, variables, on_toggle
+        self.hints = {key: _Hint(self._changed) for key in variables}
+        self.shown = {key: False for key in variables}
+        self.buttons, self.painted, self.moved = {}, {}, False
+        self.tip = _Tooltip(win)
+        bg = COLORS["bg"]
+        win.configure(bg=bg, highlightthickness=1, highlightbackground="#3a4558")
+        grip = tk.Label(win, text="⠿", bg=bg, fg=COLORS["muted"], font=("Segoe UI", 12), padx=6, cursor="fleur")
+        grip.pack(side="left")
+        grip.bind("<ButtonPress-1>", self._grab)
+        grip.bind("<B1-Motion>", self._drag)
+        self._tip_for(grip, lambda: t("Ziehen zum Verschieben"))
+        tk.Label(win, text="draftgott", bg=bg, fg=COLORS["head"], font=("Segoe UI", 10, "bold"),
+                 padx=4).pack(side="left")
+        for item in BAR_ITEMS:
+            key = item["key"]
+            b = tk.Label(win, text="", font=("Segoe UI", 10, "bold"), padx=9, pady=4, cursor="hand2")
+            b.pack(side="left", padx=(4, 0), pady=3)
+            b.bind("<Button-1>", lambda e, k=key: self._toggle(k))
+            self._tip_for(b, lambda it=item: bar_tip(it, self._state(it["key"]), self.hints[it["key"]].text))
+            self.buttons[key] = b
+            if item.get("calibrate"):
+                c = tk.Label(win, text="⊕", bg="#1c2330", fg=COLORS["ink"], font=("Segoe UI", 10), padx=5, pady=4,
+                             cursor="hand2")
+                c.pack(side="left", pady=3)
+                c.bind("<Button-1>", lambda e, k=key: on_calibrate[k]())
+                self._tip_for(c, lambda it=item: t("Kalibrieren") + ": " + t(it["label"]))
+        close = tk.Label(win, text="✕", bg=bg, fg=COLORS["muted"], font=("Segoe UI", 11), padx=8, cursor="hand2")
+        close.pack(side="left", padx=(6, 0))
+        close.bind("<Button-1>", lambda e: win.destroy())
+        self._tip_for(close, lambda: t("Steuerleiste schließen: alle draftgott-Fenster zu"))
+        self.paint(self.shown)
+        self._place()
+
+    def _tip_for(self, widget, text):
+        widget.bind("<Enter>", lambda e: self.tip.show(text(), e.x_root, e.y_root + 14), add="+")
+        widget.bind("<Leave>", self.tip.hide, add="+")
+
+    def _grab(self, e):
+        self._off = (e.x_root - self.win.winfo_x(), e.y_root - self.win.winfo_y())
+
+    def _drag(self, e):
+        self.moved = True
+        self.win.geometry(f"+{e.x_root - self._off[0]}+{e.y_root - self._off[1]}")
+
+    def _place(self):
+        """Mittig oben, solange der Nutzer die Leiste nicht verschoben hat."""
+        self.win.update_idletasks()
+        if self.moved:
+            return
+        w, h = self.win.winfo_reqwidth(), self.win.winfo_reqheight()
+        size = control_geometry(self.win.winfo_screenwidth(), w).split("+", 1)
+        self.win.geometry(f"{w}x{h}+" + size[1])
+
+    def _state(self, key):
+        return bar_state(self.vars[key].get(), self.shown.get(key))
+
+    def _toggle(self, key):
+        self.vars[key].set(not self.vars[key].get())
+        self.on_toggle()
+        self.paint(self.shown)
+
+    def _changed(self):
+        self.paint(self.shown)
+
+    def paint(self, shown):
+        """Schalter nach Zustand faerben (nur bei Aenderung); shown: {Fenster: gerade zu sehen}."""
+        self.shown = dict(shown)
+        width_changed = False
+        for item in BAR_ITEMS:
+            key = item["key"]
+            state = self._state(key)
+            text = f"{item['icon']} {t(item['label'])}" + (" ⚠" if self.hints[key].text else "")
+            if self.painted.get(key) != (state, text):
+                width_changed |= (self.painted.get(key) or (None, None))[1] != text
+                self.painted[key] = (state, text)
+                bg, fg = BAR_STYLE[state]
+                self.buttons[key].configure(text=text, bg=bg, fg=fg)
+        if width_changed:
+            self._place()
+
+
 def run(url, interval_ms=1000):
     """Drei Fenster: das Steuerfenster (Hauptfenster, links) schaltet Seitenfenster und Trick-Warner an und ab;
     schliesst man es, ist alles zu. Dazu das Karten-Overlay ueber Arena (components/packoverlay.py) mit Schalter und
@@ -870,9 +1024,7 @@ def run(url, interval_ms=1000):
     control = tk.Tk()
     control.title("draftgott")
     _float_window(control)
-    control.geometry(control_geometry())
-    tk.Label(control, text=t("draftgott Fenster"), bg=COLORS["bg"], fg=COLORS["head"],
-             font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=8, pady=(4, 2))
+    control.overrideredirect(True)  # Leiste ohne Titelzeile; schliessen mit ✕
     enabled = {key: tk.BooleanVar(value=on) for key, on in default_enabled().items()}
 
     root = tk.Toplevel(control)  # Seitenfenster: Draft, Deck und im Spiel die Bibliothek
@@ -887,35 +1039,30 @@ def run(url, interval_ms=1000):
                          font=("Segoe UI", 11), padx=10, pady=4, cursor="arrow")
     trick_text.pack(fill="both", expand=True)
     windows = {"main": root, "tricks": tricks}
-    for key, label in WINDOWS:
-        tk.Checkbutton(control, text=t(label), variable=enabled[key], bg=COLORS["bg"], fg=COLORS["ink"],
-                       selectcolor="#2c3a52", activebackground=COLORS["bg"], activeforeground=COLORS["ink"],
-                       font=("Segoe UI", 10), anchor="w", command=lambda: show_windows()).pack(fill="x", padx=6)
+    for key, _label in WINDOWS:
         windows[key].protocol("WM_DELETE_WINDOW", lambda k=key: (enabled[k].set(False), show_windows()))
-
     cards_on = tk.BooleanVar(value=True)  # Karten-Overlay ueber Arena
-    cards_row = tk.Frame(control, bg=COLORS["bg"])
-    cards_row.pack(fill="x", padx=6)
-    tk.Checkbutton(cards_row, text=t("Karten-Overlay"), variable=cards_on, bg=COLORS["bg"], fg=COLORS["ink"],
-                   selectcolor="#2c3a52", activebackground=COLORS["bg"], activeforeground=COLORS["ink"],
-                   font=("Segoe UI", 10), anchor="w").pack(side="left")
-    tk.Button(cards_row, text=t("Kalibrieren"), font=("Segoe UI", 8), bg="#2c3a52", fg=COLORS["ink"], relief="flat",
-              activebackground="#3b4d6b", padx=4, pady=0, cursor="hand2",
-              command=lambda: start_calibration()).pack(side="right")
     cols_on = tk.BooleanVar(value=True)  # zwei Saeulen ueber Arena beim Draften (components/arenapanels.py)
-    cols_row = tk.Frame(control, bg=COLORS["bg"])
-    cols_row.pack(fill="x", padx=6)
-    tk.Checkbutton(cols_row, text=t("Säulen über Arena"), variable=cols_on, bg=COLORS["bg"], fg=COLORS["ink"],
-                   selectcolor="#2c3a52", activebackground=COLORS["bg"], activeforeground=COLORS["ink"],
-                   font=("Segoe UI", 10), anchor="w").pack(side="left")
-    tk.Button(cols_row, text=t("Kalibrieren"), font=("Segoe UI", 8), bg="#2c3a52", fg=COLORS["ink"], relief="flat",
-              activebackground="#3b4d6b", padx=4, pady=0, cursor="hand2",
-              command=lambda: start_column_calibration()).pack(side="right")
-    cols_hint = tk.Label(control, text="", bg=COLORS["bg"], fg=COLORS["muted"], font=("Segoe UI", 8),
-                         anchor="w", justify="left", wraplength=CONTROL_SIZE[0] - 12)
-    cols_hint.pack(fill="x", padx=8)
-    columns = arenapanels.ArenaColumns(control)
+    ctrl_bar = _ControlBar(control, {"main": enabled["main"], "tricks": enabled["tricks"], "cards": cards_on,
+                                     "cols": cols_on},
+                           on_toggle=lambda: show_windows(),
+                           on_calibrate={"cards": lambda: start_calibration(),
+                                         "cols": lambda: start_column_calibration()})
+    cards_hint, cols_hint = ctrl_bar.hints["cards"], ctrl_bar.hints["cols"]
+    columns = arenapanels.ArenaColumns(control, on_picks=lambda: toggle_picks())
     cols_state = {"cal": arenapanels.load_column_calibration()}
+
+    def toggle_picks():
+        columns.picks_open = not columns.picks_open
+        columns.last = {}  # Knopf neu zeichnen
+
+    def toggle_side(name, sb):
+        snap = state["snap"] or {}
+        side = arenapanels.toggle_side(snap.get("side"), name, sb)
+        if arenapanels.send_side(url, side) is not None:
+            state["snap"] = dict(snap, side=side)  # sofort zeigen, der naechste Stand bestaetigt es
+
+    picks = arenapanels.PicksPanel(control, toggle_side, lambda: toggle_picks())
 
     def start_column_calibration():
         arena = packoverlay.arena_window(os.getpid())
@@ -933,9 +1080,6 @@ def run(url, interval_ms=1000):
         current = arenapanels.column_rects(arena["size"], cards_state["cal"], cols_state["cal"])
         cal_win = arenapanels.ColumnCalibrator(control, arena, current, done)
         cal_win.win.bind("<Destroy>", lambda e: cards_state.update(busy=False), add="+")
-    cards_hint = tk.Label(control, text="", bg=COLORS["bg"], fg=COLORS["muted"], font=("Segoe UI", 8),
-                          anchor="w", justify="left", wraplength=CONTROL_SIZE[0] - 12)
-    cards_hint.pack(fill="x", padx=8)
     cards = packoverlay.PackOverlay(control)
     cards_state = {"cal": packoverlay.load_calibration(), "arena": {"found": False}, "busy": False}
 
@@ -969,7 +1113,19 @@ def run(url, interval_ms=1000):
         if slim != state["slim"]:
             state["slim"] = slim
             render()
-        if not cards_state["busy"] and packoverlay.should_show(cards_on.get(), snap, cal, arena):
+        drawing = not cards_state["busy"] and arenapanels.should_draw(cols_on.get(), snap, arena)
+        if not drawing and columns.picks_open and not arenapanels.active(cols_on.get(), snap, arena):
+            columns.picks_open = False  # Draft vorbei oder Saeulen aus: Picks-Fenster zu
+        if drawing and columns.picks_open:
+            try:
+                picks.show(snap, arenapanels.picks_rect(arena["size"], cal, cols_state["cal"]), arena["origin"],
+                           arena["size"][0] / arenapanels.BASE_W)
+            except tk.TclError:
+                pass
+        else:
+            picks.hide()
+        if not cards_state["busy"] and not columns.picks_open and \
+                packoverlay.should_show(cards_on.get(), snap, cal, arena):
             try:
                 views = packoverlay.pack_views(snap)
                 hidden = packoverlay.hover_others(cal, len(views), arena["origin"], arena["size"],
@@ -979,22 +1135,24 @@ def run(url, interval_ms=1000):
                 pass
         else:
             cards.hide()
-        # ohne Pack auf den Karten bleibt das Seitenfenster mit der Rangliste; zwischen zwei Packs springt es nicht
-        cols = arenapanels.active(cols_on.get(), snap, arena) and (
-            slim or (state["cols"] and (snap or {}).get("status") == "waiting"))
+        # beim Draften zeigen die Saeulen alles (ohne Karten-Overlay mit der Rangliste), das Seitenfenster bleibt weg
+        cols = arenapanels.active(cols_on.get(), snap, arena)
         if cols != state["cols"]:
             state["cols"] = cols
             show_windows()
-        if not cards_state["busy"] and arenapanels.should_draw(cols_on.get(), snap, arena):
+        if drawing:
             try:
                 n = len(snap.get("pack") or [])
-                on_card = bool(cal and n and packoverlay.hover_others(cal, n, arena["origin"], arena["size"],
-                                                                      packoverlay.cursor_pos()))
+                on_card = not columns.picks_open and bool(cal and n and packoverlay.hover_others(
+                    cal, n, arena["origin"], arena["size"], packoverlay.cursor_pos()))
                 columns.show(snap, cal, arena, slim, faded=on_card, colcal=cols_state["cal"])
             except tk.TclError:
                 pass
         else:
             columns.hide()
+        ctrl_bar.paint({"main": root.state() != "withdrawn", "tricks": tricks.state() != "withdrawn",
+                        "cards": cards.win.state() != "withdrawn",
+                        "cols": any(w.state() != "withdrawn" for w in columns.wins.values())})
         control.after(100, cards_tick)  # schnell genug fuer das Hovern ueber Karten
 
     def show_windows():

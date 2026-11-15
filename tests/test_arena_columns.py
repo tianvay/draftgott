@@ -32,16 +32,18 @@ def tiles(snap):
 
 
 class DeckColumnTests(unittest.TestCase):
-    def test_counts_the_archetype(self):
+    def test_counts_all_picks_without_sideboard(self):
+        # Nutzer 15.11.2026 (Freigabe, vorher nur Archetyp-Farben: 4 Kreaturen, 2,5 P.): ein Splash zaehlt mit, was
+        # nicht ins Deck soll, liegt im Sideboard (draftinfo zaehlt schon ohne Sideboard)
         col = ap.deck_column(DRAFT)
         cr, rm = tiles(DRAFT)["creatures"], tiles(DRAFT)["removal"]
-        self.assertEqual((cr["value"], cr["target"], cr["big"]), (4, ap.CREATURE_TARGET, "4"))
-        self.assertEqual((rm["value"], rm["target"], rm["big"]), (2.5, 4.0, "2,5"))
+        self.assertEqual((cr["value"], cr["target"], cr["big"]), (5, ap.CREATURE_TARGET, "5"))
+        self.assertEqual((rm["value"], rm["target"], rm["big"]), (3.5, 4.0, "3,5"))
         self.assertIn("Boros", col["title"])
-        self.assertEqual(col["curve"], [1, 2, 3, 1, 0, 0])
-        self.assertEqual(col["colors"], [("W", 4), ("R", 3)])
-        self.assertIn(("Spacecraft", "1"), col["more"])
-        self.assertIn(("Kartenfluss", "1"), col["more"])
+        self.assertEqual(col["curve"], [1, 3, 3, 1, 1, 0])
+        self.assertEqual(col["colors"], [("W", 4), ("R", 3), ("U", 2)])
+        self.assertIn(("Kartenfluss", "2"), col["more"])
+        self.assertIn("9", tiles(DRAFT)["creatures"]["sub"])
 
     def test_without_archetype_counts_all_picks(self):
         snap = dict(DRAFT, detect={"main": None, "scores": []})
@@ -52,11 +54,11 @@ class DeckColumnTests(unittest.TestCase):
 
     def test_levels(self):
         self.assertEqual(tiles(DRAFT)["creatures"]["level"], "progress")
-        self.assertEqual(tiles(DRAFT)["removal"]["level"], "yellow")  # 2,5 P. = gelbe Schwelle des Berichts
-        rich = dict(DRAFT, draftinfo=dict(INFO, arch=dict(ARCH, creatures=15, removal_points=4.0)))
+        self.assertEqual(tiles(DRAFT)["removal"]["level"], "yellow")  # 3,5 P.: ueber der gelben Schwelle 2,5
+        rich = dict(DRAFT, draftinfo=dict(INFO, creatures=15, removal_points=4.0))
         self.assertEqual(tiles(rich)["creatures"]["level"], "green")
         self.assertEqual(tiles(rich)["removal"]["level"], "green")
-        poor = dict(DRAFT, draftinfo=dict(INFO, arch=dict(ARCH, removal_points=1.0)))
+        poor = dict(DRAFT, draftinfo=dict(INFO, removal_points=1.0))
         self.assertEqual(tiles(poor)["removal"]["level"], "progress")
 
     def test_bar_fraction_is_capped(self):
@@ -79,6 +81,7 @@ class PickColumnTests(unittest.TestCase):
         self.assertEqual(col["hints"], ["Test Bolt"])
         self.assertEqual(col["archs"], [("Boros", "3,5", True), ("Izzet", "2", False), ("Orzhov", "1,5", False)])
         self.assertEqual(col["signals"], [("W offen +2", "open"), ("R evtl. offen +1", "maybe")])
+        self.assertEqual(col["dots"], [("W", "open", "+2"), ("R", "maybe", "+1")])  # oben als Manakreise
         self.assertEqual(col["tips"], ["Tipp eins", "Tipp zwei"])
 
     def test_manual_archetype_and_switch(self):
@@ -219,6 +222,95 @@ class ColumnCalibrationTests(unittest.TestCase):
                 except ValueError as err:
                     out += "\n" + str(err)
         self.assertEqual(german_leftovers(out), [])
+
+
+PICKCARDS = [{"name": "Bear", "colors": ["W"], "mv": 2, "land": False, "creature": True, "removal": 0},
+             {"name": "Bolt", "colors": ["R"], "mv": 1, "land": False, "creature": False, "removal": 2.5},
+             {"name": "Bolt", "colors": ["R"], "mv": 1, "land": False, "creature": False, "removal": 2.5},
+             {"name": "Wisp", "colors": ["U"], "mv": 3, "land": False, "creature": True, "removal": 0},
+             {"name": "Golem", "colors": [], "mv": 4, "land": False, "creature": True, "removal": 0},
+             {"name": "Charm", "colors": ["W", "R"], "mv": 2, "land": False, "creature": False, "removal": 1},
+             {"name": "Planet", "colors": [], "mv": 0, "land": True, "creature": False, "removal": 0}]
+PICKSNAP = dict(DRAFT, pickcards=PICKCARDS, side={"Bolt": 1, "Wisp": 1})
+
+
+class PicksPanelTests(unittest.TestCase):
+    """Picks-Fenster (Nutzer 15.11.2026): alle Picks nach Farbe, ein Klick legt eine Karte ins Sideboard oder zurueck,
+    ohne Umweg ueber die Seite."""
+
+    def groups(self, snap=PICKSNAP):
+        return {label: entries for label, entries in ap.picks_groups(snap)}
+
+    def test_groups_by_color(self):
+        g = self.groups()
+        self.assertEqual(list(g), ["W", "U", "R", "Mehrfarbig", "Farblos", "Länder"])
+        self.assertEqual([(e["name"], e["sb"]) for e in g["R"]], [("Bolt", False), ("Bolt", True)])  # letzte Kopie
+        self.assertEqual([(e["name"], e["sb"]) for e in g["U"]], [("Wisp", True)])
+        self.assertEqual(g["W"][0]["mv"], 2)
+        self.assertTrue(g["W"][0]["creature"])
+
+    def test_sorted_by_mana_value(self):
+        snap = dict(PICKSNAP, pickcards=[dict(PICKCARDS[0], name="Late", mv=5), dict(PICKCARDS[0], name="Early", mv=1)])
+        self.assertEqual([e["name"] for e in self.groups(snap)["W"]], ["Early", "Late"])
+
+    def test_toggle(self):
+        self.assertEqual(ap.toggle_side({"Bolt": 1}, "Bolt", True), {})  # zurueck ins Deck
+        self.assertEqual(ap.toggle_side({"Bolt": 1}, "Bolt", False), {"Bolt": 2})
+        self.assertEqual(ap.toggle_side({}, "Bear", False), {"Bear": 1})
+        self.assertEqual(ap.toggle_side({"Bolt": 1, "Wisp": 1}, "Wisp", True), {"Bolt": 1})
+
+    def test_head(self):
+        head = ap.picks_head(PICKSNAP)
+        self.assertIn("7", head)
+        self.assertIn("Sideboard 2", head)
+
+    def test_button_text(self):
+        self.assertIn("Sideboard 2", ap.picks_button(PICKSNAP, False))
+        self.assertTrue(ap.picks_button(PICKSNAP, False).startswith("▸"))
+        self.assertTrue(ap.picks_button(PICKSNAP, True).startswith("▾"))
+        self.assertIsNone(ap.picks_button(dict(DRAFT, pickcards=[]), False))
+
+    def test_rect_between_the_columns(self):
+        r = ap.column_rects((2000, 1125), None)
+        x, y, w, h = ap.picks_rect((2000, 1125), None)
+        self.assertGreaterEqual(x, r["deck"][0] + r["deck"][2])
+        self.assertLessEqual(x + w, r["pick"][0] + r["pick"][2])
+        self.assertLess(y + h, 1030)
+
+    def test_send_side_without_server(self):
+        self.assertIsNone(ap.send_side("http://127.0.0.1:9", {"Bolt": 1}, timeout=0.2))
+
+    def test_english(self):
+        with english():
+            out = "\n".join([label for label, _ in ap.picks_groups(PICKSNAP)] + [
+                ap.picks_head(PICKSNAP), ap.picks_button(PICKSNAP, False), ap.picks_help()])
+        self.assertEqual(german_leftovers(out), [])
+        self.assertIn("Multicolor", out)
+
+
+class PickCardsSnapshotTests(unittest.TestCase):
+    def test_snapshot_lists_the_picks_with_colors_and_mana_value(self):
+        from tests.test_live_sideboard import SideboardTestCase
+
+        class Case(SideboardTestCase):
+            def runTest(self):
+                pass
+        case = Case()
+        case.setUp()
+        try:
+            snap = case.snap()
+            self.assertEqual([c["name"] for c in snap["pickcards"]], snap["picks"])
+            first = snap["pickcards"][0]
+            self.assertEqual(set(first), {"name", "colors", "mv", "land", "creature", "removal"})
+        finally:
+            case.tearDown()
+
+    def test_page_takes_over_the_sideboard_of_the_server(self):
+        import pathlib
+        page = (pathlib.Path(__file__).resolve().parent.parent / "components" / "drafthelper.py").read_text(
+            encoding="utf-8")
+        self.assertIn("function syncSide()", page)
+        self.assertIn("syncSide()", page.split("async function pollLive", 1)[1].split("function liveSide", 1)[0])
 
 
 class PoolInfoTests(unittest.TestCase):

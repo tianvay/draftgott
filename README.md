@@ -220,8 +220,11 @@ In Arena muss unter Optionen → Konto „Detailed Logs (Plugin Support)“ eing
 - **Seitenfenster:** kleines Fenster, immer im Vordergrund, mit Archetyp und Rangliste (● zugeordnet, ○ Farben
   passen). Arena im Fenster oder randlosen Vollbild spielen. `--kein-overlay` schaltet es ab, `--overlay URL` öffnet
   es einzeln, `--arena-log DATEI` nimmt ein anderes Protokoll.
-- **Steuerfenster:** am linken Bildschirmrand, schaltet per Häkchen das Seitenfenster (Draft / Bibliothek) und den
-  Trick-Warner an und ab; schließt man es, sind alle Fenster zu.
+- **Steuerfenster:** Leiste oben in der Bildschirmmitte mit je einem Schalter pro Fenster: ▤ Seitenfenster,
+  ⚡ Trick-Warner, ▦ Karten-Overlay, ◫ Säulen über Arena, ⊕ kalibriert. Hell = an und zu sehen, gedämpft = an, aber
+  gerade nicht gebraucht, dunkel = aus; ⚠ = Hinweis im Mausfenster. Fenster erscheinen nur bei Bedarf: Trick-Warner
+  im Spiel, Seitenfenster nach dem Draft und im Spiel (beim Draften übernehmen die Säulen, ohne Karten-Overlay mit der
+  Rangliste des Packs; ohne Draft und Spiel bleibt es zu). Am Griff ⠿ verschieben, ✕ schließt alle Fenster.
 - **Karten-Overlay:** legt beim Picken Rang, Bewertung, Punkte, Archetyp-Passung, Removal, Kartenfluss, Synergie und
   die eigene Siegquote direkt auf die Karten im Arena-Fenster (Rahmen lila = Top-Pick, grün = passt, grau = fremd).
   Einmal bei vollem Pack im Steuerfenster „Kalibrieren“ und fünf Kartenecken anklicken (gespeichert in
@@ -232,8 +235,11 @@ In Arena muss unter Optionen → Konto „Detailed Logs (Plugin Support)“ eing
 - **Säulen über Arena:** beim Draften zwei feste Säulen im freien Platz von Arenas Draft-Bildschirm (Schalter
   „Säulen über Arena“ im Steuerfenster). Links neben dem Pack die Zahlen deines Decks: Kreaturen (Ziel 15) und
   Removal-Punkte (Ziel 4, gelb ab 2,5 wie im Bericht) groß mit Balken, darunter Kurve, Farben, Kartenfluss und
-  Spacecraft, mit erkanntem Archetyp nur in dessen Farben. Zwischen Pack und Deckliste alles zum Pick: Warnung zur
-  Kurve, Top-Pick (nur ohne Karten-Overlay), Archetyp-Rangliste, Signale, Wechsel mit Sideboard und Tipps. Mit
+  Spacecraft, über alle Picks außer dem Sideboard (ein Splash zählt mit). Zwischen Pack und Deckliste alles zum Pick:
+  oben die Signale offener Farben als Manakreise (offen groß, umkämpft grau), Warnung zur Kurve, Top-Pick (nur ohne
+  Karten-Overlay), Archetyp-Rangliste, Wechsel mit Sideboard und Tipps. Der Knopf „Picks & Sideboard“ unten links
+  öffnet über dem Pack alle Picks nach Farbe und Manawert (● = Kreatur); ein Klick legt eine Karte ins Sideboard oder
+  zurück, wie „Aus“ auf der Seite (die Seite übernimmt den Stand). Mit
   Kalibrierung des Karten-Overlays richten sich die Säulen nach dem Kartenraster. Bei anderer Auflösung oder
   anderem Seitenverhältnis: im Steuerfenster neben „Säulen über Arena“ auf „Kalibrieren“ und je Säule die Ecke oben
   links und unten rechts anklicken (gestrichelt die jetzige Lage, Entf = Standardlage; gespeichert in
