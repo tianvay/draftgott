@@ -625,6 +625,17 @@ RULES = [
     "Marken. Scolding Administrator gibt seine Marken beim Tod weiter. Tester of the Tangential verschiebt zu "
     "Kampfbeginn seine Marken mit freiem Mana auf den stärksten Angreifer, wenn er selbst nicht angreifen kann. "
     "Matterbending Mage ist nach einem Zauber mit {X} unblockbar. Homesickness tappt zwei Kreaturen mit Stun-Marke.",
+    "SOS-Paket F (Prismari): Opus ab 5 ausgegebenem Mana – Exhibition Tidecaller lässt den Gegner 3 bzw. 10 Karten "
+    "millen, Molten-Core Maestro gibt {R} in Höhe seiner Power, Elemental Mascot exiliert die oberste Karte (bis Ende "
+    "des nächsten eigenen Zugs spielbar). Converge: Farben = verschiedene Farben der eigenen Länder, höchstens der "
+    "Manawert (Marken der Archaics, +1/+0 je Farbe des Zaubers, Marken für Kreaturzauber, X ziehen und zwei abwerfen, "
+    "gegnerische Kreatur bis Manawert X exilieren, X abwerfen lassen). Mana nur für Instants/Sorceries "
+    "(Hydro-Channeler, Tablet of Discovery, Abstract Paintmage, Resonating Lute je Land) zählt als Kostensenkung, für "
+    "Opus aber als ausgegeben. Topiary Lecturer gibt {G} in Höhe seiner Power. Kostensenkungen: Ajani's Response gegen "
+    "eine getappte Kreatur, Brush Off gegen Instants/Sorceries, Orysa ab Gesamt-Toughness 10, The Dawning Archaic je "
+    "Instant/Sorcery im Friedhof. Diary of Dreams zählt Seitenmarken und zieht am Ende des gegnerischen Zugs; "
+    "Resonating Lute zieht mit 7+ Handkarten; Potioner's Trove (2 Leben) und Sanar (Treasure) im eigenen Endsegment "
+    "nach einem Instant/Sorcery; Rapturous Moment: 3 ziehen, 2 abwerfen, das Mana bleibt für Instants.",
     "Noch nicht im Kampf: weitere Auslöser und Fähigkeiten (siehe Modell-Abdeckung). Solche Karten werden gewirkt, "
     "wirken aber nur mit den schon modellierten Effekten.",
 ]

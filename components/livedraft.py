@@ -19,7 +19,7 @@ from components import gamestate
 from components import signals
 from components import synergy
 from components import tricks
-from components.cardkinds import FLOW_ORDER, flow_kinds
+from components.cardkinds import FLOW_ORDER, flow_kinds, type_kinds
 from components.cards import card_info, land_produced
 from components.removal import removal_info
 from components.deckfile import parse_pool
@@ -50,7 +50,8 @@ def card_summary(sc, name, set_code="", number=""):
             "land": land, "found": bool(sc), "creature": "Creature" in front,
             "removal": (removal_info(sc) or {}).get("points", 0) if sc else 0,
             "flow": [k for k in FLOW_ORDER if k in set(flow_kinds(sc))] if sc else [],
-            "produces": land_produced(sc) if sc and land else [], "syn": _syn_tags(sc)}
+            "produces": land_produced(sc) if sc and land else [], "syn": _syn_tags(sc),
+            "spacecraft": "spacecraft" in type_kinds(type_line)}
 
 
 def _syn_tags(sc):
@@ -65,7 +66,7 @@ def _syn_tags(sc):
 
 def pool_info(cards, main):
     """Kennzahlen der Picks: Karten, Kreaturen, Removal (Karten und Punkte wie im Bericht), Kartenfluss (Karten und
-    je Art). "arch": dieselben Zahlen nur fuer Karten in den Farben des Archetyps main (farblose zaehlen mit)."""
+    je Art), Spacecraft. "arch": dieselben Zahlen nur fuer Karten in den Farben des Archetyps main (farblose zaehlen mit)."""
     def count(cs):
         kinds = {}
         for c in cs:
@@ -74,7 +75,8 @@ def pool_info(cards, main):
         return {"cards": len(cs), "creatures": sum(1 for c in cs if c.get("creature")),
                 "removal": sum(1 for c in cs if c.get("removal")),
                 "removal_points": round(sum(c.get("removal") or 0 for c in cs), 2),
-                "flow": sum(1 for c in cs if c.get("flow")), "flow_kinds": kinds}
+                "flow": sum(1 for c in cs if c.get("flow")), "flow_kinds": kinds,
+                "spacecraft": sum(1 for c in cs if c.get("spacecraft"))}
     out = count(cards)
     out["arch"] = count([c for c in cards if set(c.get("colors") or []) <= set(main)]) if main else None
     return out
@@ -138,8 +140,25 @@ def deck_summary(cards, ratings, source):
             "removal": sum(c.get("qty", 1) for c in spells if c.get("removal")),
             "removal_points": round(sum((c.get("removal") or 0) * c.get("qty", 1) for c in spells), 2),
             "flow": sum(c.get("qty", 1) for c in spells if c.get("flow")),
+            "spacecraft": sum(c.get("qty", 1) for c in spells if c.get("spacecraft")),
             "colors": dict(sorted(colors.items(), key=lambda kv: (-kv[1], "WUBRG".find(kv[0])))),
             "top": top}
+
+
+def side_switch(detect, all_cards, assign, ratings, archetypes, n_side):
+    """Wechsel mit dem Sideboard: Liegt mit allen Picks (Sideboard eingerechnet) ein anderer Archetyp vorn als der
+    Plan, {"colors", "name", "score" (mit Sideboard), "plan_score" (ohne), "cards" (Sideboard-Karten)}, sonst None.
+    Schreibt je Archetyp den Zuwachs durch das Sideboard als "side" in detect["scores"]."""
+    full = cardarchetypes.detect(all_cards, assign, ratings, archetypes)
+    with_side = {s["colors"]: s["score"] for s in full["scores"]}
+    for s in detect["scores"]:
+        s["side"] = round(with_side.get(s["colors"], 0) - s["score"], 2)
+    top = full["main"]
+    if not top or top == detect["main"]:
+        return None
+    plan = next((s["score"] for s in detect["scores"] if s["colors"] == top), 0)
+    name = next((a["name"] for a in archetypes or [] if a["colors"] == top), top)
+    return {"colors": top, "name": name, "score": with_side[top], "plan_score": plan, "cards": n_side}
 
 
 def default_names(log_path):
@@ -205,6 +224,10 @@ class LiveDraft:
         self.seen = set()  # Arena-Nummern aller Karten, die in Packs dieses Programmlaufs zu sehen waren
         self.fetch_set = fetch_set
         self.tricks = {}  # Setcode -> Tricks des Sets (components/tricks.py)
+        # Picks im Sideboard (Nutzer 15.11.2026): Arena schreibt das Verschieben waehrend des Drafts nicht ins
+        # Protokoll, der Drafthelper meldet es (Pick auf "Aus"). Gespeichert je Draft neben der Pool-Datei.
+        self.side_file = self.pool_file.with_name(self.pool_file.stem + "_sideboard.json")
+        self._side = self._read_side()
 
     def _card_info(self, grp):
         """Name, Set, Nummer und Farben (Scryfall, sonst ohne Farben) fuer die Gegnerdeck-Datei."""
@@ -332,7 +355,66 @@ class LiveDraft:
     def _write_pool(self):
         if self._same_cards():  # nicht mit der einfachen Pick-Liste ueberschreiben
             return
-        self._save("\n".join(["Deck"] + self._lines((g, 1) for g in self.state.picks)) + "\n")
+        self._save(self._pool_text())
+
+    def _pool_text(self):
+        """Pool-Datei aus den Picks: Abschnitt Deck, die Picks im Sideboard im Abschnitt Sideboard."""
+        active, side = self._split_picks()
+        lines = ["Deck"] + self._lines((g, 1) for g in active)
+        if side:
+            lines += ["", "Sideboard"] + self._lines((g, 1) for g in side)
+        return "\n".join(lines) + "\n"
+
+    def _draft_key(self):
+        return self.state.draft or self.state.event or ""
+
+    def _read_side(self):
+        try:
+            data = json.loads(self.side_file.read_text(encoding="utf-8"))
+            side = {str(n): int(v) for n, v in (data.get("side") or {}).items() if int(v) > 0}
+            return {"draft": str(data.get("draft") or ""), "side": side}
+        except (OSError, ValueError, TypeError, AttributeError):
+            return {"draft": "", "side": {}}
+
+    def _side_now(self):
+        """Sideboard des laufenden Drafts {Name: Anzahl}, hoechstens so viele Kopien wie gepickt."""
+        key = self._draft_key()
+        if not key or self._side["draft"] != key:
+            return {}
+        have = Counter(c["name"] for c in (self._card(g) for g in self.state.picks) if c)
+        return {n: min(v, have[n]) for n, v in self._side["side"].items() if have[n]}
+
+    def _split_picks(self):
+        """(Picks im Plan, Picks im Sideboard) als Arena-Nummern; ins Sideboard gehen die letzten Kopien eines Namens."""
+        left = dict(self._side_now())
+        active, side = [], []
+        for grp in reversed(self.state.picks):
+            card = self._card(grp)
+            if card and left.get(card["name"], 0) > 0:
+                left[card["name"]] -= 1
+                side.append(grp)
+            else:
+                active.append(grp)
+        return active[::-1], side[::-1]
+
+    def set_side(self, side):
+        """Legt fest, welche Picks im Sideboard liegen ({Name: Anzahl}; leer = alle im Deck) und schreibt die
+        Pool-Datei neu. Unbekannte Namen und Kopien ueber die gepickte Zahl fallen weg; ValueError bei falschen Werten
+        oder ohne laufenden Draft."""
+        if not isinstance(side, dict) or any(not isinstance(n, str) or isinstance(v, bool) or not isinstance(v, int)
+                                             or v < 0 for n, v in side.items()):
+            raise ValueError(t("Sideboard: erwartet Kartenname und Anzahl"))
+        with self.lock:
+            key = self._draft_key()
+            if not key:
+                raise ValueError(t("Kein laufender Draft"))
+            self._side = {"draft": key, "side": {n: v for n, v in side.items() if v > 0}}
+            self._side = {"draft": key, "side": self._side_now()}
+            tmp = self.side_file.with_name(self.side_file.name + ".tmp")
+            tmp.write_text(json.dumps(self._side, ensure_ascii=False), encoding="utf-8")
+            tmp.replace(self.side_file)
+            self._save(self._pool_text())
+            self._written = list(self.state.picks)
 
     def _deck_valid(self):
         """Gehoert das zuletzt abgegebene Deck zum laufenden Draft? Ohne mitgelesene Picks: ja, ausser es liegt schon
@@ -483,6 +565,10 @@ class LiveDraft:
                                      "nichts: {hint}", hint=t(DETAILED_LOGS))}
             pack = [c for c in (self._card(g) for g in self.state.pack) if c]
             picks = [c for c in (self._card(g) for g in self.state.picks) if c]
+            active_grps, side_grps = self._split_picks()
+            active = [c for c in (self._card(g) for g in active_grps) if c]  # Plan: ohne Sideboard
+            side_cards = [c for c in (self._card(g) for g in side_grps) if c]
+            side = self._side_now()
             unknown = [g for g in self.state.pack + self.state.picks if g not in self.names()]
             waiting, n_picks, event = self.state.waiting, len(self.state.picks), self.state.event
             deck = self._deck_info()
@@ -491,12 +577,15 @@ class LiveDraft:
             sig = signals.analyze([dict(h) for h in self.state.history], self._card, ratings, event)
         code = self._set_code(pack + picks)
         found = set_archetypes.for_set(code)
-        detect = cardarchetypes.detect([dict(c, qty=1) for c in picks], assign, ratings, found, manual)
-        draftinfo = pool_info(picks, detect["main"])
-        archmap = cardarchetypes.archetype_map(found, assign, [c["name"] for c in picks],
+        detect = cardarchetypes.detect([dict(c, qty=1) for c in active], assign, ratings, found, manual)
+        detect["switch"] = side_switch(detect, [dict(c, qty=1) for c in picks], assign, ratings, found,
+                                       len(side_cards)) if side_cards else None
+        draftinfo = pool_info(active, detect["main"])
+        archmap = cardarchetypes.archetype_map(found, assign, [c["name"] for c in active],
                                                [c["name"] for c in cardarchetypes.rank(pack, ratings, assign,
-                                                                                      detect["main"])])
-        ranked = cardarchetypes.rank(pack, ratings, assign, detect["main"], best, detect, pool=picks)
+                                                                                      detect["main"])],
+                                               side=[c["name"] for c in side_cards])
+        ranked = cardarchetypes.rank(pack, ratings, assign, detect["main"], best, detect, pool=active)
         for c in ranked:
             c["stats"] = (cardstats or {}).get(c["name"])
         names = {c["name"] for c in pack + picks}
@@ -513,7 +602,7 @@ class LiveDraft:
                 cards = [dict(c, qty=q) for c, q in ((self._card(g), q) for g, q in main_deck) if c]
                 deckinfo = deck_summary(cards, ratings, "arena")
             else:
-                deckinfo = deck_summary([dict(c, qty=1) for c in picks], ratings, "picks")
+                deckinfo = deck_summary([dict(c, qty=1) for c in active], ratings, "picks")
             deckinfo["record"] = self.tracker.record(draft_id, event) if self.tracker else None
             names |= {c["name"] for c in (self._card(g) for g, _ in main_deck or []) if c}
         return {"status": "waiting" if waiting or not pack else "pack", "version": self.version, "message": "",
@@ -522,7 +611,7 @@ class LiveDraft:
                 "picks": [c["name"] for c in picks], "unknown": unknown, "detect": detect,
                 "deck": deck, "complete": complete, "deckinfo": deckinfo, "game": game,
                 "draftinfo": draftinfo, "archmap": archmap, "enemy_saved": saved, "summary": summary,
-                "signals": sig, "curve_warning": None if complete else curve_warning(picks, detect["main"]),
+                "signals": sig, "curve_warning": None if complete else curve_warning(active, detect["main"]), "side": side,
                 "archetypes": found,
                 "cardarch": {n: v for n, v in (assign or {}).items() if n in names},
                 "cardbest": {n: v for n, v in (best or {}).items() if n in names}, "hints": hints,

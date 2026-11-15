@@ -5,8 +5,10 @@ import re
 
 def type_kinds(type_line):
     """Typ-Kennzeichen einer Karte fuer die Uebersicht links (nur die Vorderseite zaehlt). Artefakte und
-    Verzauberungen zaehlen ohne Kreaturen und Laender; ein Nicht-Standardland ist 'land' und 'nonbasic_land'."""
-    types = (type_line or "").split(" // ")[0].split("\u2014")[0]
+    Verzauberungen zaehlen ohne Kreaturen und Laender; ein Nicht-Standardland ist 'land' und 'nonbasic_land'.
+    Der Untertyp Spacecraft ergibt zusaetzlich 'spacecraft' (Nutzer 15.11.2026)."""
+    front = (type_line or "").split(" // ")[0]
+    types = front.split("\u2014")[0]
     creature, land = "Creature" in types, "Land" in types
     kinds = []
     if creature:
@@ -24,6 +26,8 @@ def type_kinds(type_line):
         kinds.append("enchantment")
     if "Planeswalker" in types:
         kinds.append("planeswalker")
+    if "Spacecraft" in front.partition("—")[2].split():
+        kinds.append("spacecraft")
     return kinds
 
 

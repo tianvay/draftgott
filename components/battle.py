@@ -915,6 +915,9 @@ def _mana(me, step):
     creature_units += [(ANY_COLOR, i) for i, c in enumerate(me.creatures)  # Loot, the Nexus
                        if c.card.nexus_mana and not c.tapped and not c.dead
                        and (c.entered < step or c.card.haste or c.has("haste")) for _k in range(powers)]
+    creature_units += [(("G",), i) for i, c in enumerate(me.creatures)  # SOS Topiary Lecturer
+                       if c.card.power_mana and not c.tapped and not c.dead
+                       and (c.entered < step or c.card.haste or c.has("haste")) for _k in range(max(0, c.power))]
     return pool, creature_units
 
 
@@ -979,6 +982,14 @@ def own_reduction(p, card):
         return card.self_discount[1] if p.under_attack else 0
     if card.self_discount[0] == "gy_left":  # SOS Wilt in the Heat
         return card.self_discount[1] if gy_left_turn(p) else 0
+    if card.self_discount[0] == "tapped_target":  # SOS Ajani's Response: eine getappte gegnerische Kreatur
+        foe = p.opponent
+        return card.self_discount[1] if foe is not None and any(c.tapped and not c.dead for c in foe.creatures) else 0
+    if card.self_discount[0] == "toughness_total":  # SOS Orysa
+        need, n = card.self_discount[1:]
+        return n if sum(c.toughness for c in p.creatures if not c.dead) >= need else 0
+    if card.self_discount[0] == "gy_instsorc":  # SOS The Dawning Archaic
+        return sum(1 for c in p.graveyard if c.is_instant_sorcery) * card.self_discount[1]
     alive = [c for c in p.creatures if not c.dead]
     return cost_reduction(card, [c.power for c in alive], [c.toughness for c in alive],
                           any(c.card.legendary for c in alive), p.noncreature_cast)
@@ -989,7 +1000,7 @@ def _discounted(card, d, p=None):
     Zusatzkosten (Silence the Echo)."""
     if card.is_land or not card.alts:
         return card
-    own = own_reduction(p, card)
+    own = own_reduction(p, card) + instsorc_reduction(p, card)
     if own:
         card = reduced(card, own)
     extra = 0 if card.behold_jace and has_jace(p) else card.extra_cost  # Countersculpt: "behold a Jace or pay {1}"
@@ -3308,7 +3319,8 @@ _CAST_FILTERS = {
 def mana_spent(p, card):
     """Fuer den Zauber ausgegebenes Mana (Opus): die billigste Bezahlung nach Kostensenkung."""
     alts = _alts(p, card) or card.alts
-    return min((g + sum(n for _c, n in cols) for g, cols in alts), default=0)
+    extra = min(instsorc_reduction(p, card), min((g for g, _cols in card.alts), default=0))  # SOS: Mana fuer
+    return min((g + sum(n for _c, n in cols) for g, cols in alts), default=0) + extra  # Instants/Sorceries zaehlt
 
 
 def cast_triggers(p, card, step, e):
@@ -3329,6 +3341,8 @@ def cast_triggers(p, card, step, e):
             if big and spent >= 5:
                 atoms = big if mode == "instead" else atoms + big
             atoms = tuple(tuple(spent if x == "spent" else card.mv if x == "mv" else x for x in a) for a in atoms)
+            atoms = tuple(("team_pump", converge_colors(p, card), 0) if a[0] == "converge_team_pump" else a
+                          for a in atoms)  # SOS Magmablood Archaic: +1/+0 je Farbe des Zaubers
             cast_effects(p, src, source, atoms, step, e)
 
 
@@ -3403,6 +3417,13 @@ def cast_effects(p, src, source, atoms, step, e, label="Auslöser beim Wirken"):
             make_tokens(p, [(atom[1], atom[2])], step, e, opp, source.name)
         elif kind == "surveil":
             surveil_cards(p, [atom[1]], e, source.name)
+        elif kind == "mill_opp" and opp is not None:  # SOS Exhibition Tidecaller: der Gegner millt
+            _mill(opp, atom[1], e, source.name)
+        elif kind == "mana_power" and src is not None:  # SOS Molten-Core Maestro: {R} in Hoehe der Power
+            p.open += [(atom[1],)] * max(0, src.power)
+        elif kind == "impulse_next" and p.library:  # SOS Elemental Mascot: bis Ende des naechsten eigenen Zugs
+            top = p.library.pop(0)
+            p.impulse.append((top, p.own_turns + 1))
         elif kind == "reanimate_creature":  # SOS Forum Necroscribe: die staerkste Kreaturenkarte
             cands = gy_candidates(p, "creature")
             if cands:
@@ -5065,6 +5086,8 @@ def try_counter(caster, spell, step, e, threat=None, effects=None):
         if n and _payable(caster, ((n, ()),)):
             continue  # weicher Counter: der Gegner wuerde zahlen
         alts = _alts(holder, c)
+        if c.counter_alts_instsorc and spell.is_instant_sorcery:  # SOS Brush Off
+            alts = c.counter_alts_instsorc
         if mode.counter_mv and spell.mv > mode.counter_mv:  # Highly Illogical: nur mit Kicker (702.33)
             if not c.kicker:
                 continue
@@ -6240,6 +6263,15 @@ def sos_end_step(dfn, act, step, e):
             c.tapped = True
         prepare_by(dfn, "tap3", e, only=trio)
     sos_fractal_end(dfn, step, e)
+    for x in [x for x in dfn.perms if isinstance(x, Card)]:
+        if x.hand7_draw and len(dfn.hand) >= 7:  # Resonating Lute
+            _draw(dfn)
+            e["events"].append(i18n.t("{me}: {c_card_name} zieht {n}", me=i18n.t(dfn.name), c_card_name=x.name, n=1))
+        if x.diary:  # Diary of Dreams: {5} minus Seitenmarken
+            cost = max(0, 5 - getattr(dfn, "sos_pages", {}).get(x.name, 0))
+            if _pay_open(dfn, ((cost, ()),)):
+                _draw(dfn)
+                e["events"].append(i18n.t("{me}: {c_card_name} zieht {n}", me=i18n.t(dfn.name), c_card_name=x.name, n=1))
     for c in [c for c in dfn.creatures if c.card.fractal_ability and tap_ready(dfn, c)]:  # Emil, Berta
         cost, kind = c.card.fractal_ability
         if kind == "snw":
@@ -6370,6 +6402,22 @@ def sos_debuff(me, opp, card, n, e):
     bury((me, opp), e)
 
 
+def converge_colors(p, card):
+    """SOS Converge: Farben des ausgegebenen Manas - so viele verschiedene Farben, wie die eigenen Laender
+    erzeugen koennen, hoechstens der Manawert (je Farbe mindestens ein Mana)."""
+    colors = {c for land in p.lands for c in land.land_colors if c in "WUBRG"}
+    return min(len(colors), card.mv)
+
+
+def instsorc_reduction(p, card):
+    """SOS: Mana nur fuer Instants und Sorceries (Hydro-Channeler, Tablet of Discovery, Abstract Paintmage, Resonating
+    Lute) wirkt wie eine Kostensenkung um so viel generisches Mana."""
+    if p is None or not card.is_instant_sorcery:
+        return 0
+    cards = [c.card for c in p.creatures if not c.dead] + [x for x in p.perms if isinstance(x, Card)]
+    return sum(len(p.lands) if c.instsorc_mana == "lands" else c.instsorc_mana for c in cards if c.instsorc_mana)
+
+
 FRACTAL = token_card("Fractal", creature=True, power=0, toughness=0, artifact=False, types=("fractal",))
 
 
@@ -6399,6 +6447,16 @@ def sos_on_cast(p, card, step, e):
     """SOS Paket E beim Wirken: Increment (ausgegebenes Mana, bei {X} mit X, groesser als Power oder Toughness: Marke;
     nicht die gerade gewirkte Kreatur selbst) und Matterbending Mage (Zauber mit {X}: unblockbar)."""
     spent = None
+    if card.is_instant_sorcery:  # Potioner's Trove, Sanar: "if you've cast an instant or sorcery spell this turn"
+        p.instsorc_step = step
+        for x in [x for x in p.perms if isinstance(x, Card) and x.diary]:  # Diary of Dreams: Seitenmarke
+            p.sos_pages = getattr(p, "sos_pages", {})
+            p.sos_pages[x.name] = p.sos_pages.get(x.name, 0) + 1
+    if card.is_creature and any(c.card.converge_creature_counters and not c.dead for c in p.creatures):
+        fresh = next((c for c in reversed(p.creatures) if c.card is card and c.entered == step), None)
+        if fresh is not None:  # Wildgrowth Archaic: je Farbe eine zusaetzliche Marke
+            n = sum(1 for c in p.creatures if c.card.converge_creature_counters and not c.dead and c is not fresh)
+            fresh.bonus += n * converge_colors(p, card)
     for c in [c for c in p.creatures if not c.dead and not (c.card is card and c.entered == step)]:
         if c.card.increment:
             if spent is None:
@@ -6407,6 +6465,33 @@ def sos_on_cast(p, card, step, e):
                 add_counters(p, c, 1, step, e)
         if c.card.x_cast_unblockable and card.x_cost:
             c.extra.add("unblockable")
+
+
+def sos_converge(me, opp, card, step, e):
+    """SOS Converge (X = Farben des ausgegebenen Manas): Marken auf sich, X ziehen und zwei abwerfen, eine gegnerische
+    Kreatur mit Manawert <= X exilieren (die gefaehrlichste), der Gegner wirft X Karten ab."""
+    x = converge_colors(me, card)
+    src = next((c for c in reversed(me.creatures) if c.card is card and not c.dead), None)
+    if card.converge_counters and src is not None:
+        src.bonus += x
+    if card.converge_draw and x > 0:  # Transcendent Archaic: "you may" - wir ziehen immer
+        _draw(me, x)
+        for _k in range(card.converge_draw):
+            gone = choose_discard(me)
+            if gone is not None:
+                me.hand.remove(gone)
+                me.graveyard.append(gone)
+                discarded(me, e)
+    if card.converge_exile and opp is not None:
+        cands = [c for c in opp.creatures if not c.dead and c.card.mv <= x and not hexproof(c) and ward_ok(me, c)]
+        if cands:
+            target = max(cands, key=danger)
+            if pay_ward(me, target, e):
+                opp.creatures.remove(target)
+                _leave(opp, target.card)
+                e["events"].append(i18n.t("{me}: {card_name} – {target_name} ins Exil", me=i18n.t(me.name), card_name=card.name, target_name=target.card.name))
+    if card.converge_discard and opp is not None and x > 0:
+        discard(opp, x, e)
 
 
 def sos_combat_start(me, opp, step, e):
@@ -6507,6 +6592,12 @@ def sos_end_own(me, opp, step, e):
     ohne Lebensgewinn das schwaechste Permanent (Token, dann ein entbehrliches Land ab 5 Laendern, sonst die
     schwaechste Kreatur)."""
     sos_fractal_end(me, step, e)
+    if getattr(me, "instsorc_step", None) == step:  # nach einem Instant/Sorcery in diesem Zug
+        for x in [x for x in me.perms if isinstance(x, Card) and x.instsorc_life]:  # Potioner's Trove
+            gain_life(me, x.instsorc_life)
+        for c in [c for c in me.creatures if c.card.instsorc_treasure and tap_ready(me, c)]:  # Sanar
+            c.tapped = True
+            artifact_tokens(me, "treasure", 1, step, e)
     alive = [c for c in me.creatures if not c.dead]
     died = me.deaths - me.deaths_mark > 0
     if gy_left_turn(me):  # SOS Primary Research
@@ -6596,6 +6687,8 @@ def sos_effects(me, opp, card, step, entry):
             pick.pump += x
             pick.extra.add("trample")
             entry["events"].append(i18n.t("{me}: {card_name} – {target_name} bekommt {kw}", me=i18n.t(me.name), card_name=card.name, target_name=pick.card.name, kw=f"+{x}/+0, trample"))
+    if card.converge_counters or card.converge_draw or card.converge_exile or card.converge_discard:
+        sos_converge(me, opp, card, step, entry)
     if card.fractal_drawn:  # Fractal Anomaly: X = in diesem Zug gezogene Karten
         fractal_token(me, me.drawn - me.drawn_mark, step, entry, card.name)
     if card.fractal_gift:  # Oracle's Gift: X Fractals, dann X Marken auf jeden eigenen Fractal
@@ -7312,6 +7405,13 @@ def card_effects(me, opp, card, step, entry, modes=None):
             me.predrawn[card] -= 1
         else:
             _draw(me, card.draws)
+    for _k in range(card.discard_after):  # SOS Rapturous Moment: nach dem Ziehen abwerfen
+        gone = choose_discard(me)
+        if gone is not None:
+            me.hand.remove(gone)
+            me.graveyard.append(gone)
+            discarded(me, entry)
+    me.open += list(card.add_mana)  # ... und Mana fuer Instants danach
     for _k in range(card.brainstorm):  # SOS Brainstorm: die schwaechsten Handkarten oben auf die Bibliothek
         back = choose_discard(me)
         if back is not None:

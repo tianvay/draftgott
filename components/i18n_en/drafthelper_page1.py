@@ -55,6 +55,10 @@ PAGE = {
         "      (colors, assignment, categories), see ",
     "Die Picks landen in der Kartenpool-Datei, die Karten unten zeigen den Pool.":
         "The picks end up in the card pool file, the cards below show the pool.",
+    "<b>Aus</b> an einem Pick legt ihn ins Sideboard: Er zählt nicht mehr zum Plan; läge ein anderer Archetyp "
+    "mit dem Sideboard vorn, steht oben „↔ Wechsel möglich“.":
+        "<b>Off</b> on a pick moves it to the sideboard: it no longer counts toward the plan; if another archetype "
+        "would lead with the sideboard, the top shows “↔ Switch possible”.",
     ">Archetypen</summary>": ">Archetypes</summary>",
     "Hervorgehoben: der Archetyp deiner Core-Farben (die zwei Farben mit den meisten Core-Karten,\n"
     "      ohne Länder; mehrfarbige zählen für jede ihrer Farben).":

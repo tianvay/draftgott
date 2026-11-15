@@ -231,6 +231,12 @@ In Arena muss unter Optionen → Konto „Detailed Logs (Plugin Support)“ eing
   Seitenfenster Pack-Liste und Top-Pick weg (Signale, Archetyp-Tracker und Tipps bleiben).
 - **Kennzahlen der Picks:** Kreaturen, Removal (Karten und Punkte wie im Bericht) und Kartenfluss der Picks, mit
   erkanntem Archetyp zusätzlich nur in dessen Farben. Pack-Karten zeigen ihre Removal-Punkte.
+- **Spacecraft:** Hat der Pool Spacecraft, zählen Typ-Übersicht (Zeile „Spacecraft (Karten)“), Bericht,
+  Live-Bereich, Seitenfenster, minimierter Kasten und Stream-Overlay sie mit („Spacecraft n“).
+- **Sideboard im Draft:** Arena protokolliert das Verschieben ins Sideboard während des Drafts nicht. Einen Pick im
+  Drafthelper auf **Aus** stellen: Er landet im Abschnitt Sideboard der Pool-Datei und zählt nicht mehr zum Plan
+  (Archetyp, Kennzahlen, Kurve, Synergie). Läge mit dem Sideboard ein anderer Archetyp vorn, erscheint
+  „↔ Wechsel möglich“. Gespeichert je Draft in `_livedraft_sideboard.json` (nicht im Git).
 - **Archetypen im Draft:** Tabelle (und im Seitenfenster kurz) je Archetyp mit den zugeordneten Picks und
   Pack-Karten. Nur die eigene Zuordnung zählt: Karten ohne Zuordnung gehören keinem Archetyp an, eine Karte kann zu
   mehreren gehören.
@@ -682,7 +688,10 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
   Instants/Sorceries und Kreaturen, Practiced Scrollsmith und Ancestral Anger. Paket E (Increment, Fractals):
   Increment, Auslöser für Marken (Pensive Professor, Berta), Fractal-Token mit X Marken (Fractal Anomaly, Oracle's
   Gift, Emil, Berta, Fractal Tender, Ambitious Augmenter), Marken weitergeben (Scolding Administrator, Tester of the
-  Tangential), Matterbending Mage und Homesickness. Weitere SOS-Pakete folgen; bis dahin wirken offene Karten nur mit den schon modellierten
+  Tangential), Matterbending Mage und Homesickness. Paket F (Prismari): Opus ab 5 Mana, Converge, Mana nur für
+  Instants/Sorceries (als Kostensenkung), Topiary Lecturer, bedingte Kostensenkungen (Ajani's Response, Brush Off,
+  Orysa, The Dawning Archaic), Diary of Dreams, Potioner's Trove, Sanar und Rapturous Moment. Weitere SOS-Pakete
+  folgen; bis dahin wirken offene Karten nur mit den schon modellierten
   Effekten.
 - Alchemy: Reality Fracture (YFRA), Paket A: Perpetual, Conjure benannter Karten, Seek (Killian), Avoided
   Stairwurm, Zimone, Dina, Asymmetry Sage, Sparks Ablaze, Paradox Kraken, Boisterous Clique, Searing Soloist

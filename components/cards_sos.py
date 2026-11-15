@@ -353,6 +353,134 @@ def _e_traits(low, spell):
     return out
 
 
+_OPUS = r"^opus — whenever you cast an instant or sorcery spell, "
+_BIG = r"\. if five or more mana was spent to cast that spell, "
+_CONV = r"^converge — "
+_INSTSORC_ONLY = r"spend this mana only to cast (?:an )?instant (?:and|or) sorcery spells?\.$"
+# Paket F: Opus, Converge, Mana fuer Instants/Sorceries, Kostensenkungen
+_F_RES = {
+    "opus_mill": re.compile(_OPUS + r"target player mills (three|\w+) cards" + _BIG + r"that player mills (ten|\w+) "
+                            r"cards instead\.$"),
+    "opus_mana": re.compile(_OPUS + rf"put a \+1/\+1 counter on {_SELF}" + _BIG + r"add an amount of \{r\} equal to "
+                            rf"{_SELF}'s power\.$"),
+    "opus_impulse": re.compile(_OPUS + rf"{_SELF} gets \+1/\+0 until end of turn" + _BIG + r"exile the top card of your "
+                               r"library\. you may play that card until the end of your next turn\.$"),
+    "converge_counters": re.compile(_CONV + rf"{_SELF} enters with a \+1/\+1 counter on it for each color of mana spent "
+                                    r"to cast it\.$"),
+    "converge_team_pump": re.compile(r"^whenever you cast an instant or sorcery spell, creatures you control get \+1/\+0 "
+                                     r"until end of turn for each color of mana spent to cast that spell\.$"),
+    "converge_creature": re.compile(r"^whenever you cast a creature spell, that creature enters with x additional "
+                                    r"\+1/\+1 counters on it, where x is the number of colors of mana spent to cast "
+                                    r"it\.$"),
+    "converge_draw": re.compile(_CONV + r"when (?:~|this creature) enters, you may draw x cards, where x is the number "
+                                r"of colors of mana spent to cast this spell\. if you draw one or more cards this way, "
+                                r"discard (two|a|one) cards?\.$"),
+    "converge_exile": re.compile(_CONV + r"when (?:~|this creature) enters, exile target nonland permanent an opponent "
+                                 r"controls with mana value less than or equal to the number of colors of mana spent "
+                                 r"to cast this creature\.$"),
+    "converge_discard": re.compile(_CONV + r"target player discards x cards, where x is the number of colors of mana "
+                                   r"spent to cast this spell\.$"),
+    "instsorc_tap": re.compile(r"^\{t\}: add ((?:\{[wubrgc]\})+)\. " + _INSTSORC_ONLY),
+    "instsorc_any": re.compile(r"^\{1\}, \{t\}: add one mana of any color\. " + _INSTSORC_ONLY),
+    "instsorc_main1": re.compile(r"^at the beginning of your first main phase, add ((?:\{[wubrgc]\})+)\. "
+                                 + _INSTSORC_ONLY),
+    "instsorc_lands": re.compile(r"^lands you control have \"\{t\}: add two mana of any one color\. "
+                                 + _INSTSORC_ONLY[:-1] + r"\"$"),
+    "hand7_draw": re.compile(r"^\{t\}: draw a card\. activate only if you have seven or more cards in your hand\.$"),
+    "power_mana": re.compile(rf"^\{{t\}}: add an amount of \{{g\}} equal to {_SELF}'s power\.$"),
+    "tapped_target": re.compile(r"^this spell costs \{(\d+)\} less to cast if it targets a tapped creature\.$"),
+    "brush": re.compile(r"^this spell costs \{1\}\{u\} less to cast if it targets an instant or sorcery spell\.$"),
+    "toughness_total": re.compile(r"^this spell costs \{(\d+)\} less to cast if creatures you control have total "
+                                  r"toughness (\d+) or greater\.$"),
+    "gy_instsorc": re.compile(r"^this spell costs \{1\} less to cast for each instant and sorcery card in your "
+                              r"graveyard\.$"),
+    "diary_page": re.compile(r"^whenever you cast an instant or sorcery spell, put a page counter on this artifact\.$"),
+    "diary_draw": re.compile(r"^\{5\}, \{t\}: draw a card\. this ability costs \{1\} less to activate for each page "
+                             r"counter on this artifact\.$"),
+    "instsorc_life": re.compile(r"^\{t\}: you gain (\d+) life\. activate only if you've cast an instant or sorcery "
+                                r"spell this turn\.$"),
+    "instsorc_treasure": re.compile(r"^\{t\}: create a treasure token\. activate only if you've cast an instant or "
+                                    r"sorcery spell this turn\.$"),
+    "loot_mana": re.compile(r"^draw (three|two) cards, then discard (two|a) cards?\. add ((?:\{[wubrgc]\})+)\.$"),
+}
+_NUMW = {"a": 1, "one": 1, "two": 2, "three": 3, "ten": 10}
+
+
+def _units(symbols):
+    return tuple((c.upper(),) for c in re.findall(r"\{([wubrgc])\}", symbols))
+
+
+def _f_traits(card, low, spell):
+    """Paket F: Opus, Converge, Mana fuer Instants/Sorceries, Kostensenkungen (eine Zeile)."""
+    res, out = _F_RES, {}
+    m = res["opus_mill"].match(low)
+    if m:
+        out["cast_trig"] = (("instsorc", (("mill_opp", _NUMW.get(m.group(1), 0)),),
+                             (("mill_opp", _NUMW.get(m.group(2), 0)),), "instead"),)
+    if res["opus_mana"].match(low):
+        out["cast_trig"] = (("instsorc", (("counter", 1),), (("mana_power", "R"),), "also"),)
+    if res["opus_impulse"].match(low):
+        out["cast_trig"] = (("instsorc", (("pump", 1, 0),), (("impulse_next",),), "also"),)
+    if res["converge_counters"].match(low):
+        out["converge_counters"] = True
+    if res["converge_team_pump"].match(low):
+        out["cast_trig"] = (("instsorc", (("converge_team_pump",),), (), ""),)
+    if res["converge_creature"].match(low):
+        out["converge_creature_counters"] = True
+    m = res["converge_draw"].match(low)
+    if m:
+        out["converge_draw"] = _NUMW[m.group(1)]
+    if res["converge_exile"].match(low):
+        out["converge_exile"] = True
+    if spell and res["converge_discard"].match(low):
+        out["converge_discard"] = True
+    m = res["instsorc_tap"].match(low)
+    if m:  # zusaetzliches Mana gegenueber einer normalen Manaquelle: je Symbol 1 (Tablet: {R}{R} neben {R} -> 1)
+        out["instsorc_mana"] = max(out.get("instsorc_mana", 0), len(_units(m.group(1))) - (1 if "Artifact" in
+                                                                                             card.get("type_line", "")
+                                                                                             else 0))
+    if res["instsorc_any"].match(low):  # Hydro-Channeler: nur Farbe statt mehr Mana, dieselbe Quelle (hoechstens 1)
+        out["instsorc_mana"] = max(out.get("instsorc_mana", 0), 1)
+    m = res["instsorc_main1"].match(low)
+    if m:
+        out["instsorc_mana"] = len(_units(m.group(1)))
+    if res["instsorc_lands"].match(low):
+        out["instsorc_mana"] = "lands"
+    if res["hand7_draw"].match(low):
+        out["hand7_draw"] = True
+    if res["power_mana"].match(low):
+        out["power_mana"] = True
+    m = res["tapped_target"].match(low)
+    if m and spell:
+        out["self_discount"] = ("tapped_target", int(m.group(1)))
+    if res["brush"].match(low) and spell:  # Kosten ohne {1}{U}
+        face = (card.get("card_faces") or [card])[0]
+        cost = face.get("mana_cost") or card.get("mana_cost") or ""
+        generic = re.search(r"\{(\d+)\}", cost)
+        rest = re.sub(r"\{\d+\}", "", cost).replace("{U}", "", 1)
+        n = max(0, (int(generic.group(1)) if generic else 0) - 1)
+        out["counter_alts_instsorc"] = cost_alternatives(("{%d}" % n if n else "") + rest)
+    m = res["toughness_total"].match(low)
+    if m:
+        out["self_discount"] = ("toughness_total", int(m.group(2)), int(m.group(1)))
+    if res["gy_instsorc"].match(low):
+        out["self_discount"] = ("gy_instsorc", 1)
+    if res["diary_page"].match(low) or res["diary_draw"].match(low):
+        out["diary"] = True
+    m = res["instsorc_life"].match(low)
+    if m:
+        out["instsorc_life"] = int(m.group(1))
+    if res["instsorc_treasure"].match(low):
+        out["instsorc_treasure"] = True
+    m = re.match(r"^when ~ enters, draw (a|one|two|three) cards?\.$", low)
+    if m and not spell:  # Kurzname einer Legende ("When Orysa enters"), den parse_draws nicht kennt
+        out["draws"] = _NUMW[m.group(1)]
+    m = res["loot_mana"].match(low)
+    if m and spell:
+        out["draws"], out["discard_after"], out["add_mana"] = _NUMW[m.group(1)], _NUMW[m.group(2)], _units(m.group(3))
+    return out
+
+
 def prepare_triggers(card):
     """Paket B: Arten der Ausloeser, die die Vorderseite prepared machen (Reihenfolge wie im Text)."""
     if card.get("layout") != "prepare":
@@ -418,6 +546,7 @@ def sos_traits(card, type_line, base):
         out.update(_life_traits(card, low, spell))
         out.update(_gy_traits(low, spell))
         out.update(_e_traits(low, spell))
+        out.update(_f_traits(card, low, spell))
         trigger = bool(re.match(r"^(when|whenever|at the beginning)\b", low))
         if not spell:
             m = res["etb_drain"].match(low)

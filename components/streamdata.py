@@ -33,9 +33,16 @@ def payload(snap):
     tricks = [list(r) for r in overlay.trick_window_rows(snap)]
     if not snap:
         return {"mode": "off", "main": rows, "tricks": tricks, "record": None, "colors": [], "curve": None,
-                "format": None, "lang": get_lang()}
+                "format": None, "lang": get_lang(), "spacecraft": 0}
     main = (snap.get("detect") or {}).get("main") or ""
     info = snap.get("deckinfo") or {}
     return {"mode": _mode(snap), "main": rows, "tricks": tricks, "record": _record(snap),
             "colors": [c for c in main if c in "WUBRG"], "curve": info.get("curve"),
-            "format": (snap.get("signals") or {}).get("format"), "lang": get_lang()}
+            "format": (snap.get("signals") or {}).get("format"), "lang": get_lang(), "spacecraft": _spacecraft(snap)}
+
+
+def _spacecraft(snap):
+    """Spacecraft im Deck (nach dem Draft) bzw. unter den Picks im Plan (wie die Zeile "Spacecraft n")."""
+    if snap.get("complete") and snap.get("deckinfo"):
+        return snap["deckinfo"].get("spacecraft") or 0
+    return overlay.draft_spacecraft(snap)

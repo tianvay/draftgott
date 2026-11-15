@@ -228,6 +228,12 @@ In Arena, “Detailed Logs (Plugin Support)” must be enabled under Options →
   leaves out the pack list and top pick (signals, archetype tracker and tips stay).
 - **Pick metrics:** creatures, removal (cards and points as in the report) and card flow of the picks, with the
   detected archetype additionally only in its colors. Pack cards show their removal points.
+- **Spacecraft:** If the pool has Spacecraft, the type overview (row "Spacecraft (cards)"), the report, the live
+  area, the side window, the minimized box and the stream overlay count them ("Spacecraft n").
+- **Sideboard during the draft:** Arena does not log moving cards to the sideboard during the draft. Set a pick to
+  **Off** in the Draft Helper: it goes to the Sideboard section of the pool file and no longer counts toward the plan
+  (archetype, stats, curve, synergy). If another archetype would lead with the sideboard, "↔ Switch possible"
+  appears. Stored per draft in `_livedraft_sideboard.json` (not in git).
 - **Archetypes in the draft:** Table (and briefly in the overlay) per archetype with the assigned picks and
   pack cards. Only your own assignment counts: cards without an assignment belong to no archetype, a card can belong to
   several.
@@ -675,7 +681,10 @@ full log. The rules of the battle model are described in detail at the end of th
   returning instants/sorceries and creatures, Practiced Scrollsmith, and Ancestral Anger. Package E (increment,
   Fractals): increment, counter triggers (Pensive Professor, Berta), Fractal tokens with X counters (Fractal Anomaly,
   Oracle's Gift, Emil, Berta, Fractal Tender, Ambitious Augmenter), passing on counters (Scolding Administrator, Tester
-  of the Tangential), Matterbending Mage, and Homesickness. More SOS packages will follow; until then, open cards only have their already modelled effects.
+  of the Tangential), Matterbending Mage, and Homesickness. Package F (Prismari): opus from 5 mana, converge, mana
+  only for instants/sorceries (as a cost reduction), Topiary Lecturer, conditional cost reductions (Ajani's Response,
+  Brush Off, Orysa, The Dawning Archaic), Diary of Dreams, Potioner's Trove, Sanar, and Rapturous Moment. More SOS
+  packages will follow; until then, open cards only have their already modelled effects.
 - Alchemy: Reality Fracture (YFRA), package A: perpetual, conjuring named cards, seek (Killian), Avoided
   Stairwurm, Zimone, Dina, Asymmetry Sage, Sparks Ablaze, Paradox Kraken, Boisterous Clique, Searing Soloist
   (cards to conjure are in `components/conjure.py`).

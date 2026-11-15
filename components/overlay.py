@@ -26,7 +26,7 @@ RATING_ABBR = {"matchwinner": "♛", "splashworthy": "★", "mustplay": "MP", "p
 MARK = {"best": "◆", "arch": "●", "color": "○", "": "  "}
 COLORS = {"bg": "#161b24", "ink": "#e8ecf3", "muted": "#8d97a8", "arch": "#1f7a45", "color": "#2c3a52",
           "head": "#ffd166", "never": "#6b7280", "best": "#6d28b8", "hint": "#8e2bd6", "hint2": "#5b1d99",
-          "warn": "#b4462a", "warnsub": "#ffb59e"}
+          "warn": "#b4462a", "warnsub": "#ffb59e", "ship": "#1d5f7a"}
 HINT_STATE = {"in": "dein Archetyp", "near": "nahe dran"}
 
 
@@ -374,6 +374,7 @@ def deck_rows(snap):
     rows.append((t("Kurve") + " " + " ".join(f"{lab}:{n}" for lab, n in zip(labels, info["curve"])), "curve"))
     rows.append((t("Kreaturen {c} · Removal {r} ({p} P.) · Kartenfluss {f}", c=info['creatures'], r=info['removal'],
                    p=_num(info['removal_points']), f=info['flow']), "arch"))
+    rows += ship_rows(info.get("spacecraft"))
     if info.get("colors"):
         rows.append((t("Farben") + " " + " · ".join(f"{c} {n}" for c, n in info["colors"].items()), "colors"))
     if info.get("top"):
@@ -398,7 +399,7 @@ def summary_rows(s):
 
 
 MINI_KEYS = (("removal", "Removal"), ("land", "Land"), ("creature", "Kreatur"), ("bomb", "Spielbare Bombe"))
-MINI_TAGS = ("arch", "color", "best", "hint", "plain", "head", "warn")  # Stile mit eigener Kasten-Form (mini_*)
+MINI_TAGS = ("arch", "color", "best", "hint", "plain", "head", "warn", "ship")  # Stile mit eigener Kasten-Form (mini_*)
 
 
 def mini_rows(snap, slim=False):
@@ -422,6 +423,7 @@ def mini_rows(snap, slim=False):
         info = snap["deckinfo"]
         return [(_record(info) or t("Dein Deck"), "head"),
                 (t("Kreaturen {c} · Removal {r}", c=info['creatures'], r=info['removal']), "arch")] + \
+            ship_rows(info.get("spacecraft")) + \
             [(f"{RATING_ABBR['matchwinner']} {name}", "hint") for name in info.get("top") or []]
     if snap.get("status") in ("pack", "waiting"):
         main = (snap.get("detect") or {}).get("main")
@@ -431,6 +433,10 @@ def mini_rows(snap, slim=False):
             rows += [(f"{MARK['best']} {h['name']}", "hint") for h in snap.get("hints") or []][:1]
         if snap.get("curve_warning"):
             rows.append(("⚠ " + t("Kurve zu hoch"), "warn"))
+        switch = (snap.get("detect") or {}).get("switch")
+        if switch:
+            rows.append((f"↔ {switch['name']}", "color"))
+        rows += draft_ship_rows(snap)
         if snap.get("pack"):
             if not slim:
                 best = snap["pack"][0]
@@ -439,6 +445,36 @@ def mini_rows(snap, slim=False):
             rows.append((t("Warte auf Pack …"), "msg"))
         return rows
     return [("draftgott Live", "msg")]
+
+
+def ship_rows(n):
+    """Zeile "Spacecraft n" (Nutzer 15.11.2026), nur wenn es welche gibt."""
+    return [(t("Spacecraft {n}", n=n), "ship")] if n else []
+
+
+def draft_spacecraft(snap):
+    """Spacecraft unter den Picks im Plan: im erkannten Archetyp dessen Farben (farblose zaehlen mit), sonst alle."""
+    info = snap.get("draftinfo") or {}
+    main = (snap.get("detect") or {}).get("main")
+    return ((info.get("arch") if main and info.get("arch") else info) or {}).get("spacecraft") or 0
+
+
+def draft_ship_rows(snap):
+    return ship_rows(draft_spacecraft(snap))
+
+
+def side_rows(snap):
+    """Picks im Sideboard (zaehlen nicht zum Plan) und ein moeglicher Wechsel zu einem Archetyp mit ihnen."""
+    rows = []
+    n = sum((snap.get("side") or {}).values())
+    if n:
+        rows.append((t("Sideboard: {n} Karte(n), zählen nicht zum Plan", n=n), "sub"))
+    sw = (snap.get("detect") or {}).get("switch")
+    if sw:
+        rows.append(("↔ " + t("Wechsel möglich: {name} ({colors}) mit Sideboard {a} P., ohne {b} P.",
+                              name=sw["name"], colors=sw["colors"], a=_num(sw["score"]), b=_num(sw["plan_score"])),
+                     "color"))
+    return rows
 
 
 def info_rows(info, main_name):
@@ -484,11 +520,15 @@ def rows_for(snap, slim=False):
     scores =[s for s in detect.get("scores") or [] if s["score"]][:3]
     if scores:
         rows.append((" · ".join(f"{s['name']} {s['score']:g}" for s in scores), "sub"))
+    rows += side_rows(snap)
     rows += signal_rows(snap.get("signals"))
     if snap.get("draftinfo") and snap["draftinfo"].get("cards"):
         rows += info_rows(snap["draftinfo"], _arch_name(snap, main) if main else None)
+    rows += draft_ship_rows(snap)
     for a in snap.get("archmap") or []:
         text = f"{a['name']}: {a['count']} Pick{'s' if a['count'] != 1 else ''}"
+        if a.get("side"):
+            text += t(" (+{n} im Sideboard)", n=a["side"])
         if a["pack"]:
             text += t(" · im Pack: ") + ", ".join(a["pack"])
         rows.append((text, "arch" if a["pack"] and a["colors"] == main else ("color" if a["pack"] else "sub")))
@@ -807,11 +847,13 @@ def _styles(text):
     text.tag_configure("group", foreground=COLORS["muted"], font=("Segoe UI", 10, "bold"), spacing1=6, spacing3=1)
     text.tag_configure("warn", background=COLORS["warn"], foreground="#ffffff", font=("Segoe UI", 11, "bold"),
                        spacing1=3, spacing3=2)
+    text.tag_configure("ship", background=COLORS["ship"], font=("Segoe UI", 11, "bold"), spacing1=2, spacing3=2)
     text.tag_configure("warnsub", foreground=COLORS["warnsub"], font=("Segoe UI", 9), lmargin1=6, lmargin2=6,
                        spacing3=1)
-    for tag in ("arch", "color", "best", "hint", "plain", "head", "msg", "warn"):  # Kasten: groessere Schrift
+    for tag in ("arch", "color", "best", "hint", "plain", "head", "msg", "warn", "ship"):  # Kasten: groesser
         text.tag_configure("mini_" + tag, font=("Segoe UI", 13, "bold"), spacing1=3, spacing3=3,
-                           background=COLORS[tag] if tag in ("arch", "color", "best", "hint", "warn") else COLORS["bg"],
+                           background=COLORS[tag] if tag in ("arch", "color", "best", "hint", "warn", "ship")
+                           else COLORS["bg"],
                            foreground=COLORS["head"] if tag == "head" else (
                                "#ffffff" if tag == "warn" else COLORS["ink"]))
 

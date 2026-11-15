@@ -48,6 +48,23 @@ PAGE = {
     '" (nahe dran)"': '" (close)"',
     '"Archetyp: "': '"Archetype: "',
     '"Archetyp: noch offen"': '"Archetype: not yet set"',
+    '"Sideboard nicht gespeichert: "': '"Sideboard not saved: "',
+    '(s.side?" (+"+String(s.side).replace(".",",")': '(s.side?" (+"+String(s.side)',
+    '"Sideboard: "+nside+(nside===1?" Karte":" Karten")': '"Sideboard: "+nside+(nside===1?" card":" cards")',
+    '"Picks auf „Aus“: zählen nicht zum Plan (Archetyp, Kennzahlen, Kurve, Synergie)"':
+        '"Picks set to “Off”: not part of the plan (archetype, stats, curve, synergy)"',
+    '"↔ Wechsel möglich: "': '"↔ Switch possible: "',
+    '+String(sw.score).replace(".",",")+': '+String(sw.score)+',
+    '+String(sw.plan_score).replace(".",",")+': '+String(sw.plan_score)+',
+    '" P. mit Sideboard, "': '" pts with sideboard, "',
+    '" P. ohne)"': '" pts without)"',
+    '"Mit deinen Sideboard-Karten läge dieser Archetyp vorn. Zum Wechseln die Karten wieder auf Core stellen oder den '
+    'Archetyp oben wählen."':
+        '"With your sideboard cards this archetype would lead. To switch, set the cards back to Core or choose the '
+        'archetype above."',
+    '"Karten mit dem Untertyp Spacecraft unter deinen Picks (ohne Sideboard)"':
+        '"Cards with the subtype Spacecraft among your picks (without sideboard)"',
+    '" im Sideboard)"': '" in sideboard)"',
     '" (eigene Wahl)"': '" (manual choice)"',
     '"Kategorie dieser Karte"': '"Category of this card"',
     '"Kategorie: –"': '"Category: –"',

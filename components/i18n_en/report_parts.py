@@ -211,6 +211,7 @@ LOCAL = {
     'Removal (Karten)': 'Removal (cards)',
     'Σ Removal-Punkte': 'Σ Removal points',
     'Prepared (Karten)': 'Prepared (cards)',
+    'Spacecraft (Karten)': 'Spacecraft (cards)',
     'Manaquellen (Karten)': 'Mana sources (cards)',
     'Friedhof-Interaktion (Karten)': 'Graveyard interaction (cards)',
     'Σ Friedhof-Punkte': 'Σ Graveyard points',

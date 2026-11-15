@@ -101,4 +101,9 @@ EN = {
     "1 braucht eigene Kreatur (Gegner hat keine)": "1 needs own creature (opponent has none)",
     "{n} brauchen eigene Kreatur (Gegner hat keine)": "{n} need own creature (opponent has none)",
     "Ausgeblendet: ": "Hidden: ",
+    "Spacecraft {n}": "Spacecraft {n}",
+    "Sideboard: {n} Karte(n), zählen nicht zum Plan": "Sideboard: {n} card(s), not part of the plan",
+    "Wechsel möglich: {name} ({colors}) mit Sideboard {a} P., ohne {b} P.":
+        "Switch possible: {name} ({colors}) with sideboard {a} pts, without {b} pts",
+    " (+{n} im Sideboard)": " (+{n} in sideboard)",
 }

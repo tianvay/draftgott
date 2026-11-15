@@ -151,10 +151,11 @@ def detect(cards, assign, ratings, archetypes, manual=None):
     return {"main": top["colors"] if sure else None, "manual": False, "scores": scores}
 
 
-def archetype_map(archetypes, assign, picks, pack):
+def archetype_map(archetypes, assign, picks, pack, side=()):
     """Je Archetyp des Sets die zugeordneten Picks ([{"name", "n"}] in Pick-Reihenfolge, "count" = Kopien) und
     Pack-Karten (Namen in Pack-Reihenfolge). Nur die eigene Zuordnung zaehlt: Karten ohne Zuordnung gehoeren keinem
-    Archetyp an, eine Karte kann mehreren angehoeren. Archetypen ohne Karten fehlen."""
+    Archetyp an, eine Karte kann mehreren angehoeren. Archetypen ohne Karten fehlen. side: Picks im Sideboard (Namen);
+    gibt es welche, steht je Archetyp "side" (zugeordnete Kopien im Sideboard) dabei."""
     out = []
     for a in archetypes or []:
         counts = {}
@@ -162,9 +163,13 @@ def archetype_map(archetypes, assign, picks, pack):
             if a["colors"] in (assign or {}).get(name, []):
                 counts[name] = counts.get(name, 0) + 1
         in_pack = [n for n in pack if a["colors"] in (assign or {}).get(n, [])]
-        if counts or in_pack:
-            out.append({"colors": a["colors"], "name": a["name"], "count": sum(counts.values()),
-                        "picks": [{"name": n, "n": k} for n, k in counts.items()], "pack": in_pack})
+        n_side = sum(1 for n in side if a["colors"] in (assign or {}).get(n, []))
+        if counts or in_pack or n_side:
+            entry = {"colors": a["colors"], "name": a["name"], "count": sum(counts.values()),
+                     "picks": [{"name": n, "n": k} for n, k in counts.items()], "pack": in_pack}
+            if side:
+                entry["side"] = n_side
+            out.append(entry)
     return out
 
 

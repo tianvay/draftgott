@@ -405,6 +405,17 @@ def _live_help():
             "Archetyp alle) warnen Live-Bereich und Seitenfenster rot, wenn der Ø Manawert über 3,3 liegt, auf 23 "
             "Zauber hochgerechnet mehr als 6 Karten 5+ Mana kosten oder weniger als 5 Karten höchstens 2 Mana. Der "
             "minimierte Kasten zeigt „⚠ Kurve zu hoch“. Dann lieber günstige Karten nehmen."),
+            t("<b>Spacecraft</b>: Hat der Pool Karten mit dem Untertyp Spacecraft, zählt sie die Typ-Übersicht der "
+            "Seite (Zeile „Spacecraft (Karten)“, auch im Bericht unter Kartentypen), der Live-Bereich, das "
+            "Seitenfenster, der minimierte Kasten und das Stream-Overlay („Spacecraft n“; im Draft in den Farben "
+            "des Archetyps, farblose zählen mit; nach dem Draft im Deck)."),
+            t("<b>Sideboard im Draft</b>: Arena schreibt nicht ins Protokoll, wenn du während des Drafts Karten ins "
+            "Sideboard legst. Stell den Pick deshalb im Drafthelper auf <b>Aus</b>: Er wandert in den Abschnitt "
+            "Sideboard der Kartenpool-Datei und zählt nicht mehr zum Plan (Archetyp, Kennzahlen, Kurve, Synergie "
+            "im Pack). Die Archetyp-Punkte zeigen „(+n SB)“, was das Sideboard einem Archetyp brächte; läge mit "
+            "dem Sideboard ein anderer Archetyp vorn, steht „↔ Wechsel möglich“ auf der Seite, im Seitenfenster "
+            "und im Kasten. Zurück ins Deck: den Pick wieder auf Core stellen. Gilt je Draft und bleibt nach "
+            "einem Neustart."),
             t("Die Fenster des Overlays passen ihre Höhe selbst an den Inhalt an, damit keine Zeilen abgeschnitten "
             "werden; die Breite bleibt, wie du sie ziehst. Reicht der Platz nach unten nicht, rutscht das Fenster "
             "nach oben.")]))

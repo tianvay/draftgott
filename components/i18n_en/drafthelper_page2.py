@@ -35,6 +35,9 @@ PAGE = {
     '"Removal (Karten)"': '"Removal (cards)"',
     '"Σ Removal-Punkte"': '"Σ Removal points"',
     '"Prepared (Karten)"': '"Prepared (cards)"',
+    '"Spacecraft (Karten)"': '"Spacecraft (cards)"',
+    '" Spacecraft: Karten mit dem Untertyp Spacecraft (zählen auch als Artefakte; nur, wenn der Pool welche hat)."':
+        '" Spacecraft: cards with the subtype Spacecraft (also counted as artifacts; only if the pool has any)."',
     '"Manaquellen (Karten)"': '"Mana sources (cards)"',
     '"Friedhof-Interaktion (Karten)"': '"Graveyard interaction (cards)"',
     '"Σ Friedhof-Punkte"': '"Σ Graveyard points"',

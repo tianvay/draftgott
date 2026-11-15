@@ -41,4 +41,6 @@ EN = {
     "In Arena unter Optionen → Konto „Detailed Logs (Plugin Support)“ einschalten und Arena neu "
     "starten.":
         "In Arena, go to Options → Account, turn on \"Detailed Logs (Plugin Support)\" and restart Arena.",
+    "Sideboard: erwartet Kartenname und Anzahl": "Sideboard: expected card name and count",
+    "Kein laufender Draft": "No draft in progress",
 }

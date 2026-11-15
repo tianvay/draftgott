@@ -375,6 +375,17 @@ def make_handler(app):
                     return
                 self._json({"ok": True})
                 return
+            if path == "/api/live/side":  # Picks im Sideboard (auf der Seite: "Aus" an einem Pick)
+                try:
+                    if not app.get("live"):
+                        raise ValueError(t("Kein Live-Draft"))
+                    body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
+                    app["live"].set_side(body.get("side") if isinstance(body, dict) else None)
+                except (ValueError, OSError) as exc:
+                    self._json({"ok": False, "error": str(exc)}, 400)
+                    return
+                self._json({"ok": True})
+                return
             if path in ("/api/cardarch", "/api/live/archetype"):
                 self._card_archetype(path)
                 return
@@ -863,7 +874,7 @@ h2 small{color:var(--muted);font-weight:400}
 #live .lhead h2{margin:0;font-size:18px}
 #live .lscores{display:flex;flex-wrap:wrap;gap:6px;font-size:12.5px}
 #live .lscores span{border:1px solid var(--line);border-radius:999px;padding:1px 9px;background:#fafbfc}
-#live .lscores span.main{border-color:#2e9e5b;background:#e3f4ea;font-weight:700}
+#live .lscores span.main{border-color:#2e9e5b;background:#e3f4ea;font-weight:700} #live .lscores span.switch{border-color:#3b6fb6;background:#e6eefa;font-weight:600}
 #ldeck{display:none;background:#1f7a45;border-color:#1f7a45;color:#fff;font-weight:700}
 #ldeck.show{display:inline-block}
 #ldeck:disabled{background:#e9edf3;border-color:var(--line);color:var(--muted);opacity:1}
@@ -979,7 +990,7 @@ h2 small{color:var(--muted);font-weight:400}
     <div class="lmsg">Reihenfolge: Kategorie (★ 4, MP 3, ohne 1,5, Fi 1, NP immer 0) + 3, wenn die Karte dem
       Archetyp zugeordnet ist (grün), + 4, wenn er ihr bester ist (lila), sonst + 1, wenn ihre Farben passen (hellgrün), + Synergie mit deinen Picks (bis 2). Archetyp: aus deinen Picks
       (Farben, Zuordnung, Kategorien), siehe <a href="/howitworks.html#hiw-live" target="_blank">So funktioniert es</a>.
-      Die Picks landen in der Kartenpool-Datei, die Karten unten zeigen den Pool.</div></section>
+      Die Picks landen in der Kartenpool-Datei, die Karten unten zeigen den Pool. <b>Aus</b> an einem Pick legt ihn ins Sideboard: Er zählt nicht mehr zum Plan; läge ein anderer Archetyp mit dem Sideboard vorn, steht oben „↔ Wechsel möglich“.</div></section>
   <details class="help" id="archetypes" open><summary id="archtitle">Archetypen</summary>
     <div class="agrid" id="archlist"></div>
     <div class="anote">Hervorgehoben: der Archetyp deiner Core-Farben (die zwei Farben mit den meisten Core-Karten,
@@ -1151,7 +1162,7 @@ function tile(t){
   const stl=statLine(cardstats[t.card.name]);if(stl)d.appendChild(stl);
   const seg=el("div","seg");
   for(const m of ["core","splash","nosplash","off"]){
-    const b=el("button",null,LABEL[m]);b.dataset.m=m;b.onclick=()=>{t.mark=m;paint(t);summary();save()};seg.appendChild(b)}
+    const b=el("button",null,LABEL[m]);b.dataset.m=m;b.onclick=()=>{t.mark=m;paint(t);summary();save();liveSide()};seg.appendChild(b)}
   d.appendChild(seg);
   const sel=el("select","catsel");sel.title="Kategorie dieser Karte (gilt für alle Kopien)";
   const o0=el("option",null,"Kategorie: –");o0.value="";sel.appendChild(o0);
@@ -1363,7 +1374,7 @@ const FLOW_KINDS=["draw","search","surveil","scry","explore","mill_self","mill_o
 // Zaehlt je Variante (Core + Splash bzw. Core + NoSplash) Kopien nach Typ. copies: {kinds, mark, empower, points};
 // basics: {core, splash, nosplash} je Standardland (zaehlen als Land und Karte, nie als Nicht-Standardland).
 function typeCounts(copies, basics){
-  const rows=["creature","instant","sorcery","land","nonbasic_land","artifact","enchantment","planeswalker"];
+  const rows=["creature","instant","sorcery","land","nonbasic_land","artifact","enchantment","planeswalker","spacecraft"];
   const out={splash:{},nosplash:{}};
   for(const g of ["splash","nosplash"]){
     const o=out[g];rows.forEach(r=>{o[r]=0});o.cards=0;o.empower=0;o.points=0;o.flow=0;o.prepared=0;
@@ -1409,7 +1420,7 @@ const TYPE_ROWS=[["cards","Karten gesamt",""],["creature","Kreaturen",""],["inst
   ["removal","Removal (Karten)","sep"],["removal_points","Σ Removal-Punkte","sub"]];
 // Zeilen der Typ-Uebersicht; Kartenfluss-Arten erscheinen nur, wenn eine Karte im Pool sie hat
 function typeRows(){
-  const rows=TYPE_ROWS.slice();
+  const rows=TYPE_ROWS.slice();if(pool.some(c=>(c.kinds||[]).includes("spacecraft")))rows.push(["spacecraft","Spacecraft (Karten)","sep"]);
   if(pool.some(c=>c.prepared))rows.push(["prepared","Prepared (Karten)","sep"]);
   if(pool.some(c=>c.ramp))rows.push(["ramp","Manaquellen (Karten)","sep"]);
   if(pool.some(c=>c.gy_points||c.gy_enabler))rows.push(["gy","Friedhof-Interaktion (Karten)","sep"],
@@ -1465,7 +1476,7 @@ function typeOverview(){
     "gewirkt werden kann (nur, wenn der Pool solche Karten hat). Flash nur bei bleibenden Karten. Removal-Punkte: "+
     "1 = entfernt jede gegnerische Kreatur (Details unter „So funktioniert es“); Ampel grün ab 4, gelb ab 2,5 "+
     "Punkten bei 40 Karten. Synergie-Punkte: Karten, die von anderen Karten im Deck profitieren, und wie gut das "+
-    "erfüllt ist (Ampel grün ab 6, gelb ab 3,5 bei 40 Karten); „Ohne Partner“: Karten, deren Bedarf kaum erfüllt ist."));
+    "erfüllt ist (Ampel grün ab 6, gelb ab 3,5 bei 40 Karten); „Ohne Partner“: Karten, deren Bedarf kaum erfüllt ist."+" Spacecraft: Karten mit dem Untertyp Spacecraft (zählen auch als Artefakte; nur, wenn der Pool welche hat)."));
 }
 // Sortierung nur der Anzeige (die Reihenfolge der Zuordnungen bleibt unberuehrt)
 const COLOR_ORDER=["W","U","B","R","G","M","C","L"];
@@ -1816,6 +1827,16 @@ async function pollLive(once){
     Object.assign(cardarch,r.cardarch||{});Object.assign(cardbest,r.cardbest||{});for(const [n,v] of Object.entries(r.ratings||{}))cats[n]=v;
     const j=JSON.stringify(r);if(j!==liveJson){liveJson=j;live=r;renderLive();state.forEach(paint)}}
   if(!once)setTimeout(()=>pollLive(false),1500)}
+// Live-Draft: "Aus" an einem Pick legt ihn ins Sideboard (Arena schreibt das nicht ins Protokoll); der Server
+// rechnet den Plan ohne diese Karten (livedraft.set_side) und schreibt sie in den Abschnitt Sideboard der Pool-Datei
+function liveSide(){
+  if(!live||live.complete||!(live.status==="pack"||live.status==="waiting"))return;
+  const picked=new Set(live.picks||[]),side={};
+  for(const t of state)if(t.mark==="off"&&picked.has(t.card.name))side[t.card.name]=(side[t.card.name]||0)+1;
+  const key=o=>JSON.stringify(Object.keys(o).sort().map(k=>[k,o[k]]));
+  if(key(side)===key(live.side||{}))return;
+  api("/api/live/side",{side}).then(r=>{if(!r||!r.ok)showErr("Sideboard nicht gespeichert: "+((r&&r.error)||"Fehler"));
+    pollLive(true)}).catch(()=>{})}
 function renderLive(){
   const box=$("live");if(!live)return;box.classList.add("show");
   const det=live.detect||{},m=det.main,sel=$("lmanual");
@@ -1827,7 +1848,16 @@ function renderLive(){
   sel.value=det.manual?m:"";sel.parentNode.style.display=(live.archetypes||[]).length?"":"none";
   const sc=$("lscores");sc.textContent="";
   if(live.archetypes)sc.appendChild(el("span",m?"main":null,m?"Archetyp: "+archName(m)+(det.manual?" (eigene Wahl)":""):"Archetyp: noch offen"));
-  (det.scores||[]).filter(s=>s.score).slice(0,4).forEach(s=>sc.appendChild(el("span",null,s.name+" "+String(s.score).replace(".",","))));
+  (det.scores||[]).filter(s=>s.score).slice(0,4).forEach(s=>sc.appendChild(el("span",null,s.name+" "+String(s.score).replace(".",",")+
+    (s.side?" (+"+String(s.side).replace(".",",")+" SB)":""))));
+  const nside=Object.values(live.side||{}).reduce((a,b)=>a+b,0);
+  if(nside&&!live.complete){const x=el("span",null,"Sideboard: "+nside+(nside===1?" Karte":" Karten"));
+    x.title="Picks auf „Aus“: zählen nicht zum Plan (Archetyp, Kennzahlen, Kurve, Synergie)";sc.appendChild(x)}
+  const sw=det.switch;
+  if(sw&&!live.complete){const x=el("span","switch","↔ Wechsel möglich: "+sw.name+" ("+String(sw.score).replace(".",",")+
+    " P. mit Sideboard, "+String(sw.plan_score).replace(".",",")+" P. ohne)");
+    x.title="Mit deinen Sideboard-Karten läge dieser Archetyp vorn. Zum Wechseln die Karten wieder auf Core stellen oder den Archetyp oben wählen.";
+    sc.appendChild(x)}
   const playing=!!(live.game&&live.game.active);  // im Spiel stoert der Knopf nur
   const db=$("ldeck"),dk=live.deck||{};db.classList.toggle("show",!!live.complete&&!playing);
   db.disabled=!dk.ready||dk.applied;
@@ -1864,9 +1894,11 @@ function renderInfo(){
   add("Picks",String(i.cards));add("Kreaturen",String(i.creatures));
   add("Removal",i.removal+" ("+num(i.removal_points)+" P.)","Removal-Punkte wie im Bericht; Ampel dort: grün ab 4 Punkten je 40 Karten");
   add("Kartenfluss",String(i.flow),kinds||"keine");
+  if(i.spacecraft)add("Spacecraft",String(i.spacecraft),"Karten mit dem Untertyp Spacecraft unter deinen Picks (ohne Sideboard)");
   const m=live.detect&&live.detect.main;
   if(i.arch&&m){add("In "+archName(m),i.arch.cards+" Karten");add("Kreaturen",String(i.arch.creatures));
-    add("Removal",i.arch.removal+" ("+num(i.arch.removal_points)+" P.)");add("Kartenfluss",String(i.arch.flow))}
+    add("Removal",i.arch.removal+" ("+num(i.arch.removal_points)+" P.)");add("Kartenfluss",String(i.arch.flow));
+    if(i.arch.spacecraft)add("Spacecraft",String(i.arch.spacecraft))}
   const w=live.curve_warning;  // livedraft.curve_warning: Kurve der Picks zu hoch
   if(w){const s=el("span","cwarn");s.append("⚠ Mana-Kurve zu hoch: Ø "+num(w.avg_mv)+" · 5+ Mana "+w.heavy+
     " · bis 2 Mana "+w.cheap+" (von "+w.cards+" Zaubern)");s.title="Tipp: jetzt günstige Karten (bis 2–3 Mana) bevorzugen";
@@ -1906,6 +1938,7 @@ function renderMap(){
     [...a.colors].forEach(c=>{const s=manaSym(c);if(s)n.appendChild(s)});n.append(" "+a.name);
     const p=el("td");p.appendChild(el("b",null,String(a.count)));
     if(a.picks.length)p.append(": "+a.picks.map(x=>(x.n>1?x.n+"× ":"")+x.name).join(", "));
+    if(a.side)p.append(" (+"+a.side+" im Sideboard)");
     const k=el("td","pk");if(a.pack.length)k.appendChild(el("b",null,a.pack.join(", ")));else k.append("–");
     tr.append(n,p,k);t.appendChild(tr)}
   box.appendChild(t);

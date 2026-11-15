@@ -368,6 +368,8 @@ EN = {
     "{me}: {c_card_name} exiliert {pick_name} aus dem Friedhof": "{me}: {c_card_name} exiles {pick_name} from the graveyard",
     "{me}: {card_name} – {target_name} +{p}/+{t}": "{me}: {card_name} – {target_name} +{p}/+{t}",
     "{me}: {card_name} – {n} Karten aus dem Friedhof": "{me}: {card_name} – {n} cards from the graveyard",
+    # SOS Paket F
+    "{me}: {card_name} – {target_name} ins Exil": "{me}: {card_name} – {target_name} into exile",
     "{me}: {a_card_name} – Gegner verliert {loss}, {life} Leben": "{me}: {a_card_name} – opponent loses {loss}, {life} life",
     # Namen der Spieler im Protokoll
     "Wir": "We",

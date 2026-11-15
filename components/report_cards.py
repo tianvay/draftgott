@@ -108,7 +108,7 @@ def type_counts(ctx):
     t = {"cards": 0, "creature": 0, "instant": 0, "sorcery": 0, "artifact": 0, "enchantment": 0, "planeswalker": 0,
          "land": 0, "nonbasic_land": 0, "empower": 0, "points": 0, "flow": 0, "prepared": 0,
          "flash": 0, "deathtouch": 0, "removal": 0, "removal_points": 0.0, "ramp": 0,
-         "gy": 0, "gy_points": 0.0, "gy_enabler": 0}
+         "gy": 0, "gy_points": 0.0, "gy_enabler": 0, "spacecraft": 0}
     t.update({f"flow_{k}": 0 for k in FLOW_ORDER})
     for name, qty, card, _shown in ctx["rows"]:
         i = info.get(name) or {}
@@ -163,6 +163,8 @@ def _rows(decks):
     """Zeilen (Label, Klasse, [Werte je Deck]); Kartenfluss-Arten nur, wenn eines der Decks sie hat."""
     counts = [type_counts(d) for d in decks]
     spec = list(TYPE_ROWS)
+    if any(c["spacecraft"] for c in counts):
+        spec.append(("spacecraft", "Spacecraft (Karten)", ""))
     if any(c["prepared"] for c in counts):
         spec.append(("prepared", "Prepared (Karten)", ""))
     if any(c["ramp"] for c in counts):

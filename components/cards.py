@@ -554,6 +554,21 @@ class Card(NamedTuple):
     fractal_ability: tuple = ()  # (Kosten, "snw"/"x"): {T}-Faehigkeit Fractal mit X Marken (Emil, Berta)
     x_cast_unblockable: bool = False  # Zauber mit {X} gewirkt: unblockbar bis Rundenende (Matterbending Mage)
     tap_targets: int = 1  # tap_spell: so viele Kreaturen (Homesickness)
+    # SOS Paket F (Opus, Converge, Mana)
+    converge_counters: bool = False  # kommt mit einer Marke je Farbe des ausgegebenen Manas
+    converge_creature_counters: bool = False  # Kreaturzauber: so viele zusaetzliche Marken wie Farben (Wildgrowth)
+    converge_draw: int = 0  # Betreten: X ziehen (X = Farben), dann N abwerfen (Transcendent Archaic)
+    converge_exile: bool = False  # Betreten: gegnerische Kreatur mit Manawert <= X exilieren (Sundering Archaic)
+    converge_discard: bool = False  # der Gegner wirft X Karten ab (Arcane Omens)
+    instsorc_mana: object = 0  # Mana nur fuer Instants/Sorceries (als Kostensenkung): N oder "lands" (je Land 1)
+    hand7_draw: bool = False  # "{T}: Draw a card. Activate only if you have seven or more cards in your hand"
+    power_mana: bool = False  # "{T}: Add an amount of {G} equal to this creature's power" (Topiary Lecturer)
+    counter_alts_instsorc: tuple = ()  # Counterspell gegen Instant/Sorcery billiger: diese Zahlungswege (Brush Off)
+    diary: bool = False  # Diary of Dreams: Seitenmarke je Instant/Sorcery, "{5}, {T}: Draw" je Marke {1} billiger
+    instsorc_life: int = 0  # "{T}: You gain N life", nur nach einem Instant/Sorcery in diesem Zug (Potioner's Trove)
+    instsorc_treasure: bool = False  # "{T}: Create a Treasure token", nur nach einem Instant/Sorcery (Sanar)
+    discard_after: int = 0  # nach dem Ziehen N abwerfen (Rapturous Moment)
+    add_mana: tuple = ()  # Mana beim Aufloesen (Mana-Einheiten), fuer Instants danach (Rapturous Moment)
 
 
 LANDCYCLE_RE = re.compile(
