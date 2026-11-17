@@ -420,6 +420,7 @@ def _already_running(url):
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     paths.tidy_up()
+    paths.move_pools()
     if "--desktop" in argv:
         print(install_desktop_entry())
         return

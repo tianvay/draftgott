@@ -11,6 +11,33 @@ from components.i18n import t
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "daten"
 REPORT_DIR = ROOT / "berichte"
+DECK_DIR = ROOT / "decks"  # eigene Decklisten (z. B. _normaldeck.txt), im Git
+POOL_FILES = ("_livedraft.txt", "_draftedcardpool.txt")  # Kartenpools des Drafthelpers, liegen in daten
+
+
+def deck_file(path):
+    """Deckliste: der Pfad wie angegeben, sonst ein blosser Name im Ordner decks; fehlt beides, bleibt der Pfad."""
+    p = pathlib.Path(path)
+    if not p.exists() and p.parent == pathlib.Path(".") and (DECK_DIR / p).is_file():
+        return DECK_DIR / p
+    return path
+
+
+def move_pools():
+    """Verschiebt die Kartenpools (POOL_FILES) aus dem Projektordner nach daten, wenn es dort noch keine gibt.
+    Gibt die Zahl der verschobenen Dateien zurueck."""
+    moved = 0
+    for name in POOL_FILES:
+        src, target = ROOT / name, DATA_DIR / name
+        if not src.is_file() or target.exists():
+            continue
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        try:
+            src.replace(target)
+        except OSError:
+            continue
+        moved += 1
+    return moved
 
 
 def _in(folder, name):

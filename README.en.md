@@ -71,17 +71,21 @@ browser interface (sorting, search, export) is not automatically tested.
 **Working rule:** New features get tests first, then the code. New tests are cross-checked by deliberately
 breaking the code (the test must then fail). Existing tests are not changed to make them pass;
 if they need to be adapted because of deliberately changed behavior, that happens only after
-explicit approval. Rules questions are settled with the rulebook `MagicCompRules.txt` (Comprehensive Rules) in the
-project folder; deviations from it are noted in the code with the rule number or in the rules of the battle report.
+explicit approval. Rules questions are settled with the rulebook `MagicCompRules_202611.txt` (Comprehensive Rules,
+version of November 6, 2026; the previous version is next to it as `MagicCompRules_202609.txt`) in the project
+folder; deviations from it are noted in the code with the rule number or in the rules of the battle report.
 
 ## Folders
 
 - `daten/`: all JSON files per user (card ratings, archetype assignment, draft statistics, Scryfall caches,
-  window positions, calibrations of card overlay and columns, sideboard of the live draft).
+  window positions, calibrations of card overlay and columns, sideboard of the live draft), plus the card pools
+  `_livedraft.txt` and `_draftedcardpool.txt` and the launcher messages (`log_<mode>.txt`).
+- `decks/`: your own deck lists for analysis on the command line (e.g. `_normaldeck.txt`); a bare file name is
+  found there: `python mtg_sim.py _normaldeck.txt`.
 - `berichte/`: all generated HTML reports (analysis, battle, set report, tournament).
 - Neither folder is in Git. A bare file name for `--html`, `--bewertung`, `--statistik` etc. goes into the
   matching folder, a path with a folder applies as given. JSON or HTML files still lying directly in the project
-  folder are moved there once by `mtg_sim.py` on start (nothing is overwritten; `components/paths.py`).
+  folder are moved there once by `mtg_sim.py` on start, as are the card pools (nothing is overwritten; `components/paths.py`).
 
 ## Code structure
 
@@ -142,7 +146,7 @@ python mtg_sim.py --drafthelper
 Reads the card pool from `_draftedcardpool.txt` (sections `Deck` and `Sideboard`, lines as in the deck files,
 with set code and number) and opens a page in the browser with all cards as images (data and images from Scryfall).
 To use a different file: `python mtg_sim.py --drafthelper mypool.txt`.
-`_draftedcardpool.txt` is not in Git (it is listed in `.gitignore`): everyone creates their own pool, e.g. with the
+`_draftedcardpool.txt` lies in the `daten` folder and is not in Git: everyone creates their own pool, e.g. with the
 deck export from MTG Arena, and `git pull` never overwrites it. If the file is missing, the Draft Helper aborts immediately with
 a message describing what the file must look like.
 
@@ -243,7 +247,7 @@ In the launcher **Start live draft** or `python mtg_sim.py --drafthelper _livedr
 reads along with the MTG Arena log (`Player.log`, like 17Lands or Untapped; the game itself is not touched).
 In Arena, “Detailed Logs (Plugin Support)” must be enabled under Options → Account.
 
-- **Picks:** go straight into the card pool file (`_livedraft.txt`, not in Git); the page reloads and shows
+- **Picks:** go straight into the card pool file (`daten/_livedraft.txt`, not in Git); the page reloads and shows
   the pool. A new draft starts the file from scratch; a running draft is read back at startup. Card names
   come from Arena's card database in the installation folder, otherwise via the `arena_id` from Scryfall.
 - **Current pack:** at the top of the page as a ranking. Points = category (★ 4, MustPlay 3, none 1.5, Filler 1) + 3
@@ -746,7 +750,7 @@ full log. The rules of the battle model are described in detail at the end of th
   for spells and abilities, mass −X/−X, attack pump); also warp speed. Chekov and Branching Timeline are deliberately not modeled.
 - Beam me up (TRK): sorceries from the graveyard like flashback, plus one of your own creatures returns to hand
   (most valuable enter-the-battlefield effect, otherwise the cheapest, never against a lethal counterattack); Scotty.
-- Sagas (rule 714, TRK): chapters after each of your own draw steps, then sacrificed; investigate with a Clue token.
+- Sagas (rule 715, TRK): chapters after each of your own draw steps, then sacrificed; investigate with a Clue token.
 - Lands and tokens (TRK): planet lands with life, lands with a mode when entering untapped, New Planet tokens
   (tapped, landfall), anomalies and Unexplored Territory (sacrifice at the end of the opponent's turn with leftover mana),
   land search onto the battlefield with Planet cards, Food, anthems (also only for artifact creatures), “can't block”, “can't

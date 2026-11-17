@@ -254,8 +254,8 @@ EN = {
         'In Arena, “Detailed Logs (Plugin Support)” must be switched on under Options → Account (then restart Arena).',
     'Die Kartennamen kommen aus Arenas eigener Kartendatenbank (im Installationsordner), sonst aus Scryfall.':
         "Card names come from Arena's own card database (in the install folder), otherwise from Scryfall.",
-    'Jeder Pick landet sofort in der Kartenpool-Datei (<code>_livedraft.txt</code>, Format wie der Deck-Export von Arena); die Seite lädt danach neu und zeigt den Pool wie gewohnt. Ein neuer Draft beginnt die Datei von vorn. Auch ein schon laufender Draft wird beim Start nachgelesen.':
-        "Each pick goes straight into the card pool file (<code>_livedraft.txt</code>, same format as Arena's deck export); the page then reloads and shows the pool as usual. A new draft starts the file from scratch. A draft that is already running is also read back at startup.",
+    'Jeder Pick landet sofort in der Kartenpool-Datei (<code>daten/_livedraft.txt</code>, Format wie der Deck-Export von Arena); die Seite lädt danach neu und zeigt den Pool wie gewohnt. Ein neuer Draft beginnt die Datei von vorn. Auch ein schon laufender Draft wird beim Start nachgelesen.':
+        "Each pick goes straight into the card pool file (<code>daten/_livedraft.txt</code>, same format as Arena's deck export); the page then reloads and shows the pool as usual. A new draft starts the file from scratch. A draft that is already running is also read back at startup.",
     'Aktuelles Pack':
         'Current pack',
     'Oben auf der Seite steht das Pack, aus dem du gerade wählst, als Rangliste. Punkte je Karte: Kategorie (♛ Matchwinner 5, ★ Splashworthy 4, MustPlay 3, ohne Kategorie 1,5, Filler 1) + 3, wenn die Karte dem Archetyp zugeordnet ist (grün hervorgehoben, „passt zu …“), + 4, wenn er ihr bester Archetyp ist (lila, pulsierender Rand, „am besten in …“), sonst + 1, wenn ihre Farben in den Farben des Archetyps liegen (hellgrün). NeverPlay hat immer 0 Punkte.':

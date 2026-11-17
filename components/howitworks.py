@@ -374,7 +374,7 @@ def _live_help():
             t("In Arena muss unter Optionen → Konto „Detailed Logs (Plugin Support)“ eingeschaltet sein (danach Arena "
             "neu starten)."),
             t("Die Kartennamen kommen aus Arenas eigener Kartendatenbank (im Installationsordner), sonst aus Scryfall."),
-            t("Jeder Pick landet sofort in der Kartenpool-Datei (<code>_livedraft.txt</code>, Format wie der "
+            t("Jeder Pick landet sofort in der Kartenpool-Datei (<code>daten/_livedraft.txt</code>, Format wie der "
             "Deck-Export von Arena); die Seite lädt danach neu und zeigt den Pool wie gewohnt. Ein neuer Draft "
             "beginnt die Datei von vorn. Auch ein schon laufender Draft wird beim Start nachgelesen.")]))
         + _panel(t("Aktuelles Pack"), _ul([

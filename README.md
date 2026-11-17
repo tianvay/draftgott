@@ -72,17 +72,21 @@ Oberfläche im Browser (Sortierung, Suche, Export) ist nicht automatisch geteste
 **Arbeitsregel:** Neue Funktionen bekommen zuerst Tests, dann den Code. Neue Tests werden gegengeprüft, indem der
 Code absichtlich kaputt gemacht wird (der Test muss dann fehlschlagen). Bestehende Tests werden nicht verändert,
 damit sie grün werden; sollen sie wegen bewusst geändertem Verhalten angepasst werden, passiert das nur nach
-ausdrücklicher Freigabe. Regelfragen werden mit dem Regelwerk `MagicCompRules.txt` (Comprehensive Rules) im
-Projektordner geklärt; Abweichungen davon stehen mit Regelnummer im Code bzw. in den Regeln des Kampfberichts.
+ausdrücklicher Freigabe. Regelfragen werden mit dem Regelwerk `MagicCompRules_202611.txt` (Comprehensive Rules,
+Fassung vom 6. November 2026; die vorige Fassung liegt als `MagicCompRules_202609.txt` daneben) im Projektordner
+geklärt; Abweichungen davon stehen mit Regelnummer im Code bzw. in den Regeln des Kampfberichts.
 
 ## Ordner
 
 - `daten/`: alle JSON-Dateien je Nutzer (Kartenbewertung, Archetyp-Zuordnung, Draft-Statistik, Scryfall-Caches,
-  Fensterlagen, Kalibrierungen von Karten-Overlay und Säulen, Sideboard des Live-Drafts).
+  Fensterlagen, Kalibrierungen von Karten-Overlay und Säulen, Sideboard des Live-Drafts), dazu die Kartenpools
+  `_livedraft.txt` und `_draftedcardpool.txt` und die Meldungen des Launchers (`log_<modus>.txt`).
+- `decks/`: eigene Decklisten für die Analyse per Kommandozeile (z. B. `_normaldeck.txt`); ein bloßer Dateiname
+  wird dort gefunden: `python mtg_sim.py _normaldeck.txt`.
 - `berichte/`: alle erzeugten HTML-Berichte (Analyse, Kampf, Setauswertung, Turnier).
 - Beide Ordner sind nicht im Git. Ein bloßer Dateiname bei `--html`, `--bewertung`, `--statistik` usw. landet im
   passenden Ordner, ein Pfad mit Ordner gilt wie angegeben. Liegen noch JSON- oder HTML-Dateien direkt im
-  Projektordner, verschiebt `mtg_sim.py` sie beim Start einmalig dorthin (nichts wird überschrieben;
+  Projektordner, verschiebt `mtg_sim.py` sie beim Start einmalig dorthin, ebenso die Kartenpools (nichts wird überschrieben;
   `components/paths.py`).
 
 ## Aufbau des Codes
@@ -145,7 +149,7 @@ python mtg_sim.py --drafthelper
 Liest den Kartenpool aus `_draftedcardpool.txt` (Abschnitte `Deck` und `Sideboard`, Zeilen wie in den Deckdateien,
 mit Setcode und Nummer) und öffnet im Browser eine Seite mit allen Karten als Bild (Daten und Bilder von Scryfall).
 Eine andere Datei geht so: `python mtg_sim.py --drafthelper meinpool.txt`.
-`_draftedcardpool.txt` liegt nicht im Git (steht in `.gitignore`): Jeder legt seinen eigenen Pool an, z. B. mit dem
+`_draftedcardpool.txt` liegt im Ordner `daten` und nicht im Git: Jeder legt seinen eigenen Pool an, z. B. mit dem
 Deck-Export aus MTG Arena, und `git pull` überschreibt ihn nie. Fehlt die Datei, bricht der Drafthelper sofort mit
 einer Meldung ab, die beschreibt, wie die Datei aussehen muss.
 
@@ -248,7 +252,7 @@ Im Launcher **Live-Draft starten** oder `python mtg_sim.py --drafthelper _livedr
 liest das Protokoll von MTG Arena mit (`Player.log`, wie 17Lands oder Untapped; das Spiel selbst wird nicht berührt).
 In Arena muss unter Optionen → Konto „Detailed Logs (Plugin Support)“ eingeschaltet sein.
 
-- **Picks:** landen sofort in der Kartenpool-Datei (`_livedraft.txt`, nicht im Git); die Seite lädt neu und zeigt
+- **Picks:** landen sofort in der Kartenpool-Datei (`daten/_livedraft.txt`, nicht im Git); die Seite lädt neu und zeigt
   den Pool. Ein neuer Draft beginnt die Datei von vorn, ein laufender Draft wird beim Start nachgelesen. Kartennamen
   aus Arenas Kartendatenbank im Installationsordner, sonst über die `arena_id` von Scryfall.
 - **Aktuelles Pack:** oben auf der Seite als Rangliste. Punkte = Kategorie (★ 4, MustPlay 3, ohne 1,5, Filler 1) + 3,
@@ -772,7 +776,7 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
   Timeline bewusst nicht.
 - Beam me up (TRK): Sorceries aus dem Friedhof wie Flashback, dazu geht eine eigene Kreatur zurück auf die Hand
   (wertvollster Betreten-Effekt, sonst die billigste, nie gegen einen tödlichen Gegenangriff); Scotty.
-- Sagas (714, TRK): Kapitel nach jedem eigenen Draw Step, danach geopfert; Investigate mit Clue-Token.
+- Sagas (715, TRK): Kapitel nach jedem eigenen Draw Step, danach geopfert; Investigate mit Clue-Token.
 - Länder und Token (TRK): Planeten-Länder mit Leben, Länder mit Modus beim ungetappten Betreten, New-Planet-Token
   (getappt, Landfall), Anomalien und Unexplored Territory (Opfern am Ende des gegnerischen Zugs mit übrigem Mana),
   Landsuche aufs Feld mit Planet-Karten, Food, Anthems (auch nur für Artefaktkreaturen), „can't block“, „can't

@@ -59,27 +59,33 @@ SCRIPT_DIR = pathlib.Path(__file__).resolve().parent.parent
 
 
 def pool_path(path):
-    """Pfad der Kartenpool-Datei (auch relativ zum Projektordner); fehlt sie, Abbruch mit Erklaerung. Die Datei
-    gehoert jedem Nutzer selbst und liegt nicht im Git."""
+    """Pfad der Kartenpool-Datei: ein blosser Name zuerst im Ordner daten (Nutzer 17.11.2026), sonst wie angegeben
+    oder relativ zum Projektordner; fehlt sie, Abbruch mit Erklaerung. Die Datei gehoert jedem Nutzer selbst und liegt
+    nicht im Git."""
     p = pathlib.Path(path)
+    if p.parent == pathlib.Path(".") and (paths.DATA_DIR / p).is_file():
+        return paths.DATA_DIR / p
     if not p.exists() and (SCRIPT_DIR / p).exists():
         p = SCRIPT_DIR / p
     if not p.exists():
         sys.exit(t("Kartenpool-Datei nicht gefunden: {path}\n"
-                   "Der Drafthelper braucht deinen gedrafteten Kartenpool als Textdatei im Projektordner "
+                   "Der Drafthelper braucht deinen gedrafteten Kartenpool als Textdatei im Ordner daten "
                    "({dir}).\n"
                    "Lege die Datei {name} an, z. B. mit dem Deck-Export aus MTG Arena: "
                    "ein Abschnitt 'Deck' und ein Abschnitt 'Sideboard', darunter Zeilen wie\n"
                    "  1 Curse-Marred Demon (FRA) 79\n"
                    "Die Datei liegt nicht im Git, jeder hat seine eigene.",
-                   path=path, dir=SCRIPT_DIR, name=pathlib.Path(path).name))
+                   path=path, dir=paths.DATA_DIR, name=pathlib.Path(path).name))
     return p
 
 
 def live_pool_file(path):
-    """Live-Draft: legt die Pool-Datei (relativ zum Projektordner) leer an, falls sie fehlt. Gibt den Pfad zurueck."""
+    """Live-Draft: legt die Pool-Datei leer an, falls sie fehlt (ein blosser Name im Ordner daten). Gibt den Pfad
+    zurueck."""
     p = pathlib.Path(path)
-    if not p.is_absolute() and not p.exists():
+    if p.parent == pathlib.Path("."):
+        p = paths.data_file(p.name)
+    elif not p.is_absolute() and not p.exists():
         p = SCRIPT_DIR / p
     if not p.exists():
         p.write_text("Deck\n", encoding="utf-8")

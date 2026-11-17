@@ -1,14 +1,14 @@
 """Englische Texte fuer den Python-Teil von components/drafthelper.py (Konsole, Fehlermeldungen der Seite)."""
 EN = {
     "Kartenpool-Datei nicht gefunden: {path}\n"
-    "Der Drafthelper braucht deinen gedrafteten Kartenpool als Textdatei im Projektordner "
+    "Der Drafthelper braucht deinen gedrafteten Kartenpool als Textdatei im Ordner daten "
     "({dir}).\n"
     "Lege die Datei {name} an, z. B. mit dem Deck-Export aus MTG Arena: "
     "ein Abschnitt 'Deck' und ein Abschnitt 'Sideboard', darunter Zeilen wie\n"
     "  1 Curse-Marred Demon (FRA) 79\n"
     "Die Datei liegt nicht im Git, jeder hat seine eigene.":
         "Card pool file not found: {path}\n"
-        "The Draft Helper needs your drafted card pool as a text file in the project folder "
+        "The Draft Helper needs your drafted card pool as a text file in the folder daten "
         "({dir}).\n"
         "Create the file {name}, e.g. with the deck export from MTG Arena: "
         "a 'Deck' section and a 'Sideboard' section, followed by lines like\n"

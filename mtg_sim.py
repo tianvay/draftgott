@@ -119,11 +119,13 @@ def entries_from_files(args):
     core, core_label = {}, None
     if args.core:
         core_path, core_label = split_label(args.core)
+        core_path = paths.deck_file(core_path)
         with open(core_path, encoding="utf-8") as f:
             core = parse_deck(f.read())
         print(t("Kern: {n} Karten aus {path}", n=sum(core.values()), path=core_path), file=sys.stderr)
     for spec in list(args.deckfile) + (args.deckalt or []):
         path, label = split_label(spec)
+        path = paths.deck_file(path)  # ein blosser Name auch im Ordner decks
         with open(path, encoding="utf-8") as f:
             text = f.read()
         name = parse_deck_name(text, pathlib.Path(path).stem)
@@ -290,9 +292,10 @@ def run(args):
                 pass
 
 
-def main():
+def main(argv=None):
     paths.tidy_up()  # JSON-Dateien nach daten, HTML-Berichte nach berichte (einmalig)
-    run(parse_args())
+    paths.move_pools()  # Kartenpools des Drafthelpers nach daten (einmalig)
+    run(parse_args(argv))
 
 
 if __name__ == "__main__":
