@@ -1,3 +1,7 @@
+# Eigene Daten (JSON) und erzeugte Berichte (HTML) je Nutzer
+daten/
+berichte/
+
 # Generierte Berichte
 *.html
 

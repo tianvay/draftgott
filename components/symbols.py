@@ -15,9 +15,10 @@ import time
 import urllib.error
 import urllib.request
 
+from components import paths
 from components.i18n import t
 
-SYMBOL_FILE = pathlib.Path(__file__).resolve().parent.parent / "scryfall_symbols.json"
+SYMBOL_FILE = paths.data_file("scryfall_symbols.json")
 SYMBOLOGY_URL = "https://api.scryfall.com/symbology"
 HEADERS = {"User-Agent": "mtg-sim/4.0", "Accept": "*/*"}
 PAUSE = 0.06  # Scryfall bittet um kurze Pausen zwischen Anfragen

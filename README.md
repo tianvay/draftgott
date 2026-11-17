@@ -42,6 +42,16 @@ damit sie grün werden; sollen sie wegen bewusst geändertem Verhalten angepasst
 ausdrücklicher Freigabe. Regelfragen werden mit dem Regelwerk `MagicCompRules.txt` (Comprehensive Rules) im
 Projektordner geklärt; Abweichungen davon stehen mit Regelnummer im Code bzw. in den Regeln des Kampfberichts.
 
+## Ordner
+
+- `daten/`: alle JSON-Dateien je Nutzer (Kartenbewertung, Archetyp-Zuordnung, Draft-Statistik, Scryfall-Caches,
+  Fensterlagen, Kalibrierungen von Karten-Overlay und Säulen, Sideboard des Live-Drafts).
+- `berichte/`: alle erzeugten HTML-Berichte (Analyse, Kampf, Setauswertung, Turnier).
+- Beide Ordner sind nicht im Git. Ein bloßer Dateiname bei `--html`, `--bewertung`, `--statistik` usw. landet im
+  passenden Ordner, ein Pfad mit Ordner gilt wie angegeben. Liegen noch JSON- oder HTML-Dateien direkt im
+  Projektordner, verschiebt `mtg_sim.py` sie beim Start einmalig dorthin (nichts wird überschrieben;
+  `components/paths.py`).
+
 ## Aufbau des Codes
 
 | Datei | Aufgabe |
@@ -112,7 +122,7 @@ einer Meldung ab, die beschreibt, wie die Datei aussehen muss.
   spielen, aber nicht zwingend; im Draft zwischen MustPlay und Filler, keine starke Karte), **Filler** (füllt auf, wenn wir die Farbe spielen und nicht
   splashen) und **NeverPlay** (zu schlecht oder zu situativ). Die Kategorie ist unabhängig von
   Core/Splash/NoSplash/Aus und beeinflusst die Simulation nicht. Die Kopfleiste zählt je Kategorie und hat einen
-  Filter „Karten zeigen“. Die Kategorien stehen je Kartenname in `kartenbewertung.json` im Projektordner (nicht im
+  Filter „Karten zeigen“. Die Kategorien stehen je Kartenname in `kartenbewertung.json` im Ordner `daten` (nicht im
   Git, jeder Nutzer bewertet selbst) und gelten für jeden Kartenpool: ändert sich der Pool, sind bewertete Karten
   schon eingestuft. Gespeichert wird bei jedem Klick; die Datei ist alphabetisch sortiert und von Hand
   bearbeitbar. Mit `--bewertung DATEI` gilt eine andere Datei (z. B. je Nutzer). Kategorien aus älteren

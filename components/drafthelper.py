@@ -21,6 +21,7 @@ import urllib.error
 import webbrowser
 from collections import Counter
 
+from components import paths
 from components.cards import card_info, land_produced
 from components.cardkinds import (FLOW_ORDER, empower_points, flow_kinds,  # noqa: F401 (auch von Tests benutzt)
                                   type_kinds)
@@ -591,21 +592,21 @@ def make_handler(app):
 
 
 def ratings_path(args):
-    """Bewertungsdatei: wie angegeben, ein relativer Name liegt im Projektordner."""
+    """Bewertungsdatei: wie angegeben, ein blosser Name liegt im Ordner daten."""
     path = pathlib.Path(getattr(args, "bewertung", None) or "kartenbewertung.json")
-    return path if path.is_absolute() else SCRIPT_DIR / path
+    return paths.data_file(path)
 
 
 def stats_path(args):
-    """Datei der Draft-Statistik: wie angegeben, ein relativer Name liegt im Projektordner."""
+    """Datei der Draft-Statistik: wie angegeben, ein blosser Name liegt im Ordner daten."""
     path = pathlib.Path(getattr(args, "statistik", None) or "draftstatistik.json")
-    return path if path.is_absolute() else SCRIPT_DIR / path
+    return paths.data_file(path)
 
 
 def archetypes_path(args):
-    """Datei der Archetyp-Zuordnung: wie angegeben, ein relativer Name liegt im Projektordner."""
+    """Datei der Archetyp-Zuordnung: wie angegeben, ein blosser Name liegt im Ordner daten."""
     path = pathlib.Path(getattr(args, "archetypen", None) or "kartenarchetypen.json")
-    return path if path.is_absolute() else SCRIPT_DIR / path
+    return paths.data_file(path)
 
 
 def start_overlay(url):

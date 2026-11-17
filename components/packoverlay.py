@@ -26,10 +26,11 @@ grosse Kartenansicht mal rechts, mal links oeffnet (hover_others, Mausposition a
 import json
 import pathlib
 
+from components import paths
 from components.i18n import dec, t
 
 SCRIPT_DIR = pathlib.Path(__file__).resolve().parent.parent
-CAL_FILE = SCRIPT_DIR / "kartenoverlay.json"
+CAL_FILE = paths.data_file("kartenoverlay.json")
 CAL_KEYS = ("x", "y", "w", "h", "dx", "dy", "cols", "size")
 RATING_LABEL = {"matchwinner": "♛ MW", "splashworthy": "★ SW", "mustplay": "MP", "playable": "Pl", "filler": "Fi", "neverplay": "NP"}
 ASPECT_TOLERANCE = 0.03

@@ -533,7 +533,7 @@ def _live_help():
             t('Das <b>Karten-Overlay</b> legt beim Picken die Zahlen direkt auf die Karten im Arena-Fenster: oben links der Rang im Pack, oben rechts die Bewertung, unten Punkte, Farben des besten Archetyps, Passung (✓ dein Archetyp, ≈ nahe dran, ○ Farben passen, – fremde Farben), Removal, Kartenfluss, Synergie, Kreatur und deine Siegquote mit der Karte; Rahmen lila = Top-Pick, grün = passt, grau = fremd. Einmal bei vollem Pack „Kalibrieren“ im Steuerfenster und fünf Ecken anklicken (Karte 1 oben links und unten rechts, Karte 2 oben links, letzte Karte der ersten Reihe oben links, erste Karte der zweiten Reihe oben links); gespeichert in <code>kartenoverlay.json</code> (nicht im Git). Die Zahlen liegen in der Reihenfolge wie in Arena (Seltenheit, Farbe, dann Sammlernummer); jede Karte zeigt unten klein ihren Namen zur Kontrolle. Klicks gehen durch das Overlay zu Arena; zeigt die Maus auf eine Karte, verschwinden die Zahlen auf allen anderen Karten, damit die große Kartenansicht von Arena frei bleibt. Solange das Overlay an und kalibriert ist, lässt das Seitenfenster Pack-Liste und Top-Pick weg; Archetyp, Signale, Archetyp-Tracker und Tipps bleiben.')]))
         + _panel(t("Draft-Statistik"), _ul([
             t("Solange der Live-Draft läuft, sammelt er je Draft die Picks, das abgegebene Deck und die Ergebnisse der "
-            "Matches (je Game und fürs Match) in <code>draftstatistik.json</code> im Projektordner (nicht im Git, "
+            "Matches (je Game und fürs Match) in <code>draftstatistik.json</code> im Ordner <code>daten</code> (nicht im Git, "
             "anderer Name mit <code>--statistik DATEI</code>). Gezählt werden nur Draft- und Sealed-Events."),
             t("Matches und Decks gehören zum letzten Draft desselben Events. Wurde der Draft nicht mitgelesen, zählt "
             "das Event trotzdem, nur ohne Picks. Beim Start wird auch die vorherige Protokolldatei "
@@ -608,7 +608,7 @@ def _drafthelper_help():
             "darüber: Name). Ein Klick ordnet die Karte dem Archetyp zu oder nimmt die Zuordnung zurück; eine Karte "
             "kann zu mehreren Archetypen passen."),
             t("Die Zuordnung gilt je Kartenname für jeden Pool und den Live-Draft und steht in "
-            "<code>kartenarchetypen.json</code> im Projektordner (nicht im Git, anderer Name mit "
+            "<code>kartenarchetypen.json</code> im Ordner <code>daten</code> (nicht im Git, anderer Name mit "
             "<code>--archetypen DATEI</code>)."),
             t("<b>Set-Karten bewerten</b> (oben) lädt alle Karten eines Sets von Scryfall: Kategorie und Archetypen "
             "lassen sich so schon vor dem Draft festlegen. Filter: ohne Kategorie, ohne Archetyp, je Farbe."),

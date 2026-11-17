@@ -58,7 +58,8 @@ class FileTests(unittest.TestCase):
 
     def test_file_next_to_the_other_settings(self):
         self.assertEqual(overlay.POS_FILE.name, "fensterlage.json")
-        self.assertEqual(overlay.POS_FILE.parent, pathlib.Path(overlay.__file__).resolve().parent.parent)
+        # Nutzer 17.11.2026: alle JSON-Dateien im Ordner daten (vorher direkt im Projektordner)
+        self.assertEqual(overlay.POS_FILE.parent, pathlib.Path(overlay.__file__).resolve().parent.parent / "daten")
 
 
 if __name__ == "__main__":

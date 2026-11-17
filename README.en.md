@@ -42,6 +42,15 @@ if they need to be adapted because of deliberately changed behavior, that happen
 explicit approval. Rules questions are settled with the rulebook `MagicCompRules.txt` (Comprehensive Rules) in the
 project folder; deviations from it are noted in the code with the rule number or in the rules of the battle report.
 
+## Folders
+
+- `daten/`: all JSON files per user (card ratings, archetype assignment, draft statistics, Scryfall caches,
+  window positions, calibrations of card overlay and columns, sideboard of the live draft).
+- `berichte/`: all generated HTML reports (analysis, battle, set report, tournament).
+- Neither folder is in Git. A bare file name for `--html`, `--bewertung`, `--statistik` etc. goes into the
+  matching folder, a path with a folder applies as given. JSON or HTML files still lying directly in the project
+  folder are moved there once by `mtg_sim.py` on start (nothing is overwritten; `components/paths.py`).
+
 ## Code structure
 
 | File | Purpose |
@@ -111,7 +120,7 @@ a message describing what the file must look like.
   but not a must; between MustPlay and Filler in the draft, not a strong card), **Filler** (fills up if we play the color and do not
   splash) and **NeverPlay** (too bad or too situational). The category is independent of
   Core/Splash/NoSplash/Off and does not affect the simulation. The header bar counts per category and has a
-  “Show cards” filter. The categories are stored per card name in `kartenbewertung.json` in the project folder (not in
+  “Show cards” filter. The categories are stored per card name in `kartenbewertung.json` in the folder `daten` (not in
   Git, each user rates for themselves) and apply to every card pool: if the pool changes, rated cards
   are already classified. It is saved on every click; the file is sorted alphabetically and can be
   edited by hand. With `--bewertung FILE` a different file is used (e.g. one per user). Categories from older

@@ -20,6 +20,7 @@ Solange sie da sind und das Karten-Overlay das Pack zeigt, tritt das Seitenfenst
 import json
 import pathlib
 
+from components import paths
 from components.i18n import dec, t
 from components.removal import GREEN_PER_40, YELLOW_PER_40
 
@@ -250,7 +251,7 @@ def _grid(cal):
     return left, right
 
 
-COL_FILE = SCRIPT_DIR / "saeulen.json"
+COL_FILE = paths.data_file("saeulen.json")
 MIN_COL_W = 0.03  # schmaler als 3 % der Fensterbreite: wohl verklickt
 CAL_STEPS = ("Linke Säule (dein Deck): Ecke oben links anklicken",
              "Linke Säule (dein Deck): Ecke unten rechts anklicken",

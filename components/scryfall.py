@@ -14,6 +14,7 @@ import sys
 import urllib.error
 import urllib.request
 
+from components import paths
 from components.i18n import t
 
 HEADERS = {
@@ -56,7 +57,7 @@ def fetch_cards(names):
     return found
 
 
-CACHE_FILE = pathlib.Path(__file__).resolve().parent.parent / "scryfall_cache.json"
+CACHE_FILE = paths.data_file("scryfall_cache.json")
 
 
 def fetch_cards_cached(names, refresh=False):
@@ -79,7 +80,7 @@ def fetch_cards_cached(names, refresh=False):
     return cache
 
 
-IMAGE_CACHE_FILE = pathlib.Path(__file__).resolve().parent.parent / "scryfall_images_cache.json"
+IMAGE_CACHE_FILE = paths.data_file("scryfall_images_cache.json")
 
 
 def card_image_url(card):
@@ -116,7 +117,7 @@ def fetch_printing_images(specs):
     return {k: v for k, v in cache.items() if k in {f"{s_}/{n}" for s_, n in specs}}
 
 
-SET_CACHE_FILE = pathlib.Path(__file__).resolve().parent.parent / "scryfall_set_cache.json"
+SET_CACHE_FILE = paths.data_file("scryfall_set_cache.json")
 
 
 def fetch_set_cards(code, refresh=False):

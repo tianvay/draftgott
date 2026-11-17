@@ -21,6 +21,7 @@ import random
 import urllib.error
 import urllib.request
 
+from components import paths
 from components.i18n import dec, t
 
 RATING_ABBR = {"matchwinner": "♛", "splashworthy": "★", "mustplay": "MP", "playable": "Pl", "filler": "Fi", "neverplay": "NP"}
@@ -741,7 +742,7 @@ def main_geometry(screen_width):
     return f"360x560+{max(0, screen_width - 380)}+{TOP}"
 
 
-POS_FILE = pathlib.Path(__file__).resolve().parent.parent / "fensterlage.json"  # letzte Lage der Fenster, nicht im Git
+POS_FILE = paths.data_file("fensterlage.json")  # letzte Lage der Fenster, nicht im Git
 POS_VISIBLE = 60  # so viele Pixel des Fensters muessen auf einem Bildschirm liegen, sonst gilt die Standardlage
 
 

@@ -11,6 +11,7 @@ import traceback
 import urllib.error
 from collections import Counter
 
+from components import paths
 from components import arenalog
 from components import archetypes as set_archetypes
 from components import cardarchetypes
@@ -191,7 +192,7 @@ def default_names(log_path):
 def rebuild_stats(args):
     """--statistik-neu: Draft-Statistik aus Player-prev.log und Player.log neu aufbauen (Sicherung der alten Datei)."""
     root = pathlib.Path(__file__).resolve().parent.parent
-    path = pathlib.Path(args.statistik)
+    path = paths.data_file(args.statistik)
     path = path if path.is_absolute() else root / path
     log = pathlib.Path(args.arena_log) if args.arena_log else arenalog.default_log_path()
     names = default_names(log)
@@ -230,8 +231,8 @@ class LiveDraft:
         self.fetch_set = fetch_set
         self.tricks = {}  # Setcode -> Tricks des Sets (components/tricks.py)
         # Picks im Sideboard (Nutzer 15.11.2026): Arena schreibt das Verschieben waehrend des Drafts nicht ins
-        # Protokoll, der Drafthelper meldet es (Pick auf "Aus"). Gespeichert je Draft neben der Pool-Datei.
-        self.side_file = self.pool_file.with_name(self.pool_file.stem + "_sideboard.json")
+        # Protokoll, der Drafthelper meldet es (Pick auf "Aus"). Gespeichert je Draft neben der Pool-Datei (Pool im Projektordner: in daten).
+        self.side_file = paths.beside(self.pool_file, "_sideboard.json")
         self._side = self._read_side()
 
     def _card_info(self, grp):

@@ -14,6 +14,7 @@ import sys
 import urllib.error
 import webbrowser
 
+from components.paths import report_file
 from components.battle import play_game
 from components.battle_server import ENEMY_DIR
 from components.deckfile import parse_deck, parse_deck_name
@@ -354,7 +355,7 @@ def run(args, build_deck, fetch_cards, ask=input):
         print(f"  {m['wins_x']} : {m['wins_y']} ({t('Unentschieden')} {m['draws']}) -> "
               + (t("{p} hätte gewinnen sollen", p=names[a] if fav == "x" else names[b]) if fav
                  else t("zu knapp, kein klarer Favorit")), file=sys.stderr)
-    out = pathlib.Path(args.turnier_ausgabe or SCRIPT_DIR / f"turnier_{folder}.html")
+    out = report_file(args.turnier_ausgabe or f"turnier_{folder}.html")
     out.write_text(render_tournament_html(folder, names, matches, args.turnier_spiele, args.kampf_runden,
                                           decks=[d for i, d in enumerate(info) if i in used]), encoding="utf-8")
     print(t("Turnierbericht gespeichert: {path}", path=out.resolve()), file=sys.stderr)

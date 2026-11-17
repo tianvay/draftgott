@@ -18,6 +18,7 @@ import urllib.error
 import webbrowser
 from collections import Counter
 
+from components import paths
 from components.cli import parse_args
 from components.i18n import set_lang, t
 from components.scryfall import fetch_cards_cached
@@ -187,7 +188,7 @@ def battle_entries_games(entries, enemy_paths, args, progress=_stderr):
 
 
 def save_battle_report(html, args):
-    out_path = pathlib.Path(getattr(args, "kampf_ausgabe", None) or "mtg_kampf.html")
+    out_path = paths.report_file(getattr(args, "kampf_ausgabe", None) or "mtg_kampf.html")
     out_path.write_text(html, encoding="utf-8")
     print(t("Kampfbericht gespeichert: {path}", path=out_path.resolve()), file=sys.stderr)
     return out_path
@@ -230,7 +231,7 @@ def simulate_entries(entries, args, progress=_stderr):
 
 
 def save_report(html, args):
-    out_path = pathlib.Path(args.ausgabe)
+    out_path = paths.report_file(args.ausgabe)
     out_path.write_text(html, encoding="utf-8")
     print(t("Bericht gespeichert: {path}", path=out_path.resolve()), file=sys.stderr)
     return out_path
@@ -278,11 +279,11 @@ def run(args):
         serve_report(html, entries, args, battle_entries_games, save_battle_report,
                      open_browser=not args.nicht_oeffnen)
         return
-    paths = [save_report(html, args)]
+    outs = [save_report(html, args)]
     if args.gegner:  # Kampf in einen eigenen Bericht
-        paths.append(save_battle_report(battle_entries(entries, args.gegner, args), args))
+        outs.append(save_battle_report(battle_entries(entries, args.gegner, args), args))
     if not args.nicht_oeffnen:
-        for out_path in paths:
+        for out_path in outs:
             try:
                 webbrowser.open(out_path.resolve().as_uri())
             except Exception:
@@ -290,6 +291,7 @@ def run(args):
 
 
 def main():
+    paths.tidy_up()  # JSON-Dateien nach daten, HTML-Berichte nach berichte (einmalig)
     run(parse_args())
 
 

@@ -10,6 +10,8 @@ EN = {
     "Kampfbericht gespeichert: {path}": "Battle report saved: {path}",
     "Kampf {deck} gegen {enemy}: {n} Spiele pro Modus ...": "Battle {deck} vs {enemy}: {n} games per mode ...",
     "Bericht gespeichert: {path}": "Report saved: {path}",
+    "{n} Dateien aufgeräumt: JSON-Dateien liegen jetzt im Ordner daten, HTML-Berichte im Ordner berichte.":
+        "{n} files tidied up: JSON files are now in the folder daten, HTML reports in the folder berichte.",
     "<p>Noch kein Kampfbericht vorhanden.</p>": "<p>No battle report yet.</p>",
     "Bericht mit Kampf-Funktion: {url}": "Report with battle feature: {url}",
     "Zum Beenden: Knopf 'Beenden' im Bericht oder Strg+C hier im Fenster.":

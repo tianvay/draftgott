@@ -22,6 +22,7 @@ import sys
 import urllib.error
 import webbrowser
 
+from components import paths
 from components import archetypes as set_archetypes
 from components import cardarchetypes
 from components import draftstats as ds
@@ -32,7 +33,7 @@ from components.i18n import dec, html_lang, is_en, t, tr_block
 from components.scryfall import fetch_cards_cached
 
 SCRIPT_DIR = pathlib.Path(__file__).resolve().parent.parent
-OUT_DIR = SCRIPT_DIR
+OUT_DIR = paths.REPORT_DIR
 MIN_GAMES = 20  # darunter gilt eine Siegquote nur als Hinweis
 TOP_GAMES = 10  # Mindestzahl Games fuer "beste und schwaechste Karten"
 EDGE_GAMES = 5  # Formatvorteil: Mindestzahl Games in jedem der beiden Formate
@@ -879,8 +880,7 @@ def render_set_report(data, set_code, cards, assign, ratings):
 
 
 def _path(name):
-    p = pathlib.Path(name)
-    return p if p.is_absolute() else SCRIPT_DIR / p
+    return paths.data_file(name)
 
 
 def run(args):
@@ -898,6 +898,7 @@ def run(args):
         cards = {}
     assign = cardarchetypes.load_assign(_path(args.archetypen))
     ratings = card_ratings.load_ratings(_path(args.bewertung))
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
     out = OUT_DIR / output_name(code)
     out.write_text(render_set_report(data, code, cards, assign, ratings), encoding="utf-8")
     print(t("Setauswertung gespeichert: {path}", path=out), file=sys.stderr)
