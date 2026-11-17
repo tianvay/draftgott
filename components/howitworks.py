@@ -7,6 +7,7 @@ zusaetzlich als eigenstaendige Seite (render_help_page). Die Texte sind allgemei
 from components.cli import parse_args
 from components.coverage import METRIC_ORDER
 from components.html_base import HTML_CSS, esc
+from components.theme import theme_css
 from components.i18n import dec, html_lang, t
 from components.report_cards import AVAIL_GREEN, AVAIL_YELLOW
 from components.report_sections import JACE_RULES, render_logic_section
@@ -366,7 +367,7 @@ def _sections():
 def _live_help():
     return (
         _panel(t("Start"), _ul([
-            t("Menüpunkt <b>3</b> in <code>draftgott.bat</code> oder <code>python mtg_sim.py --drafthelper "
+            t("Im Launcher (<code>draftgott.pyw</code>) <b>Live-Draft starten</b> oder <code>python mtg_sim.py --drafthelper "
             "_livedraft.txt --live</code>. Der Drafthelper liest das Protokoll von MTG Arena mit "
             "(<code>Player.log</code> unter <code>AppData/LocalLow/Wizards Of The Coast/MTGA</code>, anderer Pfad mit "
             "<code>--arena-log DATEI</code>). Gelesen wird nur diese Datei, das Spiel selbst wird nicht berührt."),
@@ -560,7 +561,7 @@ def _live_help():
             "Gegnerdeck-Auswahl im Drafthelper hat es sofort. Beim Neuaufbau der Statistik (--statistik-neu) wird "
             "nichts gespeichert.")]))
         + _panel(t("Setauswertung"), _ul([
-            t("Menüpunkt <b>4</b> in <code>draftgott.bat</code> oder <code>python mtg_sim.py --setauswertung "
+            t("Im Launcher (<code>draftgott.pyw</code>) <b>Auswertung öffnen</b> oder <code>python mtg_sim.py --setauswertung "
             "[SET]</code>: schreibt <code>setauswertung_&lt;set&gt;.html</code> und öffnet sie (ohne SET das Set mit "
             "den meisten Drafts)."),
             t("Inhalt: Überblick (Drafts, Matches und Games mit Bilanz), Archetypen (je Draft erkannt wie im "
@@ -568,7 +569,7 @@ def _live_help():
             "Tabelle (gedraftet, Ø Pick-Nummer im Pack, im Deck, Games, Siegquote, Matches), Bewertung gegen "
             "Ergebnis je Kategorie und die Liste der Drafts.")]))
         + _panel(t("Set bewerten"), _ul([
-            t("Menüpunkt <b>5</b> in <code>draftgott.bat</code> oder <code>python mtg_sim.py --set-bewerten "
+            t("Im Launcher (<code>draftgott.pyw</code>) <b>Set bewerten starten</b> oder <code>python mtg_sim.py --set-bewerten "
               "[SET]</code>: eigene Seite im Browser. Zuerst ein fertig umgesetztes Set wählen (alle Sets mit "
               "Archetypen, derzeit TRK, FRA und SOS), dann je Karte Kategorie und Archetypen festlegen."),
             t("Kategorie per Knopf (♛ Matchwinner bis NP NeverPlay) oder mit der Tastatur: Maus auf die Karte, Taste "
@@ -702,7 +703,7 @@ def render_help_page():
     """Eigenstaendige Seite (fuer den Drafthelper unter /howitworks.html)."""
     return (f'<!DOCTYPE html><html lang="{html_lang()}"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width,initial-scale=1">'
-            f'<title>{t("So funktioniert es – MTG Simulation")}</title><style>{HTML_CSS}</style></head><body>'
+            f'<title>{t("So funktioniert es – MTG Simulation")}</title><style>{HTML_CSS}{theme_css()}</style></head><body>'
             f'<header class="top" id="top"><h1>{t("So funktioniert es")}</h1>'
             f'<div class="sub">{t("Regeln und Lesehilfen für Bericht und Drafthelper")}</div></header>'
             f'{render_help_view(back_href="/", back_label="Zurück zum Drafthelper", on=True)}</body></html>')

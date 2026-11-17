@@ -78,7 +78,7 @@ PAGE = {
     # Uebersicht links
     '"Weiß","#f1e7b8"': '"White","#f1e7b8"',
     '"Blau","#3b82d6"': '"Blue","#3b82d6"',
-    '"Schwarz","#4a4a4a"': '"Black","#4a4a4a"',
+    '"Schwarz","#76707f"': '"Black","#76707f"',
     '"Rot","#d6453b"': '"Red","#d6453b"',
     '"Grün","#3f9b4f"': '"Green","#3f9b4f"',
     '"Mehrfarbig","#d9a400"': '"Multicolor","#d9a400"',

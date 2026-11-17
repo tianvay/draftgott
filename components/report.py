@@ -6,6 +6,7 @@ from collections import Counter
 from components.battle_server import FIGHT_COUNTS
 from components.howitworks import render_help_view
 from components.html_base import HTML_CSS, LAYOUT_JS, LABEL_CLASS, esc, h_bar_cell, h_legend, h_level_pill, h_level_td, h_mode, h_pct, h_section, h_table, html_cost, html_mana, svg_bars, svg_lines
+from components.theme import theme_css
 from components import i18n, symbols
 from components.i18n_en.report import FIGHT_BAR_EN, FIGHT_JS_EN, SWITCH_JS_EN
 from components.jace import analyze_jace
@@ -780,7 +781,7 @@ def render_html(ctx):
     side_html = (f'<h3>{i18n.t("Kernzahlen")}</h3>{kpi_html}<div class="navsep"></div><h3>{i18n.t("Abschnitte")}</h3>{nav_html}'
                  f'<div class="navsep"></div><h3>{i18n.t("Einstellungen")}</h3>'
                  f'<div class="chips">{"".join(f"<span class=chip>{esc(c)}</span>" for c in chips)}</div>')
-    css = HTML_CSS + symbols.symbol_css(symbols.used())
+    css = HTML_CSS + symbols.symbol_css(symbols.used()) + theme_css()
     return (f'<!DOCTYPE html><html lang="{i18n.html_lang()}"><head><meta charset="utf-8">'
             f'<meta name="viewport" content="width=device-width,initial-scale=1">'
             f'<title>{esc(ctx["name"])} – ' + i18n.t("MTG Simulation") + f'</title><style>{css}</style></head><body>'

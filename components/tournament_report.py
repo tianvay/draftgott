@@ -4,34 +4,21 @@ in Tabellen, Tooltips nur als Ergaenzung."""
 from components.html_base import esc
 from components.i18n import dec, html_lang, is_en, t
 from components import tournament as tm
+from components.theme import theme_css
 
 MIN_CARD_GAMES = 30  # darunter ist die Kartenquote nur ein Hinweis (grau)
 TOP_CARDS = 3
 
 CSS = """
 :root{
- color-scheme:light;
- --page:#f6f6f3; --surface:#fcfcfb; --raised:#ffffff; --ink:#0b0b0b; --ink2:#52514e; --muted:#7a7873;
- --grid:#e1e0d9; --axis:#c3c2b7; --ring:rgba(11,11,11,.10); --soft:#efeee9;
- --a:#2a78d6; --b:#eb6834; --drawc:#c3c2b7; --mid:#f0efec;
- --good:#006300; --goodbg:#e3f3e3; --warn:#7a5200; --warnbg:#fff1cc; --accent:#2a78d6;
+ color-scheme:dark;
+ --page:#0d1117; --surface:#151b24; --raised:#1b2330; --ink:#e6edf5; --ink2:#b8c4d6; --muted:#8796a8;
+ --grid:#243040; --axis:#2f3d52; --ring:rgba(255,255,255,.08); --soft:#1b2330;
+ --a:#3be3d0; --b:#ff8a5c; --drawc:#2f3d52; --mid:#2f3d52;
+ --good:#5fd38f; --goodbg:#12301f; --warn:#ffc565; --warnbg:#3a2a0c; --accent:#3be3d0;
 }
-@media (prefers-color-scheme: dark){
- :root:not([data-theme="light"]){
-  color-scheme:dark;
-  --page:#0d0d0d; --surface:#1a1a19; --raised:#222220; --ink:#f0efec; --ink2:#c3c2b7; --muted:#898781;
-  --grid:#2c2c2a; --axis:#383835; --ring:rgba(255,255,255,.10); --soft:#262624;
-  --a:#3987e5; --b:#d95926; --drawc:#55544f; --mid:#383835;
-  --good:#0ca30c; --goodbg:#16301a; --warn:#fab219; --warnbg:#3a2f12; --accent:#3987e5;
- }
-}
-:root[data-theme="dark"]{
-  color-scheme:dark;
-  --page:#0d0d0d; --surface:#1a1a19; --raised:#222220; --ink:#f0efec; --ink2:#c3c2b7; --muted:#898781;
-  --grid:#2c2c2a; --axis:#383835; --ring:rgba(255,255,255,.10); --soft:#262624;
-  --a:#3987e5; --b:#d95926; --drawc:#55544f; --mid:#383835;
-  --good:#0ca30c; --goodbg:#16301a; --warn:#fab219; --warnbg:#3a2f12; --accent:#3987e5;
-}
+/* immer dunkel wie der Launcher (components/theme.py), auch bei hellem System: */
+@media (prefers-color-scheme: dark){:root{color-scheme:dark}}
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
 body{margin:0;background:var(--page);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
@@ -577,7 +564,7 @@ def render(folder, names, matches, games=None, max_turns=20, decks=None):
         t("{g} Spiele", g=_num(total))
     return (f'<!DOCTYPE html><html lang="{html_lang()}"><head><meta charset="utf-8">'
             f'<meta name="viewport" content="width=device-width,initial-scale=1">'
-            f'<title>{esc(title)}</title><style>{CSS}</style></head><body>'
+            f'<title>{esc(title)}</title><style>{CSS}{theme_css()}</style></head><body>'
             f'<header class="top"><h1>{esc(title)}</h1><span class="sub">{esc(sub)}</span>'
             f'<nav>{nav_html}</nav></header>'
             f'<main>{"".join(sections)}</main>'

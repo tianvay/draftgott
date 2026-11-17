@@ -22,8 +22,8 @@ EN = {
     "alle mitgelesenen Drafts des Sets": "all tracked drafts of the set",
     "Match-Verlauf (älteste zuerst): {timeline}": "Match history (oldest first): {timeline}",
     "läuft noch": "still running",
-    "Noch keine Drafts für dieses Set in der Statistik. Starte den Live-Draft (Menüpunkt 3), dann werden Drafts und Matches gesammelt.":
-        "No drafts for this set in the statistics yet. Start the live draft (menu item 3) and drafts and matches will be collected.",
+    "Noch keine Drafts für dieses Set in der Statistik. Starte den Live-Draft im Launcher, dann werden Drafts und Matches gesammelt.":
+        "No drafts for this set in the statistics yet. Start the live draft in the launcher and drafts and matches will be collected.",
     # Archetypen
     "Je Draft erkannt wie im Live-Draft: aus dem Hauptdeck (sonst den Picks), mit deiner Archetyp-Zuordnung und Kategorie.":
         "Detected per draft as in the live draft: from the main deck (otherwise the picks), using your archetype assignment and category.",
@@ -73,8 +73,8 @@ EN = {
     " · Deck {n} Karten": " · deck {n} cards",
     "Games {a}-{b}": "Games {a}-{b}",
     # Konsole
-    "Noch keine Drafts in {path}. Starte den Live-Draft (Menüpunkt 3), dann werden Drafts und Matches gesammelt.":
-        "No drafts in {path} yet. Start the live draft (menu item 3) and drafts and matches will be collected.",
+    "Noch keine Drafts in {path}. Starte den Live-Draft im Launcher, dann werden Drafts und Matches gesammelt.":
+        "No drafts in {path} yet. Start the live draft in the launcher and drafts and matches will be collected.",
     "Scryfall nicht erreichbar, Auswertung ohne Kartendaten: {e}": "Scryfall unreachable, report without card data: {e}",
     "Setauswertung gespeichert: {path}": "Set report saved: {path}",
     "Gegnerdeck nicht gespeichert: {e}": "Opponent deck not saved: {e}",

@@ -105,7 +105,7 @@ EN = {
     'Kartentypen': 'Card types',
     '({n} Punkte)': '({n} points)',
     '{p} %': '{p}%',
-    'Aus den mitgelesenen Live-Drafts (draftstatistik.json): Games mit der Karte im Hauptdeck. Grau: weniger als 20 Games, nur ein Hinweis. Ganze Auswertung: Setauswertung (Menüpunkt 4).': 'From the live drafts that were read (draftstatistik.json): games with the card in the main deck. Gray: fewer than 20 games, only a hint. Full report: Set report (menu item 4).',
+    'Aus den mitgelesenen Live-Drafts (draftstatistik.json): Games mit der Karte im Hauptdeck. Grau: weniger als 20 Games, nur ein Hinweis. Ganze Auswertung: Setauswertung im Launcher.': 'From the live drafts that were read (draftstatistik.json): games with the card in the main deck. Gray: fewer than 20 games, only a hint. Full report: set report in the launcher.',
     'Hauptfarben: die zwei Farben mit den meisten Nichtland-Karten (Kopien, mehrfarbige zählen für jede ihrer Farben).': 'Main colors: the two colors with the most nonland cards (copies, multicolored cards count for each of their colors).',
     'Kartentypen im Vergleich': 'Card types compared',
     'Removal-Karten': 'Removal cards',

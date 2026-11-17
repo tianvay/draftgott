@@ -23,6 +23,39 @@ Es gibt drei Teile:
   (`scryfall.py`, `cards.py`, `mana.py`, `simulation.py`, `report.py` …). Der Cache `scryfall_cache.json` entsteht
   automatisch neben `mtg_sim.py`.
 
+## Starten
+
+**Launcher (Windows und Ubuntu):** `draftgott.pyw` doppelklicken (Windows, ohne Konsolenfenster) bzw.
+`python3 draftgott.pyw` (Ubuntu). Es öffnet sich ein eigenes Fenster (App-Fenster von Edge, Chrome oder Chromium,
+sonst der normale Browser) mit drei Startoptionen:
+
+- **Live-Draft:** liest MTG Arena mit (siehe „Live-Draft“). Nach dem Draft geht es im selben Fenster weiter:
+  Goldfish-Simulation und Kampf gegen Gegnerdecks starten direkt im Drafthelper.
+- **Setauswertung:** die Statistik deiner Drafts eines Sets; das Set wählst du im Launcher.
+- **Set bewerten:** Kategorie und Archetypen je Karte festlegen.
+
+Oben zeigt der Launcher, ob Python bereit ist, ob das Arena-Protokoll gefunden wurde und ob in Arena „Detailed
+Logs“ an sind; darunter die Drafts je Set und die Zahl der gesammelten Gegnerdecks. Unten: Sprache (DE/EN, wird in
+`daten/launcher.json` gemerkt), **Ordner öffnen** und **Beenden**. Unter Ubuntu legt **Ins Startmenü** den Eintrag
+`~/.local/share/applications/draftgott.desktop` mit Symbol an (oder `python3 draftgott.pyw --desktop`).
+
+Gestartete Funktionen laufen als eigene Prozesse weiter, ihre Meldungen stehen in `daten/log_<modus>.txt`; endet eine
+mit Fehler, zeigt der Launcher die letzten Zeilen. Schließt man das Launcher-Fenster, beendet sich der Launcher nach
+kurzer Zeit von selbst. Ein zweiter Doppelklick zeigt den laufenden Launcher (Port 8770).
+
+Drafthelper und Analyse gibt es im Launcher nicht mehr als eigenen Start: gedraftet wird immer live, danach wird aus
+dem Drafthelper simuliert und gekämpft. Für Entwicklung und Tests bleiben `draftgott.bat` und alle Parameter von
+`mtg_sim.py`.
+
+**Ubuntu:** Python 3 mit `python3-tk` (für die Fenster über Arena). Arena läuft dort über Steam/Proton, Lutris oder
+Wine; der Launcher sucht `Player.log` in diesen Ordnern und gibt den Pfad an den Live-Draft weiter. Säulen,
+Steuerleiste und Seitenfenster nutzen für Klick-Durchlass und Fensterlage Windows-Funktionen und sind unter Ubuntu
+eingeschränkt.
+
+Alle Seiten (Launcher, Drafthelper, Bericht, Kampfbericht, Setauswertung, Turnierbericht, Set bewerten) teilen sich
+ein Aussehen: dunkle Fläche, türkiser Akzent, Logo in der Kopfleiste (`components/theme.py`). Schriften: Space
+Grotesk und JetBrains Mono, wenn installiert, sonst die Systemschrift.
+
 ## Tests
 
 ```
@@ -57,6 +90,9 @@ Projektordner geklärt; Abweichungen davon stehen mit Regelnummer im Code bzw. i
 | Datei | Aufgabe |
 |---|---|
 | `mtg_sim.py` | Startpunkt: Decks laden, simulieren, Bericht schreiben |
+| `draftgott.pyw` | Start per Doppelklick: öffnet den Launcher |
+| `components/launcher.py` | Launcher: Fenster mit Live-Draft, Setauswertung und Set bewerten, Zustand von Arena, Ubuntu-Startmenü |
+| `components/theme.py` | Gemeinsames Aussehen aller Seiten (Farben, Schrift, Logo, Knöpfe) |
 | `components/cli.py` | Alle Kommandozeilen-Parameter |
 | `components/deckfile.py` | Deckdateien und Datei-Angaben (`datei=Label`) einlesen |
 | `components/scryfall.py` | Kartendaten von Scryfall holen und zwischenspeichern |

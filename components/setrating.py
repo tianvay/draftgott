@@ -20,6 +20,7 @@ from components import cardarchetypes
 from components import ratings as card_ratings
 from components.i18n import html_lang, t
 from components.symbols import active as active_symbols, symbol_css
+from components.theme import theme_css
 
 PORT = 8767
 SYMBOL_KEYS = ("W", "U", "B", "R", "G")
@@ -225,26 +226,26 @@ PAGE = r"""<!DOCTYPE html>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>__TITLE__</title>
 <style>
-:root{--bg:#f4f6f9;--card:#fff;--ink:#1d2430;--muted:#667085;--line:#d9dee7;--accent:#2f6fd6;
+:root{--bg:#0d1117;--card:#151b24;--ink:#e6edf5;--muted:#8796a8;--line:#243040;--accent:#3be3d0;
 --mw:#8e2bd6;--sw:#e0a800;--mp:#2e9e5b;--pl:#3f8f9a;--fi:#6b7d99;--np:#8b2f2f}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 body{margin:0;font:14px/1.4 system-ui,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink)}
-header{position:sticky;top:0;z-index:5;background:#fff;border-bottom:1px solid var(--line);padding:10px 20px;
+header{position:sticky;top:0;z-index:5;background:#151b24;border-bottom:1px solid var(--line);padding:10px 20px;
   display:flex;flex-direction:column;gap:8px}
 .row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
 h1{font-size:18px;margin:0 8px 0 0}
-.btn{font:inherit;padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:#fff;cursor:pointer}
+.btn{font:inherit;padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:#151b24;cursor:pointer}
 .btn:hover{border-color:var(--accent)}
 #quit{margin-left:auto}
 #sets{display:flex;gap:6px;flex-wrap:wrap}
 #sets button{font:inherit;font-weight:700;padding:6px 14px;border-radius:999px;border:2px solid var(--line);
-  background:#fff;cursor:pointer}
-#sets button.on{border-color:var(--accent);background:#e8f0fd;color:#1b4fa3}
-.bar{flex:1;min-width:200px;height:10px;border-radius:999px;background:#e6e9ef;overflow:hidden;display:flex}
+  background:#151b24;cursor:pointer}
+#sets button.on{border-color:var(--accent);background:#162337;color:#84aceb}
+.bar{flex:1;min-width:200px;height:10px;border-radius:999px;background:#242831;overflow:hidden;display:flex}
 .bar span{display:block;height:100%}
 #ptext{color:var(--muted);font-size:13px}
-input[type=search],select{font:inherit;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:#fff}
+input[type=search],select{font:inherit;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:#151b24}
 input[type=search]{flex:1;min-width:180px}
 #legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12.5px;color:var(--muted)}
 #legend b{color:var(--ink)}
@@ -253,38 +254,38 @@ main{padding:12px 20px 60px}
 #start{max-width:640px;margin:40px auto;text-align:center;color:var(--muted)}
 #start .big{display:flex;justify-content:center;gap:16px;margin-top:18px;flex-wrap:wrap}
 #start .big button{font:inherit;font-size:22px;font-weight:800;padding:22px 34px;border-radius:14px;
-  border:2px solid var(--line);background:#fff;cursor:pointer}
+  border:2px solid var(--line);background:#151b24;cursor:pointer}
 #start .big button:hover{border-color:var(--accent);color:var(--accent)}
 #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(172px,1fr));gap:14px}
 .tile{background:var(--card);border:2px solid transparent;border-radius:12px;padding:8px;box-shadow:0 1px 3px #0001;
   display:flex;flex-direction:column;gap:6px}
-.tile.done{border-color:#cfe9d9}
+.tile.done{border-color:#436a52}
 .tile.hover{outline:2px solid var(--accent)}
-.tile img{width:100%;border-radius:8px;display:block;cursor:zoom-in;aspect-ratio:488/680;object-fit:cover;background:#eee}
-.tile .ph{aspect-ratio:488/680;border-radius:8px;background:#e6e9ef;display:flex;align-items:center;justify-content:center;
+.tile img{width:100%;border-radius:8px;display:block;cursor:zoom-in;aspect-ratio:488/680;object-fit:cover;background:#202938}
+.tile .ph{aspect-ratio:488/680;border-radius:8px;background:#242831;display:flex;align-items:center;justify-content:center;
   text-align:center;padding:8px;font-weight:700}
 .tile .nm{font-weight:700;font-size:13px;line-height:1.25}
 .tile .nm small{font-weight:600;color:var(--muted);margin-left:4px}
 .cats{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:3px}
 .cats button{font:inherit;font-size:11px;font-weight:700;padding:4px 0;border-radius:6px;border:1px solid var(--line);
-  background:#f8f9fb;color:var(--muted);cursor:pointer}
+  background:#1b2330;color:var(--muted);cursor:pointer}
 .cats button.on{color:#fff;border-color:transparent}
 .cats button.on.matchwinner{background:var(--mw)}.cats button.on.splashworthy{background:var(--sw);color:#2d2100}
 .cats button.on.mustplay{background:var(--mp)}.cats button.on.playable{background:var(--pl)}
 .cats button.on.filler{background:var(--fi)}.cats button.on.neverplay{background:var(--np)}
 .achips{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:3px}
-.achips button{border:1px solid var(--line);background:#f8f9fb;border-radius:6px;padding:3px 0;font-size:10.5px;
+.achips button{border:1px solid var(--line);background:#1b2330;border-radius:6px;padding:3px 0;font-size:10.5px;
   cursor:pointer;color:var(--muted);font-weight:600}
 .achips button .m.ms{margin:0;width:11px;height:11px;vertical-align:middle}
-.achips button.on{background:#e3f4ea;border-color:#2e9e5b;color:#146c3d;font-weight:700}
-.achips button.best{background:#f1e4fb;border-color:#8e2bd6;color:#5b1d99;font-weight:700}
+.achips button.on{background:#1d3728;border-color:#2e9e5b;color:#87e9b4;font-weight:700}
+.achips button.best{background:#2a1739;border-color:#8e2bd6;color:#b887e8;font-weight:700}
 .anames{font-size:11.5px;color:var(--muted);min-height:15px}
 #detail{display:none;position:fixed;inset:0;z-index:20;background:#000d;align-items:center;justify-content:center;padding:16px 70px}
 #detail.show{display:flex}
 #detail .dpanel{display:flex;gap:22px;align-items:flex-start;max-width:1100px;width:100%;max-height:100%;overflow:auto;
   background:var(--card);border-radius:16px;padding:18px;position:relative}
 #dimg{height:min(78vh,680px);max-width:52vw;border-radius:16px;display:block;flex:none}
-#detail .dph{width:340px;aspect-ratio:488/680;border-radius:16px;background:#e6e9ef;display:flex;align-items:center;
+#detail .dph{width:340px;aspect-ratio:488/680;border-radius:16px;background:#242831;display:flex;align-items:center;
   justify-content:center;font-weight:800;font-size:20px;text-align:center;padding:16px;flex:none}
 #detail .dside{flex:1;min-width:240px;display:flex;flex-direction:column;gap:12px}
 #dname{font-size:22px;font-weight:800;margin:0;padding-right:36px}
@@ -304,11 +305,11 @@ main{padding:12px 20px 60px}
 #darchs button{font:inherit;text-align:left;padding:7px 10px;border-radius:10px;border:2px solid var(--line);background:var(--card);
   color:var(--ink);cursor:pointer;display:flex;align-items:center;gap:6px}
 #darchs button .m.ms{margin:0;width:15px;height:15px}
-#darchs button.on{background:#e3f4ea;border-color:#2e9e5b;color:#146c3d;font-weight:700}
-#darchs button.best{background:#f1e4fb;border-color:#8e2bd6;color:#5b1d99;font-weight:700}
+#darchs button.on{background:#1d3728;border-color:#2e9e5b;color:#87e9b4;font-weight:700}
+#darchs button.best{background:#2a1739;border-color:#8e2bd6;color:#b887e8;font-weight:700}
 #dclose{position:absolute;top:10px;right:10px;font-size:20px;line-height:1;width:34px;height:34px;padding:0}
 .dnav{position:fixed;top:50%;transform:translateY(-50%);z-index:21;width:52px;height:84px;border-radius:14px;border:0;
-  background:#fffc;color:#1d2430;font-size:36px;cursor:pointer;display:none}
+  background:#151b24cc;color:#e6edf5;font-size:36px;cursor:pointer;display:none}
 #detail.show~.dnav{display:block}
 .dnav:disabled{opacity:.3;cursor:default}
 #dprev{left:8px}#dnext{right:8px}
@@ -319,17 +320,8 @@ main{padding:12px 20px 60px}
 #toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#8b2f2f;color:#fff;padding:8px 14px;
   border-radius:8px;display:none;z-index:30}
 @media (max-width:700px){header{position:static}main{padding:12px 16px 60px}header{padding:10px 16px}}
-@media (prefers-color-scheme:dark){
-  :root{--bg:#14181f;--card:#1d232d;--ink:#e6e9ef;--muted:#9aa4b5;--line:#343c4a}
-  header,.btn,#sets button,#start .big button,input[type=search],select{background:#1d232d;color:var(--ink)}
-  #sets button.on{background:#1f3357;color:#cfe0ff}
-  .cats button,.achips button{background:#252c37}
-  .achips button.on,#darchs button.on{background:#1f3b2b;color:#9fe0b8}
-  .achips button.best,#darchs button.best{background:#35204a;color:#e0c2ff}
-  #detail .dph{background:#2a313d}
-  .bar{background:#2a313d}.tile .ph{background:#2a313d}
-}
 /*SYMBOL_CSS*/
+/*THEME_CSS*/
 </style></head><body>
 <header>
   <div class="row"><h1>__TITLE__</h1><div id="sets"></div>
@@ -521,7 +513,7 @@ def render_page():
     page = PAGE
     for key, value in parts.items():
         page = page.replace(key, value)
-    return (page.replace("/*SYMBOL_CSS*/", symbol_css(have))
+    return (page.replace("/*SYMBOL_CSS*/", symbol_css(have)).replace("/*THEME_CSS*/", theme_css())
             .replace("const TX=__TX__;", "const TX=" + json.dumps(page_texts(), ensure_ascii=False) + ";")
             .replace("const SYMBOLS=__SYMBOLS__;", "const SYMBOLS=" + json.dumps(have) + ";"))
 

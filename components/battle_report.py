@@ -9,6 +9,7 @@ import re
 
 from components.battle import _end_life, _max_gap
 from components.html_base import HTML_CSS, LAYOUT_JS, LABEL_CLASS, esc, h_bar_cell, h_mode, h_section, h_table, svg_lines
+from components.theme import theme_css
 from components.i18n import html_lang, is_en, t, tr_block
 
 MODES = ("On the Play", "On the Draw")
@@ -1103,7 +1104,7 @@ def render_battle_html(decks, args):
                  f'<div class="chips">{"".join(f"<span class=chip>{esc(c)}</span>" for c in chips)}</div>')
     return (f'<!DOCTYPE html><html lang="{html_lang()}"><head><meta charset="utf-8">'
             f'<meta name="viewport" content="width=device-width,initial-scale=1">'
-            f'<title>{esc(title)} – {t("MTG Simulation")}</title><style>{HTML_CSS}{CSS}</style></head><body>'
+            f'<title>{esc(title)} – {t("MTG Simulation")}</title><style>{HTML_CSS}{CSS}{theme_css()}</style></head><body>'
             f'<header class="top" id="top"><h1>{esc(title)}</h1>'
             f'<span class="sub">{t("Kampf-Simulation · erstellt am {stamp}", stamp=stamp)}</span>'
             '<a id="backlink" class="btn" href="report" style="display:none;margin-left:auto">' + t("← Zurück zum Bericht") + '</a>'

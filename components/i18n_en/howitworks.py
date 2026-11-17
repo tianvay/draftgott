@@ -248,8 +248,8 @@ EN = {
         'These assumptions apply to the goldfish (no opponent). The battle model plays against an opponent deck with blockers, removal, instants and planeswalkers; its rules are in the battle report.',
     'Start':
         'Start',
-    'Menüpunkt <b>3</b> in <code>draftgott.bat</code> oder <code>python mtg_sim.py --drafthelper _livedraft.txt --live</code>. Der Drafthelper liest das Protokoll von MTG Arena mit (<code>Player.log</code> unter <code>AppData/LocalLow/Wizards Of The Coast/MTGA</code>, anderer Pfad mit <code>--arena-log DATEI</code>). Gelesen wird nur diese Datei, das Spiel selbst wird nicht berührt.':
-        'Menu item <b>3</b> in <code>draftgott.bat</code> or <code>python mtg_sim.py --drafthelper _livedraft.txt --live</code>. The Draft Helper reads along with the MTG Arena log (<code>Player.log</code> under <code>AppData/LocalLow/Wizards Of The Coast/MTGA</code>, another path with <code>--arena-log FILE</code>). Only this file is read; the game itself is not touched.',
+    'Im Launcher (<code>draftgott.pyw</code>) <b>Live-Draft starten</b> oder <code>python mtg_sim.py --drafthelper _livedraft.txt --live</code>. Der Drafthelper liest das Protokoll von MTG Arena mit (<code>Player.log</code> unter <code>AppData/LocalLow/Wizards Of The Coast/MTGA</code>, anderer Pfad mit <code>--arena-log DATEI</code>). Gelesen wird nur diese Datei, das Spiel selbst wird nicht berührt.':
+        'In the launcher (<code>draftgott.pyw</code>) <b>Start live draft</b> or <code>python mtg_sim.py --drafthelper _livedraft.txt --live</code>. The Draft Helper reads along with the MTG Arena log (<code>Player.log</code> under <code>AppData/LocalLow/Wizards Of The Coast/MTGA</code>, another path with <code>--arena-log FILE</code>). Only this file is read; the game itself is not touched.',
     'In Arena muss unter Optionen → Konto „Detailed Logs (Plugin Support)“ eingeschaltet sein (danach Arena neu starten).':
         'In Arena, “Detailed Logs (Plugin Support)” must be switched on under Options → Account (then restart Arena).',
     'Die Kartennamen kommen aus Arenas eigener Kartendatenbank (im Installationsordner), sonst aus Scryfall.':
@@ -384,8 +384,8 @@ EN = {
         'An existing file is never overwritten. Page and overlay report “Opponent deck saved”, the opponent deck selection in the Draft Helper has it immediately. When the statistics are rebuilt (--statistik-neu), nothing is saved.',
     'Setauswertung':
         'Set report',
-    'Menüpunkt <b>4</b> in <code>draftgott.bat</code> oder <code>python mtg_sim.py --setauswertung [SET]</code>: schreibt <code>setauswertung_&lt;set&gt;.html</code> und öffnet sie (ohne SET das Set mit den meisten Drafts).':
-        'Menu item <b>4</b> in <code>draftgott.bat</code> or <code>python mtg_sim.py --setauswertung [SET]</code>: writes <code>setauswertung_&lt;set&gt;.html</code> and opens it (without SET the set with the most drafts).',
+    'Im Launcher (<code>draftgott.pyw</code>) <b>Auswertung öffnen</b> oder <code>python mtg_sim.py --setauswertung [SET]</code>: schreibt <code>setauswertung_&lt;set&gt;.html</code> und öffnet sie (ohne SET das Set mit den meisten Drafts).':
+        'In the launcher (<code>draftgott.pyw</code>) <b>Open report</b> or <code>python mtg_sim.py --setauswertung [SET]</code>: writes <code>setauswertung_&lt;set&gt;.html</code> and opens it (without SET the set with the most drafts).',
     'Inhalt: Überblick (Drafts, Matches und Games mit Bilanz), Archetypen (je Draft erkannt wie im Live-Draft, aus dem Hauptdeck), beste und schwächste Karten (ab 10 Games), alle Karten als sortierbare Tabelle (gedraftet, Ø Pick-Nummer im Pack, im Deck, Games, Siegquote, Matches), Bewertung gegen Ergebnis je Kategorie und die Liste der Drafts.':
         'Contents: overview (drafts, matches and games with record), archetypes (recognized per draft as in the live draft, from the main deck), best and weakest cards (from 10 games), all cards as a sortable table (drafted, avg pick number in pack, in deck, games, win rate, matches), rating versus result per category and the list of drafts.',
     'Zuordnung':

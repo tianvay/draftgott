@@ -11,7 +11,7 @@ from components.i18n_en.report_parts import L
 from components.removal import removal_level
 from components import synergy
 
-COLOR_HEX = {"W": "#f1e7b8", "U": "#3b82d6", "B": "#4a4a4a", "R": "#d6453b", "G": "#3f9b4f", "M": "#d9a400",
+COLOR_HEX = {"W": "#f1e7b8", "U": "#3b82d6", "B": "#76707f", "R": "#d6453b", "G": "#3f9b4f", "M": "#d9a400",
              "C": "#b7bcc6"}
 COLOR_NAME = {"W": "Weiß", "U": "Blau", "B": "Schwarz", "R": "Rot", "G": "Grün", "M": "Mehrfarbig", "C": "Farblos"}
 BUCKETS = 8  # 0 bis 6 und 7+
@@ -247,7 +247,7 @@ def _assignment_html(ctx, archetypes):
             best.setdefault(pair, []).append(n)
     by_name = {s["colors"]: s["name"] for s in found["scores"]}
     best_html = "".join(
-        '<div style="margin-top:4px"><b style="color:#7b2fbf">' + t("Am besten in {x}:", x=esc(by_name.get(p, p))) + '</b> '
+        '<div style="margin-top:4px"><b style="color:#c38bff">' + t("Am besten in {x}:", x=esc(by_name.get(p, p))) + '</b> '
         + ", ".join(esc(n) for n in lst) + "</div>"
         for p, lst in sorted(best.items(), key=lambda kv: (kv[0] != found["main"], -len(kv[1]), kv[0])))
     return ('<div style="margin-top:10px"><b>' + t("Deine Zuordnung:") + '</b> ' + " · ".join(counts) + '</div>'
@@ -275,7 +275,7 @@ def render_stats_panel(ctx):
             + h_table([L("Karte"), t("Gedraftet"), t("Im Deck"), "Games", t("Games gewonnen")], rows)
             + '<div class="note">' + t("Aus den mitgelesenen Live-Drafts (draftstatistik.json): Games mit der Karte im "
                                        "Hauptdeck. Grau: weniger als 20 Games, nur ein Hinweis. Ganze Auswertung: "
-                                       "Setauswertung (Menüpunkt 4).") + '</div></div>')
+                                       "Setauswertung im Launcher.") + '</div></div>')
 
 
 def render_archetype_panel(ctx):
