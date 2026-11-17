@@ -26,8 +26,9 @@ Es gibt drei Teile:
 ## Starten
 
 **Launcher (Windows und Ubuntu):** `draftgott.pyw` doppelklicken (Windows, ohne Konsolenfenster) bzw.
-`python3 draftgott.pyw` (Ubuntu). Es öffnet sich ein eigenes Fenster (App-Fenster von Edge, Chrome oder Chromium,
-sonst der normale Browser) mit drei Startoptionen:
+`python3 draftgott.pyw` (Ubuntu). Es öffnet sich ein eigenes Fenster (App-Fenster des Standardbrowsers, wenn er
+Chromium-basiert ist wie Chrome, Brave, Vivaldi oder Edge; sonst von Edge, Chrome oder Chromium; ohne diese der
+normale Browser. Firefox kann keine App-Fenster) mit drei Startoptionen:
 
 - **Live-Draft:** liest MTG Arena mit (siehe „Live-Draft“). Nach dem Draft geht es im selben Fenster weiter:
   Goldfish-Simulation und Kampf gegen Gegnerdecks starten direkt im Drafthelper.

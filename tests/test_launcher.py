@@ -112,6 +112,74 @@ class Browser(unittest.TestCase):
                                                    exists=lambda p: False))
 
 
+class DefaultBrowser(unittest.TestCase):
+    EDGE = "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"
+    CHROME = "C:/Program Files/Google/Chrome/Application/chrome.exe"
+    BRAVE = "C:/Users/x/AppData/Local/BraveSoftware/Brave-Browser/Application/brave.exe"
+    FIREFOX = "C:/Program Files/Mozilla Firefox/firefox.exe"
+
+    def cmd(self, default, present):
+        return launcher.browser_command("http://x/", "P", "win32", which=lambda n: None,
+                                        exists=lambda p: str(p).replace("\\", "/") in present,
+                                        default=lambda system: default)
+
+    def test_chromium_default_beats_edge(self):
+        cmd = self.cmd(self.CHROME, {self.EDGE, self.CHROME})
+        self.assertEqual(cmd[0].replace("\\", "/"), self.CHROME)
+        self.assertIn("--app=http://x/", cmd)
+
+    def test_brave_default(self):
+        self.assertEqual(self.cmd(self.BRAVE, {self.EDGE, self.BRAVE})[0], self.BRAVE)
+
+    def test_firefox_default_falls_back_to_edge(self):
+        self.assertEqual(self.cmd(self.FIREFOX, {self.EDGE, self.FIREFOX})[0].replace("\\", "/"), self.EDGE)
+
+    def test_missing_default_falls_back(self):
+        self.assertEqual(self.cmd(self.CHROME, {self.EDGE})[0].replace("\\", "/"), self.EDGE)
+
+    def test_no_default_known(self):
+        self.assertEqual(self.cmd(None, {self.EDGE})[0].replace("\\", "/"), self.EDGE)
+
+    def test_linux_default_vivaldi(self):
+        cmd = launcher.browser_command("http://x/", "P", "linux",
+                                       which=lambda n: "/usr/bin/" + n if n in ("chromium", "vivaldi-stable") else None,
+                                       exists=lambda p: p == "/usr/bin/vivaldi-stable",
+                                       default=lambda system: "/usr/bin/vivaldi-stable")
+        self.assertEqual(cmd[0], "/usr/bin/vivaldi-stable")
+
+    def test_app_browser_names(self):
+        for path in (self.CHROME, self.EDGE, self.BRAVE, "/usr/bin/chromium-browser", "/usr/bin/google-chrome-stable",
+                     "/opt/vivaldi/vivaldi", "/usr/bin/microsoft-edge"):
+            self.assertTrue(launcher.is_app_browser(path), path)
+        for path in (self.FIREFOX, "/usr/bin/firefox", "/usr/bin/flatpak", "", None):
+            self.assertFalse(launcher.is_app_browser(path), path)
+
+    def test_exe_from_command(self):
+        self.assertEqual(launcher.exe_from_command('"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" '
+                                                   '--single-argument %1'),
+                         "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe")
+        self.assertEqual(launcher.exe_from_command("/usr/bin/brave-browser-stable %U"), "/usr/bin/brave-browser-stable")
+        self.assertEqual(launcher.exe_from_command("env GDK_BACKEND=x11 /usr/bin/chromium %U"), "/usr/bin/chromium")
+        self.assertIsNone(launcher.exe_from_command(""))
+
+    def test_windows_default_from_registry(self):
+        reg = {"https": "ChromeHTML",
+               "ChromeHTML": '"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --single-argument %1'}
+        self.assertEqual(launcher.default_browser("win32", read_reg=reg.get),
+                         "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe")
+        self.assertIsNone(launcher.default_browser("win32", read_reg=lambda key: None))
+
+    def test_linux_default_from_desktop_file(self):
+        with tempfile.TemporaryDirectory() as d:
+            (pathlib.Path(d) / "brave-browser.desktop").write_text(
+                "[Desktop Entry]\nName=Brave\nExec=/usr/bin/brave-browser-stable %U\n\n[Desktop Action new]\n"
+                "Exec=/usr/bin/brave-browser-stable --incognito\n", encoding="utf-8")
+            self.assertEqual(launcher.default_browser("linux", run=lambda: "brave-browser.desktop\n", app_dirs=[d]),
+                             "/usr/bin/brave-browser-stable")
+            self.assertIsNone(launcher.default_browser("linux", run=lambda: "fehlt.desktop", app_dirs=[d]))
+            self.assertIsNone(launcher.default_browser("linux", run=lambda: None, app_dirs=[d]))
+
+
 class Idle(unittest.TestCase):
     def test_stays_while_pinged(self):
         self.assertFalse(launcher.should_exit(now=100, started=0, last=90, bye=None))

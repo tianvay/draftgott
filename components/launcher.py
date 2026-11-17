@@ -7,8 +7,9 @@ Startoptionen sind nur noch Live-Draft, Setauswertung und Set bewerten. Drafthel
 eigenen Start: die Leute draften immer live und machen von dort mit Goldfish-Simulation und Kampf gegen Gegnerdecks
 weiter. Fuer Entwicklung und Kommandozeile bleibt mtg_sim.py mit allen Parametern.
 
-Technik wie beim Drafthelper: kleiner Server auf 127.0.0.1 plus HTML-Seite, geoeffnet als App-Fenster von Edge,
-Chrome oder Chromium (eigenes Profil in daten/browserprofil), sonst im normalen Browser. Die Seite fragt alle paar
+Technik wie beim Drafthelper: kleiner Server auf 127.0.0.1 plus HTML-Seite, geoeffnet als App-Fenster des
+Standardbrowsers, wenn der Chromium-basiert ist (Chrome, Brave, Vivaldi, Edge), sonst von Edge, Chrome oder Chromium
+(eigenes Profil in daten/browserprofil); ohne all diese im normalen Browser. Die Seite fragt alle paar
 Sekunden den Zustand ab; kommt lange nichts mehr (Fenster zu), beendet sich der Launcher von selbst. Gestartete
 Funktionen laufen als eigene Prozesse weiter, ihre Ausgabe landet in daten/log_<modus>.txt."""
 import json
@@ -123,11 +124,103 @@ def enemy_deck_count(folder):
 
 # ---------- Fenster ----------
 
-def browser_command(url, profile, system=None, which=shutil.which, exists=os.path.exists):
-    """Befehl fuer ein App-Fenster (Edge, Chrome, Chromium) oder None, wenn keiner da ist."""
+# Browser mit App-Modus (--app=, nur Chromium-Familie); Firefox kann das seit 2021 nicht mehr
+APP_BROWSERS = ("chrome", "google-chrome", "google-chrome-stable", "google-chrome-beta", "chromium", "chromium-browser",
+                "msedge", "microsoft-edge", "microsoft-edge-stable", "brave", "brave-browser", "brave-browser-stable",
+                "vivaldi", "vivaldi-stable")
+
+
+def is_app_browser(path):
+    """Gehoert die Programmdatei zur Chromium-Familie (kann ein App-Fenster)?"""
+    if not path:
+        return False
+    name = re.split(r"[\\/]", str(path))[-1].lower()
+    if name.endswith(".exe"):
+        name = name[:-4]
+    return name in APP_BROWSERS
+
+
+def exe_from_command(cmdline):
+    """Programmdatei aus einer Befehlszeile (Registry "shell\\open\\command" oder Exec= einer .desktop-Datei)."""
+    cmdline = (cmdline or "").strip()
+    if cmdline.startswith('"'):
+        end = cmdline.find('"', 1)
+        return cmdline[1:end] if end > 1 else None
+    for part in cmdline.split():
+        if part == "env" or re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", part):
+            continue
+        return part
+    return None
+
+
+def _read_reg_win(key):
+    """Windows: "https"/"http" -> ProgId der Nutzerwahl, sonst Befehl zum Oeffnen dieser ProgId."""
+    import winreg
+    try:
+        if key in ("https", "http"):
+            sub = rf"Software\Microsoft\Windows\Shell\Associations\UrlAssociations\{key}\UserChoice"
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, sub) as k:
+                return winreg.QueryValueEx(k, "ProgId")[0]
+        with winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, rf"{key}\shell\open\command") as k:
+            return winreg.QueryValueEx(k, "")[0]
+    except OSError:
+        return None
+
+
+def _xdg_default():
+    tool = shutil.which("xdg-settings")
+    if not tool:
+        return None
+    try:
+        return subprocess.run([tool, "get", "default-web-browser"], capture_output=True, text=True,
+                              timeout=5).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def _desktop_dirs():
+    home = pathlib.Path.home()
+    data = os.environ.get("XDG_DATA_DIRS", "/usr/local/share:/usr/share").split(":")
+    return [str(home / ".local/share/applications")] + [str(pathlib.Path(p, "applications")) for p in data if p] + \
+        ["/var/lib/snapd/desktop/applications"]
+
+
+def default_browser(system=None, read_reg=None, run=None, app_dirs=None):
+    """Programmdatei des Standardbrowsers oder None (Windows: Registry, Linux: xdg-settings + .desktop-Datei)."""
+    system = system or sys.platform
+    try:
+        if system.startswith("win"):
+            read_reg = read_reg or _read_reg_win
+            prog = read_reg("https") or read_reg("http")
+            return exe_from_command(read_reg(prog)) if prog else None
+        name = ((run or _xdg_default)() or "").strip()
+        if not name.endswith(".desktop"):
+            return None
+        for folder in (app_dirs if app_dirs is not None else _desktop_dirs()):
+            f = pathlib.Path(folder, name)
+            if f.is_file():
+                for line in f.read_text(encoding="utf-8", errors="replace").splitlines():
+                    if line.startswith("[") and line.strip() != "[Desktop Entry]":
+                        break  # Abschnitte wie [Desktop Action new] nicht mehr lesen
+                    if line.startswith("Exec="):
+                        return exe_from_command(line[5:])
+    except Exception:  # Erkennung ist nur ein Bonus, der Start darf daran nie scheitern
+        return None
+    return None
+
+
+def browser_command(url, profile, system=None, which=shutil.which, exists=os.path.exists, default=default_browser):
+    """Befehl fuer ein App-Fenster oder None, wenn keiner da ist. Ist der Standardbrowser Chromium-basiert (Chrome,
+    Brave, Vivaldi, Edge, Chromium), nimmt er den, sonst Edge, Chrome oder Chromium (Nutzer 17.11.2026)."""
     system = system or sys.platform
     found = None
-    if system.startswith("win"):
+    pick = default(system) if default else None
+    if is_app_browser(pick):
+        if not os.path.isabs(pick) and not re.match(r"^[A-Za-z]:", pick):
+            pick = which(pick)  # .desktop mit Exec=brave-browser ohne Pfad
+        if pick and exists(pick):
+            found = pick
+    if not found and system.startswith("win"):
         for base in (os.environ.get("ProgramFiles(x86)", "C:/Program Files (x86)"),
                      os.environ.get("ProgramFiles", "C:/Program Files"),
                      os.environ.get("LOCALAPPDATA", "")):
