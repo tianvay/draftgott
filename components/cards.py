@@ -295,7 +295,7 @@ class Card(NamedTuple):
     snw: tuple = ()            # TRK Strange new worlds (X = verschieden benannte Laender) und Warp Speed, siehe snw_traits
     beam: tuple = ()           # TRK Beam me up: Kosten (Zahlungswege) fuer das Wirken aus dem Friedhof (+ Kreatur zurueck)
     scotty: bool = False       # Scotty, Miracle Worker: Sorceries im Friedhof haben Beam me up zu ihren Manakosten
-    saga: tuple = ()           # Saga (714): (letztes Kapitel, ((Kapitel, Kapitel als Card oder None, Bausteine), ...))
+    saga: tuple = ()           # Saga (715): (letztes Kapitel, ((Kapitel, Kapitel als Card oder None, Bausteine), ...))
     vehicle: tuple = ()        # Fahrzeug: (Crew N, Power, Toughness, Kampf-Schluesselwoerter)
     attack_tap: bool = False   # greift sie an: eine Kreatur des Verteidigers tappen
     equip_attack_tap: bool = False  # Ausruestung: greift die Kreatur an, eine Kreatur des Verteidigers tappen
@@ -2681,7 +2681,7 @@ def foundation_traits(card, type_line):
         if low == "station":
             station_kw = True
         m = res["station_tier"].match(low)
-        if m:  # 721.2a/b: "{N+} | Faehigkeiten"
+        if m:  # 722.2a/b: "{N+} | Faehigkeiten"
             all_tiers.append(int(m.group(1)))
             team = res["station_team"].match(m.group(2))
             if _kw_only(m.group(2)):
@@ -2949,7 +2949,7 @@ _STEAL_RE = re.compile(r"(.+? deals \d+ damage to target creature an opponent co
 
 
 def saga_traits(card):
-    """Saga (714): jedes Kapitel ("I, II — ...") wie ein Zauber gelesen bzw. mit eigenen Bausteinen (_CHAPTER_RES);
+    """Saga (715): jedes Kapitel ("I, II — ...") wie ein Zauber gelesen bzw. mit eigenen Bausteinen (_CHAPTER_RES);
     nur Kapitel mit Wirkung. Letztes Kapitel aus "Sacrifice after N", sonst das hoechste."""
     type_line = card.get("type_line") or ""
     if "Saga" not in type_line or card.get("card_faces"):

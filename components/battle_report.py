@@ -404,7 +404,7 @@ RULES = [
     "eigene Kreatur auf die Hand: die mit dem wertvollsten Betreten-Effekt, sonst die billigste, Token zuletzt; nie "
     "eine, ohne die ein tödlicher Gegenangriff möglich wird. Scotty: jede Sorcery im Friedhof hat Beam me up zu ihren "
     "Manakosten, Scotty selbst geht dafür nicht zurück (Instants über Scotty nicht).",
-    "Sagas (714): beim Betreten Kapitel I, nach jedem eigenen Draw Step das nächste, nach dem letzten wird die Saga "
+    "Sagas (715): beim Betreten Kapitel I, nach jedem eigenen Draw Step das nächste, nach dem letzten wird die Saga "
     "geopfert. Kapitel wirken wie kleine Zauber (Removal, Ziehen, Leben, Token, Zurückholen). Investigate: Clue-Token "
     "({2}, opfern: ziehen) am Ende des gegnerischen Zugs mit übrigem Mana. „Sacrifices a nontoken creature“: die "
     "schwächste; „nontoken permanent“: ab 6 Ländern ein Land, sonst die schwächste Kreatur, sonst das billigste "

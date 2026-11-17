@@ -3377,7 +3377,7 @@ def cast_triggers(p, card, step, e):
 
 
 def face_dilemma(p, step, e):
-    """TRK: p waehlt Modi fuer einen Zauber oder eine Faehigkeit (700.2a/b) - "Whenever you face a dilemma"-Ausloeser
+    """TRK: p waehlt Modi fuer einen Zauber oder eine Faehigkeit (700.2a/b, 700.17) - "Whenever you face a dilemma"-Ausloeser
     eigener Kreaturen und Permanents, einmal je Zauber bzw. Faehigkeit, egal wie viele Modi."""
     p.dilemmas_turn += 1  # Captain Benjamin Sisko
     for card in [g for g in p.graveyard if g.lorca_return]:  # Gabriel Lorca: mit freiem Mana zurueck
@@ -5789,21 +5789,21 @@ def beam_up(p, opp, card, e):
 
 
 def saga_enters(p, opp, card, step, e):
-    """714.3a: die Saga kommt mit einer Lore-Marke ins Spiel, Kapitel I loest aus."""
+    """715.3a: die Saga kommt mit einer Lore-Marke ins Spiel, Kapitel I loest aus."""
     st = {"card": card, "lore": 0, "exiled": [], "temp": None}
     p.sagas.append(st)
     saga_lore(p, opp, st, step, e)
 
 
 def saga_after_draw(p, opp, step, e):
-    """714.3b: zu Beginn der ersten Main Phase (nach dem Draw Step) eine Lore-Marke auf jede eigene Saga."""
+    """715.3c: zu Beginn der ersten Main Phase (nach dem Draw Step) eine Lore-Marke auf jede eigene Saga."""
     p.sagas = [st for st in p.sagas if any(x is st["card"] for x in p.perms)]  # zerstoert/zurueck: vergessen
     for st in list(p.sagas):
         saga_lore(p, opp, st, step, e)
 
 
 def saga_lore(p, opp, st, step, e):
-    """Eine Lore-Marke: das Kapitel mit dieser Zahl wirkt; ab dem letzten Kapitel wird die Saga geopfert (714.4)."""
+    """Eine Lore-Marke: das Kapitel mit dieser Zahl wirkt; ab dem letzten Kapitel wird die Saga geopfert (715.4)."""
     card = st["card"]
     st["lore"] += 1
     final, chapters = card.saga
@@ -9727,7 +9727,7 @@ def _station_ready(p):
 
 
 def update_stations(p, step, e):
-    """721.2: Stufen nach Charge-Marken. Erreichte Schluesselwoerter und Team-Pumps gelten; ab der Stufe mit P/T-Box
+    """722.2: Stufen nach Charge-Marken. Erreichte Schluesselwoerter und Team-Pumps gelten; ab der Stufe mit P/T-Box
     ist die Karte eine Artefaktkreatur (seit ihrem Betreten unter unserer Kontrolle, 302.6)."""
     for st in _station_ready(p):
         card = st["card"]
@@ -10420,7 +10420,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
                 _draw(opp)
                 e["events"].append(i18n.t("{opp}: {w_card_name} – zieht eine Karte", opp=i18n.t(opp.name), w_card_name=w.card.name))
     jace_turn_start(me, step, e)
-    if me.sagas:  # 714.3b: Lore-Marke nach dem Draw Step
+    if me.sagas:  # 715.3c: Lore-Marke nach dem Draw Step
         saga_after_draw(me, opp, step, e)
         if opp.life <= 0 or me.life <= 0:
             return e
