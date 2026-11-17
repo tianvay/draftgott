@@ -44,8 +44,8 @@ with an error, the launcher shows the last lines. When you close the launcher wi
 shortly after. A second double-click shows the running launcher (port 8770).
 
 The launcher no longer offers the Draft Helper and the analysis as a start of their own: you always draft live and
-then simulate and battle from the Draft Helper. For development and tests, `draftgott.bat` and all parameters of
-`mtg_sim.py` remain.
+then simulate and battle from the Draft Helper. For development, tests and the tournament mode, all parameters of `mtg_sim.py` remain
+(e.g. `python mtg_sim.py --drafthelper _draftedcardpool.txt` or `python mtg_sim.py --turnier wc32`).
 
 **Ubuntu:** Python 3 with `python3-tk` (for the windows over Arena). Arena runs there via Steam/Proton, Lutris or
 Wine; the launcher looks for `Player.log` in those folders and passes the path to the live draft. Columns, control
@@ -222,13 +222,7 @@ a message describing what the file must look like.
   as a quantity per group (Core / Splash / NoSplash, with − and +). The starting value is the number in the deck of the
   file as Core. Lands that are not in the pool (e.g. Swamp for a different splash) can be
   added as well.
-- **Start by double-click (Windows):** Double-click `draftgott.bat` in the project folder. It first asks for the
-  language (**1 = Deutsch**, **2 = English**; all pages, the overlay and the messages in the window then appear in
-  that language, passed on as `--lang de` or `--lang en`), then for the mode: **1 = Deck analysis** (simulates `_normaldeck.txt` with 10,000 games, writes `meinbericht.html` and
-  shows it via the report server so that “Simulate battle” works in the report) or **2 = Draft Helper**
-  (card page with `_draftedcardpool.txt`), **3 = Live draft**, **4 = Set report** or **5 = Rate a set** (see below). The script finds Python itself (`py` or `python`). In all cases
-  leave the black window open and use the “Quit” button on the page to exit, or close the window.
-  Further parameters are appended to the chosen call (`draftgott.bat --sims 1000`).
+- **Start:** via the launcher (see “Starting”) as a live draft, or on the command line `python mtg_sim.py --drafthelper _draftedcardpool.txt` (with `--lang en` for English). To quit, use the “Quit” button on the page.
 - **Simulate** builds the variants *Core + Splash* and *Core + NoSplash*, simulates both and shows the
   comparison report directly on the page (also as a file, see `--ausgabe`). Then continue with
   “← Back to the cards”.
@@ -245,7 +239,7 @@ a message describing what the file must look like.
 
 ### Live draft (`--live`)
 
-Menu item **3** in `draftgott.bat` or `python mtg_sim.py --drafthelper _livedraft.txt --live`. The Draft Helper
+In the launcher **Start live draft** or `python mtg_sim.py --drafthelper _livedraft.txt --live`. The Draft Helper
 reads along with the MTG Arena log (`Player.log`, like 17Lands or Untapped; the game itself is not touched).
 In Arena, “Detailed Logs (Plugin Support)” must be enabled under Options → Account.
 
@@ -322,14 +316,14 @@ In Arena, “Detailed Logs (Plugin Support)” must be enabled under Options →
 
 ### Set report (`--setauswertung [SET]`)
 
-Menu item **4** in `draftgott.bat`: writes `setauswertung_<set>.html` from the draft statistics and opens it
+In the launcher **Open report** (or `python mtg_sim.py --setauswertung [SET]`): writes `setauswertung_<set>.html` from the draft statistics and opens it
 (without SET, the set with the most drafts). Sections: overview, archetypes, best and weakest cards (from 10
 games), all cards (sortable: drafted, avg pick number in the pack, in deck, games, win rate, matches), rating
 versus result per category, list of drafts.
 
 ### Rate a set (`--set-bewerten [SET]`)
 
-Menu item **5** in `draftgott.bat`: opens a page of its own in the browser. First choose a fully supported set (all
+In the launcher **Start rating** (or `python mtg_sim.py --set-bewerten`): opens a page of its own in the browser. First choose a fully supported set (all
 sets with archetypes, currently **TRK** and **FRA**), then set the category of each card (♛ Matchwinner to NP
 NeverPlay) and its archetypes (click: neutral → green = fits well → purple = best archetype → neutral). The keyboard
 is faster: hover over the card, key **1–6** sets the category, **0** removes it. Clicking the card image opens the
@@ -679,7 +673,7 @@ and tempo. Sections on mechanics appear only if the deck has matching cards. Gam
 and the explanation of each section are on the explanation page "How it works"; the settings of the run
 are at the top of the report and in the sidebar.
 
-With `--bericht-server` (or analysis via `draftgott.bat`), the report has the **Simulate battle** bar at the top:
+With `--bericht-server`, the report has the **Simulate battle** bar at the top:
 choose an opponent deck and the number of battles (50, 100, 250, 500, or 1000 per deck and mode; 500 preselected, the
 last choice is remembered by the browser), start the battles, and the battle report opens afterward.
 ## Battles against opponent decks

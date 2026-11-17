@@ -271,9 +271,11 @@ class CliTests(unittest.TestCase):
         self.assertEqual(parse_args(["--overlay", "http://127.0.0.1:8765/"]).overlay, "http://127.0.0.1:8765/")
 
     def test_batch_has_live_menu(self):
-        bat = (pathlib.Path(__file__).resolve().parent.parent / "draftgott.bat").read_text(encoding="utf-8")
-        self.assertIn("--live", bat)
-        self.assertIn("_livedraft.txt", bat)
+        # Nutzer 17.11.2026: draftgott.bat entfernt, Start ueber den Launcher
+        from components import launcher
+        cmd = launcher.command("live", "de")
+        self.assertIn("--live", cmd)
+        self.assertIn("_livedraft.txt", cmd)
 
     def test_live_pool_not_in_git(self):
         ignore = (pathlib.Path(__file__).resolve().parent.parent / ".gitignore").read_text(encoding="utf-8")

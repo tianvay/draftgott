@@ -335,11 +335,11 @@ class CliTests(unittest.TestCase):
         self.assertIn("A", out.getvalue())
 
     def test_launcher_mode_5(self):
-        bat = (pathlib.Path(__file__).resolve().parent.parent / "draftgott.bat").read_text(encoding="utf-8")
-        self.assertIn("6 = Turnier", bat)  # Nutzer 14.11.2026: Taste 5 ist jetzt "Set bewerten"
-        self.assertIn("6 = Tournament", bat)
-        self.assertIn("--turnier", bat)
-        self.assertEqual(bat.count("choice /c 12345"), 2)
+        # Nutzer 17.11.2026: draftgott.bat entfernt; Turnier nur per "python mtg_sim.py --turnier ORDNER"
+        from components import launcher
+        from components.cli import parse_args
+        self.assertNotIn("turnier", launcher.MODES)
+        self.assertEqual(parse_args(["--turnier", "wc32"]).turnier, "wc32")
 
     def test_choose_folder(self):
         self.assertEqual(tm.choose_folder(["wc32"], ask=lambda p: self.fail("nicht fragen")), "wc32")

@@ -1,4 +1,4 @@
-"""Set bewerten (--set-bewerten [SET], Menuepunkt 5 in draftgott.bat): lokaler Webserver mit einer eigenen Seite.
+"""Set bewerten (--set-bewerten [SET], im Launcher): lokaler Webserver mit einer eigenen Seite.
 
 Erst waehlt man eines der fertig umgesetzten Sets (alle Sets mit Archetypen in components/archetypes.py, derzeit TRK,
 FRA und SOS), dann legt man je Karte die Kategorie (Matchwinner bis NeverPlay) und die Archetypen fest (neutral -> gruen
@@ -519,7 +519,7 @@ def render_page():
 
 
 def serve(args):
-    """Startet die Seite (Menuepunkt 5) und oeffnet den Browser; laeuft bis "Beenden" oder Strg+C."""
+    """Startet die Seite und oeffnet den Browser; laeuft bis "Beenden" oder Strg+C."""
     from components.drafthelper import archetypes_path, ratings_path
     from components.scryfall import fetch_set_cards
     app = {"ratings": ratings_path(args), "cardarch": archetypes_path(args), "fetch_set": fetch_set_cards,

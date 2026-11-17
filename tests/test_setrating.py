@@ -198,16 +198,10 @@ class LauncherTests(unittest.TestCase):
         self.assertIsNone(parse_args(["deck.txt"]).set_bewerten)
 
     def test_batch_menu_5(self):
-        bat = (ROOT / "draftgott.bat").read_text(encoding="utf-8")
-        self.assertIn("mtg_sim.py --set-bewerten %LANGARG% %*", bat)
-        self.assertIn("echo   5 = Set bewerten", bat)
-        self.assertIn("echo   5 = Rate a set", bat)
-        self.assertIn('choice /c 123456 /n /m "Auswahl (1, 2, 3, 4 oder 5): "', bat)
-        self.assertIn('choice /c 123456 /n /m "Choice (1, 2, 3, 4 or 5): "', bat)
-        self.assertIn("if errorlevel 6 goto turnier", bat)
-        self.assertIn("if errorlevel 5 goto setbewerten", bat)
-        self.assertIn("if errorlevel 6 goto en_turnier", bat)
-        self.assertIn("if errorlevel 5 goto en_setbewerten", bat)
+        # Nutzer 17.11.2026: draftgott.bat entfernt, Start ueber den Launcher
+        from components import launcher
+        self.assertIn("--set-bewerten", launcher.command("setrate", "de"))
+        self.assertFalse((ROOT / "draftgott.bat").exists())
 
 
 if __name__ == "__main__":

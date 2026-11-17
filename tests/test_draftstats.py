@@ -364,9 +364,10 @@ class SetReportTests(unittest.TestCase):
         self.assertEqual(a.setauswertung, "")
         self.assertEqual(a.statistik, "draftstatistik.json")
         self.assertEqual(parse_args(["--setauswertung", "TRK"]).setauswertung, "TRK")
-        bat = (pathlib.Path(__file__).resolve().parent.parent / "draftgott.bat").read_text(encoding="utf-8")
-        self.assertIn("--setauswertung", bat)
-        self.assertIn("4 = Setauswertung", bat)
+        # Nutzer 17.11.2026: draftgott.bat entfernt, Start ueber den Launcher
+        from components import launcher
+        self.assertIn("--setauswertung", launcher.command("setreport", "de"))
+        self.assertIn("setreport", launcher.MODES)
 
     def test_run_writes_the_file(self):
         with tempfile.TemporaryDirectory() as d:

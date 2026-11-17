@@ -44,8 +44,8 @@ mit Fehler, zeigt der Launcher die letzten Zeilen. Schließt man das Launcher-Fe
 kurzer Zeit von selbst. Ein zweiter Doppelklick zeigt den laufenden Launcher (Port 8770).
 
 Drafthelper und Analyse gibt es im Launcher nicht mehr als eigenen Start: gedraftet wird immer live, danach wird aus
-dem Drafthelper simuliert und gekämpft. Für Entwicklung und Tests bleiben `draftgott.bat` und alle Parameter von
-`mtg_sim.py`.
+dem Drafthelper simuliert und gekämpft. Für Entwicklung, Tests und den Turniermodus bleiben alle Parameter von `mtg_sim.py`
+(z. B. `python mtg_sim.py --drafthelper _draftedcardpool.txt` oder `python mtg_sim.py --turnier wc32`).
 
 **Ubuntu:** Python 3 mit `python3-tk` (für die Fenster über Arena). Arena läuft dort über Steam/Proton, Lutris oder
 Wine; der Launcher sucht `Player.log` in diesen Ordnern und gibt den Pfad an den Live-Draft weiter. Säulen,
@@ -227,13 +227,7 @@ einer Meldung ab, die beschreibt, wie die Datei aussehen muss.
   als Menge je Gruppe eingestellt (Core / Splash / NoSplash, mit − und +). Startwert ist die Anzahl im Deck der
   Datei als Core. Länder, die nicht im Pool sind (z. B. Swamp für einen anderen Splash), lassen sich ebenfalls
   hinzufügen.
-- **Start per Doppelklick (Windows):** `draftgott.bat` im Projektordner doppelklicken. Zuerst fragt es nach der
-  Sprache (**1 = Deutsch**, **2 = English**; alle Seiten, das Overlay und die Meldungen im Fenster erscheinen dann in
-  dieser Sprache, weitergegeben als `--lang de` bzw. `--lang en`), danach nach der Betriebsart: **1 = Analyse** (simuliert `_normaldeck.txt` mit 10 000 Spielen, schreibt `meinbericht.html` und
-  zeigt ihn über den Berichts-Server, damit „Kampf simulieren“ im Bericht funktioniert) oder **2 = Drafthelper**
-  (Kartenseite mit `_draftedcardpool.txt`), **3 = Live-Draft**, **4 = Setauswertung** oder **5 = Set bewerten** (siehe unten). Das Skript sucht Python selbst (`py` oder `python`). In allen Fällen
-  das schwarze Fenster offen lassen und zum Beenden den Button „Beenden“ auf der Seite benutzen oder das Fenster
-  schließen. Weitere Parameter werden an den gewählten Aufruf angehängt (`draftgott.bat --sims 1000`).
+- **Start:** über den Launcher (siehe „Starten“) als Live-Draft, oder per Kommandozeile `python mtg_sim.py --drafthelper _draftedcardpool.txt` (mit `--lang en` auf Englisch). Zum Beenden den Button „Beenden“ auf der Seite benutzen.
 - **Simulieren** baut die Varianten *Core + Splash* und *Core + NoSplash*, simuliert beide und zeigt den
   Vergleichsbericht direkt auf der Seite (zusätzlich als Datei, siehe `--ausgabe`). Danach geht es mit
   „Zurück zu den Karten“ weiter.
@@ -250,7 +244,7 @@ einer Meldung ab, die beschreibt, wie die Datei aussehen muss.
 
 ### Live-Draft (`--live`)
 
-Menüpunkt **3** in `draftgott.bat` oder `python mtg_sim.py --drafthelper _livedraft.txt --live`. Der Drafthelper
+Im Launcher **Live-Draft starten** oder `python mtg_sim.py --drafthelper _livedraft.txt --live`. Der Drafthelper
 liest das Protokoll von MTG Arena mit (`Player.log`, wie 17Lands oder Untapped; das Spiel selbst wird nicht berührt).
 In Arena muss unter Optionen → Konto „Detailed Logs (Plugin Support)“ eingeschaltet sein.
 
@@ -343,14 +337,14 @@ In Arena muss unter Optionen → Konto „Detailed Logs (Plugin Support)“ eing
 
 ### Setauswertung (`--setauswertung [SET]`)
 
-Menüpunkt **4** in `draftgott.bat`: schreibt `setauswertung_<set>.html` aus der Draft-Statistik und öffnet sie
+Im Launcher **Auswertung öffnen** (oder `python mtg_sim.py --setauswertung [SET]`): schreibt `setauswertung_<set>.html` aus der Draft-Statistik und öffnet sie
 (ohne SET das Set mit den meisten Drafts). Abschnitte: Überblick, Archetypen, beste und schwächste Karten (ab 10
 Games), alle Karten (sortierbar: gedraftet, Ø Pick-Nummer im Pack, im Deck, Games, Siegquote, Matches), Bewertung
 gegen Ergebnis je Kategorie, Liste der Drafts.
 
 ### Set bewerten (`--set-bewerten [SET]`)
 
-Menüpunkt **5** in `draftgott.bat`: öffnet eine eigene Seite im Browser. Zuerst ein fertig umgesetztes Set wählen
+Im Launcher **Set bewerten starten** (oder `python mtg_sim.py --set-bewerten`): öffnet eine eigene Seite im Browser. Zuerst ein fertig umgesetztes Set wählen
 (alle Sets mit Archetypen, derzeit **TRK** und **FRA**), dann je Karte die Kategorie (♛ Matchwinner bis NP
 NeverPlay) und die Archetypen festlegen (Klick: neutral → grün = passt gut → lila = bester Archetyp → neutral).
 Schneller geht es mit der Tastatur: Maus auf die Karte, Taste **1–6** setzt die Kategorie, **0** entfernt sie.
@@ -703,7 +697,7 @@ und Tempo. Abschnitte zu Mechaniken erscheinen nur, wenn das Deck passende Karte
 und die Erklärung jedes Abschnitts stehen auf der Erklärseite „So funktioniert es“; die Einstellungen des Laufs
 stehen oben im Bericht und in der Seitenleiste.
 
-Mit `--bericht-server` (bzw. Analyse über `draftgott.bat`) hat der Bericht oben die Leiste **Kampf simulieren**:
+Mit `--bericht-server` hat der Bericht oben die Leiste **Kampf simulieren**:
 Gegnerdeck und Zahl der Kämpfe wählen (50, 100, 250, 500 oder 1000 je Deck und Modus; vorgewählt 500, die
 letzte Wahl merkt sich der Browser), Kämpfe starten, der Kampfbericht öffnet sich danach.
 

@@ -1,4 +1,4 @@
-"""Launcher (Nutzer 17.11.2026, Entwurf B "Kommandobruecke"): ein Fenster statt draftgott.bat, fuer Windows und Ubuntu.
+"""Launcher (Nutzer 17.11.2026, Entwurf B "Kommandobruecke"): ein Fenster statt der frueheren draftgott.bat, fuer Windows und Ubuntu.
 
 Start: Doppelklick auf draftgott.pyw (Windows, ohne Konsole) bzw. "python3 draftgott.pyw" oder der Eintrag im
 Ubuntu-Menue (Knopf "Ins Startmenue" im Launcher legt ~/.local/share/applications/draftgott.desktop an).

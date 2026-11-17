@@ -107,10 +107,10 @@ class CliAndLauncherTests(unittest.TestCase):
         self.assertTrue(parse_args(["deck.txt", "--bericht-server"]).bericht_server)
         self.assertFalse(parse_args(["deck.txt"]).bericht_server)
 
-    def test_launcher_keeps_the_analysis_open(self):
-        bat = (pathlib.Path(__file__).resolve().parent.parent / "draftgott.bat").read_text(encoding="utf-8")
-        analyse = bat[bat.index(":analyse"):bat.index(":drafthelper")]
-        self.assertIn("--bericht-server", analyse)
+    def test_analysis_is_no_launcher_option(self):
+        # Nutzer 17.11.2026: draftgott.bat entfernt; Analyse nur noch aus dem Live-Draft oder per Kommandozeile
+        from components import launcher
+        self.assertNotIn("analyse", launcher.MODES)
 
 
 if __name__ == "__main__":

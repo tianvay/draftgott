@@ -1,4 +1,4 @@
-"""Setauswertung (--setauswertung [SET], Menue 4 in draftgott.bat): die gesammelte Draft-Statistik eines Sets
+"""Setauswertung (--setauswertung [SET], im Launcher): die gesammelte Draft-Statistik eines Sets
 (draftstatistik.json, components/draftstats.py) als HTML-Seite setauswertung_<set>.html.
 
 Formate (draftstats.FORMATS) haben eigene Farben: Pick Two (4 Siege / 2 Niederlagen) violett, Pick One (Premier und
