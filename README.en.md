@@ -84,6 +84,7 @@ folder; deviations from it are noted in the code with the rule number or in the 
 - `decks/`: your own deck lists for analysis on the command line (e.g. `_normaldeck.txt`); a bare file name is
   found there: `python mtg_sim.py _normaldeck.txt`.
 - `berichte/`: all generated HTML reports (analysis, battle, set report, tournament).
+- `daten/obsidian/`: the Obsidian vault built from the draft statistics (see “Obsidian export”), not in Git either.
 - Neither folder is in Git. A bare file name for `--html`, `--bewertung`, `--statistik` etc. goes into the
   matching folder, a path with a folder applies as given. JSON or HTML files still lying directly in the project
   folder are moved there once by `mtg_sim.py` on start, as are the card pools (nothing is overwritten; `components/paths.py`).
@@ -128,6 +129,7 @@ folder; deviations from it are noted in the code with the rule number or in the 
 | `components/signals.py` | In the draft: open colors (wheel, late and taken strong cards), detect Pick Two |
 | `components/draftstats.py` | Draft statistics (`draftstatistik.json`): collect decks and matches, numbers per card |
 | `components/setreport.py` | Set report as an HTML page (`--setauswertung`) |
+| `components/obsidian.py` | Obsidian export: drafts, cards, sets and archetypes as linked notes (`--obsidian`) |
 | `components/setrating.py` | Rate a set: category and archetypes per card of a set (`--set-bewerten`) |
 | `components/symbols.py` | Original mana symbols from Scryfall (cache `scryfall_symbols.json`) |
 | `components/stats.py` | Traffic-light thresholds, timing metrics, significance calculation |
@@ -326,6 +328,23 @@ In the launcher **Open report** (or `python mtg_sim.py --setauswertung [SET]`): 
 games), all cards (sortable: drafted, avg pick number in the pack, in deck, games, win rate, matches), rating
 versus result per category, list of drafts.
 
+### Obsidian export (`--obsidian [FOLDER]`)
+
+The live draft also writes the draft statistics as linked Markdown notes into an [Obsidian](https://obsidian.md)
+vault, by default `daten/obsidian` (like all your own data not in Git; the folder name `obsidian/` is excluded by
+`.gitignore` anywhere else in the project too). It updates on start and a few seconds after every change (pick,
+deck, match), using only card data from the Scryfall cache. By hand: `python mtg_sim.py --obsidian` (or
+`--obsidian D:/MyVault` for another folder).
+
+- `Drafts/<date> <SET> <format>.md`: record, archetype, deck, sideboard, picks per pack, matches, opponent deck.
+- `Cards/<name>.md`: per drafted card set, cost, rating, archetypes, numbers as in the set report, card text.
+- `Sets/<SET>.md` and `Archetypes/<SET> <colors> <name>.md`: totals, play tips, assigned cards, drafts.
+
+In Obsidian choose “Open folder as vault”, then the graph view (Ctrl+G); the folders have their own colors
+(`.obsidian/graph.json`, only created if missing). Your own thoughts go below the line `%% draftgott … %%` at the end
+of a note and survive every export; files without the mark `draftgott: generated` in the header are never touched.
+Only changed notes are written.
+
 ### Rate a set (`--set-bewerten [SET]`)
 
 In the launcher **Start rating** (or `python mtg_sim.py --set-bewerten`): opens a page of its own in the browser. First choose a fully supported set (all
@@ -487,6 +506,7 @@ activation per turn are fixed in the script (see “Fixed assumptions”).
 | `--statistik FILE` | `draftstatistik.json` | Draft statistics of the live draft (not in Git). |
 | `--statistik-neu` | | Rebuild the draft statistics from `Player-prev.log` and `Player.log` (old file saved as `draftstatistik.backup.json`). |
 | `--setauswertung [SET]` | | Set report as an HTML page `setauswertung_<set>.html` (without SET: the set with the most drafts). |
+| `--obsidian [FOLDER]` | `obsidian` | Obsidian export of the draft statistics (default `daten/obsidian`, not in Git). |
 | `--set-bewerten [SET]` | | Rate a set: page to set the category and archetypes of every card of a fully supported set (TRK, FRA, SOS) (without SET: choose on the page). |
 | `--neu-laden` | off | Card data is stored in `scryfall_cache.json` next to the script, and on later runs only unknown cards are fetched. With `--neu-laden`, everything is fetched fresh from Scryfall. |
 | `--ausgabe FILE` (also `--html FILE`) | `mtg_bericht.html` | Name and location of the HTML report. An existing file is overwritten. |

@@ -234,6 +234,7 @@ class LiveDraft:
         # Protokoll, der Drafthelper meldet es (Pick auf "Aus"). Gespeichert je Draft neben der Pool-Datei (Pool im Projektordner: in daten).
         self.side_file = paths.beside(self.pool_file, "_sideboard.json")
         self._side = self._read_side()
+        self.on_stats = None  # Aufruf ohne Argumente, wenn sich die Draft-Statistik geaendert hat (Obsidian-Export)
 
     def _card_info(self, grp):
         """Name, Set, Nummer und Farben (Scryfall, sonst ohne Farben) fuer die Gegnerdeck-Datei."""
@@ -464,11 +465,11 @@ class LiveDraft:
 
     def step(self):
         """Liest neue Protokollzeilen; True, wenn sich Pack oder Picks geaendert haben."""
-        changed = game_changed = False
+        changed = game_changed = stats_changed = False
         for line in self.follower.poll():
             if self.tracker:  # auch Spielnachrichten (Spielstatistik fuer die Draft-Bilanz)
                 try:
-                    self.tracker.feed_line(line)
+                    stats_changed = self.tracker.feed_line(line) or stats_changed
                 except OSError as e:  # Statistik nicht speicherbar: Live-Draft laeuft weiter
                     print(t("Draft-Statistik nicht gespeichert: {err}", err=e), file=sys.stderr)
             if self.game.feed_line(line):
@@ -486,6 +487,8 @@ class LiveDraft:
                         with self.lock:
                             self.deck = deck
                         changed = True
+        if stats_changed and self.on_stats:
+            self.on_stats()
         if game_changed:
             self._load_cards(list(self.game.deck) + [x["grp"] for x in self.game.opponent_lands()])
             if self.game.active:

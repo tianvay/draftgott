@@ -85,6 +85,7 @@ geklärt; Abweichungen davon stehen mit Regelnummer im Code bzw. in den Regeln d
 - `decks/`: eigene Decklisten für die Analyse per Kommandozeile (z. B. `_normaldeck.txt`); ein bloßer Dateiname
   wird dort gefunden: `python mtg_sim.py _normaldeck.txt`.
 - `berichte/`: alle erzeugten HTML-Berichte (Analyse, Kampf, Setauswertung, Turnier).
+- `daten/obsidian/`: der Obsidian-Vault aus der Draft-Statistik (siehe „Obsidian-Export“), ebenfalls nicht im Git.
 - Beide Ordner sind nicht im Git. Ein bloßer Dateiname bei `--html`, `--bewertung`, `--statistik` usw. landet im
   passenden Ordner, ein Pfad mit Ordner gilt wie angegeben. Liegen noch JSON- oder HTML-Dateien direkt im
   Projektordner, verschiebt `mtg_sim.py` sie beim Start einmalig dorthin, ebenso die Kartenpools (nichts wird überschrieben;
@@ -130,6 +131,7 @@ geklärt; Abweichungen davon stehen mit Regelnummer im Code bzw. in den Regeln d
 | `components/signals.py` | Im Draft: offene Farben (Wheel, späte und genommene starke Karten), Pick Two erkennen |
 | `components/draftstats.py` | Draft-Statistik (`draftstatistik.json`): Decks und Matches sammeln, Zahlen je Karte |
 | `components/setreport.py` | Setauswertung als HTML-Seite (`--setauswertung`) |
+| `components/obsidian.py` | Obsidian-Export: Drafts, Karten, Sets und Archetypen als verlinkte Notizen (`--obsidian`) |
 | `components/setrating.py` | Set bewerten: Kategorie und Archetypen je Karte eines Sets (`--set-bewerten`) |
 | `components/symbols.py` | Original-Manasymbole von Scryfall (Cache `scryfall_symbols.json`) |
 | `components/stats.py` | Ampel-Schwellen, Zeitkennzahlen, Signifikanz-Rechnung |
@@ -347,6 +349,23 @@ Im Launcher **Auswertung öffnen** (oder `python mtg_sim.py --setauswertung [SET
 Games), alle Karten (sortierbar: gedraftet, Ø Pick-Nummer im Pack, im Deck, Games, Siegquote, Matches), Bewertung
 gegen Ergebnis je Kategorie, Liste der Drafts.
 
+### Obsidian-Export (`--obsidian [ORDNER]`)
+
+Der Live-Draft schreibt die Draft-Statistik zusätzlich als verlinkte Markdown-Notizen in einen
+[Obsidian](https://obsidian.md)-Vault, standardmäßig `daten/obsidian` (wie alle eigenen Daten nicht im Git; der
+Ordnername `obsidian/` ist auch an anderer Stelle im Projekt per `.gitignore` ausgeschlossen). Er aktualisiert sich
+beim Start und einige Sekunden nach jeder Änderung (Pick, Deck, Match), nur mit Kartendaten aus dem Scryfall-Cache.
+Von Hand: `python mtg_sim.py --obsidian` (oder `--obsidian D:/MeinVault` für einen anderen Ordner).
+
+- `Drafts/<Datum> <SET> <Format>.md`: Bilanz, Archetyp, Deck, Sideboard, Picks je Pack, Matches, Gegnerdeck.
+- `Cards/<Name>.md`: je gedraftete Karte Set, Kosten, Bewertung, Archetypen, Zahlen wie in der Setauswertung, Kartentext.
+- `Sets/<SET>.md` und `Archetypes/<SET> <Farben> <Name>.md`: Summen, Spielhinweise, zugeordnete Karten, Drafts.
+
+In Obsidian „Ordner als Vault öffnen“ wählen, dann die Graph-Ansicht (Strg+G); die Ordner haben eigene Farben
+(`.obsidian/graph.json`, nur angelegt, wenn es fehlt). Eigene Gedanken gehören unter die Zeile `%% draftgott … %%` am
+Ende einer Notiz und bleiben bei jedem Export erhalten; Dateien ohne die Kennung `draftgott: generated` im Kopf
+werden nie angefasst. Geschrieben werden nur geänderte Notizen.
+
 ### Set bewerten (`--set-bewerten [SET]`)
 
 Im Launcher **Set bewerten starten** (oder `python mtg_sim.py --set-bewerten`): öffnet eine eigene Seite im Browser. Zuerst ein fertig umgesetztes Set wählen
@@ -510,6 +529,7 @@ Aktivierung pro Runde sind fest im Skript (siehe „Feste Annahmen“).
 | `--statistik DATEI` | `draftstatistik.json` | Draft-Statistik des Live-Drafts (nicht im Git). |
 | `--statistik-neu` | | Draft-Statistik aus `Player-prev.log` und `Player.log` neu aufbauen (alte Datei als `draftstatistik.backup.json`). |
 | `--setauswertung [SET]` | | Setauswertung als HTML-Seite `setauswertung_<set>.html` (ohne SET: Set mit den meisten Drafts). |
+| `--obsidian [ORDNER]` | `obsidian` | Obsidian-Export der Draft-Statistik (Standard `daten/obsidian`, nicht im Git). |
 | `--set-bewerten [SET]` | | Set bewerten: Seite, auf der man je Karte eines fertig umgesetzten Sets (TRK, FRA, SOS) Kategorie und Archetypen festlegt (ohne SET: Auswahl auf der Seite). |
 | `--neu-laden` | aus | Kartendaten werden in `scryfall_cache.json` neben dem Script gespeichert, bei späteren Läufen werden nur unbekannte Karten nachgeladen. Mit `--neu-laden` wird alles frisch von Scryfall geholt. |
 | `--ausgabe DATEI` (auch `--html DATEI`) | `mtg_bericht.html` | Name und Ort des HTML-Berichts. Eine vorhandene Datei wird überschrieben. |

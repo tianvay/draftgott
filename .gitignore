@@ -2,6 +2,9 @@
 daten/
 berichte/
 
+# Obsidian-Vault aus der Draft-Statistik (je Nutzer; Standard daten/obsidian, auch an anderer Stelle nie ins Git)
+obsidian/
+
 # Generierte Berichte
 *.html
 

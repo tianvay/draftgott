@@ -246,6 +246,11 @@ def run(args):
         rebuild_stats(args)
         if args.setauswertung is None:
             return
+    if args.obsidian is not None and args.drafthelper is None:  # Obsidian-Export der Draft-Statistik
+        from components.obsidian import run as run_obsidian
+        run_obsidian(args)
+        if args.setauswertung is None:
+            return
     if args.setauswertung is not None:  # Setauswertung aus der Draft-Statistik
         from components.setreport import run as run_set_report
         run_set_report(args)

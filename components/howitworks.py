@@ -568,6 +568,14 @@ def _live_help():
             "Live-Draft, aus dem Hauptdeck), beste und schwächste Karten (ab 10 Games), alle Karten als sortierbare "
             "Tabelle (gedraftet, Ø Pick-Nummer im Pack, im Deck, Games, Siegquote, Matches), Bewertung gegen "
             "Ergebnis je Kategorie und die Liste der Drafts.")]))
+        + _panel(t("Obsidian-Export"), _ul([
+            t("Der Live-Draft schreibt die Draft-Statistik zusätzlich als verlinkte Markdown-Notizen nach "
+              "<code>daten/obsidian</code> (nicht im Git): je Draft, je gedraftete Karte, je Set und je Archetyp. In "
+              "Obsidian „Ordner als Vault öffnen“ wählen; die Graph-Ansicht zeigt dann, welche Karten, Archetypen und "
+              "Drafts zusammenhängen. Von Hand: <code>python mtg_sim.py --obsidian [ORDNER]</code>."),
+            t("Eigene Gedanken gehören unter die Zeile <code>%% draftgott … %%</code> am Ende einer Notiz: Sie bleiben "
+              "bei jedem Export erhalten. Eigene Dateien ohne die Kennung <code>draftgott: generated</code> werden nie "
+              "angefasst.")]))
         + _panel(t("Set bewerten"), _ul([
             t("Im Launcher (<code>draftgott.pyw</code>) <b>Set bewerten starten</b> oder <code>python mtg_sim.py --set-bewerten "
               "[SET]</code>: eigene Seite im Browser. Zuerst ein fertig umgesetztes Set wählen (alle Sets mit "

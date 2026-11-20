@@ -639,6 +639,10 @@ def serve(args, simulate, save, battle=None, save_battle=None):
         live = LiveDraft(log, pool_path(args.drafthelper), stats=app["stats"], enemy_dir=SCRIPT_DIR / "enemydecks",
                          fetch_set=fetch_set_cards)
         print(t("Live-Draft: lese {log}, Draft-Statistik in {stats}", log=log, stats=app['stats']), file=sys.stderr)
+        from components import obsidian  # Obsidian-Vault folgt der Draft-Statistik (daten/obsidian)
+        live.on_stats = obsidian.AutoExport(app["stats"], app["ratings"], app["cardarch"],
+                                            obsidian.vault_path(getattr(args, "obsidian", None))).poke
+        live.on_stats()  # bisherige Drafts einmal beim Start
         live.read_previous(log.with_name("Player-prev.log"))
         live.step()  # bisheriger Stand des Protokolls (laufender Draft), danach im Hintergrund weiter
         live.restore_previous(log.with_name("Player-prev.log"))  # Draft vor einem Arena-Neustart
