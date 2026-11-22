@@ -584,7 +584,9 @@ These values are in the script and can only be changed there.
   enables more in that turn). Rituals are not modeled.
 - **Cost reduction:** After the creatures on the battlefield at the start of the turn: Geist of Saint Thalia
   (noncreature spells cost {1} less), Ghalta (by the highest power or toughness), Wrath of the Bloodmane (with a
-  legendary creature); Traxos gets cheaper if a noncreature spell is cast in the same turn. Only generic mana is
+  legendary creature), Salinae (by the devotion to blue, 700.5: blue symbols in the mana costs of all your
+  permanents, hybrid included); Traxos gets cheaper if a noncreature spell is cast in the same turn. Only generic
+  mana is
   reduced, the mana value stays the same (601.2f); curve utilization counts the mana actually paid.
   The battle model uses the same calculation.
 - **Heartwood, haste for all, threshold spells:** Heartwood tokens and mana artifacts provide

@@ -63,6 +63,14 @@ def cost_alternatives(mana_cost):
     return tuple(sorted({(g, tuple(sorted(c.items()))) for g, c in alts}))
 
 
+def devotion(cards, colors):
+    """Devotion (700.5) zu einer Farbe oder Farbkombination ("U", "UR") ueber die Manakosten der Karten: je Karte der
+    groesste Anteil dieser Farben unter ihren Zahlungswegen. Das zaehlt Hybrid- und Phyrexian-Symbole fuer jede ihrer
+    Farben, ein Symbol aber nur einmal; Karten ohne Manakosten (Laender, Token) zaehlen 0."""
+    return sum(max((sum(n for col, n in cols if col in colors) for _g, cols in (c.alts or ())), default=0)
+               for c in cards)
+
+
 def can_pay(producing, generic, req):
     """Koennen die Laender (jeweils 1 Mana einer ihrer Farben) generic + req bezahlen?
     Farbanforderungen werden per Matching auf verschiedene Laender verteilt."""

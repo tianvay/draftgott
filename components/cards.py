@@ -1545,6 +1545,8 @@ _PACKAGE_S_RES = {
                                  r"'ve cast a noncreature spell this turn)"),
     "discount_x": re.compile(r"^this spell costs \{x\} less to cast, where x is the greatest (power|toughness) among "
                              r"creatures you control"),
+    "discount_devotion": re.compile(r"^this spell costs \{x\} less to cast, where x is your devotion to (white|blue|"
+                                    r"black|red|green)(?: and (white|blue|black|red|green))?\.?$"),
     "team_kw": re.compile(r"^other creatures you control have " + _KW_LIST),
     "defender_attack": re.compile(r"^creatures you control can attack as though they didn't have defender"),
     "hand_pick": re.compile(r"\b(?:target opponent|that player) reveals their hand\. you choose an? (nonland permanent|"
@@ -2364,6 +2366,10 @@ def package_s_traits(card):
         m = res["discount_x"].match(low)
         if m:
             out["self_discount"] = (m.group(1),)
+        m = res["discount_devotion"].match(low)
+        if m:  # Devotion (700.5), NAU Salinae
+            names = {"white": "W", "blue": "U", "black": "B", "red": "R", "green": "G"}
+            out["self_discount"] = ("devotion", "".join(names[g] for g in m.groups() if g))
         m = res["team_kw"].match(low)
         if m and _keyword_list(m.group(1)):
             out["team_kw"] = _keyword_list(m.group(1))

@@ -160,7 +160,7 @@ def _sections():
             "Prepared-Zauberhälften als Kopie (deren übrige Effekte stehen mit ihrer eigenen Kategorie da), Manaquellen "
             "und Treasure, Schaden an den Gegner beim Wirken oder Betreten, +1/+1-Marken und Pumps bis Rundenende beim "
             "Wirken oder Betreten, Landfall-Schaden und -Marken, Marken am Rundenende ohne Zauber (Edgar) und bei "
-            "Loyalty (Tethermage), Kostensenkung (Geist of Saint Thalia, Ghalta, Wrath of the Bloodmane, Traxos) sowie "
+            "Loyalty (Tethermage), Kostensenkung (Geist of Saint Thalia, Ghalta, Wrath of the Bloodmane, Traxos, Devotion) sowie "
             "Kampf-Schlüsselwörter ohne Gegner. Außerdem jede Zeile, die das Kartenmodell erkennt (Goldfish und/oder "
             "Kampfmodell, z. B. Removal, Token, Lebensgewinn, Planeswalker): Dafür wird die Karte nur mit dieser Zeile "
             "geparst; bei teilweise erkannten Zeilen bleibt der offene Rest stehen. Zeilen, deren Modell erst aus der "

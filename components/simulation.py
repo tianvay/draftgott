@@ -8,7 +8,7 @@ from components.cards import HEARTWOOD, enters_tapped
 from components.jace import (JaceState, cast_filter_matches, creates_jace, creates_walker, enter_filter_matches,
                              once_effects, recurring_effects, surveil)
 from components.landadvice import colors_of_alts
-from components.mana import can_cast_all, can_pay, has_two_colors, land_key
+from components.mana import can_cast_all, can_pay, devotion, has_two_colors, land_key
 from components.mulligan import deal_opening
 
 
@@ -77,10 +77,12 @@ def best_cast(spells, key, has_creature, auras_need_creature, must=None, fixed=(
 _REDUCED = {}  # verbilligte Karte -> (Originalkarte, Senkung)
 
 
-def cost_reduction(card, powers=(), toughs=(), legendary=False, noncreature=False, spell_discount=0, pw_discount=0):
+def cost_reduction(card, powers=(), toughs=(), legendary=False, noncreature=False, spell_discount=0, pw_discount=0,
+                   perms=()):
     """Generisches Mana, um das die Karte billiger ist (601.2f): eigene Senkung (Ghalta: hoechste Power bzw. Toughness
     eigener Kreaturen; Wrath of the Bloodmane mit legendaerer Kreatur; Traxos nach einem Nichtkreatur-Zauber in diesem
-    Zug) plus spell_discount fuer Nichtkreatur-Zauber (Geist of Saint Thalia). Der Manawert bleibt gleich."""
+    Zug; Salinae: Devotion (700.5) der eigenen Permanents perms) plus spell_discount fuer Nichtkreatur-Zauber (Geist of
+    Saint Thalia). Der Manawert bleibt gleich."""
     n = 0 if card.is_creature or card.is_land else spell_discount
     if card.is_planeswalker:  # Tam, the Possibility
         n += pw_discount
@@ -94,6 +96,8 @@ def cost_reduction(card, powers=(), toughs=(), legendary=False, noncreature=Fals
             n += sd[1]
         elif sd[0] == "noncreature" and noncreature:
             n += sd[1]
+        elif sd[0] == "devotion":
+            n += devotion(perms, sd[1])
     return max(0, n)
 
 
@@ -208,7 +212,8 @@ def discounted_hand(hand, board, bonus, perms=()):
     pw_discount = sum(c.pw_discount for c, _t in board) + sum(c.memorial_pw_mana for c in perms)
     out, back = [], {}
     for c in hand:
-        cheap = reduced(c, cost_reduction(c, powers, toughs, legendary, False, spell_discount, pw_discount)) \
+        cheap = reduced(c, cost_reduction(c, powers, toughs, legendary, False, spell_discount, pw_discount,
+                                          [x for x, _t in board] + list(perms))) \
             if not c.is_land else c
         if cheap is not c:
             back[cheap] = c

@@ -144,7 +144,7 @@ RULES = [
     "Vanguard), Trample für andere (Ghalta the Unstoppable), Defender greift an (Ghalta the Immovable), Marken beim "
     "Betreten und beim Tod weitergeben (Graft Surgeon), Karte ziehen, wenn ein gegnerischer Zauber sie zum Ziel hat "
     "(Ruric Thar). Kostensenkung (601.2f, auch im Goldfish): Ghalta um die höchste Power bzw. Toughness, Wrath of the "
-    "Bloodmane mit legendärer Kreatur, Traxos, wenn in diesem Zug zuerst ein Nichtkreatur-Zauber gewirkt wird.",
+    "Bloodmane mit legendärer Kreatur, Traxos, wenn in diesem Zug zuerst ein Nichtkreatur-Zauber gewirkt wird, Salinae um die Devotion zu Blau (700.5).",
     "Scry/Surveil-Auslöser: Prudent Fateseer (alle +1/+0) und Saheeli, Consul of Oversight (Thopter) einmal pro Zug, "
     "Proft bei jedem Surveil ({2} mit freiem Mana: Marke und eine Karte). Bringt ein Surveil im Kampf etwas "
     "(Fateseer, Desperate Futurescribe), surveilt Jace mit weniger als 3 Loyalty schon vor dem Kampf; "

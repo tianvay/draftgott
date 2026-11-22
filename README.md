@@ -608,7 +608,9 @@ Diese Werte stehen im Skript und lassen sich nur dort ändern.
   ermöglicht). Rituale sind nicht modelliert.
 - **Kostensenkung:** Nach den Kreaturen, die zu Rundenbeginn auf dem Feld liegen: Geist of Saint Thalia
   (Nichtkreatur-Zauber {1} billiger), Ghalta (um die höchste Power bzw. Toughness), Wrath of the Bloodmane (mit
-  legendärer Kreatur); Traxos wird billiger, wenn in derselben Runde ein Nichtkreatur-Zauber gewirkt wird. Gesenkt wird
+  legendärer Kreatur), Salinae (um die Devotion zu Blau, 700.5: Blau-Symbole in den Manakosten aller eigenen
+  Permanents, Hybrid zählt mit); Traxos wird billiger, wenn in derselben Runde ein Nichtkreatur-Zauber gewirkt wird.
+  Gesenkt wird
   nur generisches Mana, der Manawert bleibt gleich (601.2f); die Curve-Auslastung zählt das tatsächlich bezahlte Mana.
   Im Kampfmodell gilt dieselbe Rechnung.
 - **Heartwood, Haste für alle, Threshold-Zauber:** Heartwood-Token und Mana-Artefakte liefern

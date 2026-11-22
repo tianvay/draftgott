@@ -18,7 +18,7 @@ import random
 from collections import Counter
 
 from components import i18n
-from components.mana import land_key
+from components.mana import devotion, land_key
 from components.mulligan import deal_opening
 from components.jace import (JaceState, cast_filter_matches, enter_filter_matches, once_effects,
                              recurring_effects, surveil)
@@ -969,6 +969,14 @@ def discount(p):
     return own - tax
 
 
+def own_permanents(p):
+    """Karten aller eigenen Permanents ausser Laendern (fuer Devotion, 700.5): lebende Kreaturen, Nichtkreatur-
+    Permanents, Planeswalker und Sagas; jedes Objekt nur einmal."""
+    cards = [c.card for c in p.creatures if not c.dead] + list(p.perms) + [w.card for w in p.walkers]
+    seen = {id(c) for c in cards}
+    return cards + [st["card"] for st in p.sagas if id(st["card"]) not in seen]
+
+
 def own_reduction(p, card):
     """Eigene Kostensenkung der Karte nach dem Feld von p (Ghalta, Wrath of the Bloodmane, Traxos), siehe
     simulation.cost_reduction."""
@@ -990,6 +998,8 @@ def own_reduction(p, card):
         return n if sum(c.toughness for c in p.creatures if not c.dead) >= need else 0
     if card.self_discount[0] == "creatures":  # SOS Witherbloom: Affinity for creatures
         return sum(1 for c in p.creatures if not c.dead)
+    if card.self_discount[0] == "devotion":  # NAU Salinae: Devotion (700.5) der eigenen Permanents
+        return devotion(own_permanents(p), card.self_discount[1])
     if card.self_discount[0] == "gy_instsorc":  # SOS The Dawning Archaic
         return sum(1 for c in p.graveyard if c.is_instant_sorcery) * card.self_discount[1]
     alive = [c for c in p.creatures if not c.dead]
