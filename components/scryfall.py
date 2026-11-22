@@ -118,12 +118,24 @@ def fetch_printing_images(specs):
 
 
 SET_CACHE_FILE = paths.data_file("scryfall_set_cache.json")
+# Bonusblaetter: Karten eines anderen Sets, die selten in den Boostern liegen (TRK: Stardates, 30 Mythic-Reprints)
+BONUS_SHEETS = {"trk": ("sds",)}
 
 
 def fetch_set_cards(code, refresh=False):
     """Alle Karten eines Sets ohne Standardlaender (Scryfall-Suche, seitenweise), fuer die Set-Ansicht des
-    Drafthelpers. Merkt sich die Liste je Setcode in scryfall_set_cache.json; Netzwerkfehler geben [] (bzw. den
-    alten Stand aus dem Cache)."""
+    Drafthelpers, Set bewerten und den Trick-Warner; dazu die Karten seiner Bonusblaetter (BONUS_SHEETS, hinter dem
+    Hauptset). Merkt sich die Liste je Setcode in scryfall_set_cache.json; Netzwerkfehler geben [] (bzw. den alten
+    Stand aus dem Cache)."""
+    code = (code or "").lower()
+    cards = list(_fetch_one(code, refresh))
+    for extra in BONUS_SHEETS.get(code, ()):
+        cards += _fetch_one(extra, refresh)
+    return cards
+
+
+def _fetch_one(code, refresh=False):
+    """Karten genau eines Setcodes (ohne Bonusblaetter)."""
     import urllib.parse
     code = (code or "").lower()
     cache = {}

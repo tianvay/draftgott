@@ -580,6 +580,8 @@ def _live_help():
             t("Im Launcher (<code>draftgott.pyw</code>) <b>Set bewerten starten</b> oder <code>python mtg_sim.py --set-bewerten "
               "[SET]</code>: eigene Seite im Browser. Zuerst ein fertig umgesetztes Set wählen (alle Sets mit "
               "Archetypen, derzeit TRK, FRA und SOS), dann je Karte Kategorie und Archetypen festlegen."),
+            t("Zu TRK gehören auch die 30 Karten des Bonusblatts Stardates (SDS), die selten in den Boostern liegen; "
+              "sie stehen in der Set-Ansicht hinter den TRK-Karten."),
             t("Kategorie per Knopf (♛ Matchwinner bis NP NeverPlay) oder mit der Tastatur: Maus auf die Karte, Taste "
               "1 bis 6, 0 entfernt. Archetypen per Klick: neutral → grün (passt gut) → lila (bester Archetyp) → "
               "neutral."),

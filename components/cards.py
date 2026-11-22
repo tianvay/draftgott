@@ -627,6 +627,19 @@ class Card(NamedTuple):
     zaffai: bool = False  # einmal je eigenem Zug einen Instant/Sorcery aus der Hand gratis
     grandeur: bool = False  # Page, Loose Leaf: zweite Page abwerfen, bis zu einem Instant/Sorcery aufdecken
     untap_option: bool = False  # "You may tap or untap target creature": eigene Mana-Kreatur enttappen (Rejoinder)
+    # SDS (Stardates, Bonusblatt in TRK)
+    draw_life: int = 0  # Sheoldred: "Whenever you draw a card, you gain N life"
+    opp_draw_loss: int = 0  # Sheoldred: "Whenever an opponent draws a card, they lose N life"
+    red_plus_two: bool = False  # Torbran: eigene rote Quellen machen Gegnern und ihren Permanents 2 Schaden mehr
+    team_counter_mana: tuple = ()  # Rishkar: eigene Kreaturen mit einer Marke haben "{T}: Add {G}" (Manaeinheiten)
+    removal_draw: bool = False  # Ertai: "Destroy ... Its controller draws a card"
+    countered_draw: bool = False  # Ertai: "Counter target spell ... Its controller draws a card"
+    sweep_draw: bool = False  # Decree of Pain: eine Karte je so zerstoerter Kreatur
+    cycling: tuple = ()  # Decree of Pain: Cycling-Kosten (nur mit cycle_sweep, Cycling allein ist nicht modelliert)
+    cycle_sweep: int = 0  # Decree of Pain: "When you cycle this card, all creatures get -N/-N until end of turn"
+    upkeep_punish: int = 0  # Mogis: im Upkeep jedes Gegners N Schaden, ausser er opfert eine Kreatur
+    god_devotion: tuple = ()  # Theros-Gott: (Farben, N) - nur ab Devotion N eine Kreatur (Mogis)
+    god_pt: tuple = ()  # Theros-Gott als Kreatur: (Power, Toughness, Schluesselwoerter)
 
 
 LANDCYCLE_RE = re.compile(
@@ -1054,6 +1067,7 @@ _ABILITY_UNBLOCKABLE_RE = re.compile(r"^another target creature you control with
 _ABILITY_PUMP_ARTIFACTS_RE = re.compile(r"^target creature gets \+x/\+0 until end of turn, where x is the number of "
                                         r"artifacts you control\.?$")
 _ABILITY_SURVEIL_RE = re.compile(r"^surveil (\d+)\.?$")
+_ABILITY_DOUBLE_RE = re.compile(r"^double the number of \+1/\+1 counters on each creature you control\.?$")
 _ABILITY_RETURN_RE = re.compile(r"^return (another )?target (creature|land|permanent) card from your graveyard to your "
                                 r"hand\.?$")
 
@@ -1078,6 +1092,8 @@ def _ability_atoms(body):
     m = _ABILITY_RETURN_RE.match(body)
     if m:
         return (("return", m.group(2), "hand", bool(m.group(1))),)
+    if _ABILITY_DOUBLE_RE.match(body):  # SDS Bristly Bill
+        return (("double", "all"),)
     if body.startswith("create "):
         first, _, rest = body.partition(". ")
         tokens = _tokens_in(first if first.endswith(".") else first + ".")
@@ -1119,6 +1135,9 @@ def parse_abilities(card):
     own_turn ("Activate only during your turn"). Mana-Faehigkeiten zaehlen nicht dazu."""
     out = []
     for raw, low in _clean_lines(card):
+        if _MIKAEUS_RE.match(low):  # SDS Mikaeus: Kosten {T} und eine eigene +1/+1-Marke
+            out.append((((0, ()),), 0, True, "instant", (("uncounter", 1, "self"), ("counter", 1, "others"))))
+            continue
         m = _ABILITY_RE.match(low)
         if not m or "add {" in low:
             continue
@@ -1139,6 +1158,8 @@ def parse_abilities(card):
     return tuple(out)
 
 
+_MIKAEUS_RE = re.compile(r"^\{t\}, remove a \+1/\+1 counter from ~: put a \+1/\+1 counter on each other creature you "
+                         r"control\.?$")
 _SUBJ = r"(?:~|this creature)"
 _COMBAT_DRAW_RE = re.compile(rf"^whenever {_SUBJ} deals combat damage to a player, draw (a|an|one|two|three|\d+) cards?")
 _END_SAC_RE = re.compile(rf"^at the beginning of (?:the|your) end step, sacrifice {_SUBJ}\.?$")
@@ -2677,6 +2698,71 @@ def _cast_trigger(body):
     return atoms, big, "instead" if m.group(3) else "also"
 
 
+_SDS_RES = {
+    "draw_life": re.compile(r"^whenever you draw a card, you gain (\d+) life\.$"),
+    "opp_draw_loss": re.compile(r"^whenever an opponent draws a card, they lose (\d+) life\.$"),
+    "red_plus_two": re.compile(r"^if a red source you control would deal damage to an opponent or a permanent an "
+                               r"opponent controls, it deals that much damage plus 2 instead\.$"),
+    "team_counter_mana": re.compile(r'^each creature you control with a counter on it has "\{t\}: add \{([wubrg])\}\."$'),
+    "etb_up_to_one": re.compile(r"^when ~ enters, choose up to one —$"),
+    "countered_draw": re.compile(r"^•\s*counter target spell, activated ability, or triggered ability\. its controller "
+                               r"draws a card\.$"),
+    "removal_draw": re.compile(r"^•\s*destroy another target creature or planeswalker\. its controller draws a "
+                               r"card\.$"),
+    "sweep_draw": re.compile(r"^destroy all creatures\. they can't be regenerated\. draw a card for each creature "
+                             r"destroyed this way\.$"),
+    "cycling": re.compile(r"^cycling ((?:\{[^}]+\})+)$"),
+    "cycle_sweep": re.compile(r"^when you cycle this card, all creatures get -(\d+)/-\1 until end of turn\.$"),
+    "upkeep_punish": re.compile(r"^at the beginning of each opponent's upkeep, ~ deals (\d+) damage to that player "
+                                r"unless they sacrifice a creature of their choice\.$"),
+    "god": re.compile(r"^as long as your devotion to (white|blue|black|red|green)(?: and (white|blue|black|red|green))? "
+                      r"is less than (one|two|three|four|five|six|seven|eight|\d+), ~ isn't a creature\.$"),
+}
+_GOD_COUNT = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8}
+
+
+def sds_traits(card, type_line):
+    """SDS (Stardates, Bonusblatt in TRK): Sheoldred, Torbran, Rishkar, Ertai, Decree of Pain, Mogis (als dict mit den
+    Card-Feldern). Ertais Zerstoeren-Modus liest removal_spec (Modus "choose up to one" beim Betreten)."""
+    out, res, modal, lines = {}, _SDS_RES, False, list(_clean_lines(card))
+    for _raw, low in lines:
+        for key in ("draw_life", "opp_draw_loss", "upkeep_punish"):
+            m = res[key].match(low)
+            if m:
+                out[key] = int(m.group(1))
+        if res["red_plus_two"].match(low):
+            out["red_plus_two"] = True
+        m = res["team_counter_mana"].match(low)
+        if m:
+            out["team_counter_mana"] = ((m.group(1).upper(),),)
+        if res["etb_up_to_one"].match(low):
+            modal = True
+            continue
+        if modal and low.startswith("•"):
+            if res["countered_draw"].match(low):
+                out["counter"], out["countered_draw"] = ("any", (), 0), True
+            if res["removal_draw"].match(low):
+                out["removal_draw"] = True
+        else:
+            modal = False
+        if res["sweep_draw"].match(low):
+            out["sweep_draw"] = True
+        m = res["god"].match(low)
+        if m:
+            names = {"white": "W", "blue": "U", "black": "B", "red": "R", "green": "G"}
+            front = (card.get("card_faces") or [card])[0]
+            pw = str(front.get("power") or card.get("power") or "0")
+            tg = str(front.get("toughness") or card.get("toughness") or "0")
+            n = m.group(3)
+            out["god_devotion"] = ("".join(names[g] for g in m.groups()[:2] if g), _GOD_COUNT.get(n) or int(n))
+            out["god_pt"] = (int(pw) if pw.isdigit() else 0, int(tg) if tg.isdigit() else 0, combat_keywords(card))
+    cyc = next((res["cycling"].match(low) for _r, low in lines if res["cycling"].match(low)), None)
+    sweep = next((res["cycle_sweep"].match(low) for _r, low in lines if res["cycle_sweep"].match(low)), None)
+    if cyc and sweep:  # nur zusammen modelliert (Cycling allein zaehlt nicht)
+        out["cycling"], out["cycle_sweep"] = cost_alternatives(cyc.group(1).upper()), int(sweep.group(1))
+    return out
+
+
 def foundation_traits(card, type_line):
     """Grundlagen fuer kommende Sets: bedingte Statik, Schluesselwoerter mit Marke, Marken zu Kampfbeginn,
     Angriffs-Ausloeser, Ausruestung beim Betreten und als Token, Ausloeser beim Wirken (als dict mit den Card-Feldern)."""
@@ -3158,7 +3244,7 @@ _TRK_RES = {
     "lf_self_counter": re.compile(r"^landfall — whenever a land you control enters, put (a|one|two|\d+) \+1/\+1 "
                                  r"counters? on (?:~|this creature)\.$"),
     "lf_target_counter": re.compile(r"^landfall — whenever a land you control enters, put (a|one|two|\d+) "
-                                   r"\+1/\+1 counters? on target creature you control\.$"),
+                                   r"\+1/\+1 counters? on target creature(?: you control)?\.$"),
     "lf_burnham": re.compile(r"^landfall — whenever a land you control enters, (?:~|(?:captain|~) burnham) deals (\d+) "
                             r"damage to each opponent\. if this is the second time this ability has resolved this "
                             r"turn, put a \+1/\+1 counter on (?:~|(?:captain|~) burnham)\.$"),
@@ -4095,7 +4181,7 @@ def _card_info_base(card):
     alts = tuple(sorted({a for c in costs for a in cost_alternatives(c)}))
     mv = min((mana_value(c) for c in costs), default=0)
 
-    is_creature = "Creature" in type_line
+    is_creature = "Creature" in type_line and not any(_SDS_RES["god"].match(low) for _r, low in _clean_lines(card))
     is_aura = "Aura" in type_line
     pw = front.get("power") or card.get("power") or "0"
     tg = front.get("toughness") or card.get("toughness") or "0"
@@ -4163,7 +4249,7 @@ def _card_info_base(card):
                 **package_m2_traits(card), **package_m3_traits(card, type_line),
                 **counter_traits(card), **walker_traits(card), **package_a_traits(card, type_line),
                 **b1_traits(card, type_line), **walker_card_traits(card, type_line, removal_spec(card)),
-                **easy_traits(card, type_line), **foundation_traits(card, type_line),
+                **easy_traits(card, type_line), **foundation_traits(card, type_line), **sds_traits(card, type_line),
                 removal_points=(removal_info(card) or {}).get("points", 0.0),
                 creature_types=(tuple(t.lower() for t in type_line.split("—", 1)[1].split())
                                 if is_creature and "—" in type_line else ())), shown

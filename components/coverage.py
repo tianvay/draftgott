@@ -123,6 +123,8 @@ COVERED_BY_CARD = (
      lambda c: bool(c.grant_kw) or any(s.grant_kw for s in (c.choices[1] if c.choices else ()))),
     (re.compile(r"^each player loses \d+ life\.?$"),  # Rest nach dem Ziehen (SOS Conciliator's Duelist)
      lambda c: bool(c.opp_loss and c.life_loss)),
+    (re.compile(r"^cycling \{|^when you cycle this card, all creatures get "),  # SDS Decree of Pain: nur zusammen
+     lambda c: bool(c.cycle_sweep)),
 )
 # Bewusst nicht modelliert (Nutzer-Entscheidung): Kartenname -> Muster der Zeile
 ON_PURPOSE = {

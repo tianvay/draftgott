@@ -686,6 +686,19 @@ RULES = [
     "nicht), mit Haste und Betreten-Effekten; gewirkt nur für Lethal oder mit eigenem Planeswalker (auch Jace-Token), "
     "sonst werden die Kopien zu Beginn des Endsegments geopfert. Hit It! erkennt auch den neuen Wortlaut „look at the "
     "top five“.",
+    "Stardates (SDS, Bonusblatt in TRK-Boostern): Sheoldred, the Apocalypse gibt bzw. kostet je gezogene Karte 2 "
+    "Leben (jedes Ziehen, auch der Draw Step). Torbran: rote Quellen machen dem Gegner und seinen Permanents 2 "
+    "Schaden mehr (Kampfschaden, Removal-Schaden, Schaden beim Wirken; eigene Kreaturen bei Massenschaden nicht). "
+    "Rishkar: eigene Kreaturen mit irgendeiner Marke haben {T}: {G}. Bristly Bill: Landfall-Marke auf die eigene "
+    "Kreatur wie bei Syndicate Liquidators, Verdoppeln als Fähigkeit nach den Regeln für Marken. Mikaeus: {T}, "
+    "eine Marke entfernen: Marke auf jede andere eigene Kreatur. Ertai Resurrected: Flash-Kreatur mit Zerstören "
+    "beim Betreten (das Ziel wie bei Removal, sein Kontrolleur zieht) oder als Counterspell nach den "
+    "Counter-Regeln (Ertai kommt ins Spiel, der Zaubernde zieht; dann kein Zerstören). Decree of Pain zieht je "
+    "zerstörte Kreatur; Cycling ({3}{B}{B}, −2/−2 für alle) mit offenem Mana am Ende des gegnerischen Zugs, wenn "
+    "es mindestens zwei gegnerische Kreaturen tötet und mehr Manawert beim Gegner als bei uns. Mogis: im Upkeep "
+    "des Gegners 2 Schaden (mit Torbran 4); der Gegner opfert seine schwächste Kreatur nur, wenn der Schaden "
+    "tödlich wäre. Ab Devotion 7 zu Schwarz und Rot ist Mogis eine 7/5-Kreatur (geprüft zu Zugbeginn und vor dem "
+    "Kampf). Jhoira: historic = legendär, Artefakt oder Saga (700.6).",
     "Noch nicht im Kampf: weitere Auslöser und Fähigkeiten (siehe Modell-Abdeckung). Solche Karten werden gewirkt, "
     "wirken aber nur mit den schon modellierten Effekten.",
 ]

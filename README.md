@@ -530,7 +530,7 @@ Aktivierung pro Runde sind fest im Skript (siehe „Feste Annahmen“).
 | `--statistik-neu` | | Draft-Statistik aus `Player-prev.log` und `Player.log` neu aufbauen (alte Datei als `draftstatistik.backup.json`). |
 | `--setauswertung [SET]` | | Setauswertung als HTML-Seite `setauswertung_<set>.html` (ohne SET: Set mit den meisten Drafts). |
 | `--obsidian [ORDNER]` | `obsidian` | Obsidian-Export der Draft-Statistik (Standard `daten/obsidian`, nicht im Git). |
-| `--set-bewerten [SET]` | | Set bewerten: Seite, auf der man je Karte eines fertig umgesetzten Sets (TRK, FRA, SOS) Kategorie und Archetypen festlegt (ohne SET: Auswahl auf der Seite). |
+| `--set-bewerten [SET]` | | Set bewerten: Seite, auf der man je Karte eines fertig umgesetzten Sets (TRK mit dem Bonusblatt SDS, FRA, SOS) Kategorie und Archetypen festlegt (ohne SET: Auswahl auf der Seite). |
 | `--neu-laden` | aus | Kartendaten werden in `scryfall_cache.json` neben dem Script gespeichert, bei späteren Läufen werden nur unbekannte Karten nachgeladen. Mit `--neu-laden` wird alles frisch von Scryfall geholt. |
 | `--ausgabe DATEI` (auch `--html DATEI`) | `mtg_bericht.html` | Name und Ort des HTML-Berichts. Eine vorhandene Datei wird überschrieben. |
 | `--nicht-oeffnen` | aus (Bericht wird geöffnet) | Der Bericht wird nur gespeichert, der Browser öffnet sich nicht. |
@@ -829,6 +829,11 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
   Troi, Academy Instructor, Dominion Supervisor, Pure Energy, Culber and Stamets, General Chang, Jadzia Dax,
   Sickbay, Picard, Leading by Example, Tea, Earl Grey, Hot, Khan, Despot by Design, Crystalline Entity, Armus,
   A Good Day to Die, Savvy Profiteer, Quark, Rok-Tahk, Gul Dukat.
+- Stardates (SDS, Bonusblatt in TRK-Boostern): Sheoldred, the Apocalypse, Torbran, Rishkar, Bristly Bill, Mikaeus,
+  the Lunarch, Ertai Resurrected (Zerstören oder Kontern), Decree of Pain (auch Cycling am Ende des gegnerischen
+  Zugs), Mogis, God of Slaughter (Gegner opfert nur gegen tödlichen Schaden; ab Devotion 7 Kreatur), Jhoira
+  (historic). Noch offen: Kenrith, Loot, beide Sisays, Drivnod, Prosper, Stella Lee, Riku, Isshin, Flare of
+  Fortitude, Sen Triplets, Empress Galina, Thada Adel, Arcum Dagsson, Bruvac und die legendären Länder.
 - Kampfbeginn und Modi (TRK): D-7 Battle Cruiser, L'Rell, Captain James T. Kirk, Kobayashi Maru Scenario (nur kurz
   vor dem Sieg), Captain Benjamin Sisko (ohne die Fünffarben-Fähigkeit), The Naked Time.
 - Opfern und Friedhof (TRK): Gowron, Kirk, Commanding Officer, Dahar Master, Targ Wrangler, Dr. McCoy, Bones McCoy,

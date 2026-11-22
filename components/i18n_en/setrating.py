@@ -72,6 +72,10 @@ EN = {
         "In the launcher (<code>draftgott.pyw</code>) <b>Start rating</b> or <code>python mtg_sim.py --set-bewerten [SET]</code>: a "
         "page of its own in the browser. First choose a fully supported set (all sets with archetypes, currently "
         "TRK, FRA and SOS), then set the category and archetypes of each card.",
+    "Zu TRK gehören auch die 30 Karten des Bonusblatts Stardates (SDS), die selten in den Boostern liegen; sie stehen "
+    "in der Set-Ansicht hinter den TRK-Karten.":
+        "TRK also includes the 30 cards of the Stardates (SDS) bonus sheet, which rarely turn up in boosters; they "
+        "come after the TRK cards in the set view.",
     "Kategorie per Knopf (♛ Matchwinner bis NP NeverPlay) oder mit der Tastatur: Maus auf die Karte, Taste 1 bis 6, "
     "0 entfernt. Archetypen per Klick: neutral → grün (passt gut) → lila (bester Archetyp) → neutral.":
         "Category by button (♛ Matchwinner to NP NeverPlay) or by keyboard: hover over the card, key 1 to 6, 0 "

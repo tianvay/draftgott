@@ -154,7 +154,7 @@ def _classify(low):
 
 def removal_info(card):
     """Bester Removal-Effekt der Karte: {"points", "kind", "text"} oder None."""
-    best = None
+    best, up_to_one = None, False
     for face in _faces(card):
         type_line = face.get("type_line") or card.get("type_line") or ""
         name = (face.get("name") or card.get("name") or "").lower()
@@ -266,13 +266,19 @@ def removal_spec(card):
     aura = "Aura" in type_line
     text = front.get("oracle_text") if card.get("card_faces") else card.get("oracle_text")
     name = (front.get("name") or card.get("name") or "").lower()
-    best = None
+    best, up_to_one = None, False
     for raw in (text or "").split("\n"):
         low = _strip(raw).strip().lower().lstrip("•").strip()
         if not low or '"' in low or "“" in low or _ACTIVATED.match(low) or _LOYALTY.match(low):
             continue
         for nm in {name, name.split(",")[0]} - {""}:
             low = low.replace(nm, "~")
+        if not spell and re.match(r"^when ~ enters, choose up to one —$", low):  # SDS Ertai: Modus beim Betreten
+            up_to_one = True
+            continue
+        up_to_one = up_to_one and raw.strip().startswith("•")
+        if up_to_one:
+            low = "when ~ enters, " + low
         if spell:
             if _TRIGGER.match(low):
                 continue

@@ -285,6 +285,8 @@ NEUTRAL = (
     # SOS Paket H
     "uncopyable", "self_copy_infusion", "self_copy_creature", "each_sacrifice", "flashback_tap3",  # SOS Paket I
     "pay_x_life", "paradigm", "capstone", "fractalize", "pox", "reckoning", "cascade", "grandeur", "untap_option",
+    "draw_life", "opp_draw_loss", "red_plus_two", "team_counter_mana", "removal_draw", "countered_draw", "sweep_draw",
+    "cycling", "cycle_sweep", "upkeep_punish", "god_devotion", "god_pt",  # SDS Paket B
     # SOS Paket J
     "face_copy", "end_sacrifice_pw",  # FRA Face Yourself
     "is_token", "sac_mana", "opp_spell_tax", "extra_cost", "hexproof_until_damage", "alt_draws",

@@ -384,6 +384,12 @@ EN = {
     "{me}: {card_name} – Grandeur": "{me}: {card_name} – grandeur",
     "{me}: {card_name} – {target_name} enttappt": "{me}: {card_name} – {target_name} untapped",
     "{me}: {a_card_name} – Gegner verliert {loss}, {life} Leben": "{me}: {a_card_name} – opponent loses {loss}, {life} life",
+    # SDS Paket B
+    "{caster}: {card_name} – zieht {n}": "{caster}: {card_name} – draws {n}",
+    "{p}: {card_name} gecycelt – alle Kreaturen −{n}/−{n}": "{p}: {card_name} cycled – all creatures −{n}/−{n}",
+    "{opp}: {card_name} – {n} Schaden an {me}": "{opp}: {card_name} – {n} damage to {me}",
+    "{p}: {card_name} wird zur Kreatur": "{p}: {card_name} becomes a creature",
+    "{p}: {card_name} ist keine Kreatur mehr": "{p}: {card_name} is no longer a creature",
     # Namen der Spieler im Protokoll
     "Wir": "We",
     "Gegner": "Opponent",

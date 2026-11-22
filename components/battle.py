@@ -240,8 +240,8 @@ class Creature:
         if tough > power and self.ctl is not None and any(c.card.toughness_damage and not c.dead
                                                           for c in self.ctl.creatures):
             power = tough
-        if power > 0 and self.ctl is not None and red_bonus(self.ctl, self.card):  # Searing Soloist
-            power += 1
+        if power > 0 and self.ctl is not None:  # Searing Soloist, Torbran (Kampfschaden trifft nur den Gegner)
+            power += red_bonus(self.ctl, self.card)
         return power
 
     def _threshold(self):
@@ -360,9 +360,14 @@ def _statics(p):
     return p.statics
 
 
-def red_bonus(p, card):
-    """Searing Soloist (614.1a): eine rote Quelle von p macht 1 Schaden mehr."""
-    return "R" in colors_of_alts(card.alts) and any(c.card.red_plus_one and not c.dead for c in p.creatures)
+def red_bonus(p, card, foe=True):
+    """Mehr Schaden einer roten Quelle von p (614.1a): Searing Soloist +1 an jedes Ziel, SDS Torbran +2 an einen Gegner
+    oder sein Permanent (foe). Mehrere Ersetzungen addieren sich in jeder Reihenfolge (616.1)."""
+    if "R" not in colors_of_alts(card.alts):
+        return 0
+    alive = [c for c in p.creatures if not c.dead]
+    return (1 if any(c.card.red_plus_one for c in alive) else 0) \
+        + (2 * sum(1 for c in alive if c.card.red_plus_two) if foe else 0)
 
 
 def perpetual_pump(c, pw, tw):
@@ -785,8 +790,29 @@ def _set_tracked(attr):
     return setter
 
 
+def _set_drawn(self, value):
+    """Player.drawn zaehlt jede gezogene Karte (alle Wege ziehen darueber); SDS Sheoldred loest je Karte aus."""
+    delta = value - self.__dict__.get("_drawn", 0)
+    self._drawn = value
+    if delta > 0 and "_creatures" in self.__dict__:
+        draw_triggers(self, delta)
+
+
+def draw_triggers(p, n):
+    """p zog n Karten: Sheoldred, the Apocalypse - eigene geben je Karte Leben, die des Gegners kosten je Karte Leben
+    (jede Sheoldred loest einzeln aus)."""
+    own = [c.card.draw_life for c in p.creatures if c.card.draw_life and not c.dead]
+    if own:
+        gain_life(p, sum(own) * n, events=len(own) * n)
+    foe = p.opponent
+    if foe is not None:
+        loss = sum(c.card.opp_draw_loss for c in foe.creatures if c.card.opp_draw_loss and not c.dead)
+        p.life -= loss * n
+
+
 class Player:
     creatures = property(lambda self: self._creatures, _set_tracked("_creatures"))
+    drawn = property(lambda self: self._drawn, _set_drawn)
     perms = property(lambda self: self._perms, _set_tracked("_perms"))
     statics = None  # Zwischenspeicher fuer _statics
     graveyard = property(lambda self: self._graveyard, _set_graveyard)
@@ -896,6 +922,11 @@ class Player:
             c.pump = pump.get(i, 0)
 
 
+def _has_counter(c):
+    """Liegt irgendeine Marke auf der Kreatur (+1/+1, Stun, ...)? (Rishkar)"""
+    return c.bonus > 0 or c.stun > 0
+
+
 def _mana(me, step):
     """Mana zu Rundenbeginn: Laender, Manaquellen-Permanents, Kreaturen mit Mana-Faehigkeit (nicht frisch, ungetappt)."""
     pool, cc = [], me.cc_land
@@ -907,10 +938,11 @@ def _mana(me, step):
             pool.append(land.land_colors)
     pool += [u for card in me.perms for u in card.mana_src]
     team = tuple(u for c in me.creatures if not c.dead for u in c.card.team_mana)  # Rok-Tahk
+    marked = tuple(u for c in me.creatures if not c.dead for u in c.card.team_counter_mana)  # SDS Rishkar
     creature_units = [(u, i) for i, c in enumerate(me.creatures)
-                      if (c.card.mana_src or team) and not c.tapped
+                      if (c.card.mana_src or team or (marked and _has_counter(c))) and not c.tapped
                       and (c.entered < step or c.card.haste or c.has("haste"))
-                      for u in c.card.mana_src + team]
+                      for u in c.card.mana_src + team + (marked if _has_counter(c) else ())]
     powers = len({c.power for c in me.creatures if not c.dead})
     creature_units += [(ANY_COLOR, i) for i, c in enumerate(me.creatures)  # Loot, the Nexus
                        if c.card.nexus_mana and not c.tapped and not c.dead
@@ -2186,11 +2218,53 @@ def kobayashi_ok(me, opp, card):
     return 3 * power >= opp.life
 
 
+def mogis_upkeep(me, opp, e):
+    """SDS Mogis, God of Slaughter von opp im Upkeep von me: me opfert seine schwaechste Kreatur nur, wenn der Schaden
+    sonst toedlich waere (Edikt-Regel: schwaechste Kreatur), sonst nimmt er den Schaden (Torbran: +2)."""
+    for src, card in static_sources(opp):
+        if not card.upkeep_punish:
+            continue
+        dmg = card.upkeep_punish + red_bonus(opp, card)
+        alive = [c for c in me.creatures if not c.dead]
+        if alive and me.life <= dmg and not prevented(me):
+            pick = min(alive, key=_value)
+            pick.dead = True
+            e["events"].append(i18n.t("{me}: opfert {pick_card_name} für {card_name}", me=i18n.t(me.name),
+                                      pick_card_name=pick.card.name, card_name=card.name))
+            bury((me,), e)
+        else:
+            deal_noncombat(opp, me, dmg, e)
+            e["events"].append(i18n.t("{opp}: {card_name} – {n} Schaden an {me}", opp=i18n.t(opp.name),
+                                      card_name=card.name, n=dmg, me=i18n.t(me.name)))
+
+
+def god_sync(p, step, e):
+    """Theros-Gott (SDS Mogis): ab Devotion N zu seinen Farben eine Kreatur mit seiner Power/Toughness, darunter
+    wieder nur ein Permanent. Er bleibt dasselbe Objekt, kann also angreifen, wenn er seit Zugbeginn da ist."""
+    for card in [x for x in p.perms if isinstance(x, Card) and x.god_devotion]:
+        if devotion(own_permanents(p), card.god_devotion[0]) >= card.god_devotion[1]:
+            p.perms.remove(card)
+            pw, tg, kw = card.god_pt
+            c = Creature(card._replace(is_creature=True, power=pw, toughness=tg, kw=kw), -1)
+            c.base_card = card
+            p.creatures.append(c)
+            e["events"].append(i18n.t("{p}: {card_name} wird zur Kreatur", p=i18n.t(p.name), card_name=card.name))
+    for c in [c for c in p.creatures if not c.dead and c.base_card is not None and c.base_card.god_devotion]:
+        card = c.base_card
+        if devotion(own_permanents(p), card.god_devotion[0]) < card.god_devotion[1]:
+            p.creatures.remove(c)
+            p.perms.append(card)
+            e["events"].append(i18n.t("{p}: {card_name} ist keine Kreatur mehr", p=i18n.t(p.name),
+                                      card_name=card.name))
+
+
 def upkeep_triggers(me, opp, step, e):
     """Zu Beginn jedes Upkeeps (beider Spieler): Verdant Kraken erschafft ein Tentacle fuer seinen Kontrolleur; Command
     the Stage kommt auf die Hand, wenn ein Gegner seines Besitzers im letzten Zug Schaden ausserhalb des Kampfs
     bekam."""
     kobayashi_upkeep(me, opp, step, e)
+    if opp is not None:
+        mogis_upkeep(me, opp, e)
     for x in [x for x in me.perms if x.ds9_reveal]:  # Deep Space 9
         ds9_reveal(me, opp, x.ds9_reveal, step, e)
     me.peace = [k for k in me.peace if any(x is k["card"] for x in me.perms)]
@@ -3340,6 +3414,8 @@ def cast_matches(kind, card):
             return bool(getattr(card, _TYPE_FLAGS[word]))
         if word == "spacecraft":  # alle TRK-Raumschiffe haben Station (Rutherford)
             return bool(card.station)
+        if word == "historic":  # 700.6: legendaer, Artefakt oder Saga (SDS Jhoira)
+            return bool(card.legendary or card.is_artifact or card.saga)
         return word in card.creature_types
     return _CAST_FILTERS[kind](card)
 
@@ -3371,7 +3447,7 @@ def cast_triggers(p, card, step, e):
         for x in p.perms:  # Aria of Flame: Vers-Marke, dann Schaden in Hoehe der Marken an den Gegner
             if isinstance(x, Card) and x.verse and p.opponent is not None:
                 p.verse[id(x)] = p.verse.get(id(x), 0) + 1
-                deal_noncombat(p, p.opponent, p.verse[id(x)] + (1 if red_bonus(p, x) else 0), e)
+                deal_noncombat(p, p.opponent, p.verse[id(x)] + red_bonus(p, x), e)
     for src, source in static_sources(p):
         for kind, atoms, big, mode in source.cast_trig:
             if not cast_matches(kind, card):
@@ -3437,7 +3513,7 @@ def cast_effects(p, src, source, atoms, step, e, label="Auslöser beim Wirken"):
                 c.pump += atom[1]
                 c.tpump += atom[2]
         elif kind == "face" and opp is not None:
-            deal_noncombat(p, opp, atom[1], e)
+            deal_noncombat(p, opp, atom[1] + red_bonus(p, source), e)
         elif kind == "bolt" and opp is not None and atom[1] > 0:  # "any target": Regel wie bei Removal-Schaden
             cast_removal(source._replace(removal=("damage", atom[1], (), True, "spell", False), empower_x=""),
                          p, opp, e, step)
@@ -4898,8 +4974,10 @@ def _cast_removal(card, caster, victim, e, step, target=None):
         e["events"].append(i18n.t("{caster} wirft ab: {choice_name}", caster=i18n.t(caster.name), choice_name=choice.name))
         discarded(caster, e)
     amount = _amount(spec, caster)
-    if kind in ("damage", "sweep_damage") and amount > 0 and red_bonus(caster, card):  # Searing Soloist
-        amount += 1
+    own_amount = amount
+    if kind in ("damage", "sweep_damage") and amount > 0:  # Searing Soloist, Torbran (nur gegen den Gegner)
+        own_amount = amount + red_bonus(caster, card, foe=False)
+        amount += red_bonus(caster, card)
     if kind in ("sweep", "sweep_damage"):
         hit = list(victim.creatures)
         if not ("chosen_type",) in spec[2] and not ("opponents",) in spec[2]:
@@ -4912,13 +4990,19 @@ def _cast_removal(card, caster, victim, e, step, target=None):
                       and (kind == "sweep" or c.toughness - c.damage <= amount)]
             if len(doomed) >= 2:
                 needs_cast(victim, e, step, doomed)
+        destroyed = 0
         for c in hit:
             if kind == "sweep":
                 if not c.dead and not c.has("indestructible"):  # 702.12b
                     c.dead = True
                     c.once["destroyed"] = True
+                    destroyed += 1
             else:
-                c.damage += amount
+                c.damage += own_amount if any(c is x for x in caster.creatures) else amount
+        if card.sweep_draw and destroyed:  # SDS Decree of Pain
+            _draw(caster, destroyed)
+            e["events"].append(i18n.t("{caster}: {card_name} – zieht {n}", caster=i18n.t(caster.name),
+                                      card_name=card.name, n=destroyed))
         e["events"].append(i18n.t("{caster}: {card_name} trifft alle Kreaturen", caster=i18n.t(caster.name), card_name=card.name))
         bury((caster, victim), e)
         return
@@ -5000,6 +5084,8 @@ def _cast_removal(card, caster, victim, e, step, target=None):
             target.dead = True
             if not card.exile_removal:  # Dr. McCoy, Surly Surgeon: nur Zerstoeren, kein Exil
                 target.once["destroyed"] = True
+        if card.removal_draw:  # SDS Ertai: "Its controller draws a card" (auch ohne Zerstoeren)
+            _draw(victim)
     elif kind == "minus" and target.has("indestructible"):  # -X/-X wirkt: Toughness 0 (704.5f)
         target.pump -= amount
         target.tpump -= amount
@@ -5068,8 +5154,9 @@ def _cast_removal(card, caster, victim, e, step, target=None):
 
 
 def _counter_mode(card):
-    """Die Counter-Wirkung einer Karte (sie selbst oder ihr Modus), sonst None."""
-    if not card.is_instant:
+    """Die Counter-Wirkung einer Karte (sie selbst oder ihr Modus), sonst None. SDS Ertai: Flash-Kreatur, die beim
+    Betreten kontert."""
+    if not card.is_instant and not (card.flash and card.is_creature and card.counter):
         return None
     if card.counter:
         return card
@@ -5167,9 +5254,19 @@ def try_counter(caster, spell, step, e, threat=None, effects=None):
         return brazen_bluff(holder, caster, card, alts, spell, step, e)
     _pay_open(holder, alts)
     holder.hand.remove(card)
-    holder.graveyard.append(card)
-    on_cast(holder, card, step, e)
+    if card.is_creature:  # SDS Ertai: kommt ins Spiel, der Modus "kontern" ersetzt das Zerstoeren
+        fresh = Creature(card, step)
+        holder.creatures.append(fresh)
+        on_cast(holder, card, step, e)
+        holder.etb_mode_used = card
+        creature_enters(holder, fresh, step, e, caster)
+        holder.etb_mode_used = None
+    else:
+        holder.graveyard.append(card)
+        on_cast(holder, card, step, e)
     e["events"].append(i18n.t("{holder}: {card_name} kontert {spell_name}", holder=i18n.t(holder.name), card_name=card.name, spell_name=spell.name))
+    if card.countered_draw:  # Ertai: "Its controller draws a card"
+        _draw(caster)
     return True
 
 
@@ -8057,7 +8154,7 @@ def card_effects(me, opp, card, step, entry, modes=None):
         card = card._replace(removal=("sweep", 0, (), False, "spell", False))
     effects = card._replace(modes=()) if card.etb_grant else card  # Teyo: Marke mit dem Schluesselwort (creature_enters)
     if card.removal and opp is not None and len(me.lands) >= card.etb_lands_needed \
-            and _edict_paid(me, opp, card, entry):
+            and getattr(me, "etb_mode_used", None) is not card and _edict_paid(me, opp, card, entry):
         cast_removal(card, me, opp, entry, step)
         opp.treasures += card.victim_treasure  # Vraska, the Cutting Glare
         if card.removal[3]:  # any target: der Schaden ist schon verteilt
@@ -8597,7 +8694,7 @@ def _use_removal(p, card, alts, is_spell, step, e, zone="hand", other=None, fx=N
                 cast_removal(fx, p, other, e, step)
         face = sum(a[1] for a in fx.modes[0] if a[0] == "face") if fx.modes and not fx.removal[3] else 0
         if face and other is not None:  # z. B. Extended Absence: "deals 1 damage to each opponent"
-            deal_noncombat(p, other, face, e)
+            deal_noncombat(p, other, face + red_bonus(p, fx), e)
         gain_life(p, fx.spell_life)
         if fx.tap_spell and other is not None:  # SOS Vibrant Outburst: "Tap up to one target creature."
             tap_target(p, other, fx, False, e)
@@ -8710,6 +8807,36 @@ def respond_to_attack(dfn, att, attackers, e, step):
     return alive
 
 
+def decree_cycle(p, opp, step, e):
+    """SDS Decree of Pain cyceln ("all creatures get -2/-2 until end of turn", 702.29): nur, wenn es mindestens zwei
+    gegnerische Kreaturen toetet und dabei mehr Manawert beim Gegner als bei uns. Auch Unzerstoerbare sterben (Toughness
+    0, 704.5f). Gibt True zurueck, wenn gecycelt."""
+    card = next((c for c in p.hand if c.cycle_sweep and c.cycling and _payable(p, c.cycling)), None)
+    if card is None or opp is None:
+        return False
+    n = card.cycle_sweep
+
+    def dies(c):
+        return not c.dead and c.toughness - c.damage <= n
+
+    theirs, ours = [c for c in opp.creatures if dies(c)], [c for c in p.creatures if dies(c)]
+    if len(theirs) < 2 or sum(c.card.mv for c in theirs) <= sum(c.card.mv for c in ours):
+        return False
+    _pay_open(p, card.cycling)
+    p.hand.remove(card)
+    p.graveyard.append(card)
+    e["events"].append(i18n.t("{p}: {card_name} gecycelt – alle Kreaturen −{n}/−{n}", p=i18n.t(p.name),
+                              card_name=card.name, n=n))
+    discarded(p, e, [card])
+    _draw(p)
+    for c in p.creatures + opp.creatures:
+        if not c.dead:
+            c.pump -= n
+            c.tpump -= n
+    bury((p, opp), e)
+    return True
+
+
 def end_step_instants(dfn, act, e, step):
     """Am Ende des Zugs von act nutzt dfn sein offenes Mana: Removal auf die gefaehrlichste Kreatur, Flash-Kreaturen,
     sonstige Instants (z. B. Ziehen), danach Landcycling mit dem Rest. Kampftricks bleiben auf der Hand."""
@@ -8721,6 +8848,7 @@ def end_step_instants(dfn, act, e, step):
             continue  # "any target" am Endstep nur gegen eine Kreatur oder als Lethal
         if _use_removal(dfn, card, alts, is_spell, step, e, zone, act, rc):
             cast_removal(rc, dfn, act, e, step)
+    decree_cycle(dfn, act, step, e)
     for card in sorted([c for c in dfn.hand if c.flash and not _combat_flash_removal(c)], key=lambda c: -c.mv):
         if card in dfn.hand and legend_ok(dfn, card) and _cast_from_open(dfn, card):
             e["events"].append(i18n.t("{dfn}: {card_name} mit Flash am Ende des Zugs", dfn=i18n.t(dfn.name), card_name=card.name))
@@ -8938,6 +9066,8 @@ def ability_sources(p, step, own_turn, main=False):
                 continue
             if ab[2] and not tap_ready(p, c):  # 302.6
                 continue
+            if any(a[0] == "uncounter" and c.bonus < a[1] for a in ab[4]):  # SDS Mikaeus: Kosten eine Marke
+                continue
             if snw:  # Strange new worlds: kostet {X} weniger
                 ab = (reduce_costs(ab[0], snw_x(p)),) + tuple(ab[1:])
             out.append((c, ab))
@@ -9038,8 +9168,14 @@ def apply_ability(p, src, ab, target, e=None, gy=None):
             did = True
             continue
         scope = atom[-1]
+        if kind == "uncounter":  # SDS Mikaeus: Kosten (Marke von der Quelle entfernen), bewirkt allein nichts
+            if src is not None:
+                src.bonus -= atom[1]
+            continue
         if scope == "all":
             hit = [c for c in p.creatures if not c.dead]
+        elif scope == "others":  # SDS Mikaeus: jede andere eigene Kreatur
+            hit = [c for c in p.creatures if not c.dead and c is not src]
         elif scope == "countered":
             hit = [c for c in p.creatures if not c.dead and c.bonus > 0]
         elif scope == "self":
@@ -9054,6 +9190,10 @@ def apply_ability(p, src, ab, target, e=None, gy=None):
                 c.extra |= set(atom[1])
             elif kind == "counter":
                 c.bonus += atom[1]
+            elif kind == "double":  # SDS Bristly Bill: +1/+1-Marken verdoppeln (701.10e)
+                if c.bonus <= 0:
+                    continue
+                c.bonus += c.bonus
             did = True
     return did
 
@@ -10414,6 +10554,8 @@ def take_turn(me, opp, step, rnd, skip_draw):
             continue
         c.tapped = False
     upkeep(me)
+    god_sync(me, step, e)
+    god_sync(opp, step, e)
     upkeep_triggers(me, opp, step, e)
     eye_upkeep(me, opp, e)
     sos_upkeep(me, e)
@@ -10863,6 +11005,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     combat_buffs(me, step, e)
     sos_combat_exile(me, opp, e)
     sos_combat_start(me, opp, step, e)
+    god_sync(me, step, e)  # Devotion nach Main 1 (SDS Mogis)
     combat_counters(me, step, e)
     combat_tokens(me, opp, step, e)
     combat_exile_counters(me, step, e)
