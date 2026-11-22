@@ -806,8 +806,10 @@ full log. The rules of the battle model are described in detail at the end of th
 - Stardates (SDS, bonus sheet in TRK boosters): Sheoldred, the Apocalypse, Torbran, Rishkar, Bristly Bill, Mikaeus,
   the Lunarch, Ertai Resurrected (destroy or counter), Decree of Pain (cycling too, at the end of the opponent's
   turn), Mogis, God of Slaughter (the opponent sacrifices only against lethal damage; a creature from devotion 7),
-  Jhoira (historic). Still open: Kenrith, Loot, both Sisays, Drivnod, Prosper, Stella Lee, Riku, Isshin, Flare of
-  Fortitude, Sen Triplets, Empress Galina, Thada Adel, Arcum Dagsson, Bruvac, and the legendary lands.
+  Jhoira (historic), the lands Minamo, Shizo (fear), Phyrexian Tower (sacrifices only small creature tokens), and
+  Talon Gates (filter in the goldfish too, phasing on entering, from hand at the end of the opponent's turn). Still
+  open: Kenrith, Loot, both Sisays, Drivnod, Prosper, Stella Lee, Riku, Isshin, Flare of Fortitude, Sen Triplets,
+  Empress Galina, Thada Adel, Arcum Dagsson, Bruvac.
 - Beginning of combat and modes (TRK): D-7 Battle Cruiser, L'Rell, Captain James T. Kirk, Kobayashi Maru Scenario (only shortly
   before winning), Captain Benjamin Sisko (without the five-color ability), The Naked Time.
 - Sacrifice and graveyard (TRK): Gowron, Kirk, Commanding Officer, Dahar Master, Targ Wrangler, Dr. McCoy, Bones McCoy,

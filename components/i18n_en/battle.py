@@ -390,6 +390,14 @@ EN = {
     "{opp}: {card_name} – {n} Schaden an {me}": "{opp}: {card_name} – {n} damage to {me}",
     "{p}: {card_name} wird zur Kreatur": "{p}: {card_name} becomes a creature",
     "{p}: {card_name} ist keine Kreatur mehr": "{p}: {card_name} is no longer a creature",
+    # SDS Paket C
+    "{me}: Talon Gates filtert Mana": "{me}: Talon Gates filters mana",
+    "{p}: {n} Kreatur(en) phasen ein": "{p}: {n} creature(s) phase in",
+    "{me}: {land_name} – {c_card_name} phast aus": "{me}: {land_name} – {c_card_name} phases out",
+    "{dfn}: {card_name} aus der Hand aufs Feld": "{dfn}: {card_name} from hand onto the battlefield",
+    "{me}: {land_name} – {c_card_name} bekommt Fear": "{me}: {land_name} – {c_card_name} gains fear",
+    "{me}: {land_name} enttappt {c_card_name}": "{me}: {land_name} untaps {c_card_name}",
+    "{me}: {land_name} – opfert {c_card_name}": "{me}: {land_name} – sacrifices {c_card_name}",
     # Namen der Spieler im Protokoll
     "Wir": "We",
     "Gegner": "Opponent",

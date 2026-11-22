@@ -27,7 +27,7 @@ from components.cards import HEARTWOOD, NEW_PLANET, Card, enters_tapped, token_c
 from components.conjure import conjure
 from components.simulation import (ANY_COLOR, apply_effects, apply_surveils, best_cast_reduced, choose_land,
                                    cost_reduction, do_cycle, enter_value, enters_prepared, free_spells, hand_form,
-                                   omni_ok,
+                                   omni_ok, filter_pool,
                                    landfall_effects, pay_subsets,
                                    plan_cycle, reduced, resolve_draws, tapped_for_mana, usable_now, use_treasures)
 from components.landadvice import colors_of_alts
@@ -445,6 +445,8 @@ def can_block(blocker, attacker):
         return False
     if attacker.card.evade_power and blocker.power <= attacker.card.evade_power:  # Cold-Blooded Crew
         return False
+    if attacker.has("fear") and not (blocker.card.is_artifact or "B" in colors_of_alts(blocker.card.alts)):
+        return False  # 702.36b: nur Artefaktkreaturen und schwarze Kreaturen blocken
     return not attacker.has("flying") or blocker.has("flying") or blocker.has("reach")
 
 
@@ -869,6 +871,7 @@ class Player:
         self.gear_step = None  # Zug, in dem ein Equipment oder Raumschiff unter unserer Kontrolle ins Spiel kam (Sulu)
         self.own_turns = 0    # Zahl der eigenen Zuege bisher
         self.drawn = 0        # gezogene Karten insgesamt (Lyra, Tolarian Archangel)
+        self.phased_single = []  # einzeln ausgephaste Kreaturen (Talon Gates), phasen im eigenen Untap ein
         self.drawn_mark = 0   # drawn zu Beginn des aktuellen Zugs
         self.extra_lands = 0  # zusaetzliche Landdrops in diesem Zug (Way of the Paradox)
         self.counter_boost = None  # Brad Boimler: Schritt, in dem er getappt wurde (bis Rundenende eine Marke mehr)
@@ -4051,6 +4054,8 @@ def on_land(me, opp, land, step, e, with_mana=True, untapped=False):
     this land enters untapped, choose one" nur, wenn es ungetappt kam). Gibt zusaetzliches Mana zurueck."""
     mana = []
     prepare_by(me, "landfall", e)  # SOS Tam
+    if land.etb_phase_out and opp is not None:  # SDS Talon Gates
+        gates_phase(me, opp, land, e)
     if "forest" in land.land_types:  # Roiling Canopy: mindestens 5 andere Forests
         others = sum("forest" in x.land_types for x in me.lands) - (1 if land in me.lands else 0)
         alive = [c for c in me.creatures if not c.dead]
@@ -8837,6 +8842,104 @@ def decree_cycle(p, opp, step, e):
     return True
 
 
+def phase_in(p, e):
+    """Einzeln ausgephaste Kreaturen von p phasen in seinem Untap ein (702.26a): dasselbe Objekt, ohne Betreten."""
+    if p.phased_single:
+        back, p.phased_single = p.phased_single, []
+        p.creatures.extend(back)
+        e["events"].append(i18n.t("{p}: {n} Kreatur(en) phasen ein", p=i18n.t(p.name), n=len(back)))
+
+
+def gates_phase(me, opp, land, e):
+    """SDS Talon Gates beim Betreten: die gefaehrlichste gegnerische Kreatur phast aus (kein Hexproof, Ward
+    bezahlbar); sie fehlt damit bis zum naechsten Untap ihres Kontrolleurs als Blocker."""
+    cands = [c for c in opp.creatures if not c.dead and not hexproof(c) and ward_ok(me, c)]
+    if not cands:
+        return
+    c = max(cands, key=danger)
+    if not pay_ward(me, c, e):
+        return
+    opp.creatures.remove(c)
+    opp.phased_single.append(c)
+    e["events"].append(i18n.t("{me}: {land_name} – {c_card_name} phast aus", me=i18n.t(me.name), land_name=land.name,
+                              c_card_name=c.card.name))
+
+
+def gates_from_hand(dfn, act, step, e):
+    """SDS Talon Gates ({4}: aus der Hand aufs Feld, kein Landdrop) mit offenem Mana am Ende des gegnerischen Zugs:
+    die ausgephaste Kreatur fehlt dem Gegner dann in unserem ganzen Zug."""
+    card = next((c for c in dfn.hand if c.hand_land and _payable(dfn, c.hand_land)), None)
+    if card is None:
+        return False
+    _pay_open(dfn, card.hand_land)
+    dfn.hand.remove(card)
+    dfn.lands.append(card)
+    e["events"].append(i18n.t("{dfn}: {card_name} aus der Hand aufs Feld", dfn=i18n.t(dfn.name), card_name=card.name))
+    on_land(dfn, act, card, step, e, with_mana=False)
+    return True
+
+
+def shizo_fear(me, opp, step, e):
+    """SDS Shizo vor dem Angriff: Fear fuer die staerkste eigene legendaere Kreatur, die angreifen kann, die ein
+    ungetappter Gegner blocken koennte, aber keine schwarze oder Artefaktkreatur ({B} und Shizos Tap)."""
+    for land in [x for x in me.lands if x.fear_legendary]:
+        cost = tuple((g + 1, cols) for g, cols in land.fear_legendary)
+        if not _payable(me, cost):
+            return
+        blockers = [b for b in opp.creatures if not b.dead and not b.tapped]
+        cands = [c for c in me.creatures if not c.dead and c.card.legendary and not c.has("fear")
+                 and can_attack(c, step)]
+        cands = [c for c in cands if any(can_block(b, c) for b in blockers)
+                 and not any(can_block(b, c) for b in blockers
+                             if b.card.is_artifact or "B" in colors_of_alts(b.card.alts))]
+        if not cands:
+            return
+        pick = max(cands, key=lambda c: (c.dmg, c.card.mv))
+        _pay_open(me, cost)
+        pick.extra.add("fear")
+        e["events"].append(i18n.t("{me}: {land_name} – {c_card_name} bekommt Fear", me=i18n.t(me.name),
+                                  land_name=land.name, c_card_name=pick.card.name))
+
+
+def minamo_untap(me, opp, e):
+    """SDS Minamo am Ende des eigenen Zugs: eine getappte eigene legendaere Kreatur enttappen ({U} und Minamos Tap),
+    damit sie im Zug des Gegners blocken kann - nur, wenn der Gegner Kreaturen hat; die mit der hoechsten Toughness."""
+    for land in [x for x in me.lands if x.untap_legendary]:
+        cost = tuple((g + 1, cols) for g, cols in land.untap_legendary)
+        cands = [c for c in me.creatures if not c.dead and c.tapped and c.card.legendary and not c.locked
+                 and not c.stun]
+        if not cands or not any(not c.dead for c in opp.creatures) or not _payable(me, cost):
+            return
+        pick = max(cands, key=lambda c: (c.toughness, c.power, c.card.mv))
+        _pay_open(me, cost)
+        pick.tapped = False
+        e["events"].append(i18n.t("{me}: {land_name} enttappt {c_card_name}", me=i18n.t(me.name), land_name=land.name,
+                                  c_card_name=pick.card.name))
+
+
+def tower_mana(me, spells, pool, has_creature, e):
+    """SDS Phyrexian Tower: statt {C} eine Kreatur opfern fuer {B}{B} - nur einen kleinen Kreatur-Token (Staerke
+    hoechstens 1, nicht angreifend), und nur, wenn es in dieser Runde mehr ermoeglicht. Gibt den Pool zurueck."""
+    for land in [x for x in me.lands if x.tower_sac_mana]:
+        unit = tuple(land.land_colors)
+        fodder = [c for c in me.creatures if not c.dead and c.card.is_token and c.power <= 1 and not c.attacked]
+        if unit not in pool or not fodder:
+            continue
+        trial = list(pool)
+        trial.remove(unit)
+        trial += list(land.tower_sac_mana)
+        if best_cast_reduced(spells, land_key(trial), has_creature, True)[0] \
+                <= best_cast_reduced(spells, land_key(pool), has_creature, True)[0]:
+            continue
+        pick = min(fodder, key=lambda c: (c.power, c.toughness))
+        pick.dead = True
+        pool = trial
+        e["events"].append(i18n.t("{me}: {land_name} – opfert {c_card_name}", me=i18n.t(me.name), land_name=land.name,
+                                  c_card_name=pick.card.name))
+        bury((me,), e)
+    return pool
+
+
 def end_step_instants(dfn, act, e, step):
     """Am Ende des Zugs von act nutzt dfn sein offenes Mana: Removal auf die gefaehrlichste Kreatur, Flash-Kreaturen,
     sonstige Instants (z. B. Ziehen), danach Landcycling mit dem Rest. Kampftricks bleiben auf der Hand."""
@@ -8849,6 +8952,7 @@ def end_step_instants(dfn, act, e, step):
         if _use_removal(dfn, card, alts, is_spell, step, e, zone, act, rc):
             cast_removal(rc, dfn, act, e, step)
     decree_cycle(dfn, act, step, e)
+    gates_from_hand(dfn, act, step, e)
     for card in sorted([c for c in dfn.hand if c.flash and not _combat_flash_removal(c)], key=lambda c: -c.mv):
         if card in dfn.hand and legend_ok(dfn, card) and _cast_from_open(dfn, card):
             e["events"].append(i18n.t("{dfn}: {card_name} mit Flash am Ende des Zugs", dfn=i18n.t(dfn.name), card_name=card.name))
@@ -10544,6 +10648,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
         w.used = False
     for v in me.vehicles:  # Fahrzeuge enttappen
         v["tapped"] = False
+    phase_in(me, e)  # 502.1: zuerst einphasen, dann enttappen
     for c in me.creatures:  # Untap (gesperrte Kreaturen bleiben gesperrt; Stun-Marke statt Enttappen, 122.1g)
         if c.stun and c.tapped:
             c.stun -= 1
@@ -10804,6 +10909,16 @@ def take_turn(me, opp, step, rnd, skip_draw):
                 _score_, chosen = trial
                 e["events"].append(i18n.t("{me}: {k} Lotus geopfert", me=i18n.t(me.name), k=k))
                 break
+    if forced is None and any(x.filter_any or x.tower_sac_mana for x in me.lands):  # SDS Talon Gates, Tower
+        before = list(pool_all)
+        n_filter = sum(1 for x in me.lands if x.filter_any)
+        better = filter_pool(spells, pool_all, n_filter, has_creature, True) if n_filter else None
+        if better is not None:
+            pool_all = better
+            e["events"].append(i18n.t("{me}: Talon Gates filtert Mana", me=i18n.t(me.name)))
+        pool_all = tower_mana(me, spells, pool_all, has_creature, e)
+        if pool_all != before:
+            _score_, chosen = best_cast_reduced(spells, land_key(pool_all), has_creature, True)
     if any(c.draws for c in chosen) or enters_prepared(chosen) or any(usable_now(c) for c in chosen):
         walker_bf, jace_bf = walker_flags(me)
         rd = resolve_draws(me.hand, me.library, chosen, pool_all, me.lands, land, has_creature, True, walker_bf,
@@ -11006,6 +11121,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
     sos_combat_exile(me, opp, e)
     sos_combat_start(me, opp, step, e)
     god_sync(me, step, e)  # Devotion nach Main 1 (SDS Mogis)
+    shizo_fear(me, opp, step, e)
     combat_counters(me, step, e)
     combat_tokens(me, opp, step, e)
     combat_exile_counters(me, step, e)
@@ -11243,6 +11359,7 @@ def take_turn(me, opp, step, rnd, skip_draw):
             if c.card.endstep_counters:
                 c.bonus += c.card.endstep_counters
     confidant_end_step(me, e)
+    minamo_untap(me, opp, e)
     end_assimilate(me, opp, step, e)
     for p_ in (me, opp):  # Lyra, Tolarian Archangel: 3 oder mehr Karten in diesem Zug gezogen
         if p_.drawn - p_.drawn_mark >= 3:

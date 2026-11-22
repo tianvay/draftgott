@@ -640,6 +640,12 @@ class Card(NamedTuple):
     upkeep_punish: int = 0  # Mogis: im Upkeep jedes Gegners N Schaden, ausser er opfert eine Kreatur
     god_devotion: tuple = ()  # Theros-Gott: (Farben, N) - nur ab Devotion N eine Kreatur (Mogis)
     god_pt: tuple = ()  # Theros-Gott als Kreatur: (Power, Toughness, Schluesselwoerter)
+    untap_legendary: tuple = ()  # Land Minamo: Kosten von "{U}, {T}: Untap target legendary permanent"
+    fear_legendary: tuple = ()  # Land Shizo: Kosten von "{B}, {T}: Target legendary creature gains fear"
+    tower_sac_mana: tuple = ()  # Land Phyrexian Tower: "{T}, Sacrifice a creature: Add {B}{B}" (Manaeinheiten)
+    filter_any: bool = False  # Land Talon Gates: "{1}, {T}: Add one mana of any color"
+    hand_land: tuple = ()  # Land Talon Gates: Kosten von "{4}: Put this card from your hand onto the battlefield"
+    etb_phase_out: bool = False  # Land Talon Gates: "When this land enters, up to one target creature phases out"
 
 
 LANDCYCLE_RE = re.compile(
@@ -2763,6 +2769,37 @@ def sds_traits(card, type_line):
     return out
 
 
+_SDS_LAND_RES = {
+    "untap_legendary": re.compile(r"^(\{[wubrg]\}), \{t\}: untap target legendary permanent\.$"),
+    "fear_legendary": re.compile(r"^(\{[wubrg]\}), \{t\}: target legendary creature gains fear until end of turn\.$"),
+    "tower_sac_mana": re.compile(r"^\{t\}, sacrifice a creature: add ((?:\{[wubrg]\})+)\.$"),
+    "filter_any": re.compile(r"^\{1\}, \{t\}: add one mana of any color\.$"),
+    "hand_land": re.compile(r"^(\{\d+\}): put this card from your hand onto the battlefield\.$"),
+    "etb_phase_out": re.compile(r"^when this land enters, up to one target creature phases out\.$"),
+}
+
+
+def sds_land_traits(card):
+    """SDS-Laender (Minamo, Shizo, Phyrexian Tower, Talon Gates) als dict mit den Card-Feldern. Liefert ein Land frei
+    nur {C} (Tower, Gates), steht nur {C} in land_colors: Farbe gibt es nur ueber Opfern bzw. den Filter."""
+    out, res = {}, _SDS_LAND_RES
+    lines = [low for _raw, low in _clean_lines(card)]
+    for low in lines:
+        for key in ("untap_legendary", "fear_legendary", "hand_land"):
+            m = res[key].match(low)
+            if m:
+                out[key] = cost_alternatives(m.group(1).upper())
+        m = res["tower_sac_mana"].match(low)
+        if m:
+            out["tower_sac_mana"] = tuple((c.upper(),) for c in re.findall(r"\{([wubrg])\}", m.group(1)))
+        for key in ("filter_any", "etb_phase_out"):
+            if res[key].match(low):
+                out[key] = True
+    if (out.get("tower_sac_mana") or out.get("filter_any")) and "{t}: add {c}." in lines:
+        out["land_colors"] = ("C",)
+    return out
+
+
 def foundation_traits(card, type_line):
     """Grundlagen fuer kommende Sets: bedingte Statik, Schluesselwoerter mit Marke, Marken zu Kampfbeginn,
     Angriffs-Ausloeser, Ausruestung beim Betreten und als Token, Ausloeser beim Wirken (als dict mit den Card-Feldern)."""
@@ -4143,6 +4180,9 @@ def _card_info(card):
     type_line = (front.get("type_line") or card.get("type_line", "")).split(" // ")[0]
     trk = trk_land_token_traits(card, type_line)
     out = out._replace(**trk) if trk else out
+    if out.is_land:
+        sds = sds_land_traits(card)
+        out = out._replace(**sds) if sds else out
     if not out.is_land:
         from components.cards_sos import sos_traits  # spaet importiert: cards_sos nutzt Helfer aus cards
         sos = sos_traits(card, type_line, out)

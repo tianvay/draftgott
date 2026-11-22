@@ -327,6 +327,32 @@ def use_treasures(spells, pool, treasures, has_creature, auras_need_creature):
     return best[1], best[2]
 
 
+def filter_pool(spells, pool, n, has_creature, auras_need_creature):
+    """SDS Talon Gates ({1}, {T}: eine Farbe nach Wahl): bis zu n Filter einsetzen, je Filter wird die {C}-Einheit des
+    Gates und eine weitere Einheit zu einer Einheit jeder Farbe - nur, wenn das in dieser Runde mehr ermoeglicht.
+    Gibt den neuen Pool zurueck oder None."""
+    base = best_cast(spells, land_key(pool), has_creature, auras_need_creature)[0]
+    cur, out = list(pool), None
+    for _ in range(n):
+        if ("C",) not in cur:
+            break
+        rest = list(cur)
+        rest.remove(("C",))
+        cand = None
+        for other in sorted(set(rest)):
+            trial = list(rest)
+            trial.remove(other)
+            trial.append(ANY_COLOR)
+            sc = best_cast(spells, land_key(trial), has_creature, auras_need_creature)[0]
+            if sc > base and (cand is None or sc > cand[0]):
+                cand = (sc, trial)
+        if cand is None:
+            break
+        base, cur = cand
+        out = cur
+    return out
+
+
 def enters_prepared(cards):
     """Kopien der Zauberhaelften von Kreaturen, die prepared ins Spiel kommen."""
     return [c.prepared[1] for c in cards if c.prepared and c.prepared[0] in ("enters", "both")]
@@ -1271,6 +1297,14 @@ def simulate(cards, sims, on_draw, max_turn, horizon, auras_need_creature, multi
                     pool = pool + [ANY_COLOR] * k_t
                     avail_total += k_t
                     extra_now += k_t
+                    key = land_key(pool)
+                    s_chosen, chosen = best_cast_reduced(spells, key, has_creature, auras_need_creature)
+            n_filter = sum(1 for c in battlefield if c.filter_any)
+            if n_filter and forced is None:  # SDS Talon Gates: Filter nur, wenn er diese Runde mehr ermoeglicht
+                better = filter_pool(spells, pool, n_filter, has_creature, auras_need_creature)
+                if better is not None:
+                    avail_total -= len(pool) - len(better)
+                    pool = better
                     key = land_key(pool)
                     s_chosen, chosen = best_cast_reduced(spells, key, has_creature, auras_need_creature)
 

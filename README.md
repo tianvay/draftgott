@@ -832,8 +832,10 @@ vollständigen Protokoll aufklappt. Die Regeln des Kampfmodells stehen ausführl
 - Stardates (SDS, Bonusblatt in TRK-Boostern): Sheoldred, the Apocalypse, Torbran, Rishkar, Bristly Bill, Mikaeus,
   the Lunarch, Ertai Resurrected (Zerstören oder Kontern), Decree of Pain (auch Cycling am Ende des gegnerischen
   Zugs), Mogis, God of Slaughter (Gegner opfert nur gegen tödlichen Schaden; ab Devotion 7 Kreatur), Jhoira
-  (historic). Noch offen: Kenrith, Loot, beide Sisays, Drivnod, Prosper, Stella Lee, Riku, Isshin, Flare of
-  Fortitude, Sen Triplets, Empress Galina, Thada Adel, Arcum Dagsson, Bruvac und die legendären Länder.
+  (historic), die Länder Minamo, Shizo (Fear), Phyrexian Tower (opfert nur kleine Kreatur-Token) und Talon Gates
+  (Filter auch im Goldfish, Phasing beim Betreten, aus der Hand am Ende des gegnerischen Zugs). Noch offen: Kenrith,
+  Loot, beide Sisays, Drivnod, Prosper, Stella Lee, Riku, Isshin, Flare of Fortitude, Sen Triplets, Empress Galina,
+  Thada Adel, Arcum Dagsson, Bruvac.
 - Kampfbeginn und Modi (TRK): D-7 Battle Cruiser, L'Rell, Captain James T. Kirk, Kobayashi Maru Scenario (nur kurz
   vor dem Sieg), Captain Benjamin Sisko (ohne die Fünffarben-Fähigkeit), The Naked Time.
 - Opfern und Friedhof (TRK): Gowron, Kirk, Commanding Officer, Dahar Master, Targ Wrangler, Dr. McCoy, Bones McCoy,

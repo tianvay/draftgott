@@ -699,6 +699,15 @@ RULES = [
     "des Gegners 2 Schaden (mit Torbran 4); der Gegner opfert seine schwächste Kreatur nur, wenn der Schaden "
     "tödlich wäre. Ab Devotion 7 zu Schwarz und Rot ist Mogis eine 7/5-Kreatur (geprüft zu Zugbeginn und vor dem "
     "Kampf). Jhoira: historic = legendär, Artefakt oder Saga (700.6).",
+    "SDS-Länder: Minamo enttappt am Ende des eigenen Zugs eine getappte eigene legendäre Kreatur als Blocker ({U} "
+    "und Minamos Tap, nur wenn der Gegner Kreaturen hat; die mit der höchsten Toughness). Shizo gibt vor dem "
+    "Angriff der stärksten eigenen legendären Kreatur Fear (702.36), wenn sie sonst geblockt werden könnte, aber "
+    "keine schwarze oder Artefaktkreatur blocken kann. Phyrexian Tower liefert frei nur {C}; für {B}{B} opfert er "
+    "nur einen kleinen Kreatur-Token (Stärke höchstens 1), wenn das in der Main Phase mehr ermöglicht. Talon Gates "
+    "liefert frei nur {C}; der Filter ({1}, {T}: eine Farbe) wird wie Treasure nur genutzt, wenn er mehr "
+    "ermöglicht (auch im Goldfish). Beim Betreten phast die gefährlichste gegnerische Kreatur aus (bis zum "
+    "nächsten Untap ihres Kontrolleurs, 702.26a); mit 4 offenem Mana kommt Gates am Ende des gegnerischen Zugs aus "
+    "der Hand aufs Feld (kein Landdrop), die Kreatur fehlt dann in unserem ganzen Zug.",
     "Noch nicht im Kampf: weitere Auslöser und Fähigkeiten (siehe Modell-Abdeckung). Solche Karten werden gewirkt, "
     "wirken aber nur mit den schon modellierten Effekten.",
 ]
